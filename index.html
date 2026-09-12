@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>巨天 Agent · 桌面 AI 智能体</title>
+<meta name="description" content="巨天 Agent——运行在桌面上的 AI 智能体：操作终端、管理文件、编写代码、生成 PPT、分析文档、语音对话。五档思考程度，本地优先，预览版即将发布。" />
+<meta name="theme-color" content="#08060f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23a78bfa'/%3E%3Cstop offset='100%25' stop-color='%237c5cff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M24 20h20v4H28v16h16v4H24z' fill='white'/%3E%3Crect x='36' y='32' width='8' height='8' rx='2' fill='white'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<div class="bg-layer" aria-hidden="true">
+  <canvas id="net"></canvas>
+  <div class="grid-overlay"></div>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="noise"></div>
+</div>
+<div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+<div class="progress" id="progress" aria-hidden="true"><span></span></div>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 40 40" width="34" height="34">
+          <defs>
+            <linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#7c5cff"/>
+            </linearGradient>
+          </defs>
+          <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#bg1)"/>
+          <path d="M15 12h13v3H18v10h10v3H15z" fill="#fff"/>
+          <rect x="22" y="19.5" width="5" height="5" rx="1.4" fill="#fff"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>巨天 Agent</strong>
+        <em>DESKTOP AI AGENT</em>
+      </span>
+    </a>
+
+    <nav class="nav-links" id="navLinks">
+      <a href="#home" class="active"><i>01</i>首页</a>
+      <a href="#features"><i>02</i>能力</a>
+      <a href="#thinking"><i>03</i>思考程度</a>
+      <a href="#tech"><i>04</i>架构</a>
+      <a href="#get"><i>05</i>获取</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="切换主题">
+        <svg class="ico-sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+        </svg>
+        <svg class="ico-moon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+        </svg>
+      </button>
+      <a class="btn btn-ghost nav-github" href="https://github.com/deepseekv5" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12A11.5 11.5 0 0 0 12 .5z"/>
+        </svg>
+        <span>GitHub</span>
+      </a>
+      <button class="icon-btn burger" id="burger" type="button" aria-label="菜单" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <section id="home" class="hero">
+    <div class="wrap hero-inner">
+      <div class="hero-copy">
+        <div class="pill reveal">
+          <span class="dot"></span> PREVIEW · 预览版开发中
+        </div>
+        <h1 class="reveal">
+          <span class="line"><span>你的电脑里</span></span>
+          <span class="line"><span>住一个<span class="grad">会干活的智能体</span></span></span>
+        </h1>
+        <p class="lede reveal">
+          巨天 Agent 是一款桌面 AI 智能体。它能操作终端、管理文件、编写代码、生成 PPT、
+          分析文档，还能跟你语音对话。五档思考程度，从秒回到深度推理，由你决定。
+        </p>
+        <div class="hero-cta reveal">
+          <a class="btn btn-primary magnetic" href="#features">看看它能干什么</a>
+          <a class="btn btn-ghost magnetic" href="#get">如何获取</a>
+        </div>
+        <ul class="hero-stats reveal">
+          <li><b data-count="6">0</b><span>核心能力</span></li>
+          <li><b data-count="5">0</b><span>档思考程度</span></li>
+          <li><b data-count="2">0</b><span>平台支持</span></li>
+          <li><b data-count="100" data-suffix="%">0</b><span>本地优先</span></li>
+        </ul>
+      </div>
+
+      <div class="hero-visual reveal" aria-hidden="false">
+        <figure class="shot reveal">
+          <figcaption class="shot-bar">
+            <span></span><span></span><span></span>
+            <em>巨天agent · v4.0 预览版</em>
+          </figcaption>
+          <img src="assets/img/preview-ui.png" alt="巨天agent 主界面预览" loading="eager" />
+        </figure>
+        <div class="float-card c1"><span class="fc-label">MODEL</span><span class="fc-value">可接入多种模型</span></div>
+        <div class="float-card c2"><span class="fc-label">MODE</span><span class="fc-value">深度思考 中</span></div>
+      </div>
+    </div>
+    <a class="scroll-hint" href="#features" aria-label="向下滚动"><span></span></a>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features" class="section">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <span class="kicker"><i></i>FEATURES · 02</span>
+        <h2>一句话，它来干活</h2>
+        <p>不只是聊天。巨天 Agent 长了手——能直接在你的电脑上把事情做完。</p>
+      </header>
+
+      <div class="feat-grid">
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg></div>
+          <h3>操作终端</h3>
+          <p>直接在你的电脑上执行命令，实时回显输出。装环境、跑脚本、查日志，说一句就行。</p>
+        </article>
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg></div>
+          <h3>管理文件</h3>
+          <p>读写、整理、检索本地文件。像有个助理坐在旁边，帮你把乱糟糟的目录理顺。</p>
+        </article>
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6l-5 6 5 6M16 6l5 6-5 6M13 4l-2 16"/></svg></div>
+          <h3>编写代码</h3>
+          <p>内置专业代码编辑器。解释代码、写测试、代码审查、多语言重构，全程在对话里完成。</p>
+        </article>
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 4v13M8 21h8M7 9h3M7 12h2"/></svg></div>
+          <h3>生成 PPT</h3>
+          <p>一句话大纲，直接产出整套演示文稿。版式、配图、结构，它都想好了。</p>
+        </article>
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6M9 13h6M9 17h4"/></svg></div>
+          <h3>分析文档</h3>
+          <p>把长文档丢给它：总结、提炼要点、交叉问答。读不完的报告，交给它读完。</p>
+        </article>
+        <article class="feat reveal">
+          <div class="feat-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+          <h3>语音对话</h3>
+          <p>内置语音识别与语音合成，说话就行，它听得懂也说得出。解放双手的场景尤其好用。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- THINKING -->
+  <section id="thinking" class="section alt">
+    <div class="wrap think-wrap">
+      <div class="think-copy">
+        <header class="sec-head left reveal">
+          <span class="kicker"><i></i>THINKING · 03</span>
+          <h2>五档思考程度<br />快和深，你来定</h2>
+        </header>
+        <p class="reveal">
+          不是每个问题都值得深度推理。拖动滑杆，实时切换智能体的思考深度：
+          琐事秒回，难题让它想透再答。
+        </p>
+        <ul class="think-list">
+          <li class="reveal"><b>关闭</b><span>直接回答，零等待，适合闲聊和简单查询。</span></li>
+          <li class="reveal"><b>低</b><span>稍作斟酌，快与准之间的平衡点。</span></li>
+          <li class="reveal"><b>中</b><span>适度思考后作答，日常任务的默认档位。</span></li>
+          <li class="reveal"><b>高</b><span>深入推理，适合代码架构、方案设计。</span></li>
+          <li class="reveal"><b>最大</b><span>竭尽全力，复杂问题的压舱底。</span></li>
+        </ul>
+      </div>
+
+      <div class="think-demo reveal">
+        <div class="think-panel">
+          <div class="tp-head">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+            <span class="tp-level" id="tpLevel">中</span>
+          </div>
+          <div class="tp-model">巨天 Agent · 预览版</div>
+          <input class="tp-slider" id="tpSlider" type="range" min="0" max="4" step="1" value="2"
+                 aria-label="思考程度" />
+          <div class="tp-scale"><span>关闭</span><span>低</span><span>中</span><span>高</span><span>最大</span></div>
+          <div class="tp-desc" id="tpDesc">适度思考后作答</div>
+        </div>
+        <figure class="shot small">
+          <img src="assets/img/preview-thinking.png" alt="思考程度面板预览" loading="lazy" />
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH -->
+  <section id="tech" class="section">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <span class="kicker"><i></i>ARCHITECTURE · 04</span>
+        <h2>本地优先的架构</h2>
+        <p>数据留在你自己的电脑里，这是设计前提，不是口号。</p>
+      </header>
+
+      <div class="tech-grid">
+        <article class="tech-card reveal"><h3>桌面原生</h3><p>基于 Electron 构建，macOS 与 Windows 原生安装包，开机即用，不依赖浏览器标签页。</p></article>
+        <article class="tech-card reveal"><h3>本地记忆</h3><p>对话与工作区数据存于本地 SQLite，跨会话记住项目上下文，断网也能翻历史。</p></article>
+        <article class="tech-card reveal"><h3>模型自由</h3><p>支持接入多种大模型 API，并内置 WebLLM 本地推理通道——敏感任务可以完全不出本机。</p></article>
+        <article class="tech-card reveal"><h3>语音链路</h3><p>语音识别与语音合成完整内建，按住说话、听它回答，全程无需第三方客户端。</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- GET -->
+  <section id="get" class="section contact">
+    <div class="wrap">
+      <div class="contact-box reveal">
+        <span class="kicker"><i></i>GET IT · 05</span>
+        <h2>预览版 · 尚未开放下载</h2>
+        <p>
+          巨天 Agent 正在封闭打磨中，正式发布后提供 macOS（Apple Silicon）与
+          Windows（x64）安装包。现在可以关注动态，第一时间拿到发布消息。
+        </p>
+        <div class="contact-actions">
+          <a class="btn btn-primary magnetic" href="https://github.com/deepseekv5" target="_blank" rel="noopener">GitHub 关注动态</a>
+          <a class="btn btn-ghost magnetic" href="https://deepseekv5.github.io/jutian-studio/" target="_blank" rel="noopener">巨天工作室官网</a>
+        </div>
+        <div class="platform-row">
+          <span class="plat">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M2 19h20"/></svg>
+            macOS · Apple Silicon
+          </span>
+          <span class="plat">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 5.5l7.5-1v7H3v-6zm8.5-1.2L21 3v8.5h-9.5V4.3zM3 12.5h7.5v7L3 18.5v-6zm8.5 0H21V21l-9.5-1.3v-7.2z"/></svg>
+            Windows · x64
+          </span>
+          <span class="plat">敬请期待</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div class="f-brand"><strong>巨天 Agent</strong><span>DESKTOP AI AGENT</span></div>
+    <nav class="f-links">
+      <a href="https://deepseekv5.github.io/" target="_blank" rel="noopener">个人主页</a>
+      <a href="https://deepseekv5.github.io/jutian-studio/" target="_blank" rel="noopener">巨天工作室</a>
+      <a href="https://github.com/deepseekv5" target="_blank" rel="noopener">GitHub</a>
+      <a href="#features">能力</a>
+    </nav>
+    <p class="f-copy">© <span id="year"></span> 巨天工作室 · 巨天 Agent 预览版</p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>
