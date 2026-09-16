@@ -149,6 +149,23 @@
           </ul>
         </div>
       </div>
+
+      <p style="font-size:15px;color:var(--ink-2);margin:26px 0 12px;max-width:62ch">
+        和普通聊天工具的差别，用具体场景对比一下更直观：
+      </p>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>场景</th><th>普通聊天工具</th><th>巨天 Agent</th></tr></thead>
+          <tbody>
+            <tr><td>要建一个目录结构</td><td>给你一段 mkdir 命令</td><td>直接建好，并告诉你建了什么</td></tr>
+            <tr><td>报错了</td><td>猜测可能的原因</td><td>读真实日志再判断，读不出来就说读不出来</td></tr>
+            <tr><td>要改一百个文件</td><td>只能逐个贴内容</td><td>在工作区内批量处理，先行后报</td></tr>
+            <tr><td>断网时</td><td>基本不可用</td><td>本地功能照常，历史记录可翻</td></tr>
+            <tr><td>数据去哪了</td><td>在对方服务器</td><td>留在你本机</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tbl-hint">表格在窄屏可以左右滑动查看</p>
     </div>
   </section>
 
@@ -303,7 +320,7 @@
 
       <div class="fig-2">
         <figure class="figure">
-          <img src="assets/img/preview-ui.png" alt="巨天 Agent 主界面预览" />
+          <img src="assets/img/preview-ui.png" alt="巨天 Agent 主界面预览" width="1440" height="900" decoding="async" />
           <figcaption>主界面 —— 左侧对话与工作区，中间消息流，底部输入框与语音入口</figcaption>
         </figure>
         <div>
@@ -367,7 +384,7 @@
 
       <div class="fig-2" style="margin-top:26px">
         <figure class="figure">
-          <img src="assets/img/preview-thinking.png" alt="思考程度面板预览" />
+          <img src="assets/img/preview-thinking.png" alt="思考程度面板预览" width="520" height="340" loading="lazy" decoding="async" />
           <figcaption>思考程度面板 —— 五档滑杆与模型选择</figcaption>
         </figure>
         <div>
@@ -487,7 +504,7 @@
       </div>
 
       <div class="faq">
-        <details>
+        <details open>
           <summary>现在能下载吗？</summary>
           <div class="a"><p>不能。预览版尚未开放下载，也没有确定发布日期。两个平台都会做：macOS（Apple Silicon）与 Windows（x64）。</p></div>
         </details>
