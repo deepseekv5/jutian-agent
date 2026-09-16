@@ -1,30 +1,33 @@
 # 巨天 Agent 官网
 
-巨天 Agent——桌面 AI 智能体（终端 / 文件 / 代码 / PPT / 语音）的产品官网。纯静态站点，由 GitHub Pages 托管。
+产品官网，纯静态，GitHub Pages 托管：<https://deepseekv5.github.io/jutian-agent/>
 
-在线地址：<https://deepseekv5.github.io/jutian-agent/>
-
-## 目录结构
+## 目录
 
 ```
-.
-├── index.html
-├── assets/
-│   ├── css/style.css
-│   ├── js/main.js          # 含「五档思考程度」交互演示
-│   └── img/                # 产品预览截图
-└── README.md
+index.html
+assets/css/style.css
+assets/js/main.js       # 主题切换、移动端菜单、导航高亮、思考程度切换
+assets/img/
+  preview-ui.png         # 主界面预览
+  preview-thinking.png   # 思考程度面板预览
 ```
 
-## 页面内容
+## 章节
 
-- Hero：产品定位与真实界面预览
-- 能力：终端 / 文件 / 代码 / PPT / 文档 / 语音
-- 思考程度：关闭 - 低 - 中 - 高 - 最大，可拖动滑杆交互演示
-- 架构：Electron 桌面原生、SQLite 本地记忆、多模型接入、WebLLM 本地推理
-- 获取：预览版尚未开放下载，macOS（Apple Silicon）与 Windows（x64）版本筹备中
+是什么 / 能力清单 / 界面 / 思考程度 / 技术规格 / 使用场景 / 路线图 / 常见问题 / 如何获取
 
-## 相关站点
+## 改内容
 
-- 个人主页：<https://deepseekv5.github.io/>
+文案全部在 `index.html`。思考档位的说明文字在 `assets/js/main.js` 顶部的 `LEVELS` 数组。
+
+| 想改什么 | 改哪儿 |
+| --- | --- |
+| 强调色 | `assets/css/style.css` 中 `--accent`（浅色 `#2f4a8c`，深色 `#8aa8e6`） |
+| 能力与规格 | 「能力清单」「技术规格」章节的表格 |
+| 下载状态 | 「如何获取」章节与 hero 的 Status 字段 |
+
+## 相关
+
 - 巨天工作室：<https://deepseekv5.github.io/jutian-studio/>
+- 个人主页：<https://deepseekv5.github.io/>
