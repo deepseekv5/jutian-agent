@@ -27,6 +27,10 @@ assets/img/
 | 能力与规格 | 「能力清单」「技术规格」章节的表格 |
 | 下载状态 | 「如何获取」章节与 hero 的 Status 字段 |
 
+## 风格切换
+
+页眉右侧三档切换（正常 / 猫娘 / 搞笑），除文案外，思考档位的说明文字也会跟着变（见 `main.js` 的 `LEVELS_*`）。
+
 ## 相关
 
 - 巨天工作室：<https://deepseekv5.github.io/jutian-studio/>

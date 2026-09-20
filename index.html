@@ -27,6 +27,11 @@
     </nav>
     <div class="head-tools">
       <a class="tools-link" href="https://deepseekv5.github.io/jutian-studio/" target="_blank" rel="noopener">工作室</a>
+      <div class="mode-switch" id="modeSwitch">
+        <button type="button" data-mode="normal" class="on">正常</button>
+        <button type="button" data-mode="neko">猫娘</button>
+        <button type="button" data-mode="funny">搞笑</button>
+      </div>
       <button class="theme-btn" id="themeBtn" type="button" aria-label="切换深浅主题">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M5.2 18.8l1.4-1.4M17.4 6.6l1.4-1.4" stroke-linecap="round"/></svg>
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M20.5 13.2A8.6 8.6 0 1 1 10.8 3.5a7 7 0 0 0 9.7 9.7z"/></svg>
@@ -50,29 +55,29 @@
       </dl>
 
       <h1 class="hero-title">
-        巨天 Agent
-        <small>An agent that actually does the work</small>
+        <span data-v="title">巨天 Agent</span>
+        <small data-v="subtitle">An agent that actually does the work</small>
       </h1>
 
       <div class="hero-body">
         <div>
-          <p class="hero-lede">
+          <p class="hero-lede" data-v="lede1">
             一个安装在你电脑里的智能体。它会开终端、改文件、写代码、做 PPT，
             也能听你说话再开口回答。不是又一个网页聊天框——它的手是长的，
             能碰到你硬盘上真实的东西。
           </p>
-          <p class="hero-lede">
+          <p class="hero-lede" data-v="lede2">
             目前还在预览阶段，没有开放下载。这一页可以当说明书看：它现在能做什么、
             做不到什么，以及打算怎么往下做，都写在下面了。
           </p>
         </div>
         <aside class="hero-aside">
           <span class="label">一句话区别</span>
-          <p>
+          <p data-v="aside1">
             常见的 AI 助手止步于"告诉你怎么做"；巨天 Agent 想做的是"替你做完"。
             差别看着不大，实际决定了它是个搜索引擎还是个同事。
           </p>
-          <p style="margin-top:10px">
+          <p data-v="aside2" style="margin-top:10px">
             没发布之前，你也可以先在下面点几下，试试思考档位是怎么回事。
           </p>
         </aside>
@@ -96,8 +101,8 @@
 
   <div class="wrap">
     <p class="pull">
-      「把控制权留给用户，包括决定它该想多久。」
-      <cite>—— 五档思考程度的设计初衷</cite>
+      <span data-v="pull">「把控制权留给用户，包括决定它该想多久。」</span>
+      <cite data-v="cite">—— 五档思考程度的设计初衷</cite>
     </p>
   </div>
 
@@ -105,8 +110,8 @@
   <section class="section" id="what">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">01</span><h2>它是什么</h2></div>
-        <p class="sec-note">先说清边界：它能干什么，以及我们不打算让它干什么。</p>
+        <div><span class="sec-num">01</span><h2 data-v="s1">它是什么</h2></div>
+        <p class="sec-note" data-v="n1">先说清边界：它能干什么，以及我们不打算让它干什么。</p>
       </div>
 
       <div class="entry">
@@ -173,8 +178,8 @@
   <section class="section" id="cap">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">02</span><h2>能力清单</h2></div>
-        <p class="sec-note">六项核心能力，每项都写明具体能到哪一步。</p>
+        <div><span class="sec-num">02</span><h2 data-v="s2">能力清单</h2></div>
+        <p class="sec-note" data-v="n2">六项核心能力，每项都写明具体能到哪一步。</p>
       </div>
 
       <article class="entry">
@@ -314,8 +319,8 @@
   <section class="section" id="ui">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">03</span><h2>界面</h2></div>
-        <p class="sec-note">当前预览版的实际界面，未做修饰。</p>
+        <div><span class="sec-num">03</span><h2 data-v="s3">界面</h2></div>
+        <p class="sec-note" data-v="n3">当前预览版的实际界面，未做修饰。</p>
       </div>
 
       <div class="fig-2">
@@ -343,8 +348,8 @@
   <section class="section" id="think">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">04</span><h2>思考程度</h2></div>
-        <p class="sec-note">五档可调。快和深，由你决定，而不是产品替你决定。</p>
+        <div><span class="sec-num">04</span><h2 data-v="s4">思考程度</h2></div>
+        <p class="sec-note" data-v="n4">五档可调。快和深，由你决定，而不是产品替你决定。</p>
       </div>
 
       <div class="entry">
@@ -402,8 +407,8 @@
   <section class="section" id="spec">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">05</span><h2>技术规格</h2></div>
-        <p class="sec-note">预览版当前的实际构成。</p>
+        <div><span class="sec-num">05</span><h2 data-v="s5">技术规格</h2></div>
+        <p class="sec-note" data-v="n5">预览版当前的实际构成。</p>
       </div>
 
       <div class="tbl-wrap">
@@ -432,24 +437,24 @@
   <section class="section" id="use">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">06</span><h2>使用场景</h2></div>
-        <p class="sec-note">几个我们自己在用的例子，比功能列表更能说明问题。</p>
+        <div><span class="sec-num">06</span><h2 data-v="s6">使用场景</h2></div>
+        <p class="sec-note" data-v="n6">几个我们自己在用的例子，比功能列表更能说明问题。</p>
       </div>
 
       <ol class="numlist">
         <li>
           <span class="n">01</span>
-          <h3>整理乱掉的下载目录</h3>
+          <h3 data-v="u1">整理乱掉的下载目录</h3>
           <p>两百多个文件名混乱的 PDF、安装包和截图。让它按类型与日期归档到子目录，顺手把明显重复的旧版本挑出来。人做要半小时，它做只要一句话，而且会先把方案列给你看。</p>
         </li>
         <li>
           <span class="n">02</span>
-          <h3>从零搭一个项目骨架</h3>
+          <h3 data-v="u2">从零搭一个项目骨架</h3>
           <p>说清楚要做什么，它建目录、装依赖、写配置、跑通第一次构建。遇到报错自己读日志修，修不动会把原始输出贴给你，而不是编一个看起来合理的解释。</p>
         </li>
         <li>
           <span class="n">03</span>
-          <h3>给明天的课做演示文稿</h3>
+          <h3 data-v="u3">给明天的课做演示文稿</h3>
           <p>把大纲丢进去，十分钟拿到一份结构完整、可直接打开的 .pptx，剩下的时间用来改措辞和配图，而不是纠结第一页该写什么。</p>
         </li>
         <li>
@@ -470,8 +475,8 @@
   <section class="section" id="road">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">07</span><h2>路线图</h2></div>
-        <p class="sec-note">已经做完的、正在做的、和打算做的。不含时间表。</p>
+        <div><span class="sec-num">07</span><h2 data-v="s7">路线图</h2></div>
+        <p class="sec-note" data-v="n7">已经做完的、正在做的、和打算做的。不含时间表。</p>
       </div>
 
       <div class="tbl-wrap">
@@ -499,13 +504,13 @@
   <section class="section" id="faq">
     <div class="wrap">
       <div class="sec-head">
-        <div><span class="sec-num">08</span><h2>常见问题</h2></div>
-        <p class="sec-note">预览阶段被问得最多的几个。</p>
+        <div><span class="sec-num">08</span><h2 data-v="s8">常见问题</h2></div>
+        <p class="sec-note" data-v="n8">预览阶段被问得最多的几个。</p>
       </div>
 
       <div class="faq">
         <details open>
-          <summary>现在能下载吗？</summary>
+          <summary data-v="q1">现在能下载吗？</summary>
           <div class="a"><p>不能。预览版尚未开放下载，也没有确定发布日期。两个平台都会做：macOS（Apple Silicon）与 Windows（x64）。</p></div>
         </details>
         <details>
@@ -513,7 +518,7 @@
           <div class="a"><p>使用云端模型时需要，Key 由你自己填写并保存在本机，我们不代管、不上传。如果只想离线使用，可以走内置的 WebLLM 本地推理通道，代价是速度慢一些、能力弱一些。</p></div>
         </details>
         <details>
-          <summary>它会偷偷改我的文件吗？</summary>
+          <summary data-v="q2">它会偷偷改我的文件吗？</summary>
           <div class="a"><p>不会。所有写入都限定在你指定的工作区内，每次操作都会在对话里留下记录。它不会在你没打开应用时做任何事，关闭窗口后不会有任何后台动作。</p></div>
         </details>
         <details>
@@ -525,7 +530,7 @@
           <div class="a"><p>巨天是工作室的名字，产品沿用前缀保持一致。命名没有更复杂的含义，也不打算起一个需要解释的英文名。</p></div>
         </details>
         <details>
-          <summary>会开源吗？</summary>
+          <summary data-v="q3">会开源吗？</summary>
           <div class="a"><p>目前不计划开源客户端代码。工作室已发布的其他项目都是开源的，这个产品因为涉及本地系统权限与模型接入，暂不公开源码。发布后会有完整的使用文档。</p></div>
         </details>
         <details>
@@ -546,10 +551,10 @@
       <div class="contact-grid">
         <div>
           <span class="sec-num">09</span>
-          <h2 style="font-family:var(--serif);font-size:30px">如何获取</h2>
+          <h2 data-v="s9" style="font-family:var(--serif);font-size:30px">如何获取</h2>
         </div>
         <div>
-          <p>
+          <p data-v="contact1">
             预览版尚未开放下载。发布时会同时提供 macOS（Apple Silicon）
             与 Windows（x64）安装包，官网与 GitHub 同步通知。
           </p>
@@ -597,7 +602,7 @@
     </div>
     <div class="foot-note">
       <span>© 2026 巨天工作室</span>
-      <span>本页所述功能以实际发布版本为准</span>
+      <span data-v="foot">本页所述功能以实际发布版本为准</span>
       <span>最后更新 2026-09-16</span>
       <span>功能说明如有出入以实际版本为准</span>
     </div>

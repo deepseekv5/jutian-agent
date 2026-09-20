@@ -285,3 +285,47 @@ td .tag { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border: 1
 .tbl-hint { display: none; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-3); padding: 8px 0 0; }
 @media (max-width: 720px) { .tbl-hint { display: block; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* ============================ 风格切换 ============================ */
+.mode-switch { display: flex; border: 1px solid var(--rule); }
+.mode-switch button {
+  padding: 7px 11px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+  color: var(--ink-2); border-right: 1px solid var(--rule); white-space: nowrap;
+}
+.mode-switch button:last-child { border-right: 0; }
+.mode-switch button:hover { color: var(--ink); background: var(--paper-2); }
+.mode-switch button.on { background: var(--ink); color: var(--paper); }
+
+html[data-mode="neko"] { --accent: #c0658f; }
+html[data-mode="neko"][data-theme="dark"] { --accent: #d79fb9; }
+html[data-mode="neko"] body {
+  font-family: "Yuanti SC", "Hiragino Maru Gothic ProN", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+html[data-mode="neko"] .figure,
+html[data-mode="neko"] .think-bar { border-radius: 12px; }
+html[data-mode="neko"] .think-desc { border-radius: 0 12px 12px 0; }
+html[data-mode="neko"] .hero-title { letter-spacing: 0; }
+
+html[data-mode="funny"] { --accent: #a8701f; }
+html[data-mode="funny"][data-theme="dark"] { --accent: #d3a962; }
+html[data-mode="funny"] .hero-title { transform: rotate(-1.1deg); }
+html[data-mode="funny"] .sec-num { letter-spacing: .3em; }
+
+@media (max-width: 720px) {
+  .mode-switch button { padding: 6px 8px; font-size: 10px; letter-spacing: .04em; }
+}
+
+/* 中等宽度下导航收进菜单，避免和风格切换按钮挤在一起 */
+@media (max-width: 1000px) {
+  .nav {
+    position: absolute; top: 62px; left: 0; right: 0; flex-direction: column; gap: 0;
+    background: var(--paper); border-bottom: 1px solid var(--rule);
+    padding: 8px 26px 16px; display: none;
+  }
+  .nav.open { display: flex; }
+  .nav a { padding: 11px 0; border-bottom: 1px solid var(--rule-2); font-size: 15px; }
+  .nav a.active::after { display: none; }
+  .burger { display: grid; }
+  .head-inner { gap: 14px; }
+  .brand span { display: none; }
+}
