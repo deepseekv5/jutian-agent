@@ -453,3 +453,145 @@ html[data-mode="pixel"] .label { letter-spacing: .22em; }
 html[data-mode="pixel"] .tlink { border-bottom-width: 3px; }
 html[data-mode="pixel"] table.tbl th { background: var(--rule-2); }
 html[data-mode="pixel"] .foot { border-top: 4px solid var(--accent); }
+
+/* ============================ 风格专属装饰 ============================ */
+.mode-deco { display: none; }
+
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes wiggle { 0%,100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+
+/* ---------- 猫娘：猫耳 + 爱心 ---------- */
+html[data-mode="neko"] .mode-deco {
+  display: block; position: fixed; top: 64px; right: 22px; z-index: 95;
+  width: 90px; height: 42px; pointer-events: none;
+}
+html[data-mode="neko"] .mode-deco::before,
+html[data-mode="neko"] .mode-deco::after {
+  content: ""; position: absolute; top: 0; width: 40px; height: 40px;
+  background: var(--accent); clip-path: polygon(50% 0, 100% 100%, 0 100%); opacity: .9;
+}
+html[data-mode="neko"] .mode-deco::before { left: 0; transform: rotate(-15deg); }
+html[data-mode="neko"] .mode-deco::after { left: 42px; transform: rotate(15deg); }
+html[data-mode="neko"] .sec-head h2::before { content: "♡ "; color: var(--accent); }
+html[data-mode="neko"] .hero-title { letter-spacing: .02em; }
+html[data-mode="neko"] body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(192,101,143,.16) 3px, transparent 4px),
+    radial-gradient(circle at 6px 20px, rgba(192,101,143,.12) 2px, transparent 3px),
+    radial-gradient(circle at 18px 20px, rgba(192,101,143,.12) 2px, transparent 3px);
+  background-size: 96px 96px;
+}
+html[data-mode="neko"] .entry-state { border-radius: 10px; }
+
+/* ---------- 搞笑：歪斜便签 + 施工斜纹 + 涂改线 ---------- */
+html[data-mode="funny"] .mode-deco {
+  display: block; max-width: 300px; margin: 26px auto 0; padding: 13px 18px;
+  background: #ffe680; color: #4a3c10; font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+  border: 1px solid #e8cf6a; transform: rotate(-2.4deg);
+  box-shadow: 3px 4px 0 rgba(0,0,0,.10);
+}
+html[data-mode="funny"] .mode-deco::after { content: "注意：本页被人改过，别全信"; }
+html[data-mode="funny"] body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,.035) 0 14px, transparent 14px 28px);
+}
+html[data-mode="funny"] .sec-head h2 { display: inline-block; }
+html[data-mode="funny"] .sec-head h2::after {
+  content: ""; display: block; height: 5px; margin-top: 5px; opacity: .45;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 7px, transparent 7px 14px);
+}
+html[data-mode="funny"] .hero-title { transform: rotate(-1.4deg); }
+html[data-mode="funny"] .entry:nth-child(even) { transform: rotate(.35deg); }
+html[data-mode="funny"] .entry-state { transform: rotate(-3deg); display: inline-block; }
+
+/* ---------- 终端：窗口标题栏 + 闪烁光标 ---------- */
+html[data-mode="terminal"] .mode-deco {
+  display: flex; align-items: center; gap: 10px; position: sticky; top: 62px; z-index: 95;
+  padding: 9px 16px; background: var(--paper-2); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .06em;
+}
+html[data-mode="terminal"] .mode-deco::before { content: "● ● ●"; letter-spacing: 4px; color: var(--rule); }
+html[data-mode="terminal"] .mode-deco::after { content: attr(data-name) "  —  bash  —  80×24"; }
+html[data-mode="terminal"] .hero-title span[data-v="title"]::after {
+  content: "▋"; color: var(--accent); animation: blink 1.1s steps(1) infinite;
+}
+html[data-mode="terminal"] .entry-state { border-radius: 0; text-transform: uppercase; }
+html[data-mode="terminal"] .tlink:hover { background: var(--accent); color: var(--paper); }
+html[data-mode="terminal"] .hero-meta dd::before { content: ""; }
+
+/* ---------- 报纸：报头 ---------- */
+html[data-mode="paper"] .mode-deco {
+  display: block; text-align: center; padding: 20px 0 16px; margin-bottom: 6px;
+  border-bottom: 3px double var(--ink); font-family: var(--serif);
+}
+html[data-mode="paper"] .mode-deco::before {
+  content: attr(data-name); display: block; font-size: clamp(28px, 5vw, 44px);
+  font-weight: 700; letter-spacing: .16em;
+}
+html[data-mode="paper"] .mode-deco::after {
+  content: "第 001 期  ·  每日发行  ·  定价：免费"; display: block; margin-top: 8px;
+  font-size: 11px; letter-spacing: .22em; color: var(--ink-3); font-family: var(--mono);
+}
+html[data-mode="paper"] .hero-title { font-size: clamp(30px, 5vw, 52px); }
+html[data-mode="paper"] .section:first-of-type .sec-head h2::after {
+  content: " — 本报讯"; font-size: 15px; color: var(--ink-3); font-family: var(--serif);
+}
+
+/* ---------- 蓝图：图框 + 右下标题栏 ---------- */
+html[data-mode="blueprint"] body::after {
+  content: ""; position: fixed; inset: 14px; z-index: 5; pointer-events: none;
+  border: 2px solid rgba(255,255,255,.42);
+  outline: 1px solid rgba(255,255,255,.22); outline-offset: 6px;
+}
+html[data-mode="blueprint"] .mode-deco {
+  display: block; position: fixed; right: 16px; bottom: 16px; z-index: 96;
+  border: 1px solid var(--rule); background: var(--paper-2);
+  font-family: var(--mono); font-size: 10px; color: var(--ink-2);
+  padding: 9px 13px; letter-spacing: .12em; line-height: 1.9;
+}
+html[data-mode="blueprint"] .mode-deco::before { content: attr(data-name) "  /  SCALE 1:1  /  REV.2026"; display: block; }
+html[data-mode="blueprint"] .mode-deco::after { content: "DRAWN BY: JUTIAN   |   SHEET 1 OF 1"; display: block; color: var(--ink-3); }
+html[data-mode="blueprint"] .hero-title::before { content: "[ "; color: var(--accent); }
+html[data-mode="blueprint"] .hero-title::after { content: " ]"; color: var(--accent); }
+html[data-mode="blueprint"] .entry-side { border-right: 1px dashed var(--rule); padding-right: 20px; }
+
+/* ---------- 手账：胶带 + 折角 ---------- */
+html[data-mode="note"] .mode-deco {
+  display: block; height: 28px; max-width: 240px; margin: 0 auto;
+  background: rgba(255,224,138,.8);
+  border-left: 1px dashed rgba(0,0,0,.14); border-right: 1px dashed rgba(0,0,0,.14);
+  transform: rotate(-1.8deg); box-shadow: 0 2px 5px rgba(0,0,0,.07);
+}
+html[data-mode="note"] .hero-title { text-decoration: underline wavy var(--accent); text-underline-offset: 8px; }
+html[data-mode="note"] .entry {
+  background: #fffefa; border: 1px solid var(--rule); padding: 26px;
+  box-shadow: 2px 3px 0 var(--rule-2), 5px 7px 0 rgba(0,0,0,.03);
+}
+html[data-mode="note"] .entry + .entry { margin-top: 16px; }
+html[data-mode="note"] .pull::first-line { font-weight: 700; }
+html[data-mode="note"] .foot { position: relative; }
+html[data-mode="note"] .foot::before {
+  content: ""; position: absolute; right: 0; top: -2px; width: 34px; height: 34px;
+  background: linear-gradient(225deg, var(--paper-2) 50%, transparent 50%);
+  border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
+}
+
+/* ---------- 像素：PRESS START + 像素格 + 抖动 ---------- */
+html[data-mode="pixel"] .mode-deco {
+  display: block; text-align: center; padding: 11px; background: var(--rule-2);
+  font-family: var(--mono); font-size: 12px; letter-spacing: .34em; color: var(--accent);
+  border-bottom: 3px solid var(--rule); animation: blink 1.5s steps(1) infinite;
+}
+html[data-mode="pixel"] .mode-deco::after { content: "PRESS START"; }
+html[data-mode="pixel"] body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+html[data-mode="pixel"] .hero-title { animation: wiggle 2.6s ease-in-out infinite; }
+html[data-mode="pixel"] .tlink:hover { transform: translate(-2px, -2px); text-shadow: 2px 2px 0 var(--rule); }
+html[data-mode="pixel"] .entry-state { border: 2px solid var(--accent); color: var(--accent); }
+html[data-mode="pixel"] .hero-meta dd { color: var(--accent); }
