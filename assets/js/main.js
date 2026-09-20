@@ -47,6 +47,41 @@
       q1: '现在能下载吗？（不能）', q2: '它会背着我改文件吗？', q3: '会开源吗？（暂时不）',
       contact1: '现在下载不了。发布时会有 Mac 和 Windows 两个版本，通知会发在官网和 GitHub。',
       foot: '页面写的和实际发布的可能有出入'
+    },
+    terminal: {
+      title: 'agent@local:~$', subtitle: 'status: preview · build: 4.0.0',
+      lede1: '# 它会开终端、改文件、写代码、做 PPT。',
+      lede2: '# 当前状态：未开放下载。',
+      pull: '// 想多久，由调用方决定。', cite: 'config: thinking_level',
+      foot: '-- waiting for release --'
+    },
+    paper: {
+      title: '巨天 Agent', subtitle: '桌面智能体 · 预览版报道',
+      lede1: '据悉，一款可操作终端与本地文件的桌面智能体正在封闭打磨，尚未开放下载。',
+      lede2: '该产品提供五档思考程度，供使用者在响应速度与推理深度之间取舍。',
+      pull: '「把控制权留给用户，包括决定它该想多久。」', cite: '—— 开发方说明',
+      foot: '本版为预览报道 · 以实际发布为准'
+    },
+    blueprint: {
+      title: '巨天 Agent', subtitle: 'UNIT SPEC / REV. 4.0.0-PREVIEW',
+      lede1: '设备类型：桌面 AI 智能体。安装位置：本机。',
+      lede2: '接口：终端、文件系统、代码编辑器、PPT 生成器、语音链路。',
+      pull: '控制项：思考档位 ×5。默认：中。', cite: 'DWG NO. JTA-4.0',
+      foot: 'DRAFT · 未发布'
+    },
+    note: {
+      title: '巨天 Agent', subtitle: '还在做的一个东西',
+      lede1: '想做一个真正会干活的智能体，不是只会说话的那种。',
+      lede2: '现在还在打磨，等能拿得出手了再发。',
+      pull: '想多久，让你来定。', cite: '—— 记在草稿本上',
+      foot: '待续'
+    },
+    pixel: {
+      title: 'JUTIAN AGENT', subtitle: 'STAGE 1 — LOADING',
+      lede1: '装备：终端 / 文件 / 代码 / PPT / 语音。',
+      lede2: '当前状态：预览版。BOSS：稳定性。',
+      pull: 'THINK LEVEL: 1 2 3 4 5', cite: 'CREDITS: 001',
+      foot: 'COMING SOON'
     }
   };
 
@@ -62,21 +97,14 @@
       var pack = MODES[m] || {};
       el.textContent = pack[k] || el.getAttribute('data-orig');
     });
-    var btns = document.querySelectorAll('.mode-switch button');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('on', btns[i].getAttribute('data-mode') === m);
-    }
+    var sel = document.getElementById('modeSelect');
+    if (sel) sel.value = m;
     try { localStorage.setItem(MODE_KEY, m); } catch (e) {}
     if (window.__onMode) window.__onMode(m);
   }
 
-  var sw = document.getElementById('modeSwitch');
-  if (sw) {
-    sw.addEventListener('click', function (e) {
-      var b = e.target.closest ? e.target.closest('button') : null;
-      if (b) applyMode(b.getAttribute('data-mode'));
-    });
-  }
+  var selBox = document.getElementById('modeSelect');
+  if (selBox) selBox.addEventListener('change', function () { applyMode(selBox.value); });
   var savedMode = null;
   try { savedMode = localStorage.getItem(MODE_KEY); } catch (e) {}
   if (savedMode && MODES[savedMode]) applyMode(savedMode);
