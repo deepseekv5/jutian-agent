@@ -595,3 +595,166 @@ html[data-mode="pixel"] .hero-title { animation: wiggle 2.6s ease-in-out infinit
 html[data-mode="pixel"] .tlink:hover { transform: translate(-2px, -2px); text-shadow: 2px 2px 0 var(--rule); }
 html[data-mode="pixel"] .entry-state { border: 2px solid var(--accent); color: var(--accent); }
 html[data-mode="pixel"] .hero-meta dd { color: var(--accent); }
+
+/* ============================================================
+   全局布局重构：每种风格换一套骨架
+   ============================================================ */
+
+/* ---------- 猫娘：居中卡片流 ---------- */
+html[data-mode="neko"] .wrap { max-width: 980px; }
+html[data-mode="neko"] .hero-body { display: block; text-align: center; }
+html[data-mode="neko"] .hero-meta { justify-content: center; }
+html[data-mode="neko"] .hero-lede { margin-left: auto; margin-right: auto; }
+html[data-mode="neko"] .hero-aside { border: 0; padding: 0; margin-top: 22px; text-align: center; }
+html[data-mode="neko"] .sec-head { display: block; text-align: center; border-top: 0; }
+html[data-mode="neko"] .sec-head .sec-note { text-align: center; }
+html[data-mode="neko"] .sec-num { text-align: center; display: block; }
+html[data-mode="neko"] .entry {
+  display: block; margin: 18px 0; padding: 24px 26px;
+  border: 2px solid var(--accent); border-radius: 22px;
+  background: var(--paper-3); box-shadow: 0 6px 0 rgba(192,101,143,.18);
+}
+html[data-mode="neko"] .entry-side { position: static; margin-bottom: 14px; }
+html[data-mode="neko"] .entry-spec { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+html[data-mode="neko"] .entry-spec div { border: 0; padding: 0; flex-direction: column; gap: 2px; }
+html[data-mode="neko"] .entry-spec dd { text-align: left; }
+html[data-mode="neko"] .points li { border-radius: 12px; padding: 10px 12px; }
+html[data-mode="neko"] .pull { border-radius: 22px; background: var(--paper-3); padding: 26px; text-align: center; }
+html[data-mode="neko"] .tlink { border: 1px solid var(--accent); border-radius: 999px; padding: 7px 16px; }
+html[data-mode="neko"] .numlist li { grid-template-columns: 1fr; gap: 4px; border-radius: 16px; padding: 18px; }
+html[data-mode="neko"] .foot-top { text-align: center; }
+
+/* ---------- 搞笑：东倒西歪 ---------- */
+html[data-mode="funny"] .sec-head { display: block; }
+html[data-mode="funny"] .sec-head h2 { display: inline-block; background: #ffe680; padding: 2px 10px; transform: rotate(-1.3deg); }
+html[data-mode="funny"] .entry { display: block; }
+html[data-mode="funny"] .entry-side { position: static; }
+html[data-mode="funny"] .entry:nth-of-type(odd) { transform: rotate(-.55deg); }
+html[data-mode="funny"] .entry:nth-of-type(even) { transform: rotate(.5deg) translateX(12px); }
+html[data-mode="funny"] .hero-meta div:nth-child(2n) { transform: rotate(2.2deg); }
+html[data-mode="funny"] .hero-meta div:nth-child(3n) { transform: rotate(-1.8deg); }
+html[data-mode="funny"] .numlist li:nth-child(2n) { transform: rotate(-.7deg); }
+html[data-mode="funny"] .numlist li:nth-child(3n) { transform: rotate(.6deg); }
+html[data-mode="funny"] .tbl-wrap { transform: rotate(.4deg); }
+html[data-mode="funny"] .points li:nth-child(even) { font-size: 15.5px; }
+html[data-mode="funny"] .points li:nth-child(3n) { padding-left: 6px; }
+html[data-mode="funny"] .log li:nth-child(2n) { transform: rotate(-.5deg); }
+html[data-mode="funny"] .pull { transform: rotate(-.8deg); }
+
+/* ---------- 终端：单列命令行 ---------- */
+html[data-mode="terminal"] .wrap { max-width: 880px; }
+html[data-mode="terminal"] .hero-body { display: block; }
+html[data-mode="terminal"] .hero-aside { border: 0; border-top: 1px dashed var(--rule); padding: 14px 0 0; margin-top: 18px; }
+html[data-mode="terminal"] .hero-lede::before { content: "# "; color: var(--ink-3); }
+html[data-mode="terminal"] .sec-head { display: block; border-top: 1px dashed var(--rule); }
+html[data-mode="terminal"] .entry { display: block; border-left: 2px solid var(--rule); padding: 14px 0 14px 18px; }
+html[data-mode="terminal"] .entry-side { position: static; }
+html[data-mode="terminal"] .entry-body > p:first-of-type::before { content: "> "; color: var(--accent); }
+html[data-mode="terminal"] .entry-spec div { border-bottom: 0; padding: 2px 0; }
+html[data-mode="terminal"] .points li { border: 0; padding: 3px 0; }
+html[data-mode="terminal"] .points li i::after { content: ":"; }
+html[data-mode="terminal"] table.tbl th { border-bottom: 1px dashed var(--rule); }
+html[data-mode="terminal"] table.tbl td { border-bottom: 0; }
+html[data-mode="terminal"] .numlist li { grid-template-columns: 1fr; gap: 2px; padding: 12px 0; }
+html[data-mode="terminal"] .numlist .n::after { content: " //"; color: var(--ink-3); }
+html[data-mode="terminal"] .pull { border-left: 2px solid var(--accent); border-top: 0; border-bottom: 0; padding: 8px 0 8px 18px; }
+html[data-mode="terminal"] .log li { grid-template-columns: 1fr; gap: 2px; padding: 8px 0; }
+html[data-mode="terminal"] .log time::before { content: "[ "; color: var(--ink-3); }
+html[data-mode="terminal"] .log time::after { content: " ]"; color: var(--ink-3); }
+
+/* ---------- 报纸：通栏 + 多栏 ---------- */
+html[data-mode="paper"] .wrap { max-width: 1260px; }
+html[data-mode="paper"] .hero-body { column-count: 2; column-gap: 36px; }
+html[data-mode="paper"] .hero-aside { border-left: 1px solid var(--ink); padding-left: 22px; break-inside: avoid; }
+html[data-mode="paper"] .sec-head { grid-template-columns: 1fr; }
+html[data-mode="paper"] .sec-head h2 { font-size: clamp(28px, 4vw, 42px); letter-spacing: .02em; }
+html[data-mode="paper"] .entry { display: block; }
+html[data-mode="paper"] .entry-side {
+  position: static; border-bottom: 1px solid var(--ink); padding-bottom: 12px; margin-bottom: 14px;
+}
+html[data-mode="paper"] .entry-spec { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 10px; }
+html[data-mode="paper"] .entry-spec div { border: 0; padding: 0; }
+html[data-mode="paper"] .entry-spec dt { font-family: var(--serif); }
+html[data-mode="paper"] .log { column-count: 2; column-gap: 34px; }
+html[data-mode="paper"] .numlist li { grid-template-columns: 1fr; gap: 6px; }
+html[data-mode="paper"] .pull { font-size: clamp(22px, 3.2vw, 32px); }
+
+/* ---------- 蓝图：图纸框 + 角标 ---------- */
+html[data-mode="blueprint"] .entry {
+  display: block; position: relative; padding: 22px 24px;
+  border: 1px solid var(--rule); margin-bottom: 16px;
+}
+html[data-mode="blueprint"] .entry::before {
+  content: ""; position: absolute; left: -1px; top: -1px; width: 12px; height: 12px;
+  border-left: 2px solid var(--accent); border-top: 2px solid var(--accent);
+}
+html[data-mode="blueprint"] .entry::after {
+  content: ""; position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px;
+  border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+}
+html[data-mode="blueprint"] .entry-side {
+  position: static; display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  border-right: 0; padding: 0 0 14px; border-bottom: 1px dashed var(--rule); margin-bottom: 14px;
+}
+html[data-mode="blueprint"] .entry-name { margin: 0; }
+html[data-mode="blueprint"] .entry-spec { display: flex; gap: 22px; flex-wrap: wrap; margin: 0; }
+html[data-mode="blueprint"] .entry-spec div { border: 0; padding: 0; }
+html[data-mode="blueprint"] .entry-spec dt { color: var(--accent); }
+html[data-mode="blueprint"] .sec-head { grid-template-columns: 1fr; gap: 10px; border-top: 1px solid var(--rule); }
+html[data-mode="blueprint"] .hero-body { display: block; }
+html[data-mode="blueprint"] .hero-aside { border-left: 0; border-top: 1px dashed var(--rule); padding: 14px 0 0; margin-top: 18px; }
+html[data-mode="blueprint"] .hero-meta div { border: 1px solid var(--rule); padding: 6px 10px; }
+html[data-mode="blueprint"] .numlist li { grid-template-columns: 70px 1fr; gap: 18px; border: 1px solid var(--rule-2); padding: 16px; margin-bottom: 10px; }
+html[data-mode="blueprint"] table.tbl { border: 1px solid var(--rule); }
+html[data-mode="blueprint"] .points li { border-bottom: 1px dashed var(--rule); }
+html[data-mode="blueprint"] .log li { border: 1px solid var(--rule-2); padding: 14px 16px; margin-bottom: 10px; }
+
+/* ---------- 手账：跨页笔记 ---------- */
+html[data-mode="note"] .hero-body { display: block; }
+html[data-mode="note"] .hero-aside {
+  border-left: 0; border-top: 2px dashed var(--rule); padding: 14px 0 0; margin-top: 18px;
+}
+html[data-mode="note"] .sec-head { grid-template-columns: 1fr; gap: 8px; }
+html[data-mode="note"] .sec-head h2 {
+  display: inline-block; border-bottom: 3px solid var(--accent); padding-bottom: 3px;
+}
+html[data-mode="note"] .entry { display: block; }
+html[data-mode="note"] .entry-side { position: static; margin-bottom: 12px; }
+html[data-mode="note"] .entry-spec div { border-bottom: 1px dashed var(--rule); }
+html[data-mode="note"] .points li { border-bottom: 1px dashed var(--rule); }
+html[data-mode="note"] .numlist li:nth-child(odd) { background: rgba(255,224,138,.28); border-radius: 4px; padding-left: 12px; padding-right: 12px; }
+html[data-mode="note"] .log li:nth-child(even) { background: rgba(255,224,138,.18); border-radius: 4px; padding-left: 12px; }
+html[data-mode="note"] table.tbl td, html[data-mode="note"] table.tbl th { border-bottom: 1px dashed var(--rule); }
+html[data-mode="note"] .hero-meta dd { border-bottom: 2px solid rgba(255,208,138,.9); }
+html[data-mode="note"] .toc { border: 2px dashed var(--rule); padding: 14px 18px; border-radius: 6px; }
+
+/* ---------- 像素：游戏对话框 ---------- */
+html[data-mode="pixel"] .hero-body { display: block; }
+html[data-mode="pixel"] .hero-aside {
+  border: 3px solid var(--rule); background: var(--paper-2); padding: 16px; margin-top: 18px;
+  box-shadow: 6px 6px 0 var(--rule-2);
+}
+html[data-mode="pixel"] .hero-meta {
+  border: 3px solid var(--rule); background: var(--paper-2); padding: 14px 16px;
+  box-shadow: 6px 6px 0 var(--rule-2); gap: 24px;
+}
+html[data-mode="pixel"] .sec-head { display: block; }
+html[data-mode="pixel"] .sec-head h2 {
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: 24px;
+}
+html[data-mode="pixel"] .entry { display: block; margin-bottom: 18px; padding: 20px; }
+html[data-mode="pixel"] .entry-side { position: static; margin-bottom: 14px; }
+html[data-mode="pixel"] .entry-spec div { border-bottom: 2px solid var(--rule-2); }
+html[data-mode="pixel"] .points li { border-bottom: 2px solid var(--rule-2); padding: 7px 0; }
+html[data-mode="pixel"] .numlist li {
+  grid-template-columns: 1fr; gap: 6px; border: 3px solid var(--rule);
+  background: var(--paper-2); padding: 16px; margin-bottom: 12px; box-shadow: 6px 6px 0 var(--rule-2);
+}
+html[data-mode="pixel"] .numlist .n { color: var(--accent); }
+html[data-mode="pixel"] .log li {
+  grid-template-columns: 1fr; gap: 4px; border: 3px solid var(--rule);
+  background: var(--paper-2); padding: 14px 16px; margin-bottom: 12px; box-shadow: 6px 6px 0 var(--rule-2);
+}
+html[data-mode="pixel"] table.tbl { border: 3px solid var(--rule); }
+html[data-mode="pixel"] .toc { border: 3px solid var(--rule); background: var(--paper-2); padding: 14px 18px; }
+html[data-mode="pixel"] .foot { background: var(--rule-2); }
