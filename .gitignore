@@ -27,4 +27,4 @@ __pycache__/
 vite.config.ts.timestamp-*.mjs
 
 # 网站构建
-jutian-site/node_modules/
+pages/node_modules/
