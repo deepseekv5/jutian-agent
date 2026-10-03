@@ -1,0 +1,30 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+release/
+*.node
+
+# 运行时数据（密钥/会话不入库）
+*.db
+*.db-shm
+*.db-wal
+.env
+*.log
+
+# 打包产物
+*.asar
+*.asar.bak
+
+# 大体积运行时（打包时由脚本注入,不入库）
+python-runtime/
+
+# 系统/工具
+.DS_Store
+__pycache__/
+*.tsbuildinfo
+vite.config.ts.timestamp-*.mjs
+
+# 网站构建
+jutian-site/node_modules/

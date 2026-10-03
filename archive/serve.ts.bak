@@ -1,0 +1,185 @@
+#!/usr/bin/env node
+/**
+ * 巨天agent — 单进程启动脚本
+ * 静态文件服务 + Tool API，内存占用极低
+ */
+import { createServer } from 'http'
+import { readFile, readdir, stat, writeFile, rename, unlink, mkdir } from 'fs/promises'
+import { join, resolve, dirname, extname } from 'path'
+import { existsSync, readFileSync } from 'fs'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+import { homedir, cpus, totalmem, freemem, platform, release, arch } from 'os'
+
+const execAsync = promisify(execFile)
+const PORT = parseInt(process.env.PORT || '3211')
+const MAX_OUT = 512 * 1024
+const DIST = join(import.meta.dirname, 'dist')
+
+// MIME types
+const MIME: Record<string, string> = {
+  '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
+  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2',
+}
+
+// ─── Security ───
+const ALLOWED = [process.env.HOME || '/Users/zeroneil', '/tmp', '/Users', '/opt', '/usr/local']
+const ok = (p: string) => ALLOWED.some(b => resolve(p).startsWith(resolve(b)))
+
+// ─── JSON helpers ───
+const json = (res: any, d: any, s = 200) => { res.writeHead(s, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(d)) }
+const body = async (req: any) => { const b: Buffer[] = []; for await (const c of req) b.push(c); return JSON.parse(Buffer.concat(b).toString() || '{}') }
+
+// ─── Tool handlers ───
+const BLOCKED = ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:', 'chmod -R 777 /', '> /dev/sda', 'format', 'shutdown']
+
+async function shell(a: any) {
+  if (!a.command) return { success: false, error: '无命令' }
+  const n = a.command.toLowerCase()
+  if (BLOCKED.some(b => n.includes(b))) return { success: false, error: '已阻止' }
+  try {
+    const r = await execAsync('zsh', ['-c', a.command], { timeout: (a.timeout || 30) * 1000, maxBuffer: MAX_OUT, env: { ...process.env, TERM: 'dumb' }, cwd: a.workdir || process.env.HOME })
+    return { success: true, output: (r.stdout || '').trim() + ((r.stderr || '').trim() ? `\n[stderr]\n${r.stderr.trim()}` : '') }
+  } catch (e: any) { return { success: false, output: (e.stdout || '').trim(), error: e.message } }
+}
+
+async function read_file(a: any) {
+  const p = resolve(a.path); if (!ok(p)) return { success: false, error: '路径不允许' }
+  try { let c = await readFile(p, 'utf-8'); if (a.offset || a.limit) { const ls = c.split('\n'); c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join('\n') } return { success: true, output: c.slice(0, MAX_OUT) } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function write_file(a: any) {
+  const p = resolve(a.path); if (!ok(p)) return { success: false, error: '路径不允许' }
+  try { await mkdir(dirname(p), { recursive: true }); await writeFile(p, a.content, 'utf-8'); return { success: true, output: `✅ 已写入: ${p}` } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function edit_file(a: any) {
+  const p = resolve(a.path); if (!ok(p)) return { success: false, error: '路径不允许' }
+  try { let c = await readFile(p, 'utf-8'); if (!c.includes(a.oldText)) return { success: false, error: '未找到要替换的文本' }; c = c.replace(a.oldText, a.newText); await writeFile(p, c, 'utf-8'); return { success: true, output: `✅ 已编辑: ${p}` } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function list_dir(a: any) {
+  const p = resolve(a.path || process.env.HOME); if (!ok(p)) return { success: false, error: '路径不允许' }
+  try { let e = await readdir(p, { withFileTypes: true }); if (!a.showHidden) e = e.filter(x => !x.name.startsWith('.')); const l = e.map(x => `${x.isDirectory() ? '📁' : '📄'} ${x.name}${x.isDirectory() ? '/' : ''}`); return { success: true, output: l.join('\n') + `\n${l.length} 项` } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function search_files(a: any) {
+  const d = resolve(a.path || process.env.HOME); if (!ok(d)) return { success: false, error: '路径不允许' }
+  try { const r = await execAsync('find', [d, '-name', a.pattern, '-maxdepth', String(a.maxDepth || 5)], { timeout: 15_000, maxBuffer: MAX_OUT }); return { success: true, output: r.stdout.trim().slice(0, MAX_OUT) } }
+  catch (e: any) { return { success: false, error: e.stderr || e.message } }
+}
+
+async function search_content(a: any) {
+  const d = resolve(a.path || process.env.HOME); if (!ok(d)) return { success: false, error: '路径不允许' }
+  try { const r = await execAsync('grep', ['-rn', a.pattern, d, '--max-count=20'], { timeout: 15_000, maxBuffer: MAX_OUT }); return { success: true, output: r.stdout.trim() || '(无匹配)' } }
+  catch (e: any) { return (e as any).code === 1 ? { success: true, output: '(无匹配)' } : { success: false, error: e.stderr || e.message } }
+}
+
+async function get_file_info(a: any) {
+  try { const s = await stat(resolve(a.path)); return { success: true, output: JSON.stringify({ size: s.size, type: s.isFile() ? 'file' : 'directory', modified: s.mtime.toISOString() }, null, 2) } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function move_file(a: any) { const s = resolve(a.src), d = resolve(a.dest); if (!ok(s) || !ok(d)) return { success: false, error: '路径不允许' }; try { await mkdir(dirname(d), { recursive: true }); await rename(s, d); return { success: true, output: `✅ ${s} → ${d}` } } catch (e: any) { return { success: false, error: e.message } } }
+async function delete_file(a: any) { const p = resolve(a.path); if (!ok(p)) return { success: false, error: '路径不允许' }; try { await unlink(p); return { success: true, output: `✅ 已删除` } } catch (e: any) { return { success: false, error: e.message } } }
+
+async function web_fetch(a: any) {
+  try { const r = await fetch(a.url, { headers: { 'User-Agent': 'LaoyouAgent/1.0' }, signal: AbortSignal.timeout(20_000) }); let t = await r.text(); t = t.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '\n').replace(/\n{3,}/g, '\n').trim(); return { success: true, output: `[${r.status}]\n\n${t.slice(0, MAX_OUT)}` } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function http_request(a: any) {
+  try { const r = await fetch(a.url, { method: a.method || 'GET', headers: { 'Content-Type': 'application/json' }, body: a.body, signal: AbortSignal.timeout(20_000) }); return { success: true, output: JSON.stringify({ status: r.status, body: (await r.text()).slice(0, MAX_OUT) }, null, 2) } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function git_operation(a: any) { return shell({ command: `git ${a.command}`, workdir: a.repoPath }) }
+async function npm_run(a: any) { return shell({ command: `npm ${a.command || ''}`, workdir: a.projectPath }) }
+
+async function code_analysis(a: any) {
+  const p = resolve(a.path); if (!ok(p)) return { success: false, error: '路径不允许' }
+  try { const c = await readFile(p, 'utf-8'); const im: string[] = []; for (const pat of [/^import\s+.+\s+from\s+['"](.+)['"]/gm, /^require\(['"](.+)['"]\)/gm]) { let m; while ((m = pat.exec(c)) !== null) im.push(m[1]) } return { success: true, output: JSON.stringify({ language: extname(p).slice(1), lines: c.split('\n').length, imports: [...new Set(im)] }, null, 2) } }
+  catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function system_info() {
+  try {
+    const mu = ((totalmem() - freemem()) / 1073741824).toFixed(1), mt = (totalmem() / 1073741824).toFixed(1)
+    const r = await execAsync('zsh', ['-c', 'for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'], { timeout: 5000, maxBuffer: 65536 })
+    const tools: Record<string, boolean> = {}
+    for (const l of r.stdout.trim().split('\n')) { const [k, v] = l.split('='); if (k && v) tools[k.trim()] = v.trim() === 'yes' }
+    return { success: true, output: JSON.stringify({ os: `${platform()} ${release()}`, arch, cpu: `${cpus().length} 核`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: homedir(), tools }, null, 2) }
+  } catch (e: any) { return { success: false, error: e.message } }
+}
+
+async function process_list(a: any) { try { const r = await execAsync('zsh', ['-c', a.filter ? `ps aux | grep -i "${a.filter}" | head -30` : 'ps aux | head -40'], { timeout: 10_000, maxBuffer: MAX_OUT }); return { success: true, output: r.stdout.trim() || '(无匹配)' } } catch (e: any) { return { success: false, error: e.message } } }
+async function port_check(a: any) { try { const r = await execAsync('lsof', ['-ti', `:${a.port}`], { timeout: 5000 }); const pid = r.stdout.trim(); if (!pid) return { success: true, output: `端口 ${a.port} 空闲 ✅` }; const i = await execAsync('ps', ['-p', pid, '-o', 'pid,comm'], { timeout: 5000 }); return { success: true, output: `端口 ${a.port}: ${i.stdout.trim()}` } } catch { return { success: true, output: `端口 ${a.port} 空闲 ✅` } } }
+async function json_process(a: any) { try { let d: any = a.data.startsWith('file:') ? JSON.parse(await readFile(resolve(a.data.slice(5)), 'utf-8')) : JSON.parse(a.data); if (a.query === 'keys') return { success: true, output: Object.keys(d).join('\n') }; return { success: true, output: JSON.stringify(d, null, 2) } } catch (e: any) { return { success: false, error: e.message } } }
+
+const SKILL_DIR = join(homedir(), '.laoyou-agent', 'skills')
+async function list_skills() { try { const list = [{ name: 'builtin', description: '内置工具集', status: 'active', toolCount: 22 }]; if (!existsSync(SKILL_DIR)) return { success: true, output: JSON.stringify(list) }; for (const s of (await readdir(SKILL_DIR, { withFileTypes: true })).filter(x => x.isDirectory())) { const mp = join(SKILL_DIR, s.name, 'skill.json'); list.push(existsSync(mp) ? { name: s.name, ...(JSON.parse(readFileSync(mp, 'utf-8'))), status: 'installed', toolCount: 0 } : { name: s.name, status: 'incomplete', toolCount: 0 }) } return { success: true, output: JSON.stringify(list) } } catch (e: any) { return { success: false, error: e.message } } }
+async function load_skill(a: any) { try { return { success: true, output: JSON.stringify(JSON.parse(readFileSync(join(SKILL_DIR, a.name, 'skill.json'), 'utf-8'))) } } catch { return { success: false, error: `Skill "${a.name}" 不存在` } } }
+async function install_skill(a: any) { try { await mkdir(join(SKILL_DIR, a.name), { recursive: true }); await writeFile(join(SKILL_DIR, a.name, 'skill.json'), JSON.stringify({ name: a.name, version: '0.1.0', installed_at: new Date().toISOString() }, null, 2)); return { success: true, output: `✅ 已安装` } } catch (e: any) { return { success: false, error: e.message } } }
+
+// ─── Handler map ───
+const TOOLS: Record<string, (a: any) => Promise<any>> = {
+  shell, read_file, write_file, edit_file, list_dir, search_files, search_content,
+  get_file_info, move_file, delete_file, web_fetch, http_request, git_operation,
+  npm_run, code_analysis, system_info, process_list, port_check, json_process,
+  list_skills, load_skill, install_skill,
+}
+
+// ─── Static file serving ───
+async function serveStatic(req: any, res: any) {
+  let p = resolve(DIST, req.url === '/' ? 'index.html' : req.url?.split('?')[0] || 'index.html')
+  if (!ok(p)) return json(res, { error: 'Forbidden' }, 403)
+  try {
+    if (!existsSync(p) || (await stat(p)).isDirectory()) p = join(DIST, 'index.html') // SPA fallback
+    const data = await readFile(p)
+    res.writeHead(200, { 'Content-Type': MIME[extname(p)] || 'application/octet-stream' })
+    res.end(data)
+  } catch { res.writeHead(404); res.end('Not found') }
+}
+
+// ─── Server ───
+createServer(async (req: any, res: any) => {
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' }); res.end(); return }
+  const url = new URL(req.url || '/', `http://localhost:${PORT}`)
+  try {
+    if (url.pathname === '/api/health') return json(res, { status: 'ok', agent: '巨天agent', tools: Object.keys(TOOLS).length })
+    if (url.pathname === '/api/tools') return json(res, { tools: Object.keys(TOOLS).map(k => ({ name: k })) })
+    if (url.pathname === '/api/models' && req.method === 'POST') {
+      try {
+        const { apiBaseUrl, apiKey } = await body(req)
+        const r = await fetch(`${apiBaseUrl}/api/models`, {
+          headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!r.ok) return json(res, { error: `API 返回 ${r.status}` }, r.status)
+        const data: any = await r.json()
+        const channelData = (data && data.data) || {}
+        const models = [...new Set(Object.values(channelData).flat().filter(Boolean) as string[])]
+        return json(res, { models })
+      } catch (e: any) {
+        return json(res, { error: e.message }, 502)
+      }
+    }
+    if (url.pathname === '/api/tools/execute' && req.method === 'POST') {
+      const { name, args = {} } = await body(req)
+      const h = TOOLS[name]; if (!h) return json(res, { success: false, error: `未知工具: ${name}` }, 404)
+      console.log(`→ ${name}`); const r = await h(args); console.log(`← ${name} ${r.success ? 'OK' : 'FAIL'}`)
+      return json(res, r)
+    }
+    await serveStatic(req, res)
+  } catch (e: any) { json(res, { error: e.message }, 500) }
+}).listen(PORT, () => {
+  console.log(`
+  🐾 巨天agent — http://localhost:${PORT}
+  ${Object.keys(TOOLS).length} tools | 单进程 | 低内存
+  `)
+})

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>巨天agent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    background: linear-gradient(160deg, #17171c 0%, #0b0b0f 55%, #101318 100%);
+    color: #ececec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-app-region: drag;
+    position: relative;
+  }
+  /* 极光光球 */
+  .aurora {
+    position: absolute; border-radius: 50%; filter: blur(90px); pointer-events: none;
+    animation: drift 12s ease-in-out infinite;
+  }
+  .a1 { width: 46vw; height: 46vw; left: -10vw; top: -14vw; background: radial-gradient(circle, rgba(52,211,153,0.16), transparent 70%); }
+  .a2 { width: 40vw; height: 40vw; right: -12vw; top: 26vh; background: radial-gradient(circle, rgba(99,102,241,0.13), transparent 70%); animation-delay: -4s; }
+  .a3 { width: 36vw; height: 36vw; left: 20vw; bottom: -14vw; background: radial-gradient(circle, rgba(14,165,233,0.11), transparent 70%); animation-delay: -8s; }
+  @keyframes drift {
+    0%, 100% { transform: translate(0,0) scale(1); opacity: .6; }
+    33% { transform: translate(50px,-30px) scale(1.12); opacity: .85; }
+    66% { transform: translate(-30px,26px) scale(.94); opacity: .6; }
+  }
+  /* 细网格 */
+  .grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 52px 52px;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black 30%, transparent 78%);
+  }
+  .wrap { text-align: center; position: relative; z-index: 2; opacity: 0; animation: heroIn .9s cubic-bezier(.2,.8,.3,1) forwards .1s; }
+  @keyframes heroIn {
+    0% { opacity: 0; transform: translateY(16px) scale(.97); filter: blur(6px); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+
+  /* 玻璃品牌圆片 */
+  .logo-wrap {
+    width: 84px; height: 84px; margin: 0 auto 20px; border-radius: 26px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(150deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+    border: 1px solid rgba(255,255,255,0.14);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+  }
+  .logo { width: 40px; height: 40px; }
+
+  .name { font-size: 19px; font-weight: 600; color: #ffffff; letter-spacing: .02em; text-shadow: 0 2px 20px rgba(0,0,0,.5); }
+  .sub { font-size: 11.5px; color: rgba(255,255,255,0.5); margin-top: 5px; letter-spacing: .08em; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 16px;
+    padding: 0 14px; height: 28px; border-radius: 99px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(12px);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; animation: breathe 2s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+  .badge span { font-size: 11px; font-family: 'SF Mono', Menlo, monospace; color: rgba(255,255,255,0.65); }
+
+  .status { margin-top: 22px; font-size: 12px; color: rgba(255,255,255,0.45); min-height: 16px; }
+
+  .bar { width: 180px; height: 3px; border-radius: 99px; background: rgba(255,255,255,0.1); margin: 14px auto 0; overflow: hidden; }
+  .bar-inner { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #34d399, #10b981); box-shadow: 0 0 12px rgba(52,211,153,0.5); animation: load 2s ease-in-out infinite; }
+  @keyframes load { 0% { width: 0; } 60% { width: 70%; } 100% { width: 100%; } }
+
+  #errorBox { display: none; margin-top: 12px; }
+  #errorBox.show { display: block; }
+  #errorMsg { font-size: 12px; color: #f87171; max-width: 280px; margin: 0 auto; line-height: 1.5; }
+  #retryBtn {
+    margin-top: 10px; padding: 6px 18px; border-radius: 9px; border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.08); color: #ececec; font-size: 12px; cursor: pointer; -webkit-app-region: no-drag;
+    backdrop-filter: blur(12px);
+  }
+  #retryBtn:hover { background: rgba(255,255,255,0.14); }
+
+  .version { margin-top: 20px; font-size: 10px; color: rgba(255,255,255,0.25); font-family: 'SF Mono', Menlo, monospace; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aurora { animation: none; }
+    .badge .dot { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="aurora a1"></div>
+  <div class="aurora a2"></div>
+  <div class="aurora a3"></div>
+  <div class="grid"></div>
+  <div class="wrap">
+    <div class="logo-wrap">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.4 8h11.2" />
+          <path d="M17.6 8v8" />
+          <path d="M6.4 16h11.2" />
+          <path d="M6.4 8v8" />
+          <path d="M6.4 12h11.2" />
+        </svg>
+      </div>
+    </div>
+    <div class="name">巨天agent</div>
+    <div class="sub">AI 工作台</div>
+    <div class="badge"><span class="dot"></span><span>Beta v4.0.0 · 欢迎来到内测</span></div>
+    <div class="bar"><div class="bar-inner"></div></div>
+    <div class="status" id="status">正在启动…</div>
+    <div id="errorBox">
+      <div id="errorMsg"></div>
+      <button id="retryBtn">重新连接</button>
+    </div>
+    <div class="version">v4.0.0</div>
+  </div>
+  <script>
+    const statusEl = document.getElementById('status')
+    const barEl = document.querySelector('.bar-inner')
+    const errorBox = document.getElementById('errorBox')
+    const errorMsg = document.getElementById('errorMsg')
+    const retryBtn = document.getElementById('retryBtn')
+
+    retryBtn.addEventListener('click', () => {
+      errorBox.classList.remove('show')
+      statusEl.textContent = '正在重新连接…'
+      barEl.style.animation = 'none'
+      void barEl.offsetWidth
+      barEl.style.animation = ''
+      if (window.electronAPI) window.electronAPI.retry()
+      else window.location.reload()
+    })
+
+    if (window.electronAPI) {
+      window.electronAPI.onStatus((msg) => { statusEl.textContent = msg })
+      window.electronAPI.onReady(() => {
+        statusEl.textContent = '就绪'
+        barEl.style.width = '100%'
+        setTimeout(() => { window.location.href = 'http://localhost:3211' }, 300)
+      })
+      window.electronAPI.onError((msg) => {
+        errorMsg.textContent = msg || '服务启动失败'
+        errorBox.classList.add('show')
+        statusEl.textContent = '启动失败'
+      })
+    } else {
+      setTimeout(() => { window.location.href = 'http://localhost:3211' }, 2500)
+    }
+  </script>
+<script>
+    // 版本号由 main.cjs 通过 query 注入(单一来源 package.json)
+    (function () {
+      var v = new URLSearchParams(location.search).get('v') || '';
+      if (!v) return;
+      document.querySelectorAll('.version, .badge span:last-child').forEach(function (el) {
+        if (/v\d/.test(el.textContent)) el.textContent = el.textContent.replace(/v\d+\.\d+\.\d+/, 'v' + v);
+      });
+    })();
+    </script></body>
+</html>

@@ -1,0 +1,98 @@
+/* ============================================================
+   motion.css — 滚动渐入 / 视差 / 悬停 / 页面转场 / 降级
+   铁律：只动 transform 与 opacity；不用重排属性做动画。
+   ============================================================ */
+
+/* ─── 滚动渐入（IntersectionObserver 加 .is-in） ─── */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-y), 0);
+  transition:
+    opacity var(--dur-reveal) var(--ease-out-expo),
+    transform var(--dur-reveal) var(--ease-out-expo);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+[data-reveal].is-in { opacity: 1; transform: translate3d(0, 0, 0); }
+/* 兄弟错峰：同一父级下的子项依次进入 */
+[data-reveal-group] > * {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-y), 0);
+  transition:
+    opacity var(--dur-reveal) var(--ease-out-expo),
+    transform var(--dur-reveal) var(--ease-out-expo);
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+[data-reveal-group].is-in > * { opacity: 1; transform: translate3d(0, 0, 0); }
+
+/* 动画完成后卸下 will-change，避免长期占用合成层 */
+[data-reveal].is-in, [data-reveal-group].is-in > * { will-change: auto; }
+
+/* ─── 视差（JS 写 --parallax，CSS 只负责把它变成 transform） ─── */
+[data-parallax] {
+  transform: translate3d(0, var(--parallax, 0px), 0);
+  will-change: transform;
+}
+
+/* ─── 悬停微交互 ─── */
+.lift { transition: transform var(--dur-micro) var(--ease-in-out), box-shadow var(--dur-micro) var(--ease-in-out); }
+.lift:hover { transform: translate3d(0, -3px, 0); box-shadow: var(--shadow-md); }
+
+/* 3D 倾斜卡（JS 写 --rx/--ry） */
+.tilt {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translate3d(0, 0, 0);
+  transform-style: preserve-3d;
+  transition: transform 420ms var(--ease-out-expo);
+}
+.tilt.is-active { transition: transform 90ms linear; }   /* 跟手阶段：短过渡 */
+
+/* 图片/图形缩放揭示 */
+.media-zoom { overflow: hidden; border-radius: var(--radius-lg); }
+.media-zoom > img { transform: scale(1.06); transition: transform 1.2s var(--ease-out-expo); }
+.media-zoom.is-in > img { transform: scale(1); }
+
+/* ─── 导航滚动进度线 ─── */
+.nav__progress {
+  position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%;
+  background: var(--c-accent); transform: scaleX(var(--progress, 0)); transform-origin: left;
+}
+
+/* ─── 页面转场：品牌色幕布 + 内容淡入 ─── */
+.transition-veil {
+  position: fixed; inset: 0; z-index: var(--z-transition);
+  background: var(--c-dark-surface);
+  transform: translate3d(0, 100%, 0);
+  pointer-events: none;
+}
+.transition-veil.is-active { transform: translate3d(0, 0, 0); }
+.transition-veil.is-leaving { transform: translate3d(0, -100%, 0); }
+
+/* 新页面内容入场（body 加 .page-enter） */
+body.page-enter main { animation: pageIn var(--dur-page) var(--ease-out-expo) both; }
+@keyframes pageIn {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* 转场时页面文字先藏一下，避免与幕布重叠时发糊 */
+body.is-leaving main { opacity: 0; transition: opacity 180ms linear; }
+
+/* ─── 降级：用户要求减少动效 ─── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  [data-reveal], [data-reveal-group] > * { opacity: 1 !important; transform: none !important; }
+  [data-parallax] { transform: none !important; }
+  .tilt { transform: none !important; }
+  .transition-veil { display: none; }
+}
+
+/* 低性能设备：去掉大面积合成层开销 */
+@media (max-width: 760px) {
+  [data-parallax] { transform: none !important; }
+  .tilt { transform: none !important; }
+}

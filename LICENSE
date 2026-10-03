@@ -1,0 +1,119 @@
+# 版权与许可声明 / COPYRIGHT & LICENSE NOTICE
+
+**版权所有 © 2026 巨天工作室。保留所有权利。**
+**Copyright © 2026 巨天工作室 . All Rights Reserved.**
+
+本作品（包括但不限于本仓库中的全部源代码、资源文件、界面设计、文案、构建脚本、文档及目录结构，以下统称"本软件"）由巨天工作室独立开发并拥有完整著作权。本软件不是开源软件。任何对本软件的使用，均构成对本声明的完整接受与同意。
+
+**This work — including but not limited to all source code, resource files, interface designs, copy, build scripts, documentation and directory structure contained in this repository (collectively, the "Software") — is solely developed and fully copyrighted by 巨天工作室. The Software is NOT open-source. Any use of the Software constitutes full acceptance of this Notice.**
+
+---
+
+## 第一部分：中文声明
+
+### 第一条 【版权归属】
+
+1.1 本软件的全部著作权及邻接权利均归巨天工作室单独且排他地享有。
+
+1.2 本软件的整体架构（包括但不限于"LY HARNESS 插件体系""集群指挥室""可编辑 diff""Computer Use 引擎""手机远程配对门卫"等功能模块的设计思想、组织结构与实现方式）、全部源代码文本、注释体系、命名约定、界面布局、视觉风格、图标与插画素材、品牌名称（"巨天agent""巨天工作室""jtcode""LY HARNESS"等）、标志、文案以及文档，均为巨天工作室的智力成果，受《中华人民共和国著作权法》《计算机软件保护条例》及国际版权公约的保护。
+
+1.3 "巨天agent""巨天工作室""巨天工作室""jtcode""LY HARNESS" 等名称与标识为巨天工作室之名称与标识。本声明的任何条款均不构成对上述名称与标识的任何形式的商标使用许可。
+
+### 第二条 【许可范围】
+
+2.1 在您遵守本声明全部条款的前提下，巨天工作室授予您一项**有限的、非独占的、不可转让的、不可再许可的、可撤销的**个人使用许可，仅允许您：
+
+&nbsp;&nbsp;&nbsp;&nbsp;（一）将本软件下载、安装至您的个人计算设备上；
+
+&nbsp;&nbsp;&nbsp;&nbsp;（二）出于个人学习、研究与个人合法事务处理之目的，以本软件的图形界面、终端入口或远程入口正常运行并使用本软件的功能；
+
+&nbsp;&nbsp;&nbsp;&nbsp;（三）查阅本仓库内的源代码以了解其工作原理。
+
+2.2 本许可自您首次获取本软件副本之时起生效，至您删除全部副本或违反本声明任一条款时终止（参见第七条）。
+
+### 第三条 【禁止行为】
+
+除非事先取得巨天工作室的**书面授权**，您**不得**实施下列任何行为：
+
+3.1 **复制与分发**：以任何形式（包括但不限于转售、捆绑、镜像、网盘分享、二次打包、刻录介质）复制、分发、传播本软件的全部或部分；
+
+3.2 **商业使用**：将本软件或其任何部分用于商业目的，包括但不限于出售、出租、许可、SaaS 化部署、嵌入商业产品、用于对外收费服务；
+
+3.3 **衍生开发**：修改、翻译、改编、反编译、反向工程、反向汇编本软件，或基于本软件的全部或部分创作衍生作品；
+
+3.4 **移除声明**：删除、遮盖、修改本软件内任何版权声明、商标标识、许可文本或权利管理信息；
+
+3.5 **冒用与混淆**：使用巨天工作室的名义、标志或商誉发布、宣传任何软件或服务，或使人误认为您的衍生成果与巨天工作室存在关联；
+
+3.6 **训练用途**：将本软件的源代码、文档或其任何部分用于训练任何机器学习模型或人工智能系统；
+
+3.7 **恶意利用**：利用本软件从事任何违反您所在司法辖区法律法规的活动，或利用 Computer Use、终端执行、远程访问等能力侵害他人合法权益。
+
+### 第四条 【第三方组件】
+
+4.1 本软件运行依赖若干第三方开源组件（包括但不限于 Electron、React、CodeMirror、better-sqlite3、marked 之运行时副本）。这些组件各自受其原始开源许可证约束，本声明不改变其效力。
+
+4.2 除上述第三方开源组件外，本仓库中由巨天工作室编写的全部内容均受本声明约束，**不适用任何开源许可证**。
+
+### 第五条 【模型服务与用户配置】
+
+5.1 本软件不内置任何人工智能模型服务、API 密钥或服务商标签。您需自行在软件设置中配置任意 OpenAI 兼容的模型服务（地址、密钥、模型名）。
+
+5.2 您配置的模型服务、密钥及由此产生的全部费用、数据交互与合规责任，均由您自行承担；巨天工作室不对任何第三方模型服务的可用性、准确性或安全性作出担保。
+
+### 第六条 【免责声明】
+
+6.1 本软件按"现状"（AS IS）提供，不附带任何明示或默示的保证，包括但不限于对适销性、特定用途适用性、不侵权及准确性的保证。
+
+6.2 在适用法律允许的最大范围内，巨天工作室不对因使用或无法使用本软件而产生的任何直接、间接、附带、特殊、惩罚性或后果性损害承担责任（包括但不限于数据丢失、业务中断、利润损失）。
+
+6.3 您理解并同意：本软件具备执行终端命令、读写文件、操作鼠标键盘（Computer Use）等高权限能力。您对启用这些能力所产生的全部后果负最终责任，并应在授予相应权限前充分评估风险。
+
+### 第七条 【许可终止】
+
+7.1 若您违反本声明任一条款，您的使用许可自动终止，无需另行通知。
+
+7.2 许可终止后，您应立即停止使用本软件并删除持有的全部副本。巨天工作室保留依法追究违约与侵权责任的一切权利。
+
+### 第八条 【其他】
+
+8.1 本声明的任何条款被认定无效或不可执行的，不影响其余条款的效力。
+
+8.2 本声明适用中华人民共和国法律。因本声明引起的争议，双方协商不成的，提交巨天工作室所在地有管辖权的人民法院裁决。
+
+8.3 巨天工作室保留随时更新本声明、本软件及其全部功能的权利，且无需事先通知。
+
+8.4 商业授权、定制开发与合作事宜，请联系：巨天工作室（联系方式见项目官方渠道）。
+
+---
+
+## Part II: English Declaration
+
+**Copyright © 2026 巨天工作室 . All Rights Reserved.**
+
+**1. Ownership.** The entire Software — architecture (including but not limited to the "LY HARNESS" plugin system, "Swarm Console", "Editable Diff", "Computer Use engine" and "Remote Pairing Gate" modules), all source code, comments, naming conventions, UI layouts, visual style, assets, branding ("巨天agent", "巨天工作室", "巨天工作室", "jtcode", "LY HARNESS"), copy and documentation — is the intellectual property of 巨天工作室 and is protected by the Copyright Law of the People's Republic of China, the Computer Software Protection Regulations, and international copyright conventions.
+
+**2. License.** Subject to full compliance, 巨天工作室 grants you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to (a) install the Software on your personal devices, (b) run and use its features for personal study, research and lawful personal tasks via its GUI, terminal or remote entry, and (c) read the source code in this repository to understand how it works.
+
+**3. Prohibitions.** Without prior written authorization from 巨天工作室, you may NOT: (i) reproduce, redistribute, resell, bundle, mirror or repackage the Software or any part of it; (ii) use the Software commercially, including SaaS deployment or embedding into paid offerings; (iii) modify, translate, adapt, decompile, reverse-engineer or create derivative works of the Software; (iv) remove or alter any copyright, trademark or licensing notices; (v) use the 巨天工作室 name or marks in any way that suggests endorsement or affiliation; (vi) use the Software, its source code or documentation to train any machine-learning or AI system; (vii) use the Software for any unlawful purpose.
+
+**4. Third-party components.** The Software relies on third-party open-source components (including but not limited to Electron, React, CodeMirror, better-sqlite3 and the runtime copy of marked), each governed by its own original license. Nothing in this Notice alters their effect. All original content authored by 巨天工作室 in this repository is governed solely by this Notice and is NOT licensed under any open-source license.
+
+**5. Model services.** The Software ships with NO AI model service, API key or provider preset. You must configure any OpenAI-compatible service yourself. All costs, data flows and compliance obligations of your chosen provider are yours. 巨天工作室 makes no warranty regarding any third-party model service.
+
+**6. Disclaimer of warranty.** THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+**7. Limitation of liability.** To the maximum extent permitted by law, 巨天工作室 shall not be liable for any direct, indirect, incidental, special, punitive or consequential damages (including loss of data, business interruption or lost profits) arising from the use of or inability to use the Software.
+
+**8. High-privilege capabilities.** You acknowledge that the Software can execute terminal commands, read/write files and control the mouse/keyboard (Computer Use). You bear final responsibility for the consequences of enabling such capabilities.
+
+**9. Termination.** Any breach of this Notice automatically terminates your license. Upon termination you must cease all use and destroy all copies. 巨天工作室 reserves all rights to pursue breach and infringement claims.
+
+**10. Governing law.** This Notice is governed by the laws of the People's Republic of China. Disputes shall be submitted to the competent court where 巨天工作室 is domiciled.
+
+**11. Contact.** Commercial licensing, customization and cooperation: contact 巨天工作室 via the official channels listed in the project.
+
+---
+
+*本声明以中英文双语发布。两种文本不一致时，以中文文本为准。*
+*This Notice is published in both Chinese and English. In case of any inconsistency, the Chinese version shall prevail.*

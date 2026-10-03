@@ -1,0 +1,96 @@
+/* ============================================================
+   tokens.css — 设计令牌 v2（编辑式排版方向）
+   三个色阶：纸 / 墨 / 发丝线。品牌绿只做标点。
+   ============================================================ */
+
+:root {
+  /* 4px 基数 */
+  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 20px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px; --sp-20: 80px;
+
+  --container: 1120px;
+  --container-wide: 1320px;
+  --gutter: clamp(20px, 4vw, 40px);
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+    "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* 流式字号：标题要大，正文要稳 */
+  --fs-hero: clamp(3rem, 8.2vw, 6.75rem);        /* 48 → 108 */
+  --fs-display: clamp(2.4rem, 5.6vw, 4.5rem);    /* 深色宣言 */
+  --fs-h2: clamp(2rem, 4.4vw, 3.4rem);
+  --fs-h3: clamp(1.25rem, 1.8vw, 1.625rem);
+  --fs-lead: clamp(1.0625rem, 1.5vw, 1.3125rem);
+  --fs-body: 1.0625rem;
+  --fs-sm: 0.9375rem;
+  --fs-xs: 0.8125rem;
+
+  --lh-tight: 1.06;
+  --lh-snug: 1.24;
+  --lh-body: 1.82;          /* 中文正文放慢呼吸 */
+
+  --track-tight: -0.032em;
+  --track-micro: -0.012em;
+  --w-medium: 500; --w-semibold: 600; --w-bold: 700; --w-black: 900;
+
+  /* 色彩 */
+  --c-bg: #ffffff;
+  --c-bg-sunken: #f6f6f4;
+  --c-ink: #0a0a0a;
+  --c-ink-2: #515154;
+  --c-ink-3: #6e6e73;
+  --c-line: rgba(0, 0, 0, 0.08);
+  --c-line-strong: rgba(0, 0, 0, 0.2);
+  --c-accent: #0d9668;
+  --c-accent-ink: #0a7a54;
+  --c-on-dark: #f5f5f4;
+  --c-on-dark-2: rgba(245, 245, 244, 0.76);
+  --c-on-dark-3: rgba(245, 245, 244, 0.56);
+  --c-dark: #0a0a0b;          /* 纯黑段，不发蓝 */
+  --c-dark-2: #111113;
+
+  /* ─── 质感层 ─── */
+  --grain-opacity: .028;          /* 胶片颗粒：印刷质感，消除数字味 */
+  --hairline: color-mix(in srgb, var(--c-ink) 9%, transparent);
+  --hairline-strong: color-mix(in srgb, var(--c-ink) 18%, transparent);
+  --sheen: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 40%);
+
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-line: rgba(0, 0, 0, 0.07);
+  --glass-blur: saturate(160%) blur(16px);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 20px 48px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 2px 10px rgba(0, 0, 0, 0.08), 0 48px 120px rgba(0, 0, 0, 0.28);
+
+  /* 动效 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-micro: 300ms;
+  --dur-reveal: 820ms;
+  --dur-page: 420ms;
+  --w-regular: 400;
+  --reveal-y: 36px;
+  --z-nav: 100; --z-transition: 300;
+  /* v2 改名遗留的引用别名(勿删) */
+  --c-dark-surface: var(--c-dark);
+}
+
+[data-theme="dark"] {
+  --c-bg: #0a0a0b;
+  --c-bg-sunken: #111113;
+  --c-ink: #f5f5f4;
+  --c-ink-2: rgba(245, 245, 244, 0.72);
+  --c-ink-3: rgba(245, 245, 244, 0.6);
+  --c-line: rgba(255, 255, 255, 0.09);
+  --c-line-strong: rgba(255, 255, 255, 0.22);
+  --c-accent: #34d399;
+  --c-accent-ink: #6ee7b7;
+  --glass-bg: rgba(10, 10, 11, 0.7);
+  --glass-line: rgba(255, 255, 255, 0.09);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.4);
+}

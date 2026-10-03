@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>使用场景 — 巨天agent</title>
+<meta name="description" content="改代码、排故障、写内容、整数据、跑流程——五种最常见的下午,它都在。">
+<meta name="theme-color" content="#06070c">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/motion.css">
+<link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="巨天agent 首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+      </span>
+      巨天agent
+    </a>
+    <nav class="nav__links" aria-label="主导航">
+      <a class="nav__link" href="index.html">首页</a>
+      <a class="nav__link" href="highlights.html">亮点</a>
+      <a class="nav__link" href="features.html">特性</a>
+      <a class="nav__link" href="scenarios.html">场景</a>
+      <a class="nav__link" href="about.html">关于</a>
+      
+    </nav>
+    <div class="nav__actions">
+      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
+      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <span class="nav__progress" aria-hidden="true"></span>
+</header>
+
+<main id="main">
+
+  <!-- ═══════════ 页头 ═══════════ -->
+  <section class="section" style="padding-bottom:clamp(48px,6vw,80px)">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">使用场景</span>
+        <h1 class="t-h2">五种最常见的下午。</h1>
+        <p class="t-lead">不是 demo,是你明天就会遇到的事。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景 1:改代码 ═══════════ -->
+  <section class="section cv-auto" style="padding-top:0">
+    <div class="container">
+      <div class="scene">
+        <div class="scene__sticky" data-reveal>
+          <span class="t-eyebrow">场景 01</span>
+          <h2 class="t-h2">改代码</h2>
+          <p class="t-lead">让它改,你看结果。</p>
+        </div>
+        <div class="scene__list">
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-code.svg" alt="代码模式:文件树、多标签编辑器与检查点提示" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>需求进,diff 出</h3>
+            <p class="sceneCard__quote">「把这个函数改成异步,顺便补上错误处理。」</p>
+            <p>它读代码、改代码、跑检查,最后把 diff 摆在你面前。每轮对话前自动快照,不满意一键回到改动前。文件树、终端、代码统计都在同一个窗口,不用切。</p>
+          </article>
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-review.svg" alt="代码审查:问题清单与复现步骤" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>审查不用翻</h3>
+            <p class="sceneCard__quote">「帮我 review 这段,找坑。」</p>
+            <p>边界条件、空指针、并发问题,它列成清单给复现步骤。哪个坑在哪一行,点一下就跳过去。</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景 2:排故障 ═══════════ -->
+  <section class="section cv-auto" style="background:var(--c-bg-sunken)">
+    <div class="container">
+      <div class="scene">
+        <div class="scene__sticky" data-reveal>
+          <span class="t-eyebrow">场景 02</span>
+          <h2 class="t-h2">排故障</h2>
+          <p class="t-lead">日志丢给它。</p>
+        </div>
+        <div class="scene__list">
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-terminal.svg" alt="终端中分析日志并定位错误根因" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>三分钟的活,三十秒</h3>
+            <p class="sceneCard__quote">「服务挂了,看看日志怎么回事。」</p>
+            <p>它读日志、跑命令、看进程、查端口,给你根因和修复建议,而不是一句「请检查您的配置」。命令行全过程可见,它做的每一步你都看得见。</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景 3:写内容 ═══════════ -->
+  <section class="section cv-auto" style="padding-top:0">
+    <div class="container">
+      <div class="scene">
+        <div class="scene__sticky" data-reveal>
+          <span class="t-eyebrow">场景 03</span>
+          <h2 class="t-h2">写内容</h2>
+          <p class="t-lead">初稿,十分钟。</p>
+        </div>
+        <div class="scene__list">
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-write.svg" alt="内容创作:从大纲到成稿的对话过程" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>先有,再好</h3>
+            <p class="sceneCard__quote">「按这个大纲写初稿,语气克制一点。」</p>
+            <p>它给结构、给措辞、给三种开头。你只管挑。语气和偏好它记得,下次不用重新交代。</p>
+          </article>
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-chat.svg" alt="对话界面:深度思考与工具调用记录" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>有据可依</h3>
+            <p class="sceneCard__quote">「这个数据哪来的?」</p>
+            <p>每次回答的工具调用都记着:查了哪个文件、跑了哪条命令、命中几条。点开就能核,不用赌。</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景 4:整数据 ═══════════ -->
+  <section class="section cv-auto" style="background:var(--c-bg-sunken)">
+    <div class="container">
+      <div class="scene">
+        <div class="scene__sticky" data-reveal>
+          <span class="t-eyebrow">场景 04</span>
+          <h2 class="t-h2">整数据</h2>
+          <p class="t-lead">表格交给它。</p>
+        </div>
+        <div class="scene__list">
+          <article class="card sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom">
+              <img src="assets/img/scene-data.svg" alt="数据处理:脚本生成与批量文件整理" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3>重复的事,一次做完</h3>
+            <p class="sceneCard__quote">「这堆 CSV 合并去重,按日期分文件。」</p>
+            <p>它写脚本、跑脚本、验结果。批量重命名、格式转换、图表生成,都是同一套动作:说清楚,它做完,你验收。</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景 5:跑流程 ═══════════ -->
+  <section class="section cv-auto" style="padding-top:0">
+    <div class="container">
+      <div class="scene">
+        <div class="scene__sticky" data-reveal>
+          <span class="t-eyebrow">场景 05</span>
+          <h2 class="t-h2">跑流程</h2>
+          <p class="t-lead">一个团队,一个窗口。</p>
+        </div>
+        <div class="scene__list">
+          <article class="card card--dark sceneCard" data-reveal>
+            <div class="sceneCard__media media-zoom" style="background:rgba(255,255,255,.03)">
+              <img src="assets/img/scene-swarm.svg" alt="集群指挥室:总管拆解任务,员工接力和交付" width="640" height="400" loading="lazy" decoding="async">
+            </div>
+            <h3 class="on-dark">目标进,交付出</h3>
+            <p class="sceneCard__quote on-dark">「做个登录页,含表单校验和错误提示。」</p>
+            <p class="on-dark" style="color:var(--c-on-dark-2)">总管拆成需求、实现、验收三步;产品先出方案,@开发 接去写,@测试 接去验,最后总管汇总交付。谁在干活、干到哪一步,看板上一目了然。员工可以自定义,也能拉群指定老板。</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section dark">
+    <div class="container cta" data-reveal>
+      <h2 class="on-dark">你的下午,归你。</h2>
+      <p>装上一个窗口,把重复的活交出去。</p>
+      <div class="cta__row">
+        <a class="btn" href="index.html#download" data-magnetic="0.24">下载 for macOS
+          <svg class="btn__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </a>
+        <a class="btn btn--ghost" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">说说你的场景</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer dark">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+          </span>
+          巨天agent
+        </a>
+        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端,和一支数字员工团队。</p>
+      </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <ul>
+          <li><a href="highlights.html">核心亮点</a></li>
+          <li><a href="features.html">特性与参数</a></li>
+          <li><a href="scenarios.html">使用场景</a></li>
+          <li><a href="index.html#download">下载</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>资源</h4>
+        <ul>
+          <li><a href="features.html#specs">系统要求</a></li>
+          <li><a href="about.html">关于我们</a></li>
+          
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>工作室</h4>
+        <ul>
+          <li><a href="about.html">巨天工作室</a></li>
+          
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 巨天工作室 (Jutian Studio)</span>
+      <span>本地优先 · 数据归你</span>
+    </div>
+  </div>
+</footer>
+
+<div class="transition-veil" aria-hidden="true"></div>
+
+<script src="assets/js/scroll.js" defer></script>
+<script src="assets/js/interactions.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+</body>
+</html>

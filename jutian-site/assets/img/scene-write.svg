@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+  <rect width="640" height="400" fill="#0f1218"/>
+  <rect x="0.5" y="0.5" width="639" height="399" fill="none" stroke="rgba(255,255,255,.09)"/>
+  <g>
+    <rect x="16" y="14" width="608" height="372" rx="12" fill="#14181f" stroke="rgba(255,255,255,.1)"/>
+    <g>
+      <circle cx="38" cy="34" r="5" fill="#ff5f57"/><circle cx="56" cy="34" r="5" fill="#febc2e"/><circle cx="74" cy="34" r="5" fill="#28c840"/>
+      <text x="320" y="39" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.4)">巨天agent</text>
+    </g>
+    <line x1="16" y1="56" x2="624" y2="56" stroke="rgba(255,255,255,.08)"/>
+    
+    <rect x="28" y="70" width="160" height="300" rx="10" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>
+    <text x="46" y="96" font-family="-apple-system,PingFang SC,sans-serif" font-size="11" fill="rgba(255,255,255,.34)">大纲</text>
+    <rect x="46" y="112" width="92" height="8" rx="4" fill="rgba(255,255,255,.22)"/>
+    <rect x="46" y="138" width="116" height="8" rx="4" fill="rgba(255,255,255,.22)"/>
+    <rect x="46" y="164" width="78" height="8" rx="4" fill="rgba(255,255,255,.22)"/>
+    <rect x="46" y="190" width="104" height="8" rx="4" fill="rgba(255,255,255,.22)"/>
+    <rect x="46" y="216" width="88" height="8" rx="4" fill="rgba(255,255,255,.22)"/>
+    <text x="216" y="82" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" font-weight="600" fill="rgba(255,255,255,.8)">初稿 · 语气克制</text>
+    
+    <rect x="216" y="86" width="300" height="8" rx="4" fill="rgba(255,255,255,.86)"/>
+    <rect x="216" y="108" width="420" height="8" rx="4" fill="rgba(255,255,255,.62)"/>
+    <rect x="216" y="130" width="380" height="8" rx="4" fill="rgba(255,255,255,.5)"/>
+    <rect x="216" y="152" width="440" height="8" rx="4" fill="rgba(255,255,255,.62)"/>
+    <rect x="216" y="174" width="260" height="8" rx="4" fill="rgba(255,255,255,.4)"/>
+    <rect x="216" y="228" width="380" height="132" rx="10" fill="rgba(16,163,127,.08)" stroke="rgba(16,163,127,.28)"/>
+    <text x="240" y="258" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="#10a37f">✓ 三种开头可选</text>
+    <text x="240" y="282" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="rgba(255,255,255,.6)">偏好已记住:短句、不排比、不用感叹号</text>
+    <rect x="240" y="300" width="200" height="8" rx="4" fill="rgba(255,255,255,.2)"/>
+    <rect x="240" y="318" width="320" height="8" rx="4" fill="rgba(255,255,255,.14)"/>
+  </g>
+</svg>

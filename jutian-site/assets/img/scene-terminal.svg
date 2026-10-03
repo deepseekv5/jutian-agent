@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+  <rect width="640" height="400" fill="#0f1218"/>
+  <rect x="0.5" y="0.5" width="639" height="399" fill="none" stroke="rgba(255,255,255,.09)"/>
+  <g>
+    <rect x="16" y="14" width="608" height="372" rx="12" fill="#14181f" stroke="rgba(255,255,255,.1)"/>
+    <g>
+      <circle cx="38" cy="34" r="5" fill="#ff5f57"/><circle cx="56" cy="34" r="5" fill="#febc2e"/><circle cx="74" cy="34" r="5" fill="#28c840"/>
+      <text x="320" y="39" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.4)">jtcode — zsh</text>
+    </g>
+    <line x1="16" y1="56" x2="624" y2="56" stroke="rgba(255,255,255,.08)"/>
+    
+    <text x="40" y="78" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="rgba(255,255,255,.34)">jtcode · 终端即入口</text>
+    <text x="40" y="92" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="rgba(255,255,255,.4)">$</tspan> <tfill="#e6edf3"></tfill> jtcode "服务挂了,看看日志"</text>
+    <text x="40" y="119" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="#34d399">❯</tspan> <tfill="#e6edf3"></tfill> tail -n 200 app.log</text>
+    <text x="40" y="146" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="rgba(255,255,255,.4)">  2026-09-28 14:22:01 ERROR</tspan> <tfill="#f87171"></tfill> ECONNREFUSED db:5432</text>
+    <text x="40" y="173" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="rgba(255,255,255,.4)">  2026-09-28 14:22:03 ERROR</tspan> <tfill="#f87171"></tfill> retry failed (3/3)</text>
+    <text x="40" y="200" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="#34d399">❯</tspan> <tfill="#e6edf3"></tfill> ss -lntp | grep 5432</text>
+    <text x="40" y="227" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="#4ade80">✓</tspan> <tfill="#e6edf3"></tfill> 根因:数据库端口未监听,连接被拒</text>
+    <text x="40" y="254" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(230,237,243,.78)"><tspan fill="#4ade80">✓</tspan> <tfill="#e6edf3"></tfill> 建议:启动 db 容器后重试,已写好一键命令</text>
+    <rect x="40" y="275" width="9" height="15" fill="#10a37f" opacity=".9"/>
+  </g>
+</svg>

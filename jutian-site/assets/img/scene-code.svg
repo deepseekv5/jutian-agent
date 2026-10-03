@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+  <rect width="640" height="400" fill="#0f1218"/>
+  <rect x="0.5" y="0.5" width="639" height="399" fill="none" stroke="rgba(255,255,255,.09)"/>
+  <g>
+    <rect x="16" y="14" width="608" height="372" rx="12" fill="#14181f" stroke="rgba(255,255,255,.1)"/>
+    <g>
+      <circle cx="38" cy="34" r="5" fill="#ff5f57"/><circle cx="56" cy="34" r="5" fill="#febc2e"/><circle cx="74" cy="34" r="5" fill="#28c840"/>
+      <text x="320" y="39" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.4)">巨天agent</text>
+    </g>
+    <line x1="16" y1="56" x2="624" y2="56" stroke="rgba(255,255,255,.08)"/>
+    
+    <rect x="28" y="71" width="150" height="24" rx="6" fill="transparent"/>
+    <text x="40" y="86" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="rgba(255,255,255,.45)">src</text>
+    <rect x="28" y="101" width="150" height="24" rx="6" fill="transparent"/>
+    <text x="40" y="116" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="rgba(255,255,255,.45)">components</text>
+    <rect x="28" y="131" width="150" height="24" rx="6" fill="rgba(16,163,127,.16)"/>
+    <text x="40" y="146" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="#eafff6">ChatPanel.tsx</text>
+    <rect x="28" y="161" width="150" height="24" rx="6" fill="transparent"/>
+    <text x="40" y="176" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="rgba(255,255,255,.45)">CodeEditor.tsx</text>
+    <rect x="28" y="191" width="150" height="24" rx="6" fill="transparent"/>
+    <text x="40" y="206" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="rgba(255,255,255,.45)">serve.cjs</text>
+    <rect x="28" y="221" width="150" height="24" rx="6" fill="transparent"/>
+    <text x="40" y="236" font-family="SF Mono,Menlo,monospace" font-size="11.5" fill="rgba(255,255,255,.45)">index.css</text>
+    <line x1="190" y1="56" x2="190" y2="386" stroke="rgba(255,255,255,.07)"/>
+    <g>
+      <rect x="206" y="66" width="120" height="20" rx="5" fill="rgba(16,163,127,.14)"/>
+      <text x="218" y="80" font-family="SF Mono,Menlo,monospace" font-size="11" fill="#eafff6">ChatPanel.tsx</text>
+      <rect x="332" y="66" width="96" height="20" rx="5" fill="rgba(255,255,255,.05)"/>
+      <text x="344" y="80" font-family="SF Mono,Menlo,monospace" font-size="11" fill="rgba(255,255,255,.45)">serve.cjs</text>
+    </g>
+    <text x="216" y="96" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">// 让它改,你看结果</text>
+    <text x="216" y="118" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">const handoff = async (t) =&gt; {</text>
+    <text x="216" y="140" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">  const owner = t.mentions[0] ?? boss.id</text>
+    <text x="216" y="162" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">  await dispatch({ to: owner, task: t })</text>
+    <text x="216" y="184" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">  return reorder(queue, owner)</text>
+    <text x="216" y="206" font-family="SF Mono,Menlo,monospace" font-size="12" fill="rgba(255,255,255,.72)">}</text>
+    <g>
+      <rect x="206" y="300" width="380" height="62" rx="8" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>
+      <text x="222" y="324" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="rgba(255,255,255,.34)">检查点 · 改动前自动快照</text>
+      <text x="222" y="346" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="#10a37f">✓ 一键撤销本轮全部改动</text>
+    </g>
+  </g>
+</svg>

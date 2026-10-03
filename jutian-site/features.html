@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>特性与参数 — 巨天agent</title>
+<meta name="description" content="系统要求、技术架构与完整特性清单:37 个内置工具、玻璃拟态界面、Git 检查点、快捷键体系。">
+<meta name="theme-color" content="#06070c">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/motion.css">
+<link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="巨天agent 首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+      </span>
+      巨天agent
+    </a>
+    <nav class="nav__links" aria-label="主导航">
+      <a class="nav__link" href="index.html">首页</a>
+      <a class="nav__link" href="highlights.html">亮点</a>
+      <a class="nav__link" href="features.html">特性</a>
+      <a class="nav__link" href="scenarios.html">场景</a>
+      <a class="nav__link" href="about.html">关于</a>
+      
+    </nav>
+    <div class="nav__actions">
+      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
+      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <span class="nav__progress" aria-hidden="true"></span>
+</header>
+
+<main id="main">
+
+  <!-- ═══════════ 页头 ═══════════ -->
+  <section class="section" style="padding-bottom:0">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">特性与参数</span>
+        <h1 class="t-h2">该重的重,该轻的轻。</h1>
+        <p class="t-lead">一个进程,一个窗口,一套完备的工具。下面是没有水分的部分。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 规格表 ═══════════ -->
+  <section class="section section--tight" id="specs">
+    <div class="container">
+      <div class="grid">
+        <div class="col-5">
+          <h3 class="t-h3" data-reveal style="position:sticky;top:120px">系统要求</h3>
+        </div>
+        <div class="col-7">
+          <div class="spec" data-reveal>
+            <div class="spec__row"><div class="spec__key">支持平台</div><div class="spec__val">macOS 13 及以上 <span>· Apple Silicon / Intel</span><br>Windows 10 及以上 <span>· x64</span></div></div>
+            <div class="spec__row"><div class="spec__key">安装体积</div><div class="spec__val">约 120 MB <span>· 首次安装后自动清理临时文件</span></div></div>
+            <div class="spec__row"><div class="spec__key">内存占用</div><div class="spec__val">空闲约 380 MB <span>· 低性能设备自动降级玻璃模糊与动画</span></div></div>
+            <div class="spec__row"><div class="spec__key">架构</div><div class="spec__val">Electron + Node 单进程 <span>· 界面、引擎、工具服务一体</span></div></div>
+            <div class="spec__row"><div class="spec__key">数据存储</div><div class="spec__val">本地 SQLite <span>· 会话、消息、记忆、知识库全部落盘本机</span></div></div>
+            <div class="spec__row"><div class="spec__key">模型接入</div><div class="spec__val">自带 API Key <span>· 任意兼容 OpenAI 协议的服务;也可接本地模型</span></div></div>
+            <div class="spec__row"><div class="spec__key">界面语言</div><div class="spec__val">中文 / English <span>· 深浅双主题 · 动态壁纸</span></div></div>
+            <div class="spec__row"><div class="spec__key">更新方式</div><div class="spec__val">增量补丁 <span>· 只替换变化文件,不重装</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 特性网格 ═══════════ -->
+  <section class="section cv-auto" style="background:var(--c-bg-sunken)">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">完整特性</span>
+        <h2 class="t-h2">打开就有的部分。</h2>
+      </div>
+
+      <div class="bento" data-reveal-group>
+        <article class="card card--hover"><span class="idx">001</span><h3 class="t-h3" style="font-size:1.15rem">多标签工作区</h3><p class="t-sm">对话、代码、终端、知识库同窗多开。Cmd+N / T / W 全键盘操作,切走不丢状态。</p></article>
+        <article class="card card--hover"><span class="idx">002</span><h3 class="t-h3" style="font-size:1.15rem">Git 检查点</h3><p class="t-sm">每轮对话前自动快照工作目录,一整轮改动一键撤销。改坏了不慌。</p></article>
+        <article class="card card--hover"><span class="idx">003</span><h3 class="t-h3" style="font-size:1.15rem">深度思考档位</h3><p class="t-sm">关闭 / 低 / 中 / 高 / 最大,随消息切换。简单问题不浪费,难问题不糊弄。</p></article>
+        <article class="card card--hover"><span class="idx">004</span><h3 class="t-h3" style="font-size:1.15rem">全局全文搜索</h3><p class="t-sm">搜标题,也搜每一条消息正文。命中直接跳到那条消息并高亮。</p></article>
+        <article class="card card--hover"><span class="idx">005</span><h3 class="t-h3" style="font-size:1.15rem">玻璃拟态界面</h3><p class="t-sm">半透明层级加发丝线,浅色深色都干净。低性能设备自动退回纯净底色。</p></article>
+        <article class="card card--hover"><span class="idx">006</span><h3 class="t-h3" style="font-size:1.15rem">语音通话模式</h3><p class="t-sm">桌面宠物一键唤起,边说边让它干活。开车、走路、双手占用时最好用。</p></article>
+        <article class="card card--hover"><span class="idx">007</span><h3 class="t-h3" style="font-size:1.15rem">命令面板</h3><p class="t-sm">Cmd+K 唤起,跳会话、开页面、发指令,一步到位。</p></article>
+        <article class="card card--hover"><span class="idx">008</span><h3 class="t-h3" style="font-size:1.15rem">长期记忆</h3><p class="t-sm">只存索引不塞全文,重要细节按需取。它记得你的偏好与项目上下文。</p></article>
+        <article class="card card--hover"><span class="idx">009</span><h3 class="t-h3" style="font-size:1.15rem">知识库</h3><p class="t-sm">文档导入即检索,回答有出处。引用可点开,不用猜。</p></article>
+        <article class="card card--hover"><span class="idx">010</span><h3 class="t-h3" style="font-size:1.15rem">截图即问</h3><p class="t-sm">框选屏幕任意区域,直接问「这是什么」「报错什么意思」。</p></article>
+        <article class="card card--hover"><span class="idx">011</span><h3 class="t-h3" style="font-size:1.15rem">PPT 生成</h3><p class="t-sm">一句话到可编辑的 .pptx,PowerPoint / Keynote / WPS 直接打开继续改。</p></article>
+        <article class="card card--hover"><span class="idx">012</span><h3 class="t-h3" style="font-size:1.15rem">定时任务</h3><p class="t-sm">到点自动跑,日报、巡检、监控,它替你盯着。</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 架构说明 ═══════════ -->
+  <section class="section">
+    <div class="container">
+      <div class="grid" style="align-items:center">
+        <div class="col-6">
+          <div class="sectionHead" style="margin-bottom:0" data-reveal>
+            <span class="t-eyebrow">架构</span>
+            <h2 class="t-h2">一个进程,一个入口。</h2>
+            <p class="t-lead" style="margin-bottom:var(--sp-6)">界面层负责对话,Agent 引擎负责决策,37 个工具直连真实系统。请求、决策、执行、回传,闭环在一台电脑上完成。</p>
+            <p class="t-body" style="font-size:var(--fs-sm)">没有微服务,没有云端编排,没有为了架构而架构。一个窗口把事情办完,是它的全部设计目标。</p>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="card" data-reveal style="padding:var(--sp-8)">
+            <svg viewBox="0 0 460 260" style="width:100%;height:auto" role="img" aria-label="架构示意:用户经界面层与 Agent 引擎交互,引擎调用工具层与终端文件系统">
+              <defs>
+                <marker id="arw" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                  <path d="M0,0 L7,3.5 L0,7 z" fill="var(--c-accent)"/>
+                </marker>
+              </defs>
+              <g fill="none" stroke="var(--c-line-strong)" stroke-width="1.5">
+                <rect x="14" y="100" width="96" height="62" rx="12" fill="var(--c-bg-elevated)"/>
+                <rect x="170" y="60" width="120" height="142" rx="14" fill="var(--c-bg-elevated)" stroke="var(--c-accent)"/>
+                <rect x="346" y="34" width="100" height="62" rx="12" fill="var(--c-bg-elevated)"/>
+                <rect x="346" y="164" width="100" height="62" rx="12" fill="var(--c-bg-elevated)"/>
+              </g>
+              <g stroke="var(--c-accent)" stroke-width="1.8" fill="none" marker-end="url(#arw)">
+                <path d="M110 131 H 168"/><path d="M290 100 H 344"/><path d="M290 164 H 344"/>
+              </g>
+              <g fill="var(--c-ink)" font-size="13" font-weight="600" text-anchor="middle" font-family="var(--font-sans)">
+                <text x="62" y="127">用户</text><text x="62" y="146" font-size="10" fill="var(--c-ink-3)">自然语言</text>
+                <text x="230" y="122" fill="var(--c-accent)">巨天agent</text>
+                <text x="230" y="144" font-size="10" fill="var(--c-ink-3)">React 界面层</text>
+                <text x="230" y="162" font-size="10" fill="var(--c-ink-3)">Agent 引擎</text>
+                <text x="230" y="180" font-size="10" fill="var(--c-ink-3)">Node 单进程</text>
+                <text x="396" y="60">工具层</text><text x="396" y="78" font-size="10" fill="var(--c-ink-3)">37 个</text>
+                <text x="396" y="190">终端 · 文件</text><text x="396" y="208" font-size="10" fill="var(--c-ink-3)">真实操作</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section dark">
+    <div class="container cta" data-reveal>
+      <h2 class="on-dark">参数看完,不如上手一遍。</h2>
+      <p>下载装上,让它干一件你今天不想干的活。</p>
+      <div class="cta__row">
+        <a class="btn" href="index.html#download" data-magnetic="0.24">下载 for macOS
+          <svg class="btn__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </a>
+        <a class="btn btn--ghost" href="scenarios.html">看使用场景</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer dark">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+          </span>
+          巨天agent
+        </a>
+        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端,和一支数字员工团队。</p>
+      </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <ul>
+          <li><a href="highlights.html">核心亮点</a></li>
+          <li><a href="features.html">特性与参数</a></li>
+          <li><a href="scenarios.html">使用场景</a></li>
+          <li><a href="index.html#download">下载</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>资源</h4>
+        <ul>
+          <li><a href="features.html#specs">系统要求</a></li>
+          <li><a href="about.html">关于我们</a></li>
+          
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>工作室</h4>
+        <ul>
+          <li><a href="about.html">巨天工作室</a></li>
+          
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 巨天工作室 (Jutian Studio)</span>
+      <span>本地优先 · 数据归你</span>
+    </div>
+  </div>
+</footer>
+
+<div class="transition-veil" aria-hidden="true"></div>
+
+<script src="assets/js/scroll.js" defer></script>
+<script src="assets/js/interactions.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+</body>
+</html>

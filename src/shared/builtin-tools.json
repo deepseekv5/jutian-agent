@@ -1,0 +1,872 @@
+[
+ {
+  "name": "dispatch_subagents",
+  "description": "派出 1-5 个子代理并行/串行执行独立子任务（后台运行，用户可见进度条）。适合：任务可拆成多个互不依赖的子任务、需要多视角调研、或长耗时批处理。每个子代理拥有与你相同的工具能力。调用后会阻塞直到全部完成，结果以报告形式返回。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "agents": {
+     "type": "array",
+     "description": "子代理清单，1-5 个",
+     "items": {
+      "type": "object",
+      "properties": {
+       "name": {
+        "type": "string",
+        "description": "子代理名，2-4 个字，如：调研员"
+       },
+       "task": {
+        "type": "string",
+        "description": "具体任务描述，含验收标准（40 字内）"
+       }
+      },
+      "required": [
+       "name",
+       "task"
+      ]
+     }
+    }
+   },
+   "required": [
+    "agents"
+   ]
+  }
+ },
+ {
+  "name": "read_file",
+  "description": "读取文本文件内容。支持 .ts/.js/.py/.json/.md/.txt/.yaml/.html/.css/.sh 等所有文本格式。返回完整文件内容。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "文件路径（绝对路径或相对路径）"
+    },
+    "offset": {
+     "type": "number",
+     "description": "起始行号（可选，从1开始）"
+    },
+    "limit": {
+     "type": "number",
+     "description": "最大行数（可选）"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  }
+ },
+ {
+  "name": "write_file",
+  "description": "写入/创建文本文件。自动创建父目录。支持代码、配置、Markdown、数据文件等所有文本格式。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "目标文件路径"
+    },
+    "content": {
+     "type": "string",
+     "description": "要写入的完整内容"
+    }
+   },
+   "required": [
+    "path",
+    "content"
+   ]
+  }
+ },
+ {
+  "name": "edit_file",
+  "description": "精确编辑文件中的指定内容。用 oldText 匹配唯一区域，替换为 newText。适合小范围修改，不需要重写整个文件。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "要编辑的文件路径"
+    },
+    "oldText": {
+     "type": "string",
+     "description": "要被替换的原文（必须精确匹配）"
+    },
+    "newText": {
+     "type": "string",
+     "description": "替换后的新文本"
+    }
+   },
+   "required": [
+    "path",
+    "oldText",
+    "newText"
+   ]
+  }
+ },
+ {
+  "name": "list_dir",
+  "description": "列出目录下的文件和子目录。类似 ls -la 但返回结构化数据，包含文件类型和大小信息。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "目录路径（默认当前工作目录）"
+    },
+    "showHidden": {
+     "type": "boolean",
+     "description": "是否显示隐藏文件（默认 false）"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "search_files",
+  "description": "按文件名模式搜索文件。使用 glob/find 模式匹配，如 \"*.ts\", \"**/*.py\", \"package.json\"。返回匹配的文件路径列表。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "pattern": {
+     "type": "string",
+     "description": "搜索模式（glob 或文件名）"
+    },
+    "path": {
+     "type": "string",
+     "description": "搜索根目录（默认当前目录）"
+    },
+    "maxDepth": {
+     "type": "number",
+     "description": "最大搜索深度（默认5层）"
+    }
+   },
+   "required": [
+    "pattern"
+   ]
+  }
+ },
+ {
+  "name": "search_content",
+  "description": "在文件内容中搜索文本。用 grep 在指定目录的所有文件中查找包含关键词的行，返回匹配的文件名和行号。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "pattern": {
+     "type": "string",
+     "description": "要搜索的正则表达式或文本"
+    },
+    "path": {
+     "type": "string",
+     "description": "搜索目录（默认当前目录）"
+    },
+    "fileType": {
+     "type": "string",
+     "description": "文件类型过滤，如 \"ts\" 或 \"py\"（可选）"
+    }
+   },
+   "required": [
+    "pattern"
+   ]
+  }
+ },
+ {
+  "name": "get_file_info",
+  "description": "获取文件的元信息：大小、修改时间、类型、权限等。不读取文件内容。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "文件或目录路径"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  }
+ },
+ {
+  "name": "move_file",
+  "description": "移动或重命名文件/目录。可以跨目录移动。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "src": {
+     "type": "string",
+     "description": "源路径"
+    },
+    "dest": {
+     "type": "string",
+     "description": "目标路径"
+    }
+   },
+   "required": [
+    "src",
+    "dest"
+   ]
+  }
+ },
+ {
+  "name": "delete_file",
+  "description": "删除文件或空目录。⚠️ 此操作不可恢复，请谨慎使用。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "要删除的文件或空目录路径"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  }
+ },
+ {
+  "name": "shell",
+  "description": "在用户 Mac 上执行 shell 命令（bash/zsh）。可以运行任何终端命令：ls/cat/grep/find/python/node/git/npm/pip/brew/docker 等。用于探索文件系统、运行脚本、管理项目、安装包、查看系统信息等。命令超时30秒。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "command": {
+     "type": "string",
+     "description": "要执行的 shell 命令"
+    },
+    "workdir": {
+     "type": "string",
+     "description": "工作目录（可选，默认用户主目录）"
+    },
+    "timeout": {
+     "type": "number",
+     "description": "超时秒数（可选，默认30）"
+    }
+   },
+   "required": [
+    "command"
+   ]
+  }
+ },
+ {
+  "name": "web_fetch",
+  "description": "抓取 URL 内容并提取可读文本。自动去除 HTML 标签和脚本。适用于抓取网页文档、文章、API 文档、README 等。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "url": {
+     "type": "string",
+     "description": "HTTP 或 HTTPS URL"
+    },
+    "method": {
+     "type": "string",
+     "enum": [
+      "GET",
+      "POST"
+     ],
+     "description": "请求方法（默认 GET）"
+    },
+    "headers": {
+     "type": "object",
+     "description": "自定义请求头（可选）"
+    },
+    "body": {
+     "type": "string",
+     "description": "请求体（POST 时可用）"
+    }
+   },
+   "required": [
+    "url"
+   ]
+  }
+ },
+ {
+  "name": "http_request",
+  "description": "发送 HTTP 请求并返回原始响应（含状态码、头、体）。适用于调用 REST API、Webhook 等。比 web_fetch 更底层，保留完整的 JSON/XML 响应。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "url": {
+     "type": "string",
+     "description": "请求 URL"
+    },
+    "method": {
+     "type": "string",
+     "enum": [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE"
+     ],
+     "description": "HTTP 方法（默认 GET）"
+    },
+    "headers": {
+     "type": "object",
+     "description": "请求头（可选）"
+    },
+    "body": {
+     "type": "string",
+     "description": "请求体（可选）"
+    }
+   },
+   "required": [
+    "url"
+   ]
+  }
+ },
+ {
+  "name": "git_operation",
+  "description": "执行 Git 操作：status/diff/log/add/commit/push/pull/branch/checkout 等。自动检测 git 仓库。传入 git 子命令和参数即可。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "command": {
+     "type": "string",
+     "description": "Git 子命令，如 \"status\"、\"log --oneline -10\"、\"add .\",\"commit -m 'fix'\"、\"push\""
+    },
+    "repoPath": {
+     "type": "string",
+     "description": "仓库路径（可选，默认工作目录）"
+    }
+   },
+   "required": [
+    "command"
+   ]
+  }
+ },
+ {
+  "name": "npm_run",
+  "description": "运行 npm/yarn/pnpm 命令。包括 install/build/test/dev/lint 等。自动检测包管理器。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "command": {
+     "type": "string",
+     "description": "npm 命令，如 \"install\"、\"run build\",\"run dev\",\"test\""
+    },
+    "projectPath": {
+     "type": "string",
+     "description": "项目路径（可选）"
+    }
+   },
+   "required": [
+    "command"
+   ]
+  }
+ },
+ {
+  "name": "code_analysis",
+  "description": "分析代码文件的结构：导入依赖、导出符号、函数/类定义、复杂度等。支持 TypeScript/JavaScript/Python。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "要分析的代码文件路径"
+    },
+    "focus": {
+     "type": "string",
+     "enum": [
+      "imports",
+      "exports",
+      "functions",
+      "classes",
+      "all"
+     ],
+     "description": "分析重点（默认 all）"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  }
+ },
+ {
+  "name": "system_info",
+  "description": "获取系统信息：操作系统版本、CPU、内存使用、磁盘空间、Node.js 版本、已安装工具链等。无需参数。",
+  "parameters": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  }
+ },
+ {
+  "name": "process_list",
+  "description": "列出正在运行的进程。可按名称过滤，用于检查服务是否在运行、端口占用情况等。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "filter": {
+     "type": "string",
+     "description": "进程名过滤关键词（可选）"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "port_check",
+  "description": "检查 TCP 端口是否被占用，以及哪个进程在使用该端口。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "port": {
+     "type": "number",
+     "description": "端口号"
+    }
+   },
+   "required": [
+    "port"
+   ]
+  }
+ },
+ {
+  "name": "json_process",
+  "description": "对 JSON 数据进行查询/转换/格式化。支持 JSONPath 查询、键值提取、格式化输出等。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "data": {
+     "type": "string",
+     "description": "JSON 字符串或文件路径（以 file: 开头表示文件路径）"
+    },
+    "query": {
+     "type": "string",
+     "description": "JSONPath 表达式或操作：format/keys/paths/get:<key>"
+    }
+   },
+   "required": [
+    "data"
+   ]
+  }
+ },
+ {
+  "name": "list_skills",
+  "description": "列出所有已安装的 Skill（技能包）。每个 Skill 包含一组相关工具和知识，可以让 Agent 掌握特定领域的能力。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "filter": {
+     "type": "string",
+     "description": "按名称或分类过滤（可选）"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "load_skill",
+  "description": "加载一个 Skill 并将其工具注册到当前会话中。加载后 AI 就可以使用该 Skill 提供的所有工具了。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "description": "Skill 名称（从 list_skills 获取）"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "install_skill",
+  "description": "从 SkillHub 安装新的 Skill。安装后可以用 load_skill 加载使用。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "description": "要安装的 Skill 名称"
+    }
+   },
+   "required": [
+    "name"
+   ]
+  }
+ },
+ {
+  "name": "create_skill",
+  "description": "让 AI 自己创建一个新的 Skill（技能包）。AI 会生成 skill.json、tools.json 和 knowledge.md 文件，形成可复用的技能包。创建后可使用 load_skill 加载该 Skill。适用于 AI 将完成任务的流程和方法固化为可复用的技能。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "skill_name": {
+     "type": "string",
+     "description": "Skill 名称（英文字母、数字和下划线，如 \"pdf-helper\"）"
+    },
+    "display_name": {
+     "type": "string",
+     "description": "Skill 显示名称（可选，中文名）"
+    },
+    "description": {
+     "type": "string",
+     "description": "Skill 功能描述（必填，说明这个 Skill 的用途和适用场景）"
+    },
+    "tools": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     },
+     "description": "工具定义数组，每个工具包含 name、description、parameters"
+    },
+    "knowledge": {
+     "type": "string",
+     "description": "Skill 的知识文档（Markdown 格式，包含使用方法、示例、注意事项等）"
+    }
+   },
+   "required": [
+    "skill_name",
+    "description"
+   ]
+  }
+ },
+ {
+  "name": "save_knowledge",
+  "description": "把一条结构化知识写入用户知识库（可被后续对话检索引用，并进入知识图谱）。当用户说\"记到知识库/存进知识库\"、或产出了值得长期保留的结论、流程、事实时使用。支持按已有条目标题建立连线。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "title": {
+     "type": "string",
+     "description": "知识条目标题（简短，用于图谱节点与检索）"
+    },
+    "content": {
+     "type": "string",
+     "description": "知识正文（结论、步骤、事实，Markdown 可用）"
+    },
+    "tags": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "标签，用于分组"
+    },
+    "link_titles": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "要关联的已有条目标题（图谱连线）"
+    }
+   },
+   "required": [
+    "title",
+    "content"
+   ]
+  }
+ },
+ {
+  "name": "remember",
+  "description": "将信息存入长期记忆。AI 可将用户偏好、重要上下文、任务经验等保存到持久化记忆中，重启后不丢失。建议将用户明确告知的偏好、重要决策、项目背景等信息写入记忆。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "description": "记忆键名（英文标识，如 \"user_preference_theme\"）"
+    },
+    "value": {
+     "type": "string",
+     "description": "记忆内容（文本，可包含结构化信息）"
+    }
+   },
+   "required": [
+    "key",
+    "value"
+   ]
+  }
+ },
+ {
+  "name": "recall",
+  "description": "从长期记忆中读取信息。如果提供了 key，则返回指定记忆的内容；不提供 key 则返回所有记忆的完整键值对列表（格式为 \"key: value\"，每条一行），方便 AI 在每次对话开始时调用此工具（不传 key）获取用户全部偏好和历史上下文。建议每次新对话启动后优先调用 recall() 获取完整记忆列表。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "description": "要读取的记忆键名（可选，不填返回所有记忆）"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "forget",
+  "description": "从长期记忆中删除指定记忆。用于清理过时或不再需要的信息。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "key": {
+     "type": "string",
+     "description": "要删除的记忆键名"
+    }
+   },
+   "required": [
+    "key"
+   ]
+  }
+ },
+ {
+  "name": "web_search",
+  "description": "使用 DuckDuckGo 免费搜索互联网，返回标题、链接和摘要列表。无需 API Key，完全免费。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string",
+     "description": "搜索关键词"
+    },
+    "max_results": {
+     "type": "integer",
+     "description": "最大返回结果数（默认 10，最大 20）"
+    }
+   },
+   "required": [
+    "query"
+   ]
+  }
+ },
+ {
+  "name": "image_generate",
+  "description": "使用 Pollinations.ai 免费生成 AI 图片并下载到本地。调用 https://image.pollinations.ai/prompt/{prompt} 获取图片",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "prompt": {
+     "type": "string",
+     "description": "图片描述，支持英文/中文"
+    },
+    "width": {
+     "type": "integer",
+     "description": "图片宽度，默认 1024",
+     "default": 1024
+    },
+    "height": {
+     "type": "integer",
+     "description": "图片高度，默认 1024",
+     "default": 1024
+    },
+    "filename": {
+     "type": "string",
+     "description": "保存文件名，不含扩展名，默认根据 prompt 自动生成"
+    }
+   },
+   "required": [
+    "prompt"
+   ]
+  }
+ },
+ {
+  "name": "url_tools",
+  "description": "URL 编解码工具。支持 encodeURIComponent 编码和 decodeURIComponent 解码。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "encode",
+      "decode"
+     ],
+     "description": "操作类型：encode 编码，decode 解码"
+    },
+    "input": {
+     "type": "string",
+     "description": "要编码或解码的文本"
+    }
+   },
+   "required": [
+    "action",
+    "input"
+   ]
+  }
+ },
+ {
+  "name": "base64_tools",
+  "description": "Base64 编解码工具。支持字符串与 Base64 格式互转。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "encode",
+      "decode"
+     ],
+     "description": "操作类型：encode 编码，decode 解码"
+    },
+    "input": {
+     "type": "string",
+     "description": "要编码或解码的文本"
+    }
+   },
+   "required": [
+    "action",
+    "input"
+   ]
+  }
+ },
+ {
+  "name": "hash_tools",
+  "description": "哈希计算工具。支持 MD5、SHA-1、SHA-256、SHA-512 四种算法。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "algorithm": {
+     "type": "string",
+     "enum": [
+      "md5",
+      "sha1",
+      "sha256",
+      "sha512"
+     ],
+     "description": "哈希算法"
+    },
+    "input": {
+     "type": "string",
+     "description": "要计算哈希的文本"
+    }
+   },
+   "required": [
+    "algorithm",
+    "input"
+   ]
+  }
+ },
+ {
+  "name": "uuid_generate",
+  "description": "UUID 生成工具。支持生成 v4（随机）或 v7（时间排序）UUID，可批量生成。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "version": {
+     "type": "string",
+     "enum": [
+      "v4",
+      "v7"
+     ],
+     "description": "UUID 版本（默认 v4）"
+    },
+    "count": {
+     "type": "integer",
+     "description": "生成数量（默认 1，最大 100）"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "timestamp_tools",
+  "description": "时间戳转换工具。支持时间戳转日期时间和日期时间转时间戳。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "to_datetime",
+      "to_timestamp"
+     ],
+     "description": "操作类型：to_datetime 时间戳→日期，to_timestamp 日期→时间戳"
+    },
+    "value": {
+     "type": "string",
+     "description": "时间戳（毫秒数字）或日期字符串"
+    }
+   },
+   "required": [
+    "action",
+    "value"
+   ]
+  }
+ },
+ {
+  "name": "text_tools",
+  "description": "文本统计工具。支持字符/单词/行数统计、词频分析、按行排序。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "count",
+      "word_freq",
+      "line_sort"
+     ],
+     "description": "操作类型：count 统计，word_freq 词频，line_sort 行排序"
+    },
+    "text": {
+     "type": "string",
+     "description": "要处理的文本内容"
+    },
+    "top_n": {
+     "type": "integer",
+     "description": "词频分析返回前 N 个高频词（默认 10）"
+    }
+   },
+   "required": [
+    "action",
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "random_tools",
+  "description": "随机生成工具。支持随机数字、随机字符串、安全密码生成。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "type": {
+     "type": "string",
+     "enum": [
+      "number",
+      "string",
+      "password"
+     ],
+     "description": "生成类型：number 数字，string 字符串，password 密码"
+    },
+    "length": {
+     "type": "integer",
+     "description": "字符串/密码长度（默认 8）"
+    },
+    "min": {
+     "type": "number",
+     "description": "随机数字最小值（默认 0）"
+    },
+    "max": {
+     "type": "number",
+     "description": "随机数字最大值（默认 100）"
+    }
+   },
+   "required": [
+    "type"
+   ]
+  }
+ },
+ {
+  "name": "color_tools",
+  "description": "颜色转换工具。支持 HEX ↔ RGB 互转和随机颜色生成。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "hex_to_rgb",
+      "rgb_to_hex",
+      "random"
+     ],
+     "description": "操作类型：hex_to_rgb HEX→RGB，rgb_to_hex RGB→HEX，random 随机颜色"
+    },
+    "value": {
+     "type": "string",
+     "description": "颜色值（HEX 如 #FF5733 或 RGB 如 rgb(255,87,51)）"
+    }
+   },
+   "required": [
+    "action"
+   ]
+  }
+ }
+]

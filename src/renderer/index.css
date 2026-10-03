@@ -1,0 +1,818 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   ChatGPT / Codex 官方设计系统
+   Light: 纯白画布 + #f9f9f9 侧边栏
+   Dark : #212121 画布 + #171717 侧边栏
+   ============================================================ */
+
+:root {
+  /* Light (default) */
+  --surface: #ffffff;
+  --surface-alt: #f9f9f9;
+  --surface-card: #ffffff;
+  --surface-input: #f4f4f4;
+  --surface-hover: #ececec;
+  --surface-active: #e3e3e3;
+
+  --sidebar-bg: #f9f9f9;
+  --sidebar-hover: #ececec;
+  --sidebar-active: #e3e3e3;
+
+  --border: #e5e5e5;
+  --border-light: #efefef;
+  --border-focus: #0d0d0d;
+
+  --text: #0d0d0d;
+  --text-head: #0d0d0d;
+  --text-secondary: #5d5d5d;
+  --text-tertiary: #8f8f8f;
+  --text-muted: #b4b4b4;
+
+  --accent: #0d0d0d;
+  --accent-bg: #f0f0f0;
+  --accent-border: #d9d9d9;
+  --accent-light: #6e6e6e;
+  --accent-text: #ffffff;
+
+  --tool-ok: #16a34a;
+  --tool-warn: #d97706;
+  --tool-err: #dc2626;
+
+  --msg-bot-bg: transparent;
+  --msg-bot-text: #0d0d0d;
+  --msg-user-bg: #f4f4f4;
+  --msg-user-text: #0d0d0d;
+
+  --brand: #0d0d0d;
+  --on-brand: #ffffff;
+
+  --sidebar-active-text: #0d0d0d;
+  --sidebar-active-bg: #e3e3e3;
+
+  --button-ghost: #f4f4f4;
+
+  --modal-overlay: rgba(0, 0, 0, 0.4);
+  --modal-bg: #ffffff;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08);
+
+  --transition-fast: 120ms ease-out;
+  --transition-base: 180ms ease-out;
+  --transition-slow: 280ms ease-out;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
+
+  --code-bg: #f0f0f0;
+  --code-color: #c0392b;
+  /* 代码块始终为深色（ChatGPT 风格） */
+  --pre-bg: #0d0d0d;
+  --pre-head: #1f1f1f;
+  --pre-text: #f5f5f5;
+  --blockquote-color: #6e6e73;
+
+  --scrollbar-thumb: #c7c7cc;
+  --scrollbar-track: transparent;
+}
+
+[data-theme="dark"] {
+  --surface: #212121;
+  --surface-alt: #171717;
+  --surface-card: #2f2f2f;
+  --surface-input: #2f2f2f;
+  --surface-hover: #2f2f2f;
+  --surface-active: #3a3a3a;
+
+  --sidebar-bg: #171717;
+  --sidebar-hover: #2f2f2f;
+  --sidebar-active: #2f2f2f;
+
+  --border: #3a3a3a;
+  --border-light: #2f2f2f;
+  --border-focus: #ffffff;
+
+  --text: #ececec;
+  --text-head: #ffffff;
+  --text-secondary: #b4b4b4;
+  --text-tertiary: #8f8f8f;
+  --text-muted: #5d5d5d;
+
+  --accent: #ffffff;
+  --accent-bg: rgba(255, 255, 255, 0.08);
+  --accent-border: rgba(255, 255, 255, 0.16);
+  --accent-light: #b4b4b4;
+  --accent-text: #0d0d0d;
+
+  --tool-ok: #4ade80;
+  --tool-warn: #fbbf24;
+  --tool-err: #f87171;
+
+  --msg-bot-bg: transparent;
+  --msg-bot-text: #ececec;
+  --msg-user-bg: #303030;
+  --msg-user-text: #ffffff;
+
+  --brand: #ffffff;
+  --on-brand: #0d0d0d;
+
+  --sidebar-active-text: #ffffff;
+  --sidebar-active-bg: #2f2f2f;
+
+  --button-ghost: #2f2f2f;
+
+  --modal-overlay: rgba(0, 0, 0, 0.65);
+  --modal-bg: #2f2f2f;
+
+  --code-bg: #2f2f2f;
+  --code-color: #f87171;
+  --pre-bg: #0d0d0d;
+  --pre-head: #1f1f1f;
+  --pre-text: #f5f5f5;
+  --blockquote-color: #a1a1aa;
+
+  --scrollbar-thumb: #4a4a4a;
+  --scrollbar-track: transparent;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--surface);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--accent-bg);
+    color: var(--text);
+  }
+
+  /* Focus visible - 仅键盘导航显示 */
+  :focus:not(:focus-visible) { outline: none; }
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--border-focus);
+  }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+}
+
+@layer utilities {
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-alt { background-color: var(--surface-alt); }
+  .bg-surface-card { background-color: var(--surface-card); }
+  .bg-surface-input { background-color: var(--surface-input); }
+  .bg-surface-hover { background-color: var(--surface-hover); }
+  .bg-surface-active { background-color: var(--surface-active); }
+  .bg-sidebar { background-color: var(--sidebar-bg); }
+
+  .text-primary { color: var(--text); }
+  .text-head { color: var(--text-head); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-tertiary { color: var(--text-tertiary); }
+  .text-muted { color: var(--text-muted); }
+  .text-accent { color: var(--accent); }
+
+  .border-default { border-color: var(--border); }
+  .border-light { border-color: var(--border-light); }
+  .border-focus { border-color: var(--border-focus); }
+
+  .shadow-sm { box-shadow: var(--shadow-sm); }
+  .shadow-md { box-shadow: var(--shadow-md); }
+  .shadow-lg { box-shadow: var(--shadow-lg); }
+
+  .radius-sm { border-radius: var(--radius-sm); }
+  .radius-md { border-radius: var(--radius-md); }
+  .radius-lg { border-radius: var(--radius-lg); }
+  .radius-xl { border-radius: var(--radius-xl); }
+  .radius-pill { border-radius: var(--radius-pill); }
+
+  .transition-fast { transition: all var(--transition-fast); }
+  .transition-base { transition: all var(--transition-base); }
+  .transition-slow { transition: all var(--transition-slow); }
+
+  .glass { backdrop-filter: blur(20px) saturate(180%); }
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in var(--transition-base); }
+
+@keyframes fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+.animate-fade-out { animation: fade-out var(--transition-fast); }
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-scale-in { animation: scale-in var(--transition-fast); }
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right { animation: slide-in-right var(--transition-base); }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.animate-pulse-soft { animation: pulse-soft 1.4s ease-in-out infinite; }
+
+@keyframes typing-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.typing-cursor { animation: typing-cursor 1s step-end infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in, .animate-fade-out, .animate-scale-in, .animate-slide-in-right, .animate-pulse-soft {
+    animation: none !important;
+  }
+  .typing-cursor { animation: none; }
+}
+
+/* ============================================================
+   Markdown Rendering - ChatGPT 风格（16px 正文）
+   ============================================================ */
+.markdown-body {
+  line-height: 1.75;
+  color: var(--msg-bot-text);
+  font-size: 16px;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.markdown-body > *:first-child { margin-top: 0; }
+.markdown-body > *:last-child { margin-bottom: 0; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+  font-weight: 600; margin: 1.4em 0 0.6em; color: var(--text-head); line-height: 1.3;
+}
+.markdown-body h1 { font-size: 1.5em; }
+.markdown-body h2 { font-size: 1.3em; }
+.markdown-body h3 { font-size: 1.12em; }
+.markdown-body h4 { font-size: 1em; }
+.markdown-body p { margin: 0.75em 0; }
+.markdown-body ul, .markdown-body ol { margin: 0.75em 0; padding-left: 1.6em; }
+.markdown-body ul { list-style-type: disc; }
+.markdown-body ol { list-style-type: decimal; }
+.markdown-body li { margin: 0.35em 0; }
+.markdown-body li::marker { color: var(--text-secondary); }
+.markdown-body a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--text-muted); }
+.markdown-body a:hover { text-decoration-color: var(--text); }
+.markdown-body blockquote {
+  margin: 1em 0; padding: 0.2em 0 0.2em 1.1em;
+  border-left: 3px solid var(--border);
+  color: var(--blockquote-color);
+}
+.markdown-body code {
+  background: var(--code-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.16em 0.4em;
+  border-radius: var(--radius-sm);
+}
+.markdown-body pre {
+  background: var(--pre-bg);
+  color: var(--pre-text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1em 1.15em;
+  margin: 1em 0;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--pre-text);
+  font-size: inherit;
+}
+.markdown-body table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 14px; }
+.markdown-body th, .markdown-body td { padding: 0.6em 1em; border: 1px solid var(--border); text-align: left; }
+.markdown-body th { background: var(--surface-alt); color: var(--text-secondary); font-weight: 600; }
+.markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1.6em 0; }
+.markdown-body strong { font-weight: 600; color: var(--text-head); }
+.markdown-body em { font-style: italic; }
+.markdown-body del { text-decoration: line-through; color: var(--text-tertiary); }
+.markdown-body kbd {
+  background: var(--surface-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* 代码块容器（带语言栏 + 复制按钮） */
+.code-block {
+  margin: 1em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--pre-bg);
+}
+.code-block-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--pre-head);
+  color: #a1a1aa;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.code-block-head button {
+  color: #a1a1aa; transition: color var(--transition-fast);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.code-block-head button:hover { color: #ffffff; }
+.code-block pre {
+  margin: 0; border: none; border-radius: 0;
+  padding: 14px 16px;
+  background: transparent;
+  color: var(--pre-text);
+}
+
+/* Syntax highlight (rehype-highlight) —— 深色代码块配色 */
+.hljs { background: transparent !important; color: var(--pre-text); }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-name, .hljs-tag { color: #ff7b72; }
+.hljs-string, .hljs-title, .hljs-section, .hljs-attribute, .hljs-literal, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-symbol, .hljs-bullet, .hljs-addition { color: #a5d6ff; }
+.hljs-comment, .hljs-quote, .hljs-deletion, .hljs-meta { color: #8b949e; font-style: italic; }
+.hljs-number, .hljs-regexp, .hljs-link { color: #ffa657; }
+.hljs-function, .hljs-class .hljs-title, .hljs-params { color: #d2a8ff; }
+.hljs-keyword, .hljs-selector-tag { font-weight: 500; }
+.hljs-attr, .hljs-variable, .hljs-property { color: #79c0ff; }
+
+/* ============================================================
+   Input / Textarea - ChatGPT 圆角 composer
+   ============================================================ */
+.input-capsule {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+.input-capsule:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.input-capsule textarea {
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+  caret-color: var(--accent);
+  min-height: 24px;
+  max-height: 200px;
+}
+.input-capsule textarea::placeholder { color: var(--text-tertiary); }
+
+/* ============================================================
+   思考程度滑块（参考 ChatGPT / Codex 的强度选择器）
+   整条轨道为品牌渐变，白色滑块指示当前档位
+   ============================================================ */
+.think-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.think-slider::-webkit-slider-runnable-track {
+  height: 22px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #e2e8f0 0%, #34d399 62%, #047857 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.think-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.think-slider:hover::-webkit-slider-thumb { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32); }
+.think-slider:active::-webkit-slider-thumb { transform: scale(1.1); }
+.think-slider::-moz-range-track {
+  height: 22px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #e2e8f0 0%, #34d399 62%, #047857 100%);
+}
+.think-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+/* 轨道上持续游动的小点（两层不同速度，营造流动感） */
+.think-slider-wrap { position: relative; }
+.think-dots {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  height: 22px;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.think-dots::before,
+.think-dots::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 200%;
+  background-repeat: repeat-x;
+  background-size: 50% 100%;
+  will-change: transform;
+}
+.think-dots::before {
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 34%, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(1.3px 1.3px at 34% 68%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1.5px 1.5px at 58% 40%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1.2px 1.2px at 76% 72%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1.6px 1.6px at 92% 36%, rgba(255, 255, 255, 0.85), transparent);
+  animation: think-dots-drift 9s linear infinite;
+}
+.think-dots::after {
+  background-image:
+    radial-gradient(1.1px 1.1px at 22% 62%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.4px 1.4px at 48% 30%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.1px 1.1px at 68% 56%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1.3px 1.3px at 86% 66%, rgba(255, 255, 255, 0.45), transparent);
+  animation: think-dots-drift 16s linear infinite reverse;
+}
+@keyframes think-dots-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .think-dots::before, .think-dots::after { animation: none; }
+}
+
+/* ── 思考程度「最大」档光环：仅最大档渲染 ── */
+.think-halo {
+  position: absolute;
+  inset: -5px;
+  border-radius: 9999px;
+  pointer-events: none;
+  animation: think-halo-pulse 1.8s ease-out infinite;
+}
+@keyframes think-halo-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.think-halo-glow {
+  animation: think-halo-glow-pulse 1.8s ease-in-out infinite;
+}
+@keyframes think-halo-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px 1px rgba(16, 185, 129, 0.45); }
+  50% { box-shadow: 0 0 16px 4px rgba(16, 185, 129, 0.72); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .think-halo, .think-halo-glow { animation: none; }
+}
+
+/* ============================================================
+   Button
+   ============================================================ */
+.btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn-ghost:active { background: var(--surface-active); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 14px;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+.btn-icon:hover { background: var(--surface-hover); color: var(--text); }
+.btn-icon:active { background: var(--surface-active); }
+.btn-icon.active { background: var(--accent-bg); color: var(--accent); }
+
+/* ============================================================
+   Card / Panel
+   ============================================================ */
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+
+/* ============================================================
+   Modal / Overlay
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: var(--modal-overlay);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  animation: fade-in var(--transition-fast);
+}
+.modal-content {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--modal-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  z-index: 1001;
+  max-width: 90vw; max-height: 90vh;
+  animation: scale-in var(--transition-base);
+}
+
+/* ============================================================
+   Loading / Empty states
+   ============================================================ */
+.loading-dots { display: inline-flex; gap: 3px; }
+.loading-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary);
+  animation: loading-dot 1.2s ease-in-out infinite;
+}
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes loading-dot {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.3); opacity: 1; }
+}
+
+/* ============================================================
+   Welcome / Empty state - ChatGPT 风格
+   ============================================================ */
+.welcome-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 2rem; text-align: center; }
+.welcome-logo {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 1.5rem;
+  color: var(--text-head);
+}
+.welcome-title { font-size: 30px; font-weight: 600; color: var(--text-head); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+.welcome-subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 2.5rem; max-width: 440px; line-height: 1.6; }
+.welcome-prompts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 560px; }
+.welcome-prompt {
+  padding: 12px 16px; border-radius: var(--radius-pill);
+  background: var(--surface-card); border: 1px solid var(--border);
+  font-size: 13.5px; color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
+}
+.welcome-prompt:hover { border-color: var(--text-muted); background: var(--surface-hover); transform: translateY(-1px); }
+.welcome-prompt:active { transform: translateY(0); }
+
+/* ============================================================
+   Divider
+   ============================================================ */
+.divider { height: 1px; background: var(--border); border: none; margin: 0; }
+.divider-light { background: var(--border-light); }
+
+/* ============================================================
+   Tooltip
+   ============================================================ */
+.tooltip { position: relative; }
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--text-head); color: var(--on-brand);
+  font-size: 11px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity var(--transition-fast);
+  margin-bottom: 6px; z-index: 100;
+}
+.tooltip:hover::after { opacity: 1; }
+
+/* ============================================================
+   Sidebar item
+   ============================================================ */
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-md);
+  color: var(--text-secondary); font-size: 13.5px;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  cursor: pointer; width: 100%; border: none; background: transparent;
+  text-align: left; font-family: inherit;
+}
+.sidebar-item:hover { background: var(--sidebar-hover); color: var(--text); }
+.sidebar-item.active { background: var(--sidebar-active); color: var(--sidebar-active-text); font-weight: 500; }
+
+/* 会话分组标题 */
+.sidebar-group-label {
+  padding: 14px 10px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   Tab bar
+   ============================================================ */
+.tab-strip { display: flex; gap: 2px; padding: 0 8px; }
+.tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 12px; height: 36px; border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: transparent; border: 1px solid transparent; border-bottom: none;
+  font-size: 12.5px; font-weight: 500; color: var(--text-tertiary);
+  cursor: pointer; transition: color var(--transition-fast), background var(--transition-fast);
+}
+.tab:hover { color: var(--text); background: var(--surface-hover); }
+.tab.active { color: var(--text-head); background: var(--surface); border-color: var(--border); border-bottom-color: var(--surface); }
+.tab .close { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: var(--radius-pill); opacity: 0; transition: opacity var(--transition-fast), background var(--transition-fast); }
+.tab:hover .close { opacity: 1; }
+.tab .close:hover { background: var(--surface-hover); }
+
+/* ============================================================
+   Context gauge
+   ============================================================ */
+.context-gauge { height: 4px; border-radius: 2px; background: var(--border-light); overflow: hidden; }
+.context-gauge > div { height: 100%; border-radius: 2px; transition: width 0.4s ease-out, background-color var(--transition-base); }
+
+/* ============================================================
+   Tool call card
+   ============================================================ */
+.tool-card {
+  background: var(--surface-card); border: 1px solid var(--border);
+  border-radius: var(--radius-md); overflow: hidden;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+.tool-card-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.tool-card-header:hover { background: var(--surface-hover); }
+.tool-card-content { padding: 0 12px 12px; border-top: 1px solid var(--border-light); font-size: 11.5px; font-family: var(--font-mono); color: var(--text-tertiary); }
+
+/* ============================================================
+   Thinking / Reasoning card
+   ============================================================ */
+.thinking-card { border-left: 2px solid var(--border-light); margin-left: 4px; padding-left: 12px; }
+.thinking-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; padding: 4px 0; }
+.thinking-content { font-size: 13px; color: var(--text-tertiary); line-height: 1.65; white-space: pre-wrap; font-family: inherit; margin-top: 6px; }
+
+/* ============================================================
+   毛玻璃质感（与输入框一致）—— 全局应用
+   .glass       常规面板：侧边栏 / 标签栏 / 面板 / 状态条
+   .glass-strong 弹出层：菜单 / 弹窗 / 命令面板（更实、更模糊）
+   ============================================================ */
+:root {
+  /* 浅色：更低不透明度 + 更高模糊，让磨砂质感在浅色下同样肉眼可见 */
+  --glass-bg: rgba(255, 255, 255, 0.52);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-blur: 18px;
+  --glass-saturate: 1.25;
+  --glass-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+[data-theme="dark"] {
+  --glass-bg: rgba(44, 44, 48, 0.55);
+  --glass-bg-strong: rgba(36, 36, 40, 0.72);
+  --glass-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+.glass {
+  /* 着色层：磨砂由全局 .global-veil 统一提供（单次模糊，全覆盖） */
+  background: var(--glass-bg) !important;
+  box-shadow: var(--glass-hairline);
+}
+.glass-strong {
+  /* 浮层：悬浮于内容之上，需自带磨砂 */
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+  box-shadow: var(--glass-hairline), 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* ── 全窗口统一蒙版：壁纸 -> 单次磨砂 -> 全部内容 ── */
+.global-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+[data-theme="dark"] .global-veil {
+  background: rgba(0, 0, 0, 0.16);
+}
+html[data-wallpaper="off"] .global-veil {
+  display: none;
+}
+/* 无壁纸时毛玻璃自动退化为纯净底色，视觉不突兀 */
+html[data-wallpaper="off"] .glass,
+html[data-wallpaper="off"] .glass-strong {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ============================================================
+   无边框窗口：拖拽区 / 非拖拽区（macOS hiddenInset）
+   ============================================================ */
+.titlebar-drag { -webkit-app-region: drag; }
+.titlebar-nodrag { -webkit-app-region: no-drag; }
+
+/* ── 语音通话背景：极光流动 ── */
+@keyframes aurora-drift {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.55; }
+  25%  { transform: translate(60px, -40px) scale(1.15); opacity: 0.8; }
+  50%  { transform: translate(-40px, 30px) scale(0.95); opacity: 0.6; }
+  75%  { transform: translate(30px, 50px) scale(1.1); opacity: 0.85; }
+  100% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+}
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(56px);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: aurora-drift 18s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-orb { animation: none; }
+}
+
+
+/* ── 低性能设备（老款 Intel Mac）：降级，保流畅 ── */
+[data-low-power="1"] .global-veil { backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-low-power="1"] .glass-strong { backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-low-power="1"] .aurora-orb { animation: none; }
+[data-low-power="1"] .codex-halo { display: none; }

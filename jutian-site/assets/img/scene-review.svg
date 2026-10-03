@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img">
+  <rect width="640" height="400" fill="#0f1218"/>
+  <rect x="0.5" y="0.5" width="639" height="399" fill="none" stroke="rgba(255,255,255,.09)"/>
+  <g>
+    <rect x="16" y="14" width="608" height="372" rx="12" fill="#14181f" stroke="rgba(255,255,255,.1)"/>
+    <g>
+      <circle cx="38" cy="34" r="5" fill="#ff5f57"/><circle cx="56" cy="34" r="5" fill="#febc2e"/><circle cx="74" cy="34" r="5" fill="#28c840"/>
+      <text x="320" y="39" text-anchor="middle" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.4)">巨天agent</text>
+    </g>
+    <line x1="16" y1="56" x2="624" y2="56" stroke="rgba(255,255,255,.08)"/>
+    
+    
+    <rect x="40" y="86" width="560" height="48" rx="10" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>
+    <rect x="54" y="100" width="26" height="20" rx="5" fill="#f87171" opacity=".18"/>
+    <text x="60" y="115" font-family="SF Mono,Menlo,monospace" font-size="11" fill="#f87171">P1</text>
+    <text x="94" y="115" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.74)">第 42 行:可能的空指针,user 未判空</text>
+    <rect x="40" y="148" width="560" height="48" rx="10" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>
+    <rect x="54" y="162" width="26" height="20" rx="5" fill="#fbbf24" opacity=".18"/>
+    <text x="60" y="177" font-family="SF Mono,Menlo,monospace" font-size="11" fill="#fbbf24">P2</text>
+    <text x="94" y="177" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.74)">第 88 行:并发写 map,缺少锁</text>
+    <rect x="40" y="210" width="560" height="48" rx="10" fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.08)"/>
+    <rect x="54" y="224" width="26" height="20" rx="5" fill="#10a37f" opacity=".18"/>
+    <text x="60" y="239" font-family="SF Mono,Menlo,monospace" font-size="11" fill="#10a37f">P3</text>
+    <text x="94" y="239" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="rgba(255,255,255,.74)">第 130 行:错误被吞,建议记日志</text>
+    <rect x="40" y="290" width="560" height="72" rx="10" fill="rgba(16,163,127,.08)" stroke="rgba(16,163,127,.3)"/>
+    <text x="60" y="318" font-family="-apple-system,PingFang SC,sans-serif" font-size="12" fill="#10a37f">✓ 三个问题都给了复现步骤,点击跳到对应行</text>
+    <text x="60" y="342" font-family="-apple-system,PingFang SC,sans-serif" font-size="11.5" fill="rgba(255,255,255,.34)">结论先行,证据可点开核</text>
+  </g>
+</svg>

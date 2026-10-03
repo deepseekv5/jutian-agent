@@ -1,0 +1,465 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>巨天agent 宣传片</title><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#06070c;color:#fff;
+ font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','PingFang SC','Helvetica Neue',sans-serif;
+ -webkit-font-smoothing:antialiased}
+.stage{position:absolute;inset:0;background:
+ radial-gradient(30% 34% at 22% 20%,rgba(16,163,127,.14),transparent 70%),
+ radial-gradient(28% 32% at 78% 74%,rgba(52,211,153,.09),transparent 70%),
+ radial-gradient(26% 30% at 62% 14%,rgba(14,165,233,.07),transparent 70%),#06070c}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:radial-gradient(ellipse 86% 76% at 50% 46%,black 18%,transparent 84%)}
+.vig{position:absolute;inset:0;background:radial-gradient(ellipse 94% 86% at 50% 48%,transparent 50%,rgba(0,0,0,.55))}
+.aurora{position:absolute;border-radius:50%;opacity:.55;will-change:transform}
+.a1{width:560px;height:560px;left:6%;top:2%;background:radial-gradient(circle,rgba(16,163,127,.42),rgba(16,163,127,.12) 45%,transparent 68%)}
+.a2{width:520px;height:520px;right:4%;bottom:0%;background:radial-gradient(circle,rgba(52,211,153,.34),rgba(52,211,153,.10) 45%,transparent 68%)}
+.a3{width:480px;height:480px;left:44%;top:44%;background:radial-gradient(circle,rgba(14,165,233,.26),rgba(14,165,233,.08) 45%,transparent 68%)}
+.sp{position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(52,211,153,.9);box-shadow:0 0 14px rgba(52,211,153,.9);opacity:0}
+
+/* ---------- 章节与场景 ---------- */
+.scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;opacity:0;transition:opacity .7s ease;pointer-events:none;z-index:2}
+.scene.on{opacity:1}
+.fu{opacity:0;transform:translateY(26px);transition:opacity .55s ease,transform .7s cubic-bezier(.16,1,.3,1)}
+.on .fu{opacity:1;transform:translateY(0)}
+.on .d0{transition-delay:.05s}.on .d1{transition-delay:.3s}.on .d2{transition-delay:.6s}.on .d3{transition-delay:.95s}
+.on .d4{transition-delay:1.35s}.on .d5{transition-delay:1.8s}.on .d6{transition-delay:2.3s}.on .d7{transition-delay:2.85s}
+.on .d8{transition-delay:3.5s}.on .d9{transition-delay:4.2s}.on .d10{transition-delay:5s}.on .d11{transition-delay:6s}
+.pop{opacity:0;transform:scale(.6);transition:opacity .4s ease,transform .8s cubic-bezier(.34,1.56,.64,1)}
+.on .pop{opacity:1;transform:scale(1)}
+.on .pd1{transition-delay:.3s}.on .pd2{transition-delay:.6s}.on .pd3{transition-delay:.95s}.on .pd4{transition-delay:1.4s}
+
+/* ---------- 章节标题 ---------- */
+.ch-h{position:absolute;top:52px;left:72px;display:flex;align-items:center;gap:16px}
+.ch-idx{font-size:15px;font-weight:800;font-family:'SF Mono',Menlo,monospace;color:#10a37f;letter-spacing:.24em}
+.ch-t{font-size:27px;font-weight:800;letter-spacing:.01em}
+
+/* ---------- 品牌 LOGO / 标题 ---------- */
+.mark{width:132px;height:132px;border-radius:34px;display:flex;align-items:center;justify-content:center;
+ background:linear-gradient(150deg,#10a37f,#0a6b51);box-shadow:0 30px 80px rgba(16,163,127,.5),inset 0 1px 0 rgba(255,255,255,.35);
+ transform:scale(.3);opacity:0;transition:transform .8s cubic-bezier(.34,1.56,.64,1),opacity .4s}
+.on .mark{transform:scale(1);opacity:1;transition-delay:.2s}
+.mark svg{width:66px;height:66px;stroke:#fff;fill:none;stroke-width:1.6}
+.title{display:flex;gap:3px;margin-top:36px}
+.title span{font-size:148px;font-weight:900;letter-spacing:-.02em;display:inline-block;opacity:0;transform:translateY(70px) scale(.8);transition:opacity .45s ease,transform .62s cubic-bezier(.16,1,.3,1)}
+.on .title span{opacity:1;transform:translateY(0) scale(1)}
+.tagline{font-size:25px;color:rgba(255,255,255,.62);margin-top:18px;letter-spacing:.42em}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:0 26px;height:46px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);font-size:16px;letter-spacing:.06em}
+.dot{width:9px;height:9px;border-radius:50%;background:#34d399;box-shadow:0 0 14px #34d399}
+
+/* ---------- 通用组件 ---------- */
+.chips{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.chip{padding:12px 22px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:17px;font-weight:600}
+.chip.acc{background:rgba(16,163,127,.14);border-color:rgba(16,163,127,.4);color:#6ee7b7}
+.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:22px 26px}
+.big{font-size:88px;font-weight:900;line-height:1;background:linear-gradient(135deg,#10a37f,#34d399);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.lbl{font-size:14px;color:rgba(255,255,255,.55);margin-top:6px;letter-spacing:.06em}
+.banner{padding:15px 34px;border-radius:16px;background:linear-gradient(120deg,#10a37f,#0d8a6b);font-size:22px;font-weight:800;opacity:0;transform:translateY(20px);transition:.7s cubic-bezier(.16,1,.3,1)}
+.on .banner{opacity:1;transform:translateY(0);transition-delay:1.7s}
+
+/* ---------- 仿真窗口 ---------- */
+.win{background:linear-gradient(180deg,#12151d,#0d1017);border:1px solid rgba(255,255,255,.1);border-radius:20px;
+ box-shadow:0 40px 100px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.03) inset;overflow:hidden;text-align:left}
+.win-bar{height:46px;display:flex;align-items:center;padding:0 18px;gap:9px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.07)}
+.wd{width:13px;height:13px;border-radius:50%}
+.win-title{margin-left:12px;font-size:14px;color:rgba(255,255,255,.5)}
+.row{display:flex;gap:44px;align-items:center}
+
+/* 架构图 / 流程图 SVG 通用 */
+.node{fill:#0f1218;stroke:#2b3140;stroke-width:1.6;transition:fill .55s,stroke .55s}
+.node.on{fill:#0c2a21;stroke:#10a37f}
+.node-tx{font-size:19px;fill:#e8eaee;font-weight:650}
+.node-sub{font-size:14px;fill:#8b93a3}
+.edge{stroke:#2b3140;stroke-width:2.4;fill:none;transition:stroke .55s}
+.edge.on{stroke:#10a37f}
+.flowp{stroke:#10a37f;stroke-width:2.4;fill:none;stroke-dasharray:8 12;opacity:0}
+
+/* 日志终端 */
+.log{background:#080b12;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px 26px;font-family:'SF Mono',Menlo,monospace;font-size:16.5px;line-height:2.05}
+.log div{opacity:0;transform:translateX(-12px);transition:.5s cubic-bezier(.16,1,.3,1)}
+.on .log div{opacity:1;transform:translateX(0)}
+.on .log .l1{transition-delay:.9s}.on .log .l2{transition-delay:1.9s}.on .log .l3{transition-delay:2.9s}.on .log .l4{transition-delay:3.9s}
+.tk{color:#7dd3fc}.ck{color:#4ade80}.st{color:#10a37f}.cm{color:#6b7280}.cur{display:inline-block;width:9px;height:19px;background:#34d399;vertical-align:-3px}
+
+/* 聊天窗 */
+.msg{display:flex;margin-bottom:22px}
+.bub{max-width:62%;padding:14px 20px;border-radius:22px;font-size:19px;line-height:1.6}
+.bub.me{background:#2a2e38;border-bottom-right-radius:6px;margin-left:auto}
+.bub.ai{background:transparent;padding-left:0;font-size:19.5px;line-height:1.65}
+.toolcard{margin-top:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 18px;font-family:'SF Mono',Menlo,monospace;font-size:15px;line-height:1.8}
+.inputcap{margin:0 26px 24px;height:60px;border-radius:30px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;padding:0 26px;gap:14px;color:rgba(255,255,255,.42);font-size:18px}
+.sendcap{width:38px;height:38px;border-radius:50%;background:#10a37f;display:flex;align-items:center;justify-content:center;margin-left:auto}
+
+/* 代码窗 */
+.editor{display:flex;height:600px}
+.tree{width:250px;border-right:1px solid rgba(255,255,255,.07);padding:16px 12px;font-size:15.5px;font-family:'SF Mono',Menlo,monospace}
+.tree div{padding:6px 12px;border-radius:8px;color:#9aa3b2;display:flex;gap:9px;align-items:center}
+.tree div.sel{background:rgba(16,163,127,.16);color:#fff}
+.code{flex:1;padding:18px 24px;font-family:'SF Mono',Menlo,monospace;font-size:17px;line-height:1.92;background:#14171f}
+.cl{white-space:pre}
+.k{color:#c792ea}.s{color:#a5e075}.n{color:#f78c6c}.c{color:#5c6773}.f{color:#82aaff}.p{color:#d6deeb}
+.tabs{display:flex;gap:2px;padding:0 14px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06)}
+.tab{padding:12px 20px;font-size:15px;color:#8b93a3;border-bottom:2px solid transparent;display:flex;gap:9px;align-items:center}
+.tab.act{color:#fff;border-bottom-color:#10a37f;background:rgba(16,163,127,.08)}
+.tab .mod{width:7px;height:7px;border-radius:50%;background:#f0b429}
+.status{height:38px;display:flex;align-items:center;gap:22px;padding:0 20px;font-size:13.5px;color:#8b93a3;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
+
+/* 员工卡 */
+.emp{width:300px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:20px 24px;text-align:left}
+.av{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff}
+.pbar{height:6px;border-radius:99px;background:rgba(255,255,255,.09);margin-top:14px;overflow:hidden}
+.pfill{height:100%;border-radius:99px;background:linear-gradient(90deg,#10a37f,#34d399);width:0;transition:width 2.4s cubic-bezier(.4,0,.2,1)}
+.on .pfill{width:var(--w)}
+.stchip{margin-left:auto;font-size:12px;padding:4px 12px;border-radius:99px;background:rgba(16,163,127,.16);color:#6ee7b7;border:1px solid rgba(16,163,127,.35)}
+
+/* 终端 */
+.term{background:#05070d;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:30px 36px;font-family:'SF Mono',Menlo,monospace;font-size:21px;line-height:2.15;box-shadow:0 40px 100px rgba(0,0,0,.55)}
+.term div{opacity:0;transform:translateX(-10px);transition:.5s cubic-bezier(.16,1,.3,1)}
+.on .term div{opacity:1;transform:translateX(0)}
+.on .term .l1{transition-delay:.5s}.on .term .l2{transition-delay:1.4s}.on .term .l3{transition-delay:2.3s}.on .term .l4{transition-delay:3.2s}
+
+/* 字幕 + 进度 */
+.subs{position:absolute;left:50%;bottom:104px;transform:translateX(-50%) translateY(14px);z-index:9;
+ padding:15px 38px;border-radius:18px;background:rgba(8,10,16,.72);border:1px solid rgba(255,255,255,.1);
+ font-size:31px;font-weight:600;letter-spacing:.02em;opacity:0;transition:opacity .28s ease,transform .28s ease;
+ backdrop-filter:blur(12px);white-space:nowrap;pointer-events:none}
+.subs.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.progress{position:absolute;left:0;bottom:0;height:3px;width:100%;background:rgba(255,255,255,.06);z-index:9}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#10a37f,#34d399)}
+.wm{position:absolute;right:40px;bottom:26px;font-size:13px;color:rgba(255,255,255,.28);letter-spacing:.16em;z-index:9}
+</style></head><body>
+<div class="stage">
+ <div class="aurora a1"></div><div class="aurora a2"></div><div class="aurora a3"></div>
+ <div class="grid"></div><div class="vig"></div>
+ <div class="sp" data-lag="0.4" style="left:16%;top:82%"></div>
+ <div class="sp" data-lag="2.2" style="left:34%;top:88%"></div>
+ <div class="sp" data-lag="3.9" style="left:52%;top:80%"></div>
+ <div class="sp" data-lag="5.3" style="left:71%;top:86%"></div>
+ <div class="sp" data-lag="6.8" style="left:87%;top:78%"></div>
+
+ <!-- 章1 标题 -->
+ <section class="scene" id="s1"><div style="display:flex;flex-direction:column;align-items:center">
+  <div class="mark"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></div>
+  <div class="title" id="t1"></div>
+  <div class="tagline fu d1">桌 面 A I 工 作 台</div>
+  <div class="chips fu d3" style="margin-top:44px">
+   <div class="chip acc">对话</div><div class="chip">代码</div><div class="chip">集群</div><div class="chip">知识库</div><div class="chip">长期记忆</div><div class="chip">终端</div>
+  </div>
+  <div class="pill fu d4" style="margin-top:40px"><span class="dot"></span>Beta v4.0 · 巨天工作室 出品</div>
+ </div></section>
+
+ <!-- 章2 架构 -->
+ <section class="scene" id="s2">
+  <div class="ch-h"><span class="ch-idx fu">01 / 06</span><span class="ch-t fu d1">架构 · 一个进程,一个入口</span></div>
+  <div class="row fu d1" style="margin-top:24px">
+   <svg width="1050" height="520" viewBox="0 0 1050 520">
+    <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#10a37f"/></marker></defs>
+    <path id="e1" class="edge" d="M196 250 H 330" marker-end="url(#ar)"/>
+    <path id="e2" class="edge" d="M520 190 H 660" marker-end="url(#ar)"/>
+    <path id="e3" class="edge" d="M520 320 H 660" marker-end="url(#ar)"/>
+    <path id="e4" class="edge" d="M850 250 H 940" marker-end="url(#ar)"/>
+    <path id="f1" class="flowp" d="M196 250 H 330"/>
+    <path id="f2" class="flowp" d="M520 190 H 660"/>
+    <path id="f3" class="flowp" d="M520 320 H 660"/>
+    <path id="f4" class="flowp" d="M850 250 H 940"/>
+    <rect class="node" id="n1" x="40" y="196" width="156" height="108" rx="18"/>
+    <text class="node-tx" x="118" y="243" text-anchor="middle">用户</text>
+    <text class="node-sub" x="118" y="270" text-anchor="middle">自然语言目标</text>
+    <rect class="node" id="n2" x="330" y="150" width="190" height="200" rx="20" style="stroke:#10a37f"/>
+    <text class="node-tx" x="425" y="200" text-anchor="middle" style="fill:#34d399;font-weight:800;font-size:21px">巨天agent</text>
+    <text class="node-sub" x="425" y="234" text-anchor="middle">React 界面层</text>
+    <text class="node-sub" x="425" y="264" text-anchor="middle">Agent 引擎</text>
+    <text class="node-sub" x="425" y="294" text-anchor="middle">Node 单进程</text>
+    <rect class="node" id="n3" x="660" y="136" width="190" height="108" rx="18"/>
+    <text class="node-tx" x="755" y="180" text-anchor="middle">工具层</text>
+    <text class="node-sub" x="755" y="207" text-anchor="middle">37 个内置工具</text>
+    <rect class="node" id="n4" x="660" y="266" width="190" height="108" rx="18"/>
+    <text class="node-tx" x="755" y="310" text-anchor="middle">终端 · 文件</text>
+    <text class="node-sub" x="755" y="337" text-anchor="middle">真实系统操作</text>
+    <rect class="node" id="n5" x="940" y="196" width="96" height="108" rx="18"/>
+    <text class="node-sub" x="988" y="245" text-anchor="middle">知识库</text>
+    <text class="node-sub" x="988" y="270" text-anchor="middle">记忆</text>
+    <text class="node-sub" x="540" y="470" text-anchor="middle" style="font-size:16px">请求 → 决策 → 执行 → 回传,闭环在一台电脑上完成</text>
+   </svg>
+   <div style="width:520px;display:flex;flex-direction:column;gap:22px">
+    <div class="card"><div style="font-size:19px;font-weight:700">本地优先</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">对话、代码、文件、记忆<br>都留在这台电脑上</div></div>
+    <div class="card"><div style="font-size:19px;font-weight:700">工具即能力</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">shell · 文件 · 浏览器<br>搜索 · 代码 · 多媒体</div></div>
+    <div class="log" style="font-size:15.5px;line-height:2">
+     <div class="l1"><span class="st">&gt;</span> <span class="tk">plan</span>(帮我分析这份日志)</div>
+     <div class="l2"><span class="st">&gt;</span> <span class="tk">shell</span>(tail -n 500 app.log)</div>
+     <div class="l3"><span class="st">&gt;</span> <span class="tk">read_file</span>(./logs/error.log)</div>
+     <div class="l4"><span class="ck">✓</span> 定位 3 处空指针,已给修复建议<span class="cur"></span></div>
+    </div>
+   </div>
+  </div>
+  <div class="banner" style="margin-top:30px">单个桌面应用,覆盖 对话 · 代码 · 集群 · 知识 · 记忆</div>
+ </section>
+
+ <!-- 章3 对话 -->
+ <section class="scene" id="s3">
+  <div class="ch-h"><span class="ch-idx fu">02 / 06</span><span class="ch-t fu d1">对话 · 不止于聊天</span></div>
+  <div class="row fu d1" style="margin-top:24px">
+   <div class="win" style="width:1060px;height:640px">
+    <div class="win-bar"><span class="wd" style="background:#ff5f57"></span><span class="wd" style="background:#febc2e"></span><span class="wd" style="background:#28c840"></span><span class="win-title">巨天agent — 新对话</span></div>
+    <div style="padding:30px 32px 0">
+     <div class="msg"><div class="bub me">帮我把项目里所有 TODO 整理成清单,按模块分组</div></div>
+     <div class="msg fu d2"><div class="bub ai">好的,我先扫描代码库,再按模块归类输出。</div></div>
+     <div class="msg fu d3"><div style="width:100%">
+      <div class="toolcard"><span class="st">⚙</span> <span class="tk">search_code</span>("TODO|FIXME")<br><span class="cm">  → 命中 12 处,涉及 6 个文件</span></div>
+      <div class="toolcard" style="margin-top:10px"><span class="st">⚙</span> <span class="tk">write_file</span>(./TODO.md)<br><span class="cm">  → 按模块分组写入完成</span></div>
+      <div style="margin-top:14px;font-size:19px;line-height:1.65"><span class="ck">✓</span> 已生成清单:6 个模块 · 12 条待办,点击即可跳转到对应代码行。</div>
+     </div></div>
+    </div>
+    <div class="inputcap"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>继续说点什么…<span class="sendcap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+   </div>
+   <div style="width:520px;display:flex;flex-direction:column;gap:20px">
+    <div class="row" style="gap:20px">
+     <div class="card fu d3" style="flex:1;text-align:center"><div class="big count" data-target="37" data-dur="1300">0</div><div class="lbl">内置工具</div></div>
+     <div class="card fu d4" style="flex:1;text-align:center"><div class="big count" data-target="5" data-dur="1200">0</div><div class="lbl">内置员工</div></div>
+    </div>
+    <div class="card fu d4"><div style="font-size:19px;font-weight:700">深度思考</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">复杂任务先推理再动手,步骤透明可见</div></div>
+    <div class="card fu d5"><div style="font-size:19px;font-weight:700">知识库 + 长期记忆</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">检索文档、记住偏好,越用越懂你</div></div>
+    <div class="card fu d6"><div style="font-size:19px;font-weight:700">多轮工具调用</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">一次指令,自动规划并连续执行</div></div>
+   </div>
+  </div>
+  <div class="banner" style="margin-top:30px">每次回答,都有据可依</div>
+ </section>
+
+ <!-- 章4 代码 -->
+ <section class="scene" id="s4">
+  <div class="ch-h"><span class="ch-idx fu">03 / 06</span><span class="ch-t fu d1">代码模式 · 完整开发环境</span></div>
+  <div class="row fu d1" style="margin-top:24px">
+   <div class="win" style="width:1130px">
+    <div class="win-bar"><span class="wd" style="background:#ff5f57"></span><span class="wd" style="background:#febc2e"></span><span class="wd" style="background:#28c840"></span><span class="win-title">code — jutian-agent</span></div>
+    <div class="tabs">
+     <div class="tab act">ChatPanel.tsx<span class="mod"></span></div>
+     <div class="tab">serve.cjs</div>
+     <div class="tab">index.css</div>
+    </div>
+    <div class="editor">
+     <div class="tree">
+      <div style="color:#6b7280;font-size:13px;padding:2px 12px 8px">资源管理器</div>
+      <div>▾ src</div>
+      <div class="sel">　ChatPanel.tsx</div>
+      <div>　CodeView.tsx</div>
+      <div>　Sidebar.tsx</div>
+      <div>▾ serve.cjs</div>
+      <div>▸ electron</div>
+      <div>▸ shared</div>
+      <div>▸ node_modules</div>
+      <div style="margin-top:10px;color:#10a37f">✓ 37 tools</div>
+      <div style="color:#10a37f">✓ git clean</div>
+     </div>
+     <div class="code">
+      <div class="cl"><span class="c">// 一句话改造:员工 @ 接力,总管自动汇总</span></div>
+      <div class="cl"><span class="k">export function</span> <span class="f">SwarmConsole</span>({ team }: <span class="p">Props</span>) {</div>
+      <div class="cl">  <span class="k">const</span> [tasks, setTasks] = <span class="f">useState</span>&lt;<span class="p">Task</span>[]&gt;([]);</div>
+      <div class="cl">  <span class="k">const</span> boss = team.<span class="f">find</span>(e =&gt; e.role === <span class="s">'manager'</span>);</div>
+      <div class="cl">&nbsp;</div>
+      <div class="cl">  <span class="k">const</span> handoff = <span class="p">async</span> (t: <span class="p">Task</span>) =&gt; {</div>
+      <div class="cl">    <span class="k">const</span> owner = t.mentions[<span class="n">0</span>] ?? boss.id;</div>
+      <div class="cl">    <span class="k">await</span> <span class="f">dispatch</span>({ to: owner, task: t });</div>
+      <div class="cl">    <span class="f">setTasks</span>(list =&gt; <span class="f">reorder</span>(list, owner));</div>
+      <div class="cl">  };</div>
+      <div class="cl">&nbsp;</div>
+      <div class="cl">  <span class="k">return</span> &lt;<span class="p">Panel</span> title=<span class="s">"集群指挥室"</span>&gt;<span class="c">{/* … */}</span>&lt;/<span class="p">Panel</span>&gt;;</div>
+      <div class="cl">}</div>
+     </div>
+    </div>
+    <div class="status"><span>主分支 main</span><span>UTF-8</span><span>TypeScript React</span><span>行 14,列 32</span><span style="margin-left:auto;color:#10a37f">● 检查点:改动前自动快照</span></div>
+   </div>
+   <div style="width:480px;display:flex;flex-direction:column;gap:16px">
+    <div class="card fu d3"><div style="font-size:19px;font-weight:700">文件树 · 多标签编辑</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">CodeMirror 语法高亮,跟随模式自动打开 AI 提到的文件</div></div>
+    <div class="card fu d4"><div style="font-size:19px;font-weight:700">Git 检查点</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">每轮对话前自动快照,一整轮改动一键撤销</div></div>
+    <div class="card fu d5"><div style="font-size:19px;font-weight:700">内置终端 + 代码统计</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">不离开窗口就能跑命令、提交、看语言分布</div></div>
+    <div class="card fu d6"><div style="font-size:19px;font-weight:700">项目级问答</div><div style="font-size:15px;color:rgba(255,255,255,.55);margin-top:6px;line-height:1.6">@ 文件即上下文,问哪行答哪行</div></div>
+   </div>
+  </div>
+  <div class="banner" style="margin-top:30px">写代码,不再来回复制粘贴</div>
+ </section>
+
+ <!-- 章5 集群 -->
+ <section class="scene" id="s5">
+  <div class="ch-h"><span class="ch-idx fu">04 / 06</span><span class="ch-t fu d1">集群指挥室 · 数字员工协作</span></div>
+  <div class="fu d1" style="margin-top:8px">
+   <svg width="1500" height="240" viewBox="0 0 1500 240">
+    <path id="q1" class="edge" d="M250 120 H 420" marker-end="url(#ar)"/>
+    <path id="q2" class="edge" d="M700 120 H 870" marker-end="url(#ar)"/>
+    <path id="q3" class="edge" d="M1150 120 H 1320" marker-end="url(#ar)"/>
+    <path id="g1" class="flowp" d="M250 120 H 420"/>
+    <path id="g2" class="flowp" d="M700 120 H 870"/>
+    <path id="g3" class="flowp" d="M1150 120 H 1320"/>
+    <rect class="node" id="m0" x="70" y="60" width="180" height="120" rx="20"/>
+    <text class="node-tx" x="160" y="112" text-anchor="middle">目标输入</text><text class="node-sub" x="160" y="140" text-anchor="middle">自然语言</text>
+    <rect class="node" id="m1" x="420" y="60" width="280" height="120" rx="20"/>
+    <text class="node-tx" x="560" y="112" text-anchor="middle">总管</text><text class="node-sub" x="560" y="140" text-anchor="middle">拆解任务 · 分派</text>
+    <rect class="node" id="m2" x="870" y="60" width="280" height="120" rx="20"/>
+    <text class="node-tx" x="1010" y="112" text-anchor="middle">数字员工</text><text class="node-sub" x="1010" y="140" text-anchor="middle">@互相接力 · 并行执行</text>
+    <rect class="node" id="m3" x="1320" y="60" width="150" height="120" rx="20"/>
+    <text class="node-tx" x="1395" y="112" text-anchor="middle">最终交付</text><text class="node-sub" x="1395" y="140" text-anchor="middle">汇总验收</text>
+    <text id="at1" class="node-tx" x="335" y="86" text-anchor="middle" style="font-size:16px;fill:#34d399;opacity:0">@产品</text>
+    <text id="at2" class="node-tx" x="785" y="86" text-anchor="middle" style="font-size:16px;fill:#34d399;opacity:0">@开发</text>
+    <text id="at3" class="node-tx" x="1235" y="86" text-anchor="middle" style="font-size:16px;fill:#34d399;opacity:0">@测试</text>
+   </svg>
+  </div>
+  <div class="row fu d3" style="gap:22px;margin-top:4px">
+   <div class="emp">
+    <div style="display:flex;align-items:center"><div class="av" style="background:linear-gradient(140deg,#f59e0b,#d97706)">产</div><div style="margin-left:14px"><div style="font-size:19px;font-weight:700">产品</div><div style="font-size:13.5px;color:rgba(255,255,255,.5)">需求 · 文档</div></div><span class="stchip">已完成</span></div>
+    <div class="pbar"><div class="pfill" style="--w:100%"></div></div>
+   </div>
+   <div class="emp">
+    <div style="display:flex;align-items:center"><div class="av" style="background:linear-gradient(140deg,#10a37f,#0b7a5e)">开</div><div style="margin-left:14px"><div style="font-size:19px;font-weight:700">开发</div><div style="font-size:13.5px;color:rgba(255,255,255,.5)">功能实现</div></div><span class="stchip">已完成</span></div>
+    <div class="pbar"><div class="pfill" style="--w:100%;transition-delay:.4s"></div></div>
+   </div>
+   <div class="emp">
+    <div style="display:flex;align-items:center"><div class="av" style="background:linear-gradient(140deg,#3b82f6,#1d4ed8)">测</div><div style="margin-left:14px"><div style="font-size:19px;font-weight:700">测试</div><div style="font-size:13.5px;color:rgba(255,255,255,.5)">回归 · 验证</div></div><span class="stchip">已完成</span></div>
+    <div class="pbar"><div class="pfill" style="--w:100%;transition-delay:.8s"></div></div>
+   </div>
+   <div class="emp" style="width:360px">
+    <div style="display:flex;align-items:center"><div class="av" style="background:linear-gradient(140deg,#a855f7,#7c3aed)">总</div><div style="margin-left:14px"><div style="font-size:19px;font-weight:700">总管</div><div style="font-size:13.5px;color:rgba(255,255,255,.5)">汇总 · 验收 · 交付</div></div><span class="stchip">汇总中</span></div>
+    <div class="pbar"><div class="pfill" style="--w:86%;transition-delay:1.2s"></div></div>
+   </div>
+  </div>
+  <div class="row fu d5" style="gap:22px;margin-top:22px">
+   <div class="card" style="text-align:center;padding:18px 34px"><div class="big count" data-target="5" data-dur="1100">0</div><div class="lbl">内置员工</div></div>
+    <div class="card" style="text-align:center;padding:18px 34px"><div class="big count" data-inf="1" data-target="0" data-dur="600">∞</div><div class="lbl">自定义员工</div></div>
+   <div class="card" style="text-align:center;padding:18px 34px"><div class="big count" data-target="100" data-dur="1400">0</div><div class="lbl">实时进度看板 %</div></div>
+  </div>
+  <div class="fu d6" style="margin-top:22px;font-size:18px;color:rgba(255,255,255,.6);text-align:center;max-width:1300px;line-height:1.7">员工可以随时增删改:起个名字、写段职责,立刻上工。任务卡在谁手上、做到哪一步,看板上一目了然。</div>
+ </section>
+
+ <!-- 章6 终端 -->
+ <section class="scene" id="s6">
+  <div class="ch-h"><span class="ch-idx fu">05 / 06</span><span class="ch-t fu d1">终端即入口</span></div>
+  <div class="row fu d1" style="margin-top:20px;gap:52px">
+   <div class="term" style="width:1080px">
+    <div class="l1"><span class="cm">$</span> brew install jtclab/tools/jtcode</div>
+    <div class="l2"><span style="color:#34d399">❯</span> jtcode <span class="cm">"帮我把这份日志分析一下"</span><span class="cur"></span></div>
+    <div class="l3" style="color:#8b93a3">⚡ 已连接 37 个内置工具 · claude code 风格面板</div>
+    <div class="l4"><span style="color:#34d399">❯</span> jtcode <span class="cm">--swarm</span> <span class="cm">"做个登录页"</span></div>
+    <div style="margin-top:10px;color:#8b93a3">✔ 产品 → 开发 → 测试 → 交付,全程无人值守<span class="cur"></span></div>
+   </div>
+   <div style="width:440px;display:flex;flex-direction:column;gap:18px">
+    <div class="card fu d3" style="text-align:center"><div style="font-size:52px;font-weight:900;color:#34d399;letter-spacing:-.01em">jtcode</div><div class="lbl">一行命令,唤起助手</div></div>
+    <div class="card fu d4" style="text-align:center"><div class="big count" data-target="37" data-dur="1200">0</div><div class="lbl">内置工具</div></div>
+    <div class="card fu d5" style="text-align:center"><div class="big count" data-target="6" data-dur="1000">0</div><div class="lbl">核心界面</div></div>
+   </div>
+  </div>
+  <div class="banner" style="margin-top:34px">对话 · 代码 · 集群 · 编辑 · 日记,终端一键到达</div>
+ </section>
+
+ <!-- 章7 片尾 -->
+ <section class="scene" id="s7"><div style="display:flex;flex-direction:column;align-items:center">
+  <div class="mark"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></div>
+  <div class="title" id="t2"></div>
+  <div class="tagline fu d2">让每个人,拥有自己的智能团队</div>
+  <div class="chips fu d4" style="margin-top:46px">
+   <div class="chip acc">对话</div><div class="chip">代码</div><div class="chip">集群</div><div class="chip">知识库</div><div class="chip">记忆</div><div class="chip">jtcode</div>
+  </div>
+  <div class="pill fu d5" style="margin-top:44px">巨 天 工 作 室 出 品</div>
+ </div></section>
+
+ <div class="subs" id="subs"><span id="subtxt"></span></div>
+ <div class="progress"><i id="pbar"></i></div>
+ <div class="wm">JUTIAN AGENT · BETA v4.0</div>
+</div>
+<script>
+['t1','t2'].forEach(function (id) { var w = document.getElementById(id); if (!w) return; '巨天agent'.split('').forEach(function (c) { var s = document.createElement('span'); s.textContent = c; w.appendChild(s); }); });
+document.querySelectorAll('#t1 span').forEach(function (s, i) { s.style.transitionDelay = (0.4 + i * 0.11) + 's'; });
+document.querySelectorAll('#t2 span').forEach(function (s, i) { s.style.transitionDelay = (0.45 + i * 0.11) + 's'; });
+
+/* 旁白(每句时长由 TTS 实测注入) */
+var NARR = __NARR_JSON__;
+var STARTS = [], acc = 0;
+NARR.forEach(function (n) { n.start = acc; acc += n.dur; n.end = acc; });
+var TOTAL = acc;
+
+function countUp(el, target, dur) {
+  el.textContent = '0';
+  setTimeout(function () {
+    var t0 = performance.now();
+    (function f() {
+      var p = Math.min((performance.now() - t0) / dur, 1);
+      el.textContent = Math.round((1 - Math.pow(1 - p, 3)) * target);
+      if (p < 1) requestAnimationFrame(f);
+    })();
+  }, 420);
+}
+var fired = {};
+function runSceneFx(sc) {
+  if (fired[sc]) return; fired[sc] = true;
+  document.querySelectorAll('#' + sc + ' .count').forEach(function (el) {
+    var v = parseInt(el.dataset.target || '0', 10);
+    if (v === 0 && el.textContent === '∞') return;
+    countUp(el, v, parseInt(el.dataset.dur || '1100', 10));
+  });
+  var svg = document.querySelector('#' + sc + ' svg');
+  if (!svg) return;
+  svg.querySelectorAll('.node').forEach(function (n, i) { setTimeout(function () { n.classList.add('on'); }, 250 + i * 260); });
+  svg.querySelectorAll('.edge').forEach(function (e, i) {
+    setTimeout(function () { e.classList.add('on'); }, 600 + i * 240);
+    var f = svg.getElementById(e.id.replace('e', 'f').replace('q', 'g'));
+    if (f) setTimeout(function () { f.style.opacity = '1'; }, 1000 + i * 240);
+  });
+  var ats = svg.querySelectorAll('text[id^="at"]');
+  if (ats.length) ats.forEach(function (a, i) { setTimeout(function () { a.style.transition = 'opacity .45s'; a.style.opacity = '1'; }, 1700 + i * 400); });
+}
+var subs = document.getElementById('subs'), subtxt = document.getElementById('subtxt'), pbar = document.getElementById('pbar'), lastCh = -1;
+/* 环境动画:全部由时间线直接驱动(无 CSS 无限动画 → 每帧只重绘一次,负载恒定、完全确定) */
+var AURORAS = [
+  { el: document.querySelector('.a1'), per: 46000, ax: 140, ay: 90, s: 0.06, ph: 0 },
+  { el: document.querySelector('.a2'), per: 58000, ax: -160, ay: -110, s: 0.05, ph: 2 },
+  { el: document.querySelector('.a3'), per: 52000, ax: 90, ay: -130, s: 0.07, ph: 4 }
+];
+var SPARKS = Array.prototype.map.call(document.querySelectorAll('.sp'), function (el) { return { el: el, lag: parseFloat(el.dataset.lag || '0') * 1000 }; });
+var FLOWS = Array.prototype.slice.call(document.querySelectorAll('.flowp'));
+var DOTS = Array.prototype.slice.call(document.querySelectorAll('.dot'));
+var CURS = Array.prototype.slice.call(document.querySelectorAll('.cur'));
+function ambient(ms) {
+  for (var i = 0; i < AURORAS.length; i++) {
+    var a = AURORAS[i], ang = ((ms + a.ph * 7000) / a.per) * Math.PI * 2;
+    a.el.style.transform = 'translate(' + (Math.sin(ang) * a.ax).toFixed(1) + 'px,' + (Math.cos(ang * 0.8) * a.ay).toFixed(1) + 'px) scale(' + (1.1 + Math.sin(ang) * a.s).toFixed(3) + ')';
+  }
+  for (var j = 0; j < SPARKS.length; j++) {
+    var s = SPARKS[j], ph = (((ms + s.lag) % 8000) + 8000) % 8000 / 8000;
+    s.el.style.transform = 'translateY(' + (-300 * ph).toFixed(1) + 'px)';
+    s.el.style.opacity = ph < 0.12 ? (ph / 0.12 * 0.9).toFixed(3) : Math.max(0, (1 - ph) / 0.88 * 0.9).toFixed(3);
+  }
+  var off = -((ms * 0.018) % 20).toFixed(2);
+  for (var k = 0; k < FLOWS.length; k++) FLOWS[k].style.strokeDashoffset = off;
+  var bo = (0.55 + 0.45 * Math.sin(ms / 1150)).toFixed(3);
+  for (var m = 0; m < DOTS.length; m++) DOTS[m].style.opacity = bo;
+  var co = (Math.floor(ms / 520) % 2 === 0) ? '1' : '0.12';
+  for (var n = 0; n < CURS.length; n++) CURS[n].style.opacity = co;
+}
+function applyTime(ms) {
+  ambient(ms);
+  var act = -1;
+  for (var i = 0; i < NARR.length; i++) if (ms >= NARR[i].start && ms < NARR[i].end) { act = i; break; }
+  if (act < 0 && ms >= TOTAL) act = NARR.length - 1;
+  if (act >= 0) {
+    if (NARR[act].text !== subtxt.textContent) subtxt.textContent = NARR[act].text;
+    subs.classList.add('show');
+    var sc = 's' + NARR[act].ch;
+    if (NARR[act].ch !== lastCh) {
+      lastCh = NARR[act].ch;
+      for (var k = 1; k <= 7; k++) { var el = document.getElementById('s' + k); if (el) el.classList.toggle('on', sc === 's' + k); }
+      runSceneFx(sc);
+    }
+  } else subs.classList.remove('show');
+  pbar.style.width = Math.min(100, ms / TOTAL * 100) + '%';
+}
+window.__applyTime = applyTime;
+window.__total = TOTAL;
+/* 重置时间线:用于重采(清除所有一次性过渡的触发状态) */
+function resetTimeline() {
+  fired = {}; lastCh = -1; subtxt.textContent = ''; subs.classList.remove('show');
+  for (var k = 1; k <= 7; k++) { var el = document.getElementById('s' + k); if (el) el.classList.remove('on'); }
+  document.querySelectorAll('.node.on,.edge.on').forEach(function (e) { e.classList.remove('on'); });
+  document.querySelectorAll('.flowp').forEach(function (e) { e.style.opacity = ''; e.style.strokeDashoffset = ''; });
+  document.querySelectorAll('.count').forEach(function (e) { e.textContent = (parseInt(e.dataset.target || '0', 10) === 0 && e.dataset.inf === '1') ? '∞' : '0'; });
+  document.querySelectorAll('text[id^="at"]').forEach(function (e) { e.style.opacity = ''; e.style.transition = ''; });
+  pbar.style.width = '0%';
+  applyTime(0);
+}
+window.__reset = resetTimeline;
+applyTime(0);
+</script></body></html>

@@ -1,0 +1,154 @@
+{
+  "name": "jutian-agent",
+  "version": "7.0.0",
+  "private": true,
+  "main": "electron/main.cjs",
+  "type": "module",
+  "description": "巨天agent - 桌面 AI 智能体（终端 / 文件 / PPT / 代码）",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "serve": "NODE_OPTIONS='--max-old-space-size=512' node serve.cjs",
+    "start": "node scripts/run.js",
+    "electron:dev": "vite build && electron .",
+    "electron:build": "npm rebuild better-sqlite3 && vite build && bash scripts/rebuild-for-electron.sh && electron-builder --mac",
+    "electron:build:win": "vite build && electron-builder --win",
+    "electron:dist": "npm run electron:build",
+    "patch": "node scripts/patch-update.mjs",
+    "patch:fast": "node scripts/patch-update.mjs --no-build"
+  },
+  "build": {
+    "appId": "com.jutian.agent",
+    "productName": "巨天agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "serve.cjs",
+      "src/shared/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.plist",
+      "entitlementsInherit": "electron/entitlements.plist",
+      "extraResources": [
+        {
+          "from": "python-runtime",
+          "to": "python-runtime",
+          "filter": [
+            "**/*"
+          ]
+        },
+        {
+          "from": "/Users/zeroneil/Desktop/项目文件夹/openai-edge-tts",
+          "to": "edge-tts",
+          "filter": [
+            "**/*",
+            "!__pycache__",
+            "!*.pyc"
+          ]
+        },
+        {
+          "from": "src/shared/stt.py",
+          "to": "stt/stt.py"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico",
+      "artifactName": "jutian-agent-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "巨天agent"
+    },
+    "dmg": {
+      "title": "巨天agent",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "asar": true,
+    "npmRebuild": false
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.1",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.43.1",
+    "@lezer/highlight": "^1.2.3",
+    "@mlc-ai/web-llm": "^0.2.77",
+    "better-sqlite3": "^12.10.0",
+    "immer": "^11.1.18",
+    "marked": "^18.0.14",
+    "pptxgenjs": "^4.0.1",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "ws": "^8.21.3",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}

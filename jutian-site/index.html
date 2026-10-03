@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>巨天agent — 一句话，它把活干完</title>
+<meta name="description" content="巨天agent 是一个桌面 AI 工作台：对话、代码、终端，和一支数字员工团队，收进同一个窗口。本地优先，37 个内置工具直连真实系统。">
+<meta name="theme-color" content="#0a0a0b">
+<meta property="og:title" content="巨天agent — 一句话，它把活干完">
+<meta property="og:description" content="桌面，是 AI 最好的位置。">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/motion.css">
+<link rel="stylesheet" href="assets/css/pages.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="巨天agent 首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+      </span>
+      巨天agent
+    </a>
+    <nav class="nav__links" aria-label="主导航">
+      <a class="nav__link" href="index.html">首页</a>
+      <a class="nav__link" href="highlights.html">亮点</a>
+      <a class="nav__link" href="features.html">特性</a>
+      <a class="nav__link" href="scenarios.html">场景</a>
+      <a class="nav__link" href="about.html">关于</a>
+      
+    </nav>
+    <div class="nav__actions">
+      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+      <a class="btn btn--sm" href="#download" data-magnetic="0.2">下载</a>
+      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <span class="nav__progress" aria-hidden="true"></span>
+</header>
+
+<main id="main">
+
+  <!-- ═══════════ Hero：巨型标题 + 真实终端 ═══════════ -->
+  <section class="hero" data-lines>
+    <p class="hero__eyebrow"><i aria-hidden="true"></i>巨天AGENT · 桌面 AI 工作台 · BETA 7.0</p>
+    <h1 class="hero__title">
+      <span class="line"><span>一句话，</span></span>
+      <span class="line"><span>它把活干完。</span></span>
+    </h1>
+    <p class="hero__lead">对话、代码、终端，和一支数字员工团队——收进同一个窗口。<br>不经过别人的服务器，数据留在这台电脑。</p>
+    <div class="hero__cta">
+      <a class="btn" href="#download" data-magnetic="0.24">下载 for macOS
+        <svg class="btn__arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      </a>
+      <a class="btn btn--ghost" href="highlights.html">它能做什么</a>
+    </div>
+    <p class="hero__meta">macOS 13+ / Windows 10+ &nbsp;·&nbsp; 120MB &nbsp;·&nbsp; 免费内测</p>
+
+    <div class="hero__term" data-reveal>
+      <div class="term" role="img" aria-label="终端演示：一行命令让巨天agent整理TODO清单">
+        <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span style="margin-left:8px">jtcode — zsh</span></div>
+        <div class="term__body" data-terminal>
+          <div><span class="p">$</span> <span class="cmd">jtcode "把项目里所有 TODO 按模块整理成清单"</span></div>
+          <div class="dim" data-term-line>⚙ search_code → 命中 12 处</div>
+          <div class="dim" data-term-line>⚙ write_file → TODO.md</div>
+          <div data-term-line><span class="ok">✓</span> <span class="cmd">6 个模块的清单已生成，点击可跳转代码行</span><span class="caret"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 数据 ═══════════ -->
+  <section class="section section--tight">
+    <div class="container">
+      <div class="statRow" data-reveal-group>
+        <div class="stat"><span class="stat__num"><span data-count="37">0</span></span><span class="stat__label">内置工具，本地可用</span></div>
+        <div class="stat"><span class="stat__num"><span data-count="5">0</span></span><span class="stat__label">数字员工，随时上工</span></div>
+        <div class="stat"><span class="stat__num"><span data-count="6">0</span></span><span class="stat__label">核心界面，一个窗口</span></div>
+        <div class="stat"><span class="stat__num"><span data-count="0">0</span><small>字节</small></span><span class="stat__label">上传到云端</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 亮点（编辑式行） ═══════════ -->
+  <section class="section cv-auto">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">核心亮点 / HIGHLIGHTS</span>
+        <h2 class="t-h2">四件事，做到位。</h2>
+        <p class="t-lead">功能多不代表能力强。这几件，我们做到了不用解释第二遍。</p>
+      </div>
+      <div data-reveal-group>
+        <div class="edrow">
+          <span class="edrow__idx">01</span>
+          <h3 class="edrow__title">说人话，它动手</h3>
+          <p class="edrow__desc">37 个内置工具直连终端与文件系统。你说目标，它拆步骤、调工具、验证、给结果。不是建议，是执行。</p>
+          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </div>
+        <div class="edrow">
+          <span class="edrow__idx">02</span>
+          <h3 class="edrow__title">代码模式</h3>
+          <p class="edrow__desc">完整开发环境，不离开窗口。文件树、多标签、语法高亮、内置终端；每轮对话前自动快照，一整轮改动一键撤销。</p>
+          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </div>
+        <div class="edrow">
+          <span class="edrow__idx">03</span>
+          <h3 class="edrow__title">集群指挥室</h3>
+          <p class="edrow__desc">一个目标，一支团队。总管拆任务，员工互相 @ 接管，自动汇总交付。员工可自定义，可拉群，可指定老板。</p>
+          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </div>
+        <div class="edrow">
+          <span class="edrow__idx">04</span>
+          <h3 class="edrow__title">终端即入口</h3>
+          <p class="edrow__desc">装上 jtcode，一行命令唤起助手。终端里、脚本里、CI 里都能用，不用切窗口。</p>
+          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+        </div>
+      </div>
+      <p style="margin-top:var(--sp-8)" data-reveal>
+        <a class="link" href="highlights.html">看全部六个亮点
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════ 黑段：宣言 + 产品窗口 ═══════════ -->
+  <section class="product" id="product">
+    <div class="statement" data-lines style="padding-block: clamp(96px, 13vw, 180px) clamp(56px, 7vw, 96px)">
+      <div class="container">
+        <p class="t-eyebrow" style="color:var(--c-on-dark-3);margin-bottom:var(--sp-8)" data-reveal>桌面 / DESKTOP</p>
+        <h2 class="statement__title">
+          <span class="line"><span>桌面，</span></span>
+          <span class="line"><span>是 AI 最好的位置。</span></span>
+        </h2>
+        <p class="statement__sub" data-reveal>浏览器里的 AI 要你迁就它。装在桌面上的 AI，直接住进你的文件、终端和工作流。</p>
+      </div>
+    </div>
+
+    <div class="product__stage" data-reveal>
+      <div class="appmock tilt" role="img" aria-label="巨天agent 界面示意：左侧会话导航，右侧对话区包含提问、AI 回复与工具调用">
+        <div class="appmock__bar" aria-hidden="true">
+          <span class="appmock__dot" style="background:#ff5f57"></span>
+          <span class="appmock__dot" style="background:#febc2e"></span>
+          <span class="appmock__dot" style="background:#28c840"></span>
+          <span class="appmock__title">巨天agent — 新对话</span>
+        </div>
+        <div class="appmock__body">
+          <aside class="appmock__side" aria-hidden="true">
+            <div class="appmock__sideTitle">工作区</div>
+            <div class="appmock__sideItem is-active"><i></i>新对话</div>
+            <div class="appmock__sideItem"><i></i>代码模式</div>
+            <div class="appmock__sideItem"><i></i>集群指挥室</div>
+            <div class="appmock__sideItem"><i></i>知识库</div>
+            <div class="appmock__sideItem"><i></i>长期记忆</div>
+            <div class="appmock__sideItem"><i></i>日记</div>
+            <div class="appmock__sideFoot">37 个内置工具<br>MCP 可扩展</div>
+          </aside>
+          <div class="appmock__main">
+            <div class="appmock__row">
+              <div class="appmock__bubble appmock__bubble--user">帮我把项目里所有 TODO 按模块整理成清单</div>
+            </div>
+            <div class="appmock__row">
+              <div class="appmock__bubble appmock__bubble--ai">
+                好，先扫代码库，再按模块归类。
+                <span class="appmock__tool"><b>⚙</b>search_code <span class="ok">→ 12 处</span></span>
+                <span class="appmock__tool"><b>⚙</b>write_file <span class="ok">→ TODO.md</span></span>
+                <br><br>已生成 6 个模块的清单，点击可跳到对应代码行。<span class="appmock__caret"></span>
+              </div>
+            </div>
+            <div class="appmock__input">
+              继续说点什么…
+              <span class="appmock__send"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="product__cap">
+      <span>巨天agent · macOS / Windows</span>
+      <span>37 TOOLS · MCP READY</span>
+    </div>
+  </section>
+
+  <!-- ═══════════ 旋转舞台 ═══════════ -->
+  <section class="turntable" data-reveal>
+    <div class="turntable__head">
+      <span class="t-eyebrow" style="color:var(--c-on-dark-3)">一个窗口 / SIX FACES</span>
+      <h2 style="margin-top:var(--sp-5)">转一圈，都是工作台。</h2>
+      <p>对话、代码、终端、集群、知识、日记——六个界面，一个进程。</p>
+    </div>
+    <div class="turntable__ring" aria-hidden="true">
+      <div class="turntable__face" style="transform: rotateY(0deg)">
+        <div class="appmock" style="transform:scale(.92)">
+          <div class="appmock__bar"><span class="appmock__dot" style="background:#ff5f57"></span><span class="appmock__dot" style="background:#febc2e"></span><span class="appmock__dot" style="background:#28c840"></span><span class="appmock__title">对话</span></div>
+          <div class="appmock__body" style="min-height:380px">
+            <aside class="appmock__side"><div class="appmock__sideTitle">工作区</div><div class="appmock__sideItem is-active"><i></i>新对话</div><div class="appmock__sideItem"><i></i>代码模式</div><div class="appmock__sideItem"><i></i>集群指挥室</div><div class="appmock__sideItem"><i></i>知识库</div><div class="appmock__sideFoot">37 TOOLS</div></aside>
+            <div class="appmock__main"><div class="appmock__row"><div class="appmock__bubble appmock__bubble--user">把这份日志分析一下</div></div><div class="appmock__row"><div class="appmock__bubble appmock__bubble--ai">正在读日志，定位到 3 处异常。<span class="appmock__caret"></span></div></div><div class="appmock__input">继续说点什么…<span class="appmock__send"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="turntable__face" style="transform: rotateY(120deg)">
+        <div class="appmock" style="transform:scale(.92)">
+          <div class="appmock__bar"><span class="appmock__dot" style="background:#ff5f57"></span><span class="appmock__dot" style="background:#febc2e"></span><span class="appmock__dot" style="background:#28c840"></span><span class="appmock__title">代码模式</span></div>
+          <div class="appmock__body" style="min-height:380px">
+            <aside class="appmock__side"><div class="appmock__sideTitle">资源管理器</div><div class="appmock__sideItem is-active"><i></i>ChatPanel.tsx</div><div class="appmock__sideItem"><i></i>serve.cjs</div><div class="appmock__sideFoot">✓ git clean</div></aside>
+            <div class="appmock__main"><div class="appmock__row" style="font-family:var(--font-mono);font-size:12.5px;line-height:2;color:rgba(255,255,255,.75)"><span>const owner = t.mentions[0] ?? boss.id<br>await dispatch({ to: owner, task: t })<span class="appmock__caret"></span></span></div><div class="appmock__input">审查 · 检查点 · 一键提交<span class="appmock__send"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="turntable__face" style="transform: rotateY(240deg)">
+        <div class="appmock" style="transform:scale(.92)">
+          <div class="appmock__bar"><span class="appmock__dot" style="background:#ff5f57"></span><span class="appmock__dot" style="background:#febc2e"></span><span class="appmock__dot" style="background:#28c840"></span><span class="appmock__title">集群指挥室</span></div>
+          <div class="appmock__body" style="min-height:380px">
+            <aside class="appmock__side"><div class="appmock__sideTitle">员工</div><div class="appmock__sideItem is-active"><i></i>总管</div><div class="appmock__sideItem"><i></i>开发</div><div class="appmock__sideItem"><i></i>测试</div><div class="appmock__sideFoot">@接力</div></aside>
+            <div class="appmock__main"><div class="appmock__row"><div class="appmock__bubble appmock__bubble--user">做个登录页</div></div><div class="appmock__row"><div class="appmock__bubble appmock__bubble--ai">总管：@产品 出方案，@开发 实现，@测试 回归。<span class="appmock__caret"></span></div></div><div class="appmock__input">实时进度看板<span class="appmock__send"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="turntable__cap">多标签工作区 · 悬停暂停旋转</div>
+  </section>
+
+
+  <!-- ═══════════ 多颜色大字自定义 ═══════════ -->
+  <section class="paint" id="paint">
+    <div data-reveal>
+      <p class="t-eyebrow" style="margin-bottom:var(--sp-6)">强调色 / MAKE IT YOURS</p>
+      <h2 class="paint__title" id="paint-title">把界面，<br>调成<span class="acc">你的颜色</span>。</h2>
+      <p class="paint__sub">五种强调色，一键切换。窗口、按钮、高亮，跟着变。</p>
+      <div class="paint__swatches" role="group" aria-label="选择强调色">
+        <button class="swatch is-active" style="background:#0d9668" data-paint="#0d9668" aria-label="青绿"></button>
+        <button class="swatch" style="background:#3b82f6" data-paint="#3b82f6" aria-label="蓝"></button>
+        <button class="swatch" style="background:#f59e0b" data-paint="#f59e0b" aria-label="琥珀"></button>
+        <button class="swatch" style="background:#ec4899" data-paint="#ec4899" aria-label="玫红"></button>
+        <button class="swatch" style="background:#8b5cf6" data-paint="#8b5cf6" aria-label="紫"></button>
+      </div>
+      <p class="paint__meta" id="paint-meta">ACCENT · TEAL 0D9668</p>
+    </div>
+  </section>
+
+
+
+  <!-- ═══════════ 细节：签名行 ═══════════ -->
+  <section class="section cv-auto">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">细节 / CRAFT</span>
+        <h2 class="t-h2">看不见的地方，也做了。</h2>
+        <p class="t-lead">这些不写在功能列表里，但你每天都会碰到。</p>
+      </div>
+      <div class="rows" data-reveal-group>
+        <article class="row-item">
+          <span class="row-i">01</span>
+          <div>
+            <h3>每一帧都能打断</h3>
+            <p>子代理并行、工具循环、远程会话，随时按停。进行到一半的工作不会因为一次误点而丢失。</p>
+          </div>
+          <span class="row-aside"><b>∥ 3</b>并行上限</span>
+        </article>
+        <article class="row-item">
+          <span class="row-i">02</span>
+          <div>
+            <h3>写入可撤销</h3>
+            <p>AI 的每次改动都是可逐条查看、编辑、撤销的 diff，而不是整文件覆盖后让你自己去翻。</p>
+          </div>
+          <span class="row-aside"><b>±</b>按改动撤销</span>
+        </article>
+        <article class="row-item">
+          <span class="row-i">03</span>
+          <div>
+            <h3>切换不丢状态</h3>
+            <p>多标签工作区里切走再切回，编辑器、滚动位置、流式输出都在原处等着你。</p>
+          </div>
+          <span class="row-aside"><b>0</b>重新加载</span>
+        </article>
+        <article class="row-item">
+          <span class="row-i">04</span>
+          <div>
+            <h3>数据不离开这台电脑</h3>
+            <p>会话、记忆、知识库全部落在本机；手机远程也只在局域网内，配对码守着每一道接口。</p>
+          </div>
+          <span class="row-aside"><b>LAN</b>仅局域网</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ 场景速览 ═══════════ -->
+  <section class="section cv-auto">
+    <div class="container">
+      <div class="sectionHead" data-reveal>
+        <span class="t-eyebrow">用在哪 / SCENARIOS</span>
+        <h2 class="t-h2">三种最常见的下午。</h2>
+      </div>
+      <div class="grid" data-reveal-group>
+        <div class="col-4">
+          <article class="card card--hover" style="padding-top:var(--sp-6);border-top:2px solid var(--c-ink);border-radius:0">
+            <span class="idx">场景 01</span>
+            <h3 class="t-h3" style="margin:var(--sp-4) 0 var(--sp-3)">改代码</h3>
+            <p class="sceneCard__quote" style="font-size:1.1rem">「让它改，你看结果。」</p>
+            <p class="t-sm">diff 摆在面前，不满意一键回到对话前。</p>
+          </article>
+        </div>
+        <div class="col-4">
+          <article class="card card--hover" style="padding-top:var(--sp-6);border-top:2px solid var(--c-ink);border-radius:0">
+            <span class="idx">场景 02</span>
+            <h3 class="t-h3" style="margin:var(--sp-4) 0 var(--sp-3)">排故障</h3>
+            <p class="sceneCard__quote" style="font-size:1.1rem">「日志丢给它。」</p>
+            <p class="t-sm">它读、它跑命令、它定位，给你根因和修复建议。</p>
+          </article>
+        </div>
+        <div class="col-4">
+          <article class="card card--hover" style="padding-top:var(--sp-6);border-top:2px solid var(--c-ink);border-radius:0">
+            <span class="idx">场景 03</span>
+            <h3 class="t-h3" style="margin:var(--sp-4) 0 var(--sp-3)">跑流程</h3>
+            <p class="sceneCard__quote" style="font-size:1.1rem">「一个团队，一个窗口。」</p>
+            <p class="t-sm">目标丢进群，员工互相接管，总管交付。</p>
+          </article>
+        </div>
+      </div>
+      <p style="margin-top:var(--sp-8)" data-reveal>
+        <a class="link" href="scenarios.html">看全部场景
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </p>
+    </div>
+  </section>
+
+
+  <!-- ═══════════ 滚动变色宣言 ═══════════ -->
+  <section class="sweep">
+    <div class="container">
+      <p class="sweep__text" data-sweep>浏览器里的 AI 要你迁就它——排队、上传、等待、忘记你是谁。装在桌面上的 AI 不一样：它读你的文件、跑你的命令、记得你的偏好，把时间还给你。</p>
+      <p class="sweep__hint">继续向下滚动 · 文字会亮起来</p>
+    </div>
+  </section>
+
+  <!-- ═══════════ 下载 CTA ═══════════ -->
+  <section class="section dark" id="download">
+    <div class="container cta" data-reveal>
+      <h2 class="on-dark">今天，少抄一段路。</h2>
+      <p>装上它，把重复的活交出去。</p>
+      <div class="cta__row">
+        <a class="btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener" data-magnetic="0.24">下载 for macOS
+          <svg class="btn__arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        </a>
+        <a class="btn btn--ghost" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">Windows 版</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer dark">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+          </span>
+          巨天agent
+        </a>
+        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
+      </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <ul>
+          <li><a href="highlights.html">核心亮点</a></li>
+          <li><a href="features.html">特性与参数</a></li>
+          <li><a href="scenarios.html">使用场景</a></li>
+          <li><a href="#download">下载</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>资源</h4>
+        <ul>
+          <li><a href="features.html#specs">系统要求</a></li>
+          <li><a href="about.html">关于我们</a></li>
+          
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>工作室</h4>
+        <ul>
+          <li><a href="about.html">巨天工作室</a></li>
+          
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 巨天工作室</span>
+      <span>本地优先 · 数据归你</span>
+    </div>
+  </div>
+</footer>
+
+<div class="transition-veil" aria-hidden="true"></div>
+
+<script src="assets/js/scroll.js" defer></script>
+<script src="assets/js/interactions.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+</body>
+</html>
