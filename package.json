@@ -150,5 +150,6 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vite": "^5.4.11"
-  }
+  },
+  "license": "MIT"
 }
