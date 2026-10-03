@@ -63,8 +63,8 @@ npm start        # 开发模式运行（构建 → http://localhost:3211）
 ├── src/shared/           跨端共享（工具 schema/MCP 客户端/员工模型/CLI）
 ├── src/renderer/engine/  流式引擎/工具执行/子代理运行器/Computer Use 代理
 ├── scripts/              构建与补丁脚本
-├── docs/                 文档与持续学习日志
-├── pages/                产品官网（GitHub Pages 发布）
+├── docs/                 产品官网(GitHub Pages 发布)
+├── docs/notes/           文档与持续学习日志
 └── archive/              历史归档
 ```
 
