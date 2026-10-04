@@ -20,6 +20,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // 关掉 sourcemap：体积减半，出错时看 dev 环境即可
+    sourcemap: false,
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         // 大依赖分块，改善首屏加载

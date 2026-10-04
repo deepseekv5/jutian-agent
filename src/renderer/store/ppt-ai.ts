@@ -73,7 +73,7 @@ function sanitizeSpecs(raw: any, opts: GenerateOptions): SlideSpec[] | null {
         .slice(0, 4)
         .map((s: any) => ({
           name: String(s.name || '数值').trim().slice(0, 16),
-          values: s.values.slice(0, 8).map((v: any) => (typeof v === 'number' && isFinite(v) ? v : parseFloat(String(v).replace(/[^\d.\-]/g, '')) || 0)),
+          values: s.values.slice(0, 8).map((v: any) => (typeof v === 'number' && isFinite(v) ? v : parseFloat(String(v).replace(/[^\d.-]/g, '')) || 0)),
         }))
       if (categories.length && series.length) spec.chart = { kind: kind as any, categories, series }
     }

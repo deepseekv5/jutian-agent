@@ -28,3 +28,10 @@ vite.config.ts.timestamp-*.mjs
 
 # 网站构建
 pages/node_modules/
+
+
+# 后端构建产物（由 src/server/serve.ts 经 `npm run build:server` 生成，勿手改）
+serve.cjs
+
+# lint/cache 临时文件
+.eslintcache

@@ -8,7 +8,7 @@ interface Props {
 
 /** Lightweight Markdown rendering */
 function renderMarkdown(md: string): string {
-  let html = md
+  const html = md
     // Code block
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       return `<pre class="cm-md-pre"><code class="cm-md-code">${escHtml(code.trim())}</code></pre>`
@@ -33,7 +33,7 @@ function renderMarkdown(md: string): string {
     // Horizontal rule
     .replace(/^---+$/gm, '<hr class="cm-md-hr" />')
     // Unordered list
-    .replace(/^[\-\*] (.+)$/gm, '<li class="cm-md-li">$1</li>')
+    .replace(/^[-*] (.+)$/gm, '<li class="cm-md-li">$1</li>')
     // Ordered list
     .replace(/^\d+\. (.+)$/gm, '<li class="cm-md-li">$1</li>')
     // Quote

@@ -1,27 +1,30 @@
 #!/usr/bin/env node
-"use strict";
+/**
+ * 巨天agent — 后端服务（单进程：静态文件 + Tool API）
+ *
+ * 本文件由 src/server/ 反推重建（原 serve.ts 源码在 v7.0.0 打包时丢失），
+ * 构建命令：npm run build:server   （esbuild 产出根目录 serve.cjs）
+ */
+import * as http from 'http'
+import * as https from 'https'
+import * as fsp from 'fs/promises'
+import * as path from 'path'
+import * as fs from 'fs'
+import * as crypto from 'crypto'
+import * as cp from 'child_process'
+import * as util from 'util'
+import * as os from 'os'
 
-// serve.ts
-var import_http = require("http");
-var import_https = require("https");
-var import_promises = require("fs/promises");
-var import_path = require("path");
-var import_fs = require("fs");
-var import_crypto = require("crypto");
-var import_child_process = require("child_process");
-var import_util = require("util");
-var import_os = require("os");
-var import_meta = {};
-var execAsync = (0, import_util.promisify)(import_child_process.execFile);
+var execAsync = util.promisify(cp.execFile);
 
 // ─── STT 常驻 worker：模型只加载一次，避免每次识别冷启动 python+import（提速关键）───
 var _stt = { proc: null, buf: "", queue: [], current: null };
 function _sttEnsure() {
   if (_stt.proc && _stt.proc.exitCode === null) return _stt.proc;
   const pyBin = process.env.PYTHON_BIN || "python3";
-  const sttScript = process.env.STT_SCRIPT || (0, import_path.join)(__dirname, "src", "shared", "stt.py");
+  const sttScript = process.env.STT_SCRIPT || path.join(__dirname, "src", "shared", "stt.py");
   _stt.buf = ""; _stt.current = null;
-  _stt.proc = import_child_process.spawn(pyBin, [sttScript, "--serve"], {
+  _stt.proc = cp.spawn(pyBin, [sttScript, "--serve"], {
     env: { ...process.env, PYTHONUNBUFFERED: "1", WHISPER_THREADS: "4" }, stdio: ["pipe", "pipe", "pipe"],
   });
   _stt.proc.stdout.on("data", (d) => {
@@ -62,11 +65,11 @@ function sttTranscribe(wavPath) {
 var PKG = (() => { try { return require("./package.json"); } catch (e) { return { version: "unknown" }; } })();
 var sharedDb = null;
 /* ─── MCP（Model Context Protocol）客户端管理器 — v5.0 学自 Zode ─── */
-var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data")); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
+var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(path.join(os.homedir(), ".laoyou-agent", "data")); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
 try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db.cjs load failed:", e.message); }
 var PORT = parseInt(process.env.PORT || "3211");
 var MAX_OUT = 512 * 1024;
-var DIST = (0, import_path.join)(__dirname, "dist");
+var DIST = path.join(__dirname, "dist");
 var MIME = {
   ".html": "text/html",
   ".js": "application/javascript",
@@ -79,9 +82,9 @@ var MIME = {
   ".woff2": "font/woff2"
 };
 var IS_WIN = process.platform === "win32";
-var USER_HOME = process.env.HOME || process.env.USERPROFILE || (IS_WIN ? "C:\\Users" : (0, import_os.homedir)());
+var USER_HOME = process.env.HOME || process.env.USERPROFILE || (IS_WIN ? "C:\\Users" : os.homedir());
 var ALLOWED = [USER_HOME, "/tmp", "/Users", "/opt", "/usr/local"];
-var ok = (p) => ALLOWED.some((b) => (0, import_path.resolve)(p).startsWith((0, import_path.resolve)(b)));
+var ok = (p) => ALLOWED.some((b) => path.resolve(p).startsWith(path.resolve(b)));
 // ─── 工作区（设置中指定，实时生效）───
 var globalWorkDir = "";
 function setWorkDir(dir) {
@@ -89,19 +92,65 @@ function setWorkDir(dir) {
 }
 function resolveWork(p) {
   var base = globalWorkDir || USER_HOME;
-  if (!p) return (0, import_path.resolve)(base);
-  return (0, import_path.resolve)(base, p);
+  if (!p) return path.resolve(base);
+  return path.resolve(base, p);
 }
 // 工作目录兜底：目录不存在时回落到用户主目录（避免 spawn ENOENT，例如换机器后旧工作区路径失效）
 function safeCwd(cwd) {
   const candidate = cwd || globalWorkDir || USER_HOME;
-  try { if (candidate && (0, import_fs.existsSync)(candidate) && (0, import_fs.statSync)(candidate).isDirectory()) return candidate; } catch {}
+  try { if (candidate && fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate; } catch {}
   return USER_HOME;
 }
+// ─── CORS / Origin 门卫 ───
+// 前后端同源（前端 fetch 一律用相对路径，remote.html 亦然），因此根本不需要放开 CORS。
+// 旧实现对所有响应回 `Access-Control-Allow-Origin: *`，导致任意网页的 JS 可直接
+// fetch('http://localhost:3211/api/settings') 读走用户 API Key，并调用 /api/tools/execute。
+// 现在：只对同源/本机可信来源回显 CORS，其余请求一律不带 CORS 头（由浏览器拦截）。
+var isTrustedOrigin = (origin) => {
+  if (!origin) return true; // 同源请求无 Origin 头；Electron file:// 与 curl 属此类
+  var o = String(origin);
+  // 注意：`Origin: null` 不可信。sandbox iframe / file:// 页面都能发出这种请求，
+  // 足以绕过 CORS 读到密钥，故只放行本机 http(s) 来源。
+  if (/^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(o)) return true;
+  if (/^https?:\/\/localhost(?::\d+)?$/i.test(o)) return true;
+  if (/^https?:\/\/\[::1\](?::\d+)?$/i.test(o)) return true;
+  return false;
+};
+var corsHeaders = (req) => {
+  var origin = req && req.headers ? req.headers.origin : "";
+  if (!isTrustedOrigin(origin)) return null;
+  var h = { Vary: "Origin" };
+  if (origin) {
+    h["Access-Control-Allow-Origin"] = origin;
+    h["Access-Control-Allow-Credentials"] = "true";
+  }
+  return h;
+};
+// 敏感字段：即便请求方可信，GET 回包也不应明文下发密钥
+var SECRET_KEYS = ["apikey", "token", "secret", "password"];
+var maskSecrets = (obj) => {
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(maskSecrets);
+  var out = {};
+  for (var k in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+    var v = obj[k];
+    if (SECRET_KEYS.indexOf(String(k).toLowerCase()) >= 0 && typeof v === "string" && v) {
+      out[k] = v.length > 8 ? `${v.slice(0, 4)}****${v.slice(-4)}` : "****";
+    } else out[k] = typeof v === "object" && v !== null ? maskSecrets(v) : v;
+  }
+  return out;
+};
 var json = (res, d, s = 200) => {
-
-  res.writeHead(s, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-  res.end(JSON.stringify(d));
+  var payload = s >= 200 && s < 300 ? maskSecrets(d) : d;
+  res.writeHead(s, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(payload));
+};
+// 需要按请求 Origin 决定 CORS 的响应（如流式/代理响应，绕过了 json()）
+var jsonAs = (req, res, d, s = 200) => {
+  var c = corsHeaders(req) || {};
+  res.writeHead(s, { ...c, "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(maskSecrets(d)));
 };
 var body = async (req) => {
   const b = [];
@@ -132,7 +181,7 @@ async function read_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    let c = await (0, import_promises.readFile)(p, "utf-8");
+    let c = await fsp.readFile(p, "utf-8");
     if (a.offset || a.limit) {
       const ls = c.split("\n");
       c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
@@ -155,10 +204,10 @@ async function write_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    await (0, import_promises.mkdir)((0, import_path.dirname)(p), { recursive: true });
+    await fsp.mkdir(path.dirname(p), { recursive: true });
     let __old = "";
-    try { __old = await (0, import_promises.readFile)(p, "utf-8"); } catch {}
-    await (0, import_promises.writeFile)(p, a.content, "utf-8");
+    try { __old = await fsp.readFile(p, "utf-8"); } catch {}
+    await fsp.writeFile(p, a.content, "utf-8");
     const __chg = recordChange(p, __old, String(a.content || ""));
     return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}`, changeId: __chg };
   } catch (e) {
@@ -166,14 +215,14 @@ async function write_file(a) {
   }
 }
 async function edit_file(a) {
-  const p = (0, import_path.resolve)(a.path);
+  const p = path.resolve(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    let c = await (0, import_promises.readFile)(p, "utf-8");
+    let c = await fsp.readFile(p, "utf-8");
     if (!c.includes(a.oldText)) return { success: false, error: "\u672A\u627E\u5230\u8981\u66FF\u6362\u7684\u6587\u672C" };
     const __oldFull = c;
     c = c.replace(a.oldText, a.newText);
-    await (0, import_promises.writeFile)(p, c, "utf-8");
+    await fsp.writeFile(p, c, "utf-8");
     const __chg2 = recordChange(p, __oldFull, c);
     return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}`, changeId: __chg2 };
   } catch (e) {
@@ -184,7 +233,7 @@ async function list_dir(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    let e = await (0, import_promises.readdir)(p, { withFileTypes: true });
+    let e = await fsp.readdir(p, { withFileTypes: true });
     if (!a.showHidden) e = e.filter((x) => !x.name.startsWith("."));
     const l = e.map((x) => `${x.isDirectory() ? "[目录]" : "[文件]"} ${x.name}${x.isDirectory() ? "/" : ""}`);
     return { success: true, output: l.join("\n") + `
@@ -224,11 +273,11 @@ async function screenshot(a) {
       src = sources[0];
     }
     if (!src || src.thumbnail.isEmpty()) return { success: false, error: "屏幕捕获为空，请重试" };
-    const dir = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "screenshots");
-    (0, import_fs.mkdirSync)(dir, { recursive: true });
-    const file = (0, import_path.join)(dir, "shot_" + Date.now().toString(36) + ".jpg");
-    (0, import_fs.writeFileSync)(file, src.thumbnail.toJPEG(70));
-    const token = (() => { try { return JSON.parse((0, import_fs.readFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), "utf-8")).token } catch { return "" } })();
+    const dir = path.join(os.homedir(), ".laoyou-agent", "data", "screenshots");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "shot_" + Date.now().toString(36) + ".jpg");
+    fs.writeFileSync(file, src.thumbnail.toJPEG(70));
+    const token = (() => { try { return JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8")).token } catch { return "" } })();
     const url = `/api/remote/file?path=${encodeURIComponent(file)}&t=${token}`;
     return { success: true, output: `📸 截屏完成（${src.thumbnail.getSize().width}x${src.thumbnail.getSize().height}）\n![screenshot](${url})\n文件: ${file}`, image: url, path: file };
   } catch (e) {
@@ -267,28 +316,28 @@ async function search_content(a) {
 }
 async function get_file_info(a) {
   try {
-    const s = await (0, import_promises.stat)((0, import_path.resolve)(a.path));
+    const s = await fsp.stat(path.resolve(a.path));
     return { success: true, output: JSON.stringify({ size: s.size, type: s.isFile() ? "file" : "directory", modified: s.mtime.toISOString() }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function move_file(a) {
-  const s = (0, import_path.resolve)(a.src), d = (0, import_path.resolve)(a.dest);
+  const s = path.resolve(a.src), d = path.resolve(a.dest);
   if (!ok(s) || !ok(d)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    await (0, import_promises.mkdir)((0, import_path.dirname)(d), { recursive: true });
-    await (0, import_promises.rename)(s, d);
+    await fsp.mkdir(path.dirname(d), { recursive: true });
+    await fsp.rename(s, d);
     return { success: true, output: `\u2705 ${s} \u2192 ${d}` };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function delete_file(a) {
-  const p = (0, import_path.resolve)(a.path);
+  const p = path.resolve(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    await (0, import_promises.unlink)(p);
+    await fsp.unlink(p);
     return { success: true, output: `\u2705 \u5DF2\u5220\u9664` };
   } catch (e) {
     return { success: false, error: e.message };
@@ -321,30 +370,30 @@ async function npm_run(a) {
   return shell({ command: `npm ${a.command || ""}`, workdir: a.projectPath });
 }
 async function code_analysis(a) {
-  const p = (0, import_path.resolve)(a.path);
+  const p = path.resolve(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    const c = await (0, import_promises.readFile)(p, "utf-8");
+    const c = await fsp.readFile(p, "utf-8");
     const im = [];
     for (const pat of [/^import\s+.+\s+from\s+['"](.+)['"]/gm, /^require\(['"](.+)['"]\)/gm]) {
       let m;
       while ((m = pat.exec(c)) !== null) im.push(m[1]);
     }
-    return { success: true, output: JSON.stringify({ language: (0, import_path.extname)(p).slice(1), lines: c.split("\n").length, imports: [...new Set(im)] }, null, 2) };
+    return { success: true, output: JSON.stringify({ language: path.extname(p).slice(1), lines: c.split("\n").length, imports: [...new Set(im)] }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function system_info() {
   try {
-    const mu = (((0, import_os.totalmem)() - (0, import_os.freemem)()) / 1073741824).toFixed(1), mt = ((0, import_os.totalmem)() / 1073741824).toFixed(1);
+    const mu = ((os.totalmem() - os.freemem()) / 1073741824).toFixed(1), mt = (os.totalmem() / 1073741824).toFixed(1);
     const r = await execAsync("zsh", ["-c", 'for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'], { timeout: 5e3, maxBuffer: 65536 });
     const tools = {};
     for (const l of r.stdout.trim().split("\n")) {
       const [k, v] = l.split("=");
       if (k && v) tools[k.trim()] = v.trim() === "yes";
     }
-    return { success: true, output: JSON.stringify({ os: `${(0, import_os.platform)()} ${(0, import_os.release)()}`, arch: import_os.arch, cpu: `${(0, import_os.cpus)().length} \u6838`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: (0, import_os.homedir)(), tools }, null, 2) };
+    return { success: true, output: JSON.stringify({ os: `${os.platform()} ${os.release()}`, arch: os.arch, cpu: `${os.cpus().length} \u6838`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: os.homedir(), tools }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -370,27 +419,27 @@ async function port_check(a) {
 }
 async function json_process(a) {
   try {
-    let d = a.data.startsWith("file:") ? JSON.parse(await (0, import_promises.readFile)((0, import_path.resolve)(a.data.slice(5)), "utf-8")) : JSON.parse(a.data);
+    let d = a.data.startsWith("file:") ? JSON.parse(await fsp.readFile(path.resolve(a.data.slice(5)), "utf-8")) : JSON.parse(a.data);
     if (a.query === "keys") return { success: true, output: Object.keys(d).join("\n") };
     return { success: true, output: JSON.stringify(d, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
-var SKILL_DIR = (0, import_path.join)((0, import_os.homedir)(), ".lyclaw", "skills");
+var SKILL_DIR = path.join(os.homedir(), ".lyclaw", "skills");
 // 迁移：旧目录 ~/.laoyou-agent/skills → ~/.lyclaw/skills（与开发版共用一个技能库）
 (() => {
   try {
-    const oldDir = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "skills");
-    if ((0, import_fs.existsSync)(oldDir) && !(0, import_fs.existsSync)(SKILL_DIR)) {
-      (0, import_fs.mkdirSync)((0, import_path.dirname)(SKILL_DIR), { recursive: true });
-      (0, import_fs.cpSync)(oldDir, SKILL_DIR, { recursive: true });
+    const oldDir = path.join(os.homedir(), ".laoyou-agent", "skills");
+    if (fs.existsSync(oldDir) && !fs.existsSync(SKILL_DIR)) {
+      fs.mkdirSync(path.dirname(SKILL_DIR), { recursive: true });
+      fs.cpSync(oldDir, SKILL_DIR, { recursive: true });
     }
-    if (!(0, import_fs.existsSync)(SKILL_DIR)) (0, import_fs.mkdirSync)(SKILL_DIR, { recursive: true });
+    if (!fs.existsSync(SKILL_DIR)) fs.mkdirSync(SKILL_DIR, { recursive: true });
   } catch {}
 })();
-var TASKS_FILE = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "scheduled_tasks.json");
-var MARKET_FILE = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "skill_market.json");
+var TASKS_FILE = path.join(os.homedir(), ".laoyou-agent", "scheduled_tasks.json");
+var MARKET_FILE = path.join(os.homedir(), ".laoyou-agent", "skill_market.json");
 
 // 生成标准 SKILL.md（真实技能文件）
 function writeSkillMd(skillDir, meta) {
@@ -418,16 +467,16 @@ ${meta.instructions || `- ${meta.description || "根据用户需求完成任务"
 - \`skill.json\` — 技能元数据
 ${meta.hasTools ? "- `tools.json` — 工具定义列表" : ""}
 `;
-    (0, import_fs.writeFileSync)((0, import_path.join)(skillDir, "SKILL.md"), md, "utf-8");
+    fs.writeFileSync(path.join(skillDir, "SKILL.md"), md, "utf-8");
   } catch {}
 }
 
 // 从 SKILL.md frontmatter 解析元数据
 function parseSkillMd(skillDir) {
   try {
-    const fp = (0, import_path.join)(skillDir, "SKILL.md");
-    if (!(0, import_fs.existsSync)(fp)) return null;
-    const text = (0, import_fs.readFileSync)(fp, "utf-8");
+    const fp = path.join(skillDir, "SKILL.md");
+    if (!fs.existsSync(fp)) return null;
+    const text = fs.readFileSync(fp, "utf-8");
     const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     const meta = { hasSkillMd: true };
     if (m) {
@@ -451,39 +500,39 @@ var DEFAULT_MARKET = [
 
 function loadMarket() {
   try {
-    if ((0, import_fs.existsSync)(MARKET_FILE)) return JSON.parse((0, import_fs.readFileSync)(MARKET_FILE, "utf-8"));
+    if (fs.existsSync(MARKET_FILE)) return JSON.parse(fs.readFileSync(MARKET_FILE, "utf-8"));
   } catch {}
   return DEFAULT_MARKET;
 }
 
 function saveMarket(skills) {
   try {
-    (0, import_fs.mkdirSync)((0, import_path.dirname)(MARKET_FILE), { recursive: true });
-    (0, import_fs.writeFileSync)(MARKET_FILE, JSON.stringify(skills, null, 2), "utf-8");
+    fs.mkdirSync(path.dirname(MARKET_FILE), { recursive: true });
+    fs.writeFileSync(MARKET_FILE, JSON.stringify(skills, null, 2), "utf-8");
   } catch {}
 }
 
 function loadTasks() {
   try {
-    if ((0, import_fs.existsSync)(TASKS_FILE)) return JSON.parse((0, import_fs.readFileSync)(TASKS_FILE, "utf-8"));
+    if (fs.existsSync(TASKS_FILE)) return JSON.parse(fs.readFileSync(TASKS_FILE, "utf-8"));
   } catch {}
   return [];
 }
 function saveTasks(tasks) {
   try {
-    (0, import_fs.mkdirSync)((0, import_path.dirname)(TASKS_FILE), { recursive: true });
-    (0, import_fs.writeFileSync)(TASKS_FILE, JSON.stringify(tasks, null, 2), "utf-8");
+    fs.mkdirSync(path.dirname(TASKS_FILE), { recursive: true });
+    fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2), "utf-8");
   } catch {}
 }
 async function list_skills() {
   try {
     const list = [{ name: "builtin", description: "内置工具集", status: "active", toolCount: 22 }];
-    if (!(0, import_fs.existsSync)(SKILL_DIR)) return { success: true, output: JSON.stringify(list) };
-    for (const s of (await (0, import_promises.readdir)(SKILL_DIR, { withFileTypes: true })).filter((x) => x.isDirectory())) {
-      const dir = (0, import_path.join)(SKILL_DIR, s.name);
-      const mp = (0, import_path.join)(dir, "skill.json");
-      if ((0, import_fs.existsSync)(mp)) {
-        list.push({ name: s.name, ...JSON.parse((0, import_fs.readFileSync)(mp, "utf-8")), status: "installed", toolCount: 0 });
+    if (!fs.existsSync(SKILL_DIR)) return { success: true, output: JSON.stringify(list) };
+    for (const s of (await fsp.readdir(SKILL_DIR, { withFileTypes: true })).filter((x) => x.isDirectory())) {
+      const dir = path.join(SKILL_DIR, s.name);
+      const mp = path.join(dir, "skill.json");
+      if (fs.existsSync(mp)) {
+        list.push({ name: s.name, ...JSON.parse(fs.readFileSync(mp, "utf-8")), status: "installed", toolCount: 0 });
       } else {
         // 兼容纯 SKILL.md 技能（GitHub 标准）
         const mdMeta = parseSkillMd(dir);
@@ -498,26 +547,26 @@ async function list_skills() {
 }
 async function load_skill(a) {
   try {
-    const dir = (0, import_path.join)(SKILL_DIR, a.name);
+    const dir = path.join(SKILL_DIR, a.name);
     const out = {};
-    const jsonPath = (0, import_path.join)(dir, "skill.json");
-    const mdPath = (0, import_path.join)(dir, "SKILL.md");
-    if ((0, import_fs.existsSync)(jsonPath)) out.meta = JSON.parse((0, import_fs.readFileSync)(jsonPath, "utf-8"));
-    if ((0, import_fs.existsSync)(mdPath)) {
-      out.skill_md = (0, import_fs.readFileSync)(mdPath, "utf-8");
+    const jsonPath = path.join(dir, "skill.json");
+    const mdPath = path.join(dir, "SKILL.md");
+    if (fs.existsSync(jsonPath)) out.meta = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+    if (fs.existsSync(mdPath)) {
+      out.skill_md = fs.readFileSync(mdPath, "utf-8");
     }
-    const toolsPath = (0, import_path.join)(dir, "tools.json");
-    if ((0, import_fs.existsSync)(toolsPath)) {
-      try { out.tools = JSON.parse((0, import_fs.readFileSync)(toolsPath, "utf-8")); } catch {}
+    const toolsPath = path.join(dir, "tools.json");
+    if (fs.existsSync(toolsPath)) {
+      try { out.tools = JSON.parse(fs.readFileSync(toolsPath, "utf-8")); } catch {}
     }
     // 附带文件清单（脚本/资源）
     const files = [];
     (function walk(p) {
       try {
-        for (const e of (0, import_fs.readdirSync)(p, { withFileTypes: true })) {
+        for (const e of fs.readdirSync(p, { withFileTypes: true })) {
           if (e.name === ".git" || e.name === "node_modules") continue;
-          if (e.isDirectory()) walk((0, import_path.join)(p, e.name));
-          else files.push((0, import_path.relative)(dir, (0, import_path.join)(p, e.name)));
+          if (e.isDirectory()) walk(path.join(p, e.name));
+          else files.push(path.relative(dir, path.join(p, e.name)));
         }
       } catch {}
     })(dir);
@@ -530,9 +579,9 @@ async function load_skill(a) {
 }
 async function install_skill(a) {
   try {
-    const dir = (0, import_path.join)(SKILL_DIR, a.name);
-    await (0, import_promises.mkdir)(dir, { recursive: true });
-    await (0, import_promises.writeFile)((0, import_path.join)(dir, "skill.json"), JSON.stringify({ name: a.name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
+    const dir = path.join(SKILL_DIR, a.name);
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({ name: a.name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
     writeSkillMd(dir, { name: a.name, description: a.description || "", hasTools: false });
     return { success: true, output: "已安装（含 SKILL.md）" };
   } catch (e) {
@@ -540,15 +589,15 @@ async function install_skill(a) {
   }
 }
 // --- 长期记忆工具 (供 AI 调用) ---
-const MEM_DIR = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data");
-(() => { try { (0, import_fs.mkdirSync)(MEM_DIR, { recursive: true }); } catch {} })();
-function memFile() { return (0, import_path.join)(MEM_DIR, "memories.json"); }
+const MEM_DIR = path.join(os.homedir(), ".laoyou-agent", "data");
+(() => { try { fs.mkdirSync(MEM_DIR, { recursive: true }); } catch {} })();
+function memFile() { return path.join(MEM_DIR, "memories.json"); }
 function loadMem() {
-  try { return (0, import_fs.existsSync)(memFile()) ? JSON.parse((0, import_fs.readFileSync)(memFile(), "utf-8")) : {}; }
+  try { return fs.existsSync(memFile()) ? JSON.parse(fs.readFileSync(memFile(), "utf-8")) : {}; }
   catch { return {}; }
 }
 function saveMem(data) {
-  try { (0, import_fs.mkdirSync)(MEM_DIR, { recursive: true }); (0, import_fs.writeFileSync)(memFile(), JSON.stringify(data, null, 2), "utf-8"); }
+  try { fs.mkdirSync(MEM_DIR, { recursive: true }); fs.writeFileSync(memFile(), JSON.stringify(data, null, 2), "utf-8"); }
   catch {}
 }
 // 记忆工具 — 统一 SQLite（与 /api/memories、上下文摘要同源）
@@ -595,10 +644,10 @@ async function delete_memory(args) {
 (() => {
   if (!sharedDb) return;
   try {
-    const dataDir = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data");
+    const dataDir = path.join(os.homedir(), ".laoyou-agent", "data");
     const readJson = (name) => {
-      const fp = (0, import_path.join)(dataDir, name);
-      try { return (0, import_fs.existsSync)(fp) ? JSON.parse((0, import_fs.readFileSync)(fp, "utf-8")) : {}; } catch { return {}; }
+      const fp = path.join(dataDir, name);
+      try { return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf-8")) : {}; } catch { return {}; }
     };
     const sessions = readJson("sessions.json");
     if (!Array.isArray(sessions.items) || sessions.items.length === 0) return;
@@ -650,8 +699,8 @@ function securityConfig() {
 }
 
 function inDirs(p, dirs) {
-  const rp = (0, import_path.resolve)(p || "");
-  return dirs.some((d) => { try { return rp.startsWith((0, import_path.resolve)(d)); } catch { return false; } });
+  const rp = path.resolve(p || "");
+  return dirs.some((d) => { try { return rp.startsWith(path.resolve(d)); } catch { return false; } });
 }
 
 const DANGEROUS_SHELL_RE = /rm\s+-rf|del\s+\/f|rd\s+\/s|format\s+[a-z]:|shutdown|diskpart|mkfs/;
@@ -1049,9 +1098,9 @@ async function create_skill(args) {
     const name = (args.name || args.skill_name || "").replace(/[^a-z0-9_-]/gi, "_").slice(0, 64);
     if (!name) return { success: false, error: "缺少 skill 名称" };
     const desc = args.description || "";
-    const skillDir = (0, import_path.join)(SKILL_DIR, name);
-    (0, import_fs.mkdirSync)(skillDir, { recursive: true });
-    (0, import_fs.writeFileSync)((0, import_path.join)(skillDir, "skill.json"), JSON.stringify({
+    const skillDir = path.join(SKILL_DIR, name);
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, "skill.json"), JSON.stringify({
       name, description: desc, version: args.version || "0.1.0",
       installed_at: (new Date()).toISOString(),
       tools: args.tools || []
@@ -1065,13 +1114,13 @@ async function create_skill(args) {
       hasTools: !!(args.tools && args.tools.length),
     });
     if (args.knowledge) {
-      (0, import_fs.writeFileSync)((0, import_path.join)(skillDir, "knowledge.md"), args.knowledge, "utf-8");
+      fs.writeFileSync(path.join(skillDir, "knowledge.md"), args.knowledge, "utf-8");
     }
     if (args.tools && (!Array.isArray(args.tools) ? true : args.tools.length)) {
-      (0, import_fs.writeFileSync)((0, import_path.join)(skillDir, "tools.json"), JSON.stringify(args.tools, null, 2), "utf-8");
+      fs.writeFileSync(path.join(skillDir, "tools.json"), JSON.stringify(args.tools, null, 2), "utf-8");
     }
     if (args.code || args.script) {
-      (0, import_fs.writeFileSync)((0, import_path.join)(skillDir, "index.js"), args.code || args.script);
+      fs.writeFileSync(path.join(skillDir, "index.js"), args.code || args.script);
     }
     return { success: true, output: `Skill "${name}" 已创建（含 SKILL.md${args.knowledge ? " + knowledge.md" : ""}${args.tools && args.tools.length ? " + tools.json" : ""}）` };
   } catch (e) { return { success: false, error: e.message }; }
@@ -1199,34 +1248,133 @@ var TOOLS = {
   remember, recall, forget,
   save_knowledge: toolSaveKnowledge
 };
+// ─── 静态资源：磁盘 LRU 缓存 + gzip 压缩 + HTTP 缓存协商 ───
+// 首屏 JS 总计约 800KB；手机远程经 LAN 访问时压缩能从 ~2.1MB 降到 ~500KB。
+// 磁盘缓存避免每次请求都 readfs，冷启动后首次请求也不阻塞。
+var STATIC_CACHE_MAX = 64;
+var staticCache = new Map();
+var GZIP_MIME = /^application\/(javascript|x-json|json)|text\/|image\/svg/;
+var gzipBuf = new Map();
+
 async function serveStatic(req, res) {
   let urlPath = req.url === "/" ? "index.html" : (req.url?.split("?")[0]?.replace(/^\//, "") || "index.html");
-  let p = (0, import_path.join)(DIST, urlPath);
+  let p = path.join(DIST, urlPath);
   // 静态文件只允许位于 DIST 目录内（打包后 app 在 /Applications 下，不能用用户目录白名单 ok() 判断）
-  const resolvedStatic = (0, import_path.resolve)(p);
-  if (!resolvedStatic.startsWith((0, import_path.resolve)(DIST))) return json(res, { error: "Forbidden" }, 403);
+  const resolvedStatic = path.resolve(p);
+  if (!resolvedStatic.startsWith(path.resolve(DIST))) return json(res, { error: "Forbidden" }, 403);
   try {
-    if (!(0, import_fs.existsSync)(p) || (await (0, import_promises.stat)(p)).isDirectory()) p = (0, import_path.join)(DIST, "index.html");
-    const data = await (0, import_promises.readFile)(p);
-    // index.html 禁止缓存（补丁更新后立即可见）；带 hash 的资源长缓存
+    // 用 fs 同步 API 判定存在性/目录：路径回退必须同步完成，避免 async stat 竞态
+    if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(DIST, "index.html");
+
+    // LRU 读盘缓存（键为绝对路径，值含 stat 结果用于 If-Modified-Since 协商）
+    let ent = staticCache.get(p);
+    if (!ent) {
+      const st = fs.statSync(p);
+      const data = await fsp.readFile(p);
+      ent = { data, mtime: st.mtimeMs, size: data.length };
+      staticCache.set(p, ent);
+      while (staticCache.size > STATIC_CACHE_MAX) {
+        const k = staticCache.keys().next().value;
+        staticCache.delete(k);
+        gzipBuf.delete(k);
+      }
+    }
+
+    // If-Modified-Since 协商：命中则 304，省掉整个响应体（对长缓存资源效果最明显）
+    const ims = req.headers["if-modified-since"];
+    if (ims) {
+      try {
+        const t = Date.parse(ims);
+        // Last-Modified 是秒级；mtime 若带毫秒部分会被误判为"比 IMS 新"，
+        // 因此先向下取整到秒再比较，与 HTTP 语义一致。
+        if (!isNaN(t) && Math.floor(ent.mtime / 1000) * 1000 <= t) { res.writeHead(304); res.end(); return; }
+      } catch {}
+    }
+
     const isHtml = p.endsWith(".html");
-    res.writeHead(200, {
-      "Content-Type": MIME[(0, import_path.extname)(p)] || "application/octet-stream",
+    const mime = MIME[path.extname(p)] || "application/octet-stream";
+    const head = {
+      "Content-Type": mime,
       "Cache-Control": isHtml ? "no-cache, no-store, must-revalidate" : "public, max-age=31536000, immutable",
-    });
-    res.end(data);
+      "Content-Length": ent.size,
+      "Last-Modified": new Date(ent.mtime).toUTCString(),
+    };
+
+    // gzip：仅对文本类且体积足够（>1KB）的资源启用，小文件压缩反而更慢
+    const acceptGz = /gzip/i.test(String(req.headers["accept-encoding"] || ""));
+    if (acceptGz && !isHtml && ent.size > 1024 && GZIP_MIME.test(mime)) {
+      let gz = gzipBuf.get(p);
+      if (!gz) {
+        gz = await promisifyGzip(ent.data);
+        if (gz && gz.length < ent.size) gzipBuf.set(p, gz);
+      }
+      if (gz && gz.length < ent.size) {
+        res.writeHead(200, {
+          "Content-Type": mime,
+          "Content-Encoding": "gzip",
+          "Vary": "Accept-Encoding",
+          "Cache-Control": head["Cache-Control"],
+          "Content-Length": gz.length,
+          "Last-Modified": head["Last-Modified"],
+        });
+        res.end(gz);
+        return;
+      }
+    }
+    res.writeHead(200, head);
+    res.end(ent.data);
   } catch {
     res.writeHead(404);
     res.end("Not found");
   }
 }
-(0, import_http.createServer)(async (req, res) => {
+// gzip 压缩（node zlib）；压缩结果由调用方缓存
+function promisifyGzip(buf) {
+  return new Promise((resolve) => {
+    try {
+      import("zlib").then((z) => {
+        z.gzip(buf, { level: 6 }, (err, out) => resolve(err || !out ? null : out));
+      }).catch(() => resolve(null));
+    } catch { resolve(null); }
+  });
+}
+http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" });
+    const c = corsHeaders(req);
+    if (!c) { res.writeHead(403); res.end(); return; } // 不可信 Origin：不给 CORS 头
+    res.writeHead(204, {
+      ...c,
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-Remote-Token, X-Api-Key",
+      "Access-Control-Max-Age": "600",
+    });
     res.end();
     return;
   }
   const url = new URL(req.url || "/", `http://localhost:${PORT}`);
+
+  // ─── 跨站请求（CSRF / DNS-rebinding）门卫 ───
+  // 浏览器发起的跨源请求必带 Origin。恶意网页 → http://localhost:3211/api/settings
+  // 就是一次典型的跨站请求；即便它读不到响应（无 CORS 头），请求本身仍会执行。
+  // 这里在服务端直接拒绝不信任的 Origin，并额外校验 Host 头，防 DNS-rebinding。
+  if (!isTrustedOrigin(req.headers.origin)) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "跨站请求已拒绝" }));
+    return;
+  }
+  // DNS-rebinding：攻击者把 evil.com 解析到 127.0.0.1，浏览器带 Host: evil.com 打到这里。
+  // 特征是「来源是本机回环，但 Host 却不是本机名」——正常本机访问不会这样。
+  // LAN 远程访问（Host 为局域网 IP）由下面的配对码门卫负责，不在此处拦截。
+  const __hostName = String(req.headers.host || "").replace(/:\d+$/, "");
+  const __hostIsLocal = __hostName === "" || __hostName === "localhost"
+    || __hostName === "127.0.0.1" || __hostName === "::1" || __hostName === "[::1]";
+  const __ra = String(req.socket.remoteAddress || "");
+  const __fromLoopback = __ra === "127.0.0.1" || __ra === "::1" || __ra === "::ffff:127.0.0.1";
+  if (__fromLoopback && !__hostIsLocal) {
+    res.writeHead(421, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Host 头不被信任（疑似 DNS rebinding）" }));
+    return;
+  }
 
   // ─── 手机远程门卫（v5.5）：非本机请求必须持配对码；只放行 /remote.html 与 /api/*（health 除外） ───
   const __isLocal = (() => {
@@ -1236,19 +1384,24 @@ async function serveStatic(req, res) {
   if (!__isLocal) {
     const __token = (() => {
       try {
-        const o = JSON.parse((0, import_fs.readFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
+        const o = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
         if (o && o.token) return String(o.token);
       } catch {}
-      const t = (0, import_crypto.randomBytes)(16).toString("hex");
+      const t = crypto.randomBytes(16).toString("hex");
       try {
-        (0, import_fs.mkdirSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data"), { recursive: true });
-        (0, import_fs.writeFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, created_at: new Date().toISOString() }));
+        fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
+        fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, created_at: new Date().toISOString() }));
       } catch {}
       return t;
     })();
     const __supplied = url.searchParams.get("t") || String(req.headers["x-remote-token"] || "");
     const __path = url.pathname;
-    const __allowedPath = __path === "/remote.html" || (__path.startsWith("/api/") && __path !== "/api/health");
+    // 配对后允许访问：远程页、静态资源（/assets/、/index.html、/ 等，配对 URL 需要加载 UI 与资源）
+    // 以及 /api/*（health 是公开探测端点，不需要 token）
+    const __isStatic = /^\/(assets\/|index\.html|remote\.html$|\.\w+$)/.test(__path)
+      || __path === "/" || __path === "/index.html" || __path === "/remote.html";
+    const __allowedPath = __path === "/remote.html" || __isStatic
+      || (__path.startsWith("/api/") && __path !== "/api/health");
     if (__supplied !== __token || !__allowedPath) {
       if (__path.startsWith("/api/")) {
         res.writeHead(401, { "Content-Type": "application/json" });
@@ -1283,7 +1436,7 @@ async function serveStatic(req, res) {
       const check = [];
       const httpGet = (u, timeout = 2500) => new Promise((resolve) => {
         try {
-          const mod = u.startsWith("https:") ? import_https : import_http;
+          const mod = u.startsWith("https:") ? https : http;
           const r = mod.get(u, { timeout }, (resp) => { resp.resume(); resolve(resp.statusCode && resp.statusCode < 500) });
           r.on("timeout", () => { r.destroy(); resolve(false) });
           r.on("error", () => resolve(false));
@@ -1306,12 +1459,12 @@ async function serveStatic(req, res) {
       check.push({ name: "Python 运行时", ok: pyOk, detail: pyVer || (process.env.PYTHON_BIN || "python3") + " 不可用" });
       // 4. STT 脚本
       let sttOk = false;
-      try { sttOk = (0, import_fs.existsSync)(process.env.STT_SCRIPT || ""); } catch { sttOk = false }
+      try { sttOk = fs.existsSync(process.env.STT_SCRIPT || ""); } catch { sttOk = false }
       check.push({ name: "语音识别 (faster-whisper)", ok: sttOk, detail: sttOk ? "脚本就绪" : "stt.py 未找到" });
       // 5. 数据库
       let dbSizeMb = "";
       try {
-        const st = (0, import_fs.statSync)((0, import_path.join)(process.env.HOME || ".", ".lyclaw", "data.db"));
+        const st = fs.statSync(path.join(process.env.HOME || ".", ".lyclaw", "data.db"));
         dbSizeMb = (st.size / 1024 / 1024).toFixed(2);
       } catch { /* ignore */ }
       check.push({ name: "数据库 (SQLite)", ok: !!sharedDb, detail: sharedDb ? `~/.lyclaw/data.db 正常${dbSizeMb ? ` · ${dbSizeMb} MB` : ""}` : "db.cjs 加载失败" });
@@ -1319,7 +1472,7 @@ async function serveStatic(req, res) {
       let wdOk = false;
       try {
         const wd = globalWorkDir || process.env.HOME || ".";
-        (0, import_fs.accessSync)(wd, import_fs.constants.W_OK); wdOk = true;
+        fs.accessSync(wd, fs.constants.W_OK); wdOk = true;
       } catch { wdOk = false }
       check.push({ name: "工作目录", ok: wdOk, detail: (globalWorkDir || "系统默认") + (wdOk ? " 可写" : " 不可写") });
       // 7. 模型 API 连通性（用配置的 baseUrl + key 请求 /models）
@@ -1335,7 +1488,7 @@ async function serveStatic(req, res) {
             new Promise((resolve) => {
               try {
                 const u = new URL(base + "/models");
-                const mod = u.protocol === "https:" ? import_https : import_http;
+                const mod = u.protocol === "https:" ? https : http;
                 const r = mod.get(u, { timeout: 4000, headers: { Authorization: `Bearer ${key}` } }, (resp) => { resp.resume(); resolve(resp.statusCode || 0) });
                 r.on("timeout", () => { r.destroy(); resolve(0) });
                 r.on("error", () => resolve(0));
@@ -1344,7 +1497,7 @@ async function serveStatic(req, res) {
             new Promise((resolve) => {
               try {
                 const u = new URL(base + "/models");
-                const mod = u.protocol === "https:" ? import_https : import_http;
+                const mod = u.protocol === "https:" ? https : http;
                 const r = mod.get(u, { timeout: 4000, headers: { Authorization: key } }, (resp) => { resp.resume(); resolve(resp.statusCode || 0) });
                 r.on("timeout", () => { r.destroy(); resolve(0) });
                 r.on("error", () => resolve(0));
@@ -1483,14 +1636,14 @@ async function serveStatic(req, res) {
         // 手机远程(v5.5)：请求未带密钥时,回退到本机存储的设置(密钥不出电脑)
         if (!targetBase || !apiKey) {
           try {
-            const __st = JSON.parse((0, import_fs.readFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "settings.json"), "utf-8"));
+            const __st = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "settings.json"), "utf-8"));
             if (!targetBase && __st.apiBaseUrl) targetBase = String(__st.apiBaseUrl);
             if (!apiKey && __st.apiKey) apiKey = String(__st.apiKey);
           } catch {}
         }
         // v7.0：未配置模型服务时明确报错,不再回退到任何默认提供商
         if (!targetBase || !apiKey) {
-          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.writeHead(400, { ...(corsHeaders(req) || {}), "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "尚未配置模型服务：请在 设置 → 推理 中填写 API 地址与密钥（任意 OpenAI 兼容服务）" }));
           return;
         }
@@ -1523,8 +1676,8 @@ async function serveStatic(req, res) {
                 ? "请求过于频繁 / 余额或限流"
                 : "请检查模型名、余额或服务状态";
           res.writeHead(proxyRes.status, {
+            ...(corsHeaders(req) || {}),
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
           });
           res.end(JSON.stringify({
             error: upstreamMsg || `上游模型服务返回 ${proxyRes.status}`,
@@ -1537,10 +1690,10 @@ async function serveStatic(req, res) {
         }
         // 流式透传 SSE
         res.writeHead(200, {
+          ...(corsHeaders(req) || {}),
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive",
-          "Access-Control-Allow-Origin": "*",
         });
         const reader = proxyRes.body.getReader();
         const decoder = new TextDecoder();
@@ -1607,7 +1760,7 @@ async function serveStatic(req, res) {
           signal: AbortSignal.timeout(20000),
         });
         const qqText = await qqRes.text();
-        res.writeHead(qqRes.status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.writeHead(qqRes.status, { ...(corsHeaders(req) || {}), "Content-Type": "application/json" });
         res.end(qqText);
       } catch (e) {
         console.error("qq-proxy error:", e.message);
@@ -1624,7 +1777,7 @@ async function serveStatic(req, res) {
         const { path: filePath, kind, openid, msgId, sandbox, token } = JSON.parse(Buffer.concat(rawChunks).toString());
         if (!filePath || !kind || !openid || !token) return json(res, { error: "缺少参数" }, 400);
         if (kind !== "group" && kind !== "c2c") return json(res, { error: "kind 必须为 group 或 c2c" }, 400);
-        const stats = await import_promises.stat(filePath).catch(() => null);
+        const stats = await fsp.stat(filePath).catch(() => null);
         if (!stats || !stats.isFile()) return json(res, { error: `文件不存在或不是文件: ${filePath}` }, 400);
         // 安全：仅允许发送用户目录 / tmp 内的文件
         const home = process.env.HOME || "/Users/zeroneil";
@@ -1634,9 +1787,9 @@ async function serveStatic(req, res) {
         const apiBase = sandbox ? "https://sandbox.api.sgroup.qq.com" : "https://api.sgroup.qq.com";
         const tokenHeader = { Authorization: `QQBot ${token}` };
         // 1. 上传文件 → file_info
-        const buf = await import_promises.readFile(filePath);
+        const buf = await fsp.readFile(filePath);
         const fd = new FormData();
-        fd.append("file", new Blob([buf], { type: "application/octet-stream" }), import_path.basename(filePath));
+        fd.append("file", new Blob([buf], { type: "application/octet-stream" }), path.basename(filePath));
         const uploadUrl = kind === "group" ? `${apiBase}/v2/groups/${openid}/files` : `${apiBase}/v2/users/${openid}/files`;
         const upRes = await fetch(uploadUrl, { method: "POST", headers: tokenHeader, body: fd, signal: AbortSignal.timeout(60000) });
         const upData = await upRes.json().catch(() => ({}));
@@ -1665,15 +1818,15 @@ async function serveStatic(req, res) {
       try {
         const filePath = decodeURIComponent(url.searchParams.get("path") || "");
         if (!filePath) return json(res, { error: "缺少 path" }, 400);
-        const ext = import_path.extname(filePath).toLowerCase();
+        const ext = path.extname(filePath).toLowerCase();
         if (![".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) return json(res, { error: "仅支持图片文件" }, 400);
         // 用户主动添加的附件，放开目录限制（仍是只读图片），大小上限提到 20MB
-        const stats = await import_promises.stat(filePath).catch(() => null);
+        const stats = await fsp.stat(filePath).catch(() => null);
         if (!stats || !stats.isFile()) return json(res, { error: "文件不存在" }, 404);
         if (stats.size > 20 * 1024 * 1024) return json(res, { error: "图片超过 20MB 限制" }, 413);
-        const buf = await import_promises.readFile(filePath);
+        const buf = await fsp.readFile(filePath);
         const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/webp";
-        return json(res, { data: buf.toString("base64"), mime, name: import_path.basename(filePath) });
+        return json(res, { data: buf.toString("base64"), mime, name: path.basename(filePath) });
       } catch (e) {
         if (!res.headersSent) json(res, { error: e.message }, 500);
       }
@@ -1736,9 +1889,9 @@ async function serveStatic(req, res) {
       const skill = market.find((s) => s.id === skillId);
       if (!skill) return json(res, { success: false, error: "Skill 不存在" });
       try {
-        const dir = (0, import_path.join)(SKILL_DIR, skillId);
-        await (0, import_promises.mkdir)(dir, { recursive: true });
-        await (0, import_promises.writeFile)((0, import_path.join)(dir, "skill.json"), JSON.stringify({
+        const dir = path.join(SKILL_DIR, skillId);
+        await fsp.mkdir(dir, { recursive: true });
+        await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({
           name: skillId, display_name: skill.name, version: skill.version,
           author: skill.author, description: skill.description, tags: skill.tags,
           tools: skill.tools, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1750,7 +1903,7 @@ async function serveStatic(req, res) {
           hasTools: !!(skill.tools && skill.tools.length),
         });
         if (skill.tools && skill.tools.length) {
-          await (0, import_promises.writeFile)((0, import_path.join)(dir, "tools.json"), JSON.stringify(skill.tools, null, 2), "utf-8");
+          await fsp.writeFile(path.join(dir, "tools.json"), JSON.stringify(skill.tools, null, 2), "utf-8");
         }
         return json(res, { success: true });
       } catch (e) {
@@ -1761,28 +1914,28 @@ async function serveStatic(req, res) {
       const { githubUrl } = await body(req);
       if (!githubUrl || !githubUrl.includes("github.com")) return json(res, { success: false, error: "无效的 GitHub 链接" });
       const repoName = githubUrl.split("/").slice(-1)[0].replace(/\.git$/, "");
-      const destDir = (0, import_path.join)(SKILL_DIR, repoName);
+      const destDir = path.join(SKILL_DIR, repoName);
       try {
         // 重装/更新：先清空旧目录，否则 git clone 报 "already exists and is not an empty directory"
-        await (0, import_promises.rm)(destDir, { recursive: true, force: true });
+        await fsp.rm(destDir, { recursive: true, force: true });
         const r = await execAsync("git", ["clone", "--depth", "1", githubUrl, destDir], { timeout: 6e4, maxBuffer: 524288 });
         // 清掉 .git，技能目录保持干净
-        await (0, import_promises.rm)((0, import_path.join)(destDir, ".git"), { recursive: true, force: true });
+        await fsp.rm(path.join(destDir, ".git"), { recursive: true, force: true });
         // 统计真实安装的文件
         const files = [];
         (function walk(p) {
           try {
-            for (const e of (0, import_fs.readdirSync)(p, { withFileTypes: true })) {
+            for (const e of fs.readdirSync(p, { withFileTypes: true })) {
               if (e.name === ".git" || e.name === "node_modules") continue;
-              if (e.isDirectory()) walk((0, import_path.join)(p, e.name));
-              else files.push((0, import_path.relative)(destDir, (0, import_path.join)(p, e.name)));
+              if (e.isDirectory()) walk(path.join(p, e.name));
+              else files.push(path.relative(destDir, path.join(p, e.name)));
             }
           } catch {}
         })(destDir);
         // 补齐元数据
         const mdMeta = parseSkillMd(destDir);
-        if (!(0, import_fs.existsSync)((0, import_path.join)(destDir, "skill.json"))) {
-          await (0, import_promises.writeFile)((0, import_path.join)(destDir, "skill.json"), JSON.stringify({
+        if (!fs.existsSync(path.join(destDir, "skill.json"))) {
+          await fsp.writeFile(path.join(destDir, "skill.json"), JSON.stringify({
             name: mdMeta?.name || repoName, display_name: mdMeta?.name || repoName,
             description: mdMeta?.description || "", version: mdMeta?.version || "1.0.0",
             source_url: githubUrl, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -1806,9 +1959,9 @@ async function serveStatic(req, res) {
       const { skillName } = await body(req);
       if (!skillName) return json(res, { success: false, error: "\u7F3A\u5C11 skillName" });
       try {
-        const skillPath = (0, import_path.join)(SKILL_DIR, skillName);
-        if ((0, import_fs.existsSync)(skillPath)) {
-          await (0, import_promises.rm)(skillPath, { recursive: true, force: true });
+        const skillPath = path.join(SKILL_DIR, skillName);
+        if (fs.existsSync(skillPath)) {
+          await fsp.rm(skillPath, { recursive: true, force: true });
         }
         // 从市场中移除
         const market = loadMarket();
@@ -1845,8 +1998,8 @@ async function serveStatic(req, res) {
     }
 
     // === 新添加: 数据持久化 API (settings/sessions/messages/memories) ===
-    const DATA_DIR = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data");
-    (() => { try { (0, import_fs.mkdirSync)(DATA_DIR, { recursive: true }); } catch {} })();
+    const DATA_DIR = path.join(os.homedir(), ".laoyou-agent", "data");
+    (() => { try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {} })();
     /** 取关键词周围的一段摘要（世界级搜索的上下文预览） */
     function snippetAround(text, q) {
       const s = String(text || "").replace(/\s+/g, " ");
@@ -1858,14 +2011,14 @@ async function serveStatic(req, res) {
     }
     function loadJson(filename) {
       try {
-        const fp = (0, import_path.join)(DATA_DIR, filename);
-        return (0, import_fs.existsSync)(fp) ? JSON.parse((0, import_fs.readFileSync)(fp, "utf-8")) : {};
+        const fp = path.join(DATA_DIR, filename);
+        return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf-8")) : {};
       } catch { return {}; }
     }
     function saveJson(filename, data) {
       try {
-        (0, import_fs.mkdirSync)(DATA_DIR, { recursive: true });
-        (0, import_fs.writeFileSync)((0, import_path.join)(DATA_DIR, filename), JSON.stringify(data, null, 2), "utf-8");
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(DATA_DIR, filename), JSON.stringify(data, null, 2), "utf-8");
       } catch {}
     }
 
@@ -1932,9 +2085,9 @@ async function serveStatic(req, res) {
     if (url.pathname === "/api/remote/file" && req.method === "GET") {
       try {
         const fp = decodeURIComponent(url.searchParams.get("path") || "");
-        const dir = (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "screenshots");
+        const dir = path.join(os.homedir(), ".laoyou-agent", "data", "screenshots");
         if (!fp.startsWith(dir)) return json(res, { error: "路径不允许" }, 403);
-        const data = (0, import_fs.readFileSync)(fp);
+        const data = fs.readFileSync(fp);
         res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-cache" });
         res.end(data);
       } catch (e) { res.writeHead(404); res.end("not found"); }
@@ -1943,7 +2096,7 @@ async function serveStatic(req, res) {
 
     // ─── 通知桥 API（v7.0）：GET 供渲染层合并；POST 仅本机（内部来源） ───
     if (url.pathname === "/api/notices" && req.method === "GET") {
-      try { return json(res, JSON.parse((0, import_fs.readFileSync)(NOTICE_FILE(), "utf-8"))); }
+      try { return json(res, JSON.parse(fs.readFileSync(NOTICE_FILE(), "utf-8"))); }
       catch { return json(res, []); }
     }
     if (url.pathname === "/api/notices" && req.method === "POST") {
@@ -1964,8 +2117,8 @@ async function serveStatic(req, res) {
       const ch = DIFF_CHANGES.find((x) => x.id === id);
       if (!ch) return json(res, { error: "变更不存在或已过期" }, 404);
       try {
-        if (ch.old) await (0, import_promises.writeFile)(ch.path, ch.old, "utf-8");
-        else { try { (0, import_fs.unlinkSync)(ch.path); } catch {} }
+        if (ch.old) await fsp.writeFile(ch.path, ch.old, "utf-8");
+        else { try { fs.unlinkSync(ch.path); } catch {} }
         return json(res, { ok: true, path: ch.path });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
@@ -1974,7 +2127,7 @@ async function serveStatic(req, res) {
       const ch = DIFF_CHANGES.find((x) => x.id === id);
       if (!ch) return json(res, { error: "变更不存在或已过期" }, 404);
       try {
-        await (0, import_promises.writeFile)(ch.path, String(content || ""), "utf-8");
+        await fsp.writeFile(ch.path, String(content || ""), "utf-8");
         ch.new = String(content || "");
         return json(res, { ok: true, path: ch.path });
       } catch (e) { return json(res, { error: e.message }, 500); }
@@ -1985,13 +2138,13 @@ async function serveStatic(req, res) {
       if (!__isLocal) return json(res, { error: "仅限本机" }, 403);
       const __token = (() => {
         try {
-          const o = JSON.parse((0, import_fs.readFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
+          const o = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
           if (o && o.token) return String(o.token);
         } catch {}
-        const t = (0, import_crypto.randomBytes)(16).toString("hex");
+        const t = crypto.randomBytes(16).toString("hex");
         try {
-          (0, import_fs.mkdirSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data"), { recursive: true });
-          (0, import_fs.writeFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t }));
+          fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
+          fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t }));
         } catch {}
         return t;
       })();
@@ -2005,16 +2158,16 @@ async function serveStatic(req, res) {
     }
     if (url.pathname === "/api/remote/rotate" && req.method === "POST") {
       if (!__isLocal) return json(res, { error: "仅限本机" }, 403);
-      const t = (0, import_crypto.randomBytes)(16).toString("hex");
+      const t = crypto.randomBytes(16).toString("hex");
       try {
-        (0, import_fs.mkdirSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data"), { recursive: true });
-        (0, import_fs.writeFileSync)((0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, rotated_at: new Date().toISOString() }));
+        fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
+        fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, rotated_at: new Date().toISOString() }));
       } catch (e) { return json(res, { error: e.message }, 500); }
       return json(res, { ok: true, token: t });
     }
     if (url.pathname === "/api/remote/tools" && req.method === "GET") {
       try {
-        const all = JSON.parse((0, import_fs.readFileSync)((0, import_path.join)(__dirname, "src", "shared", "builtin-tools.json"), "utf-8"));
+        const all = JSON.parse(fs.readFileSync(path.join(__dirname, "src", "shared", "builtin-tools.json"), "utf-8"));
         return json(res, { tools: all });
       } catch (e) { return json(res, { tools: [], error: e.message }, 500); }
     }
@@ -2062,7 +2215,7 @@ async function serveStatic(req, res) {
           } catch {}
         }
         if (!sharedDb || msgHits.length === 0) {
-          const files = (0, import_fs.readdirSync)(DATA_DIR).filter(f => f.startsWith("messages_") && f.endsWith(".json"));
+          const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith("messages_") && f.endsWith(".json"));
           const titles = new Map(sessions.map(s => [s.id, s.title]));
           const collected = [];
           for (const f of files) {
@@ -2175,7 +2328,7 @@ async function serveStatic(req, res) {
           return json(res, { ok: true });
         } catch {}
       }
-      const allFiles = (0, import_fs.readdirSync)(DATA_DIR).filter((f) => f.startsWith("messages_"));
+      const allFiles = fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("messages_"));
       for (const f of allFiles) {
         const msgs = loadJson(f);
         if (msgs.items) {
@@ -2244,11 +2397,11 @@ async function serveStatic(req, res) {
         await gitRun(dir, ["config", "user.name", "巨天agent"]);
         await gitRun(dir, ["config", "user.email", "agent@jutian.local"]);
         try {
-          const excl = (0, import_path.join)(dir, ".git", "info", "exclude");
+          const excl = path.join(dir, ".git", "info", "exclude");
           let cur = "";
-          try { cur = (0, import_fs.readFileSync)(excl, "utf-8"); } catch {}
+          try { cur = fs.readFileSync(excl, "utf-8"); } catch {}
           if (!cur.includes("node_modules/")) {
-            (0, import_fs.writeFileSync)(excl, cur + (cur.endsWith("\n") || !cur ? "" : "\n") + GIT_EXCLUDES.join("\n") + "\n", "utf-8");
+            fs.writeFileSync(excl, cur + (cur.endsWith("\n") || !cur ? "" : "\n") + GIT_EXCLUDES.join("\n") + "\n", "utf-8");
           }
         } catch {}
       }
@@ -2262,7 +2415,7 @@ async function serveStatic(req, res) {
 
     if (url.pathname === "/api/git/status" && req.method === "GET") {
       try {
-        const dir = (0, import_path.resolve)(url.searchParams.get("dir") || "");
+        const dir = path.resolve(url.searchParams.get("dir") || "");
         if (!dir || !ok(dir)) return json(res, { success: false, error: "路径不允许" }, 403);
         let isRepo = true;
         try { await gitRun(dir, ["rev-parse", "--is-inside-work-tree"]); } catch { isRepo = false; }
@@ -2279,9 +2432,9 @@ async function serveStatic(req, res) {
     if (url.pathname === "/api/git/checkpoint" && req.method === "POST") {
       try {
         const { dir, label } = await body(req);
-        const d = (0, import_path.resolve)(dir || "");
+        const d = path.resolve(dir || "");
         if (!d || !ok(d)) return json(res, { success: false, error: "路径不允许" }, 403);
-        const st = (0, import_fs.statSync)(d);
+        const st = fs.statSync(d);
         if (!st.isDirectory()) return json(res, { success: false, error: "不是目录" }, 400);
         await gitEnsureRepo(d);
         const { stdout: stOut } = await gitRun(d, ["status", "--porcelain"]);
@@ -2302,7 +2455,7 @@ async function serveStatic(req, res) {
     if (url.pathname === "/api/git/undo" && req.method === "POST") {
       try {
         const { dir, hash } = await body(req);
-        const d = (0, import_path.resolve)(dir || "");
+        const d = path.resolve(dir || "");
         if (!d || !ok(d)) return json(res, { success: false, error: "路径不允许" }, 403);
         if (!hash || !/^[0-9a-f]{4,40}$/i.test(hash)) return json(res, { success: false, error: "无效的检查点" }, 400);
         // 先为当前未提交状态留一个保底检查点，撤销本身也可被再次撤销
@@ -2321,7 +2474,7 @@ async function serveStatic(req, res) {
 
     if (url.pathname === "/api/git/log" && req.method === "GET") {
       try {
-        const dir = (0, import_path.resolve)(url.searchParams.get("dir") || "");
+        const dir = path.resolve(url.searchParams.get("dir") || "");
         const limit = Math.min(Number(url.searchParams.get("limit") || 20) || 20, 100);
         if (!dir || !ok(dir)) return json(res, { success: false, error: "路径不允许" }, 403);
         let stdout = "";
@@ -2334,7 +2487,7 @@ async function serveStatic(req, res) {
 
     if (url.pathname === "/api/git/diff" && req.method === "GET") {
       try {
-        const dir = (0, import_path.resolve)(url.searchParams.get("dir") || "");
+        const dir = path.resolve(url.searchParams.get("dir") || "");
         if (!dir || !ok(dir)) return json(res, { success: false, error: "路径不允许" }, 403);
         const { stdout } = await gitRun(dir, ["diff", "HEAD", "--stat"]).catch(() => ({ stdout: "" }));
         let text = "";
@@ -2346,85 +2499,85 @@ async function serveStatic(req, res) {
     // --- /api/code/* 端点 ---
     if (url.pathname === "/api/code/read-dir" && req.method === "GET") {
       try {
-        const dirPath = (0, import_path.resolve)(url.searchParams.get("path") || process.env.HOME);
+        const dirPath = path.resolve(url.searchParams.get("path") || process.env.HOME);
         if (!ok(dirPath)) return json(res, { success: false, error: "路径不允许" }, 403);
-        const entries = (0, import_fs.readdirSync)(dirPath, { withFileTypes: true });
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
         const items = entries.filter((x) => !x.name.startsWith(".") || url.searchParams.get("showHidden") === "1")
-          .map((x) => ({ name: x.name, path: (0, import_path.join)(dirPath, x.name), type: x.isDirectory() ? "directory" : "file", children: x.isDirectory() ? [] : undefined }));
+          .map((x) => ({ name: x.name, path: path.join(dirPath, x.name), type: x.isDirectory() ? "directory" : "file", children: x.isDirectory() ? [] : undefined }));
         return json(res, items);
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/read-file" && req.method === "GET") {
       try {
-        const fp = (0, import_path.resolve)(url.searchParams.get("path") || "");
+        const fp = path.resolve(url.searchParams.get("path") || "");
         if (!ok(fp)) return json(res, { success: false, error: "路径不允许" }, 403);
-        const content = (0, import_fs.readFileSync)(fp, "utf-8");
+        const content = fs.readFileSync(fp, "utf-8");
         return json(res, { success: true, content });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/write-file" && req.method === "POST") {
       try {
         const { path: fp, content } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        (0, import_fs.mkdirSync)((0, import_path.dirname)(resolved), { recursive: true });
-        (0, import_fs.writeFileSync)(resolved, content || "", "utf-8");
+        fs.mkdirSync(path.dirname(resolved), { recursive: true });
+        fs.writeFileSync(resolved, content || "", "utf-8");
         return json(res, { success: true, path: resolved });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/create-file" && req.method === "POST") {
       try {
         const { path: fp, content, overwrite } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        if ((0, import_fs.existsSync)(resolved) && !overwrite) return json(res, { success: false, error: "文件已存在" }, 409);
-        (0, import_fs.mkdirSync)((0, import_path.dirname)(resolved), { recursive: true });
-        (0, import_fs.writeFileSync)(resolved, content || "", "utf-8");
+        if (fs.existsSync(resolved) && !overwrite) return json(res, { success: false, error: "文件已存在" }, 409);
+        fs.mkdirSync(path.dirname(resolved), { recursive: true });
+        fs.writeFileSync(resolved, content || "", "utf-8");
         return json(res, { success: true, path: resolved });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/create-folder" && req.method === "POST") {
       try {
         const { dirPath } = await body(req);
-        const resolved = (0, import_path.resolve)(dirPath);
+        const resolved = path.resolve(dirPath);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        (0, import_fs.mkdirSync)(resolved, { recursive: true });
+        fs.mkdirSync(resolved, { recursive: true });
         return json(res, { success: true });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/rename" && req.method === "POST") {
       try {
         const { path: fp, newName } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        const newPath = (0, import_path.join)((0, import_path.dirname)(resolved), newName);
-        (0, import_fs.renameSync)(resolved, newPath);
+        const newPath = path.join(path.dirname(resolved), newName);
+        fs.renameSync(resolved, newPath);
         return json(res, { success: true });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/file" && req.method === "DELETE") {
       try {
         const { path: fp } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        (0, import_fs.rmSync)(resolved, { recursive: true, force: true });
+        fs.rmSync(resolved, { recursive: true, force: true });
         return json(res, { success: true });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/move" && req.method === "POST") {
       try {
         const { src, dest } = await body(req);
-        const rSrc = (0, import_path.resolve)(src), rDest = (0, import_path.resolve)(dest);
+        const rSrc = path.resolve(src), rDest = path.resolve(dest);
         if (!ok(rSrc) || !ok(rDest)) return json(res, { success: false, error: "路径不允许" }, 403);
-        (0, import_fs.mkdirSync)((0, import_path.dirname)(rDest), { recursive: true });
-        (0, import_fs.renameSync)(rSrc, rDest);
+        fs.mkdirSync(path.dirname(rDest), { recursive: true });
+        fs.renameSync(rSrc, rDest);
         return json(res, { success: true });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
     if (url.pathname === "/api/code/search" && req.method === "POST") {
       try {
         const { query, dir } = await body(req);
-        const target = (0, import_path.resolve)(dir || process.env.HOME);
+        const target = path.resolve(dir || process.env.HOME);
         if (!ok(target)) return json(res, { success: false, error: "路径不允许" }, 403);
         const excludeDirs = ["node_modules", ".git", "dist", "build", "__pycache__", ".next", "target"].map((d) => `-path '*/${d}' -prune -o`).join(" ");
         const r = await execAsync("zsh", ["-c", `find ${JSON.stringify(target)} ${excludeDirs} -type f -print0 | xargs -0 grep -Il ${JSON.stringify(query)} | head -50`], { timeout: 15e3, maxBuffer: MAX_OUT });
@@ -2468,9 +2621,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/code/ensure-dir" && req.method === "POST") {
       try {
         const { path: fp } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
-        (0, import_fs.mkdirSync)(resolved, { recursive: true });
+        fs.mkdirSync(resolved, { recursive: true });
         return json(res, { success: true, path: resolved, exists: true });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
@@ -2489,7 +2642,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/code/run" && req.method === "POST") {
       try {
         const { command, cwd } = await body(req);
-        const child = (0, import_child_process.exec)(command || "echo ready", { cwd: cwd || process.env.HOME, maxBuffer: 2 * 1024 * 1024 });
+        const child = cp.exec(command || "echo ready", { cwd: cwd || process.env.HOME, maxBuffer: 2 * 1024 * 1024 });
         const runId = "run_" + Date.now();
         let output = "";
         child.stdout?.on("data", (d) => { output += d.toString(); });
@@ -2553,18 +2706,18 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const walk = (dir, depth) => {
           if (depth > 8) return;
           let entries;
-          try { entries = (0, import_fs.readdirSync)(dir, { withFileTypes: true }); } catch { return }
+          try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return }
           for (const ent of entries) {
             if (ent.name.startsWith(".") && ent.name !== ".env") continue;
-            const p = (0, import_path.join)(dir, ent.name);
+            const p = path.join(dir, ent.name);
             if (ent.isDirectory()) { if (!skip.has(ent.name)) walk(p, depth + 1); continue }
             const ext = ent.name.split(".").pop()?.toLowerCase() || "";
             const lang = extLang[ext];
             if (!lang) continue;
             try {
-              const st = (0, import_fs.statSync)(p);
+              const st = fs.statSync(p);
               if (st.size > 2 * 1024 * 1024) continue;
-              const content = (0, import_fs.readFileSync)(p, "utf8");
+              const content = fs.readFileSync(p, "utf8");
               const n = content.split("\n").length;
               files++; lines += n; bytes += st.size;
               const cur = byLang.get(lang) || { files: 0, lines: 0 };
@@ -2588,10 +2741,10 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         if (!boundary) {
           const ext = contentType.includes("video/mp4") ? ".mp4" : contentType.includes("image/") ? ".jpg" : ".bin";
           const filename = "bg_upload" + ext;
-          const publicPath = (0, import_path.join)(__dirname, "public", filename);
-          const distPath = (0, import_path.join)(DIST, filename);
-          (0, import_fs.writeFileSync)(publicPath, buf);
-          (0, import_fs.writeFileSync)(distPath, buf);
+          const publicPath = path.join(__dirname, "public", filename);
+          const distPath = path.join(DIST, filename);
+          fs.writeFileSync(publicPath, buf);
+          fs.writeFileSync(distPath, buf);
           return json(res, { success: true, url: "/" + filename });
         }
         const str = buf.toString();
@@ -2608,12 +2761,12 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
             const ext = fnMatch[1].includes(".mp4") ? ".mp4" : fnMatch[1].includes(".mov") ? ".mov" : fnMatch[1].includes(".webm") ? ".webm" : ".jpg";
             const filename = "bg_upload" + ext;
             const data = buf.slice(buf.indexOf("\r\n\r\n", buf.indexOf(header)) + 4, buf.lastIndexOf("--" + boundary) - 2);
-            const publicPath = (0, import_path.join)(__dirname, "public", filename);
-            const distPath = (0, import_path.join)(DIST, filename);
-            (0, import_fs.mkdirSync)((0, import_path.dirname)(publicPath), { recursive: true });
-            (0, import_fs.mkdirSync)((0, import_path.dirname)(distPath), { recursive: true });
-            (0, import_fs.writeFileSync)(publicPath, data);
-            (0, import_fs.writeFileSync)(distPath, data);
+            const publicPath = path.join(__dirname, "public", filename);
+            const distPath = path.join(DIST, filename);
+            fs.mkdirSync(path.dirname(publicPath), { recursive: true });
+            fs.mkdirSync(path.dirname(distPath), { recursive: true });
+            fs.writeFileSync(publicPath, data);
+            fs.writeFileSync(distPath, data);
             return json(res, { success: true, url: "/" + filename });
           }
         }
@@ -2632,7 +2785,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/trash-file" && req.method === "POST") {
       try {
         const { path: fp } = await body(req);
-        const resolved = (0, import_path.resolve)(fp);
+        const resolved = path.resolve(fp);
         if (!ok(resolved)) return json(res, { success: false, error: "路径不允许" }, 403);
         await execAsync("osascript", ["-e", `tell app "Finder" to delete POSIX file ${JSON.stringify(resolved)}`], { timeout: 5e3 });
         return json(res, { success: true });
@@ -2701,13 +2854,13 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           break;
         }
         if (!audioData || audioData.length === 0) return json(res, { success: false, error: "缺少音频数据" }, 400);
-        const tmpDir = (0, import_path.join)((0, import_os.homedir)(), ".lyclaw", "stt-tmp");
-        (0, import_fs.mkdirSync)(tmpDir, { recursive: true });
-        const wavPath = (0, import_path.join)(tmpDir, `rec_${Date.now()}.wav`);
-        (0, import_fs.writeFileSync)(wavPath, audioData);
+        const tmpDir = path.join(os.homedir(), ".lyclaw", "stt-tmp");
+        fs.mkdirSync(tmpDir, { recursive: true });
+        const wavPath = path.join(tmpDir, `rec_${Date.now()}.wav`);
+        fs.writeFileSync(wavPath, audioData);
         const pyBin = process.env.PYTHON_BIN || "python3";
         // stt.py 位于 asar 外（Resources/stt），Python 无法读取 asar 内文件
-        const sttScript = process.env.STT_SCRIPT || (0, import_path.join)(__dirname, "src", "shared", "stt.py");
+        const sttScript = process.env.STT_SCRIPT || path.join(__dirname, "src", "shared", "stt.py");
         try {
           // 优先走常驻 worker（免冷启动）；worker 不可用时回退一次性进程
           let text
@@ -2720,34 +2873,34 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         } catch (e) {
           return json(res, { success: false, error: `语音识别失败: ${e.stderr || e.message}` }, 500)
         } finally {
-          try { (0, import_fs.unlinkSync)(wavPath) } catch {}
+          try { fs.unlinkSync(wavPath) } catch {}
         }
       } catch (e) {
         return json(res, { success: false, error: e.message }, 500);
       }
     }
     // ─── jtcode 命令行工具：状态 / 安装 / 卸载 ───
-    var CLI_CANDIDATES = ["/usr/local/bin/jtcode", "/opt/homebrew/bin/jtcode", (0, import_path.join)(process.env.HOME || "", ".local", "bin", "jtcode")];
+    var CLI_CANDIDATES = ["/usr/local/bin/jtcode", "/opt/homebrew/bin/jtcode", path.join(process.env.HOME || "", ".local", "bin", "jtcode")];
     if (url.pathname === "/api/cli/status" && req.method === "GET") {
       for (const p of CLI_CANDIDATES) {
-        try { if ((0, import_fs.existsSync)(p)) return json(res, { installed: true, path: p, version: "1.0.0" }); } catch {}
+        try { if (fs.existsSync(p)) return json(res, { installed: true, path: p, version: "1.0.0" }); } catch {}
       }
       return json(res, { installed: false });
     }
     if (url.pathname === "/api/cli/install" && req.method === "POST") {
       try {
-        const src = (0, import_path.join)(__dirname, "src", "shared", "jtcode-cli.mjs");
-        if (!(0, import_fs.existsSync)(src)) return json(res, { success: false, error: "CLI 脚本缺失" }, 500);
-        const script = (0, import_fs.readFileSync)(src, "utf-8").replace("__APP_VERSION__", PKG.version);
-        const targets = ["/usr/local/bin/jtcode", (0, import_path.join)(process.env.HOME || "", ".local", "bin", "jtcode")];
+        const src = path.join(__dirname, "src", "shared", "jtcode-cli.mjs");
+        if (!fs.existsSync(src)) return json(res, { success: false, error: "CLI 脚本缺失" }, 500);
+        const script = fs.readFileSync(src, "utf-8").replace("__APP_VERSION__", PKG.version);
+        const targets = ["/usr/local/bin/jtcode", path.join(process.env.HOME || "", ".local", "bin", "jtcode")];
         let lastErr = "";
         for (const p of targets) {
           try {
-            (0, import_fs.mkdirSync)((0, import_path.dirname)(p), { recursive: true });
-            (0, import_fs.writeFileSync)(p, script, { mode: 0o755 });
-            (0, import_fs.chmodSync)(p, 0o755);
-            const needsPath = p.includes(".local/bin") && !(process.env.PATH || "").includes((0, import_path.dirname)(p));
-            return json(res, { success: true, path: p, needsPathNote: needsPath, binDir: (0, import_path.dirname)(p) });
+            fs.mkdirSync(path.dirname(p), { recursive: true });
+            fs.writeFileSync(p, script, { mode: 0o755 });
+            fs.chmodSync(p, 0o755);
+            const needsPath = p.includes(".local/bin") && !(process.env.PATH || "").includes(path.dirname(p));
+            return json(res, { success: true, path: p, needsPathNote: needsPath, binDir: path.dirname(p) });
           } catch (e) { lastErr = e.message; }
         }
         return json(res, { success: false, error: "写入失败: " + lastErr }, 500);
@@ -2757,7 +2910,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
       try {
         let removed = 0;
         for (const p of CLI_CANDIDATES) {
-          try { if ((0, import_fs.existsSync)(p)) { (0, import_fs.unlinkSync)(p); removed++; } } catch {}
+          try { if (fs.existsSync(p)) { fs.unlinkSync(p); removed++; } } catch {}
         }
         return json(res, { success: true, removed });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
@@ -2788,12 +2941,11 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         }
         if (!r || !r.ok) return json(res, { error: "TTS 服务异常" }, 502);
         const audioBuf = Buffer.from(await r.arrayBuffer());
-        res.writeHead(200, { "Content-Type": "audio/mpeg", "Access-Control-Allow-Origin": "*" });
+        res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg" });
         res.end(audioBuf);
         return;
       } catch (e) { return json(res, { error: e.message }, 502); }
     }
-
 
     // ─── 全会话内容搜索（企业级：跨会话找消息）───
     if (url.pathname === "/api/search" && req.method === "GET") {
@@ -3009,13 +3161,13 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
 
 // ─── 定时任务执行器（每 30s 检查一次，到点真实执行）───
 // ─── 服务端通知桥（v7.0）：notices.json 供渲染层合并进通知中心 ───
-const NOTICE_FILE = () => (0, import_path.join)((0, import_os.homedir)(), ".laoyou-agent", "data", "notices.json");
+const NOTICE_FILE = () => path.join(os.homedir(), ".laoyou-agent", "data", "notices.json");
 function pushServerNotice(n) {
   try {
     let list = [];
-    try { list = JSON.parse((0, import_fs.readFileSync)(NOTICE_FILE(), "utf-8")); if (!Array.isArray(list)) list = []; } catch {}
+    try { list = JSON.parse(fs.readFileSync(NOTICE_FILE(), "utf-8")); if (!Array.isArray(list)) list = []; } catch {}
     list.unshift({ id: "n_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts: Date.now(), read: false, ...n });
-    (0, import_fs.writeFileSync)(NOTICE_FILE(), JSON.stringify(list.slice(0, 50)));
+    fs.writeFileSync(NOTICE_FILE(), JSON.stringify(list.slice(0, 50)));
   } catch {}
 }
 
@@ -3109,7 +3261,7 @@ function syncKeepAwake() {
   } catch {}
   if (on && !caffeinateProc) {
     try {
-      caffeinateProc = import_child_process.spawn("caffeinate", ["-dimsu"], { stdio: "ignore" });
+      caffeinateProc = cp.spawn("caffeinate", ["-dimsu"], { stdio: "ignore" });
       caffeinateProc.on("error", () => { caffeinateProc = null; });
       caffeinateProc.on("exit", () => { caffeinateProc = null; });
       console.log("→ 合盖保持运行已开启 (caffeinate)");

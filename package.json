@@ -7,15 +7,19 @@
   "description": "巨天agent - 桌面 AI 智能体（终端 / 文件 / PPT / 代码）",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "vite build",
+    "build": "npm run build:server && vite build",
     "serve": "NODE_OPTIONS='--max-old-space-size=512' node serve.cjs",
     "start": "node scripts/run.js",
     "electron:dev": "vite build && electron .",
-    "electron:build": "npm rebuild better-sqlite3 && vite build && bash scripts/rebuild-for-electron.sh && electron-builder --mac",
-    "electron:build:win": "vite build && electron-builder --win",
+    "electron:build": "vite build && bash scripts/rebuild-for-electron.sh && EDGE_TTS_DIR=\"${EDGE_TTS_DIR:-$(node scripts/edge-tts-dir.mjs)}\" electron-builder --mac",
+    "electron:build:win": "vite build && EDGE_TTS_DIR=\"${EDGE_TTS_DIR:-$(node scripts/edge-tts-dir.mjs)}\" electron-builder --win",
     "electron:dist": "npm run electron:build",
     "patch": "node scripts/patch-update.mjs",
-    "patch:fast": "node scripts/patch-update.mjs --no-build"
+    "patch:fast": "node scripts/patch-update.mjs --no-build",
+    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs",
+    "check": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix"
   },
   "build": {
     "appId": "com.jutian.agent",
@@ -59,7 +63,7 @@
           ]
         },
         {
-          "from": "/Users/zeroneil/Desktop/项目文件夹/openai-edge-tts",
+          "from": "${env.EDGE_TTS_DIR}",
           "to": "edge-tts",
           "filter": [
             "**/*",
@@ -121,10 +125,8 @@
     "@codemirror/lint": "^6.9.7",
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.6.0",
-    "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.43.1",
     "@lezer/highlight": "^1.2.3",
-    "@mlc-ai/web-llm": "^0.2.77",
     "better-sqlite3": "^12.10.0",
     "immer": "^11.1.18",
     "marked": "^18.0.14",
@@ -149,7 +151,13 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "esbuild": "^0.21.5",
+    "eslint": "^9.17.0",
+    "@eslint/js": "^9.17.0",
+    "typescript-eslint": "^8.19.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0"
   },
   "license": "MIT"
 }

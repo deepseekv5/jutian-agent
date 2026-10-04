@@ -94,7 +94,7 @@ export function materialize(spec: SlideSpec, index: number): Slide {
       push(spec.bullets?.length ? bullets(mkBox(80, 244, 622, 400), spec.bullets, S.bullets, 'dot') : null);
       push(graphic(mkBox(748, 196, 452, 456), gKind, seed));
       break;
-    case 'twoColumn':
+    case 'twoColumn': {
       push(spec.eyebrow ? text('eyebrow', mkBox(80, 72, 500, 30), spec.eyebrow, S.eyebrow) : null);
       push(text('title', mkBox(80, 110, 1120, 78), t, S.h1));
       push(divider(mkBox(80, 202, 64, 5)));
@@ -104,7 +104,8 @@ export function materialize(spec: SlideSpec, index: number): Slide {
       push(text('subtitle', mkBox(672, 236, 520, 46), cols[1]?.title ?? '要点二', { ...S.h2, color: 'accent2' }));
       push(cols[1]?.items.length ? bullets(mkBox(672, 296, 528, 330), cols[1].items, S.bulletsSm, 'check') : null);
       break;
-    case 'compare':
+    }
+    case 'compare': {
       push(text('title', mkBox(80, 66, 1120, 76), t, { fontSize: 44, bold: true }));
       push(divider(mkBox(80, 154, 64, 5)));
       const cmpCols = spec.columns ?? [];
@@ -113,6 +114,7 @@ export function materialize(spec: SlideSpec, index: number): Slide {
       push(text('subtitle', mkBox(708, 182, 340, 44), cmpCols[1]?.title ?? '方案 B', { ...S.h2, color: 'accent2', fontSize: 24 }));
       push(cmpCols[1]?.items.length ? bullets(mkBox(680, 214, 520, 396), cmpCols[1].items, { ...S.bulletsSm, fill: 'surface', radius: 18, padding: 30 }, 'dot') : null);
       break;
+    }
     case 'stats':
       push(spec.eyebrow ? text('eyebrow', mkBox(80, 76, 500, 30), spec.eyebrow, S.eyebrow) : null);
       push(text('title', mkBox(80, 114, 900, 78), t, S.h1));
