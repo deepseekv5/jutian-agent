@@ -66,17 +66,3 @@ jutian-site/
 **响应式**：断点 900 / 760 / 620 / 560。移动端导航收起为抽屉，bento 从 6 列 → 2 列 → 1 列，
 sticky 场景卡退化为顺序阅读，视差与 3D 效果关闭。
 
-## 待替换的占位信息
-
-| 位置 | 当前值 | 说明 |
-|---|---|---|
-| `contact.html` 邮箱 | `hi@jutian.studio` | 换成真实邮箱 |
-| `contact.html` GitHub | `https://github.com` | 换成真实仓库地址 |
-| `contact.html` 表单 | 仅前端演示 | 接入后端时把 `interactions.js` 里 `setupForm` 的提交分支改为 `fetch` |
-| 下载按钮 | 均指向 `index.html#download` | 换成真实安装包地址 |
-
-## 已知取舍
-
-- 页面转场用自绘幕布而非 View Transitions API：兼容性更好，且能在转场中保持品牌色。
-- 未引入 GSAP / Lenis：本站动效全部可由原生 IO + CSS transition 完成，省掉 ~70KB 依赖与主线程调度风险。
-- 产品界面为 DOM 绘制的示意图（非截图）：清晰度不受分辨率限制，且不泄露未发布界面。
