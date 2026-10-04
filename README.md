@@ -115,10 +115,11 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 ```bash
 git clone https://github.com/deepseekv5/jutian-agent.git
 cd jutian-agent
-npm install
-npm start                  # 开发模式 → http://localhost:3211
-npm run electron:build     # 打包 macOS (dmg + zip)
+./run.sh                  # 自动装依赖 + 启动(Windows 下载后直接双击 run.bat)
+npm run electron:build    # 打包 macOS (dmg + zip)
 ```
+
+> 也可以手动执行 `npm install && npm start`。`run.sh` / `run.bat` 检测到缺依赖时会自动安装。
 
 首次使用：**设置 → 推理** 填入任意 OpenAI 兼容服务的地址、密钥与模型名。
 本软件不内置任何模型服务与密钥——你的配置只属于你。
