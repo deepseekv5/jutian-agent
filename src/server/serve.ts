@@ -17,6 +17,60 @@ import * as os from 'os'
 
 var execAsync = util.promisify(cp.execFile);
 
+// ─── 数据目录：统一在 ~/.lyclaw（2026-10 起废弃 ~/.laoyou-agent，启动时自动迁移）───
+var HOME = os.homedir();
+var LYCLAW_HOME = path.join(HOME, ".lyclaw");       // 主目录：data.db / skills / scheduled_tasks.json / skill_market.json
+var DATA_DIR = path.join(LYCLAW_HOME, "data");      // 运行时数据：remote.json / 记忆 / 截图 / MCP 配置 / 旧消息存档
+var LEGACY_HOME = path.join(HOME, ".laoyou-agent"); // 旧目录，搬空即删
+// 迁移策略与 skills 相同：旧有新无才搬（绝不覆盖新数据），全部搬空才删旧目录；
+// 任何一步失败都保留现场，下次启动重试。必须先于 MCP/DB 初始化执行。
+(() => {
+  try {
+    if (!fs.existsSync(LEGACY_HOME)) return;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    let moved = 0, failed = 0;
+    const moveOne = (from, toDir) => {
+      try {
+        if (!fs.existsSync(from)) return;
+        const dest = path.join(toDir, path.basename(from));
+        if (fs.existsSync(dest)) return;
+        fs.renameSync(from, dest);
+        moved++;
+      } catch { failed++; }
+    };
+    // data/ 下的运行时数据整体并入 ~/.lyclaw/data
+    const legacyData = path.join(LEGACY_HOME, "data");
+    if (fs.existsSync(legacyData)) {
+      for (const name of fs.readdirSync(legacyData)) moveOne(path.join(legacyData, name), DATA_DIR);
+      // 旧 remote.json 是服务端生成的配对随机数:新处已有则以新为准,旧的丢弃
+      // (重新生成即可),否则 data/ 永远搬空不了,旧目录永远删不掉
+      const legacyRemote = path.join(legacyData, "remote.json");
+      if (fs.existsSync(legacyRemote)) { try { fs.rmSync(legacyRemote); } catch {} }
+      try { fs.rmdirSync(legacyData); } catch { failed++; }
+    }
+    // 旧根下的散件,与旧布局保持一致(主目录根)
+    moveOne(path.join(LEGACY_HOME, "scheduled_tasks.json"), LYCLAW_HOME);
+    moveOne(path.join(LEGACY_HOME, "skill_market.json"), LYCLAW_HOME);
+    // skills:子目录逐个并入。绝不整目录删除——旧目录里可能有新目录缺的技能
+    // (实测就有 regex-tester);搬不动的(重名)留在原地,日志提示人工处理
+    const legacySkills = path.join(LEGACY_HOME, "skills");
+    if (fs.existsSync(legacySkills)) {
+      const newSkills = path.join(LYCLAW_HOME, "skills");
+      fs.mkdirSync(newSkills, { recursive: true });
+      for (const name of fs.readdirSync(legacySkills)) moveOne(path.join(legacySkills, name), newSkills);
+      let left = 0;
+      try { left = fs.readdirSync(legacySkills).length; } catch {}
+      if (left > 0) console.log(`[migrate] 旧 skills 有 ${left} 个重名条目未搬,保留在 ${legacySkills}`);
+    }
+    if (failed === 0) {
+      let rest: string[] = [];
+      try { rest = fs.readdirSync(LEGACY_HOME); } catch {}
+      if (rest.length === 0) fs.rmdirSync(LEGACY_HOME);
+    }
+    if (moved || failed) console.log(`[migrate] ~/.laoyou-agent → ~/.lyclaw: moved=${moved} failed=${failed}`);
+  } catch (e) { console.error("[migrate] failed:", e.message); }
+})();
+
 // ─── STT 常驻 worker：模型只加载一次，避免每次识别冷启动 python+import（提速关键）───
 var _stt = { proc: null, buf: "", queue: [], current: null };
 function _sttEnsure() {
@@ -65,7 +119,7 @@ function sttTranscribe(wavPath) {
 var PKG = (() => { try { return require("./package.json"); } catch (e) { return { version: "unknown" }; } })();
 var sharedDb = null;
 /* ─── MCP（Model Context Protocol）客户端管理器 — v5.0 学自 Zode ─── */
-var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(path.join(os.homedir(), ".laoyou-agent", "data")); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
+var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(DATA_DIR); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
 try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db.cjs load failed:", e.message); }
 var PORT = parseInt(process.env.PORT || "3211");
 var MAX_OUT = 512 * 1024;
@@ -294,11 +348,11 @@ async function screenshot(a) {
       src = sources[0];
     }
     if (!src || src.thumbnail.isEmpty()) return { success: false, error: "屏幕捕获为空，请重试" };
-    const dir = path.join(os.homedir(), ".laoyou-agent", "data", "screenshots");
+    const dir = path.join(DATA_DIR, "screenshots");
     fs.mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "shot_" + Date.now().toString(36) + ".jpg");
     fs.writeFileSync(file, src.thumbnail.toJPEG(70));
-    const token = (() => { try { return JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8")).token } catch { return "" } })();
+    const token = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, "remote.json"), "utf-8")).token } catch { return "" } })();
     const url = `/api/remote/file?path=${encodeURIComponent(file)}&t=${token}`;
     return { success: true, output: `📸 截屏完成（${src.thumbnail.getSize().width}x${src.thumbnail.getSize().height}）\n![screenshot](${url})\n文件: ${file}`, image: url, path: file };
   } catch (e) {
@@ -459,8 +513,8 @@ var SKILL_DIR = path.join(os.homedir(), ".lyclaw", "skills");
     if (!fs.existsSync(SKILL_DIR)) fs.mkdirSync(SKILL_DIR, { recursive: true });
   } catch {}
 })();
-var TASKS_FILE = path.join(os.homedir(), ".laoyou-agent", "scheduled_tasks.json");
-var MARKET_FILE = path.join(os.homedir(), ".laoyou-agent", "skill_market.json");
+var TASKS_FILE = path.join(LYCLAW_HOME, "scheduled_tasks.json");
+var MARKET_FILE = path.join(LYCLAW_HOME, "skill_market.json");
 
 // 生成标准 SKILL.md（真实技能文件）
 function writeSkillMd(skillDir, meta) {
@@ -610,7 +664,7 @@ async function install_skill(a) {
   }
 }
 // --- 长期记忆工具 (供 AI 调用) ---
-const MEM_DIR = path.join(os.homedir(), ".laoyou-agent", "data");
+const MEM_DIR = DATA_DIR;
 (() => { try { fs.mkdirSync(MEM_DIR, { recursive: true }); } catch {} })();
 function memFile() { return path.join(MEM_DIR, "memories.json"); }
 function loadMem() {
@@ -665,7 +719,7 @@ async function delete_memory(args) {
 (() => {
   if (!sharedDb) return;
   try {
-    const dataDir = path.join(os.homedir(), ".laoyou-agent", "data");
+    const dataDir = DATA_DIR;
     const readJson = (name) => {
       const fp = path.join(dataDir, name);
       try { return fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, "utf-8")) : {}; } catch { return {}; }
@@ -1405,13 +1459,13 @@ http.createServer(async (req, res) => {
   if (!__isLocal) {
     const __token = (() => {
       try {
-        const o = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
+        const o = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "remote.json"), "utf-8"));
         if (o && o.token) return String(o.token);
       } catch {}
       const t = crypto.randomBytes(16).toString("hex");
       try {
-        fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
-        fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, created_at: new Date().toISOString() }));
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(DATA_DIR, "remote.json"), JSON.stringify({ token: t, created_at: new Date().toISOString() }));
       } catch {}
       return t;
     })();
@@ -1657,7 +1711,7 @@ http.createServer(async (req, res) => {
         // 手机远程(v5.5)：请求未带密钥时,回退到本机存储的设置(密钥不出电脑)
         if (!targetBase || !apiKey) {
           try {
-            const __st = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "settings.json"), "utf-8"));
+            const __st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8"));
             if (!targetBase && __st.apiBaseUrl) targetBase = String(__st.apiBaseUrl);
             if (!apiKey && __st.apiKey) apiKey = String(__st.apiKey);
           } catch {}
@@ -2019,7 +2073,7 @@ http.createServer(async (req, res) => {
     }
 
     // === 新添加: 数据持久化 API (settings/sessions/messages/memories) ===
-    const DATA_DIR = path.join(os.homedir(), ".laoyou-agent", "data");
+    // 数据目录统一用模块级 DATA_DIR(~/.lyclaw/data),不再局部重声明
     (() => { try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {} })();
     /** 取关键词周围的一段摘要（世界级搜索的上下文预览） */
     function snippetAround(text, q) {
@@ -2107,7 +2161,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/remote/file" && req.method === "GET") {
       try {
         const fp = decodeURIComponent(url.searchParams.get("path") || "");
-        const dir = path.join(os.homedir(), ".laoyou-agent", "data", "screenshots");
+        const dir = path.join(DATA_DIR, "screenshots");
         if (!fp.startsWith(dir)) return json(res, { error: "路径不允许" }, 403);
         const data = fs.readFileSync(fp);
         res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-cache" });
@@ -2160,13 +2214,13 @@ http.createServer(async (req, res) => {
       if (!__isLocal) return json(res, { error: "仅限本机" }, 403);
       const __token = (() => {
         try {
-          const o = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), "utf-8"));
+          const o = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "remote.json"), "utf-8"));
           if (o && o.token) return String(o.token);
         } catch {}
         const t = crypto.randomBytes(16).toString("hex");
         try {
-          fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
-          fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t }));
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+          fs.writeFileSync(path.join(DATA_DIR, "remote.json"), JSON.stringify({ token: t }));
         } catch {}
         return t;
       })();
@@ -2182,8 +2236,8 @@ http.createServer(async (req, res) => {
       if (!__isLocal) return json(res, { error: "仅限本机" }, 403);
       const t = crypto.randomBytes(16).toString("hex");
       try {
-        fs.mkdirSync(path.join(os.homedir(), ".laoyou-agent", "data"), { recursive: true });
-        fs.writeFileSync(path.join(os.homedir(), ".laoyou-agent", "data", "remote.json"), JSON.stringify({ token: t, rotated_at: new Date().toISOString() }));
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(DATA_DIR, "remote.json"), JSON.stringify({ token: t, rotated_at: new Date().toISOString() }));
       } catch (e) { return json(res, { error: e.message }, 500); }
       return json(res, { ok: true, token: t });
     }
@@ -3187,7 +3241,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
 
 // ─── 定时任务执行器（每 30s 检查一次，到点真实执行）───
 // ─── 服务端通知桥（v7.0）：notices.json 供渲染层合并进通知中心 ───
-const NOTICE_FILE = () => path.join(os.homedir(), ".laoyou-agent", "data", "notices.json");
+const NOTICE_FILE = () => path.join(DATA_DIR, "notices.json");
 function pushServerNotice(n) {
   try {
     let list = [];

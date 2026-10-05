@@ -6,7 +6,7 @@
  * - initialize 握手 → tools/list（缓存）→ tools/call
  * - 进程异常退出后，下次调用自动重启；请求带超时，不悬挂主流程
  *
- * 配置持久化：~/.laoyou-agent/data/mcp.json
+ * 配置持久化：~/.lyclaw/data/mcp.json（2026-10 起废弃 ~/.laoyou-agent，serve 启动时自动迁移）
  *   [{ id, name, command, args, env, enabled }]
  * 工具命名约定：mcp__<serverName>__<toolName>（与主流实现一致）
  */
@@ -15,7 +15,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 
-let DATA_DIR = path.join(require('os').homedir(), '.laoyou-agent', 'data')
+let DATA_DIR = path.join(require('os').homedir(), '.lyclaw', 'data')
 const CFG_FILE = () => path.join(DATA_DIR, 'mcp.json')
 const PROTOCOL = '2024-11-05'
 const REQ_TIMEOUT = 20000
