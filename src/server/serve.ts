@@ -126,8 +126,14 @@ var corsHeaders = (req) => {
   }
   return h;
 };
-// 敏感字段：即便请求方可信，GET 回包也不应明文下发密钥
+// 敏感字段：即便请求方可信，GET 回包也不应明文下发密钥。
+// 用「包含」而非全等匹配：qq_secret / baiduApiKey 这类前缀复合键也要命中，
+// 全等匹配会让它们绕过掩码直接明文出网。
 var SECRET_KEYS = ["apikey", "token", "secret", "password"];
+var isSecretKey = (k) => {
+  var kl = String(k).toLowerCase();
+  return SECRET_KEYS.some((s) => kl.indexOf(s) >= 0);
+};
 var maskSecrets = (obj) => {
   if (!obj || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(maskSecrets);
@@ -135,7 +141,7 @@ var maskSecrets = (obj) => {
   for (var k in obj) {
     if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
     var v = obj[k];
-    if (SECRET_KEYS.indexOf(String(k).toLowerCase()) >= 0 && typeof v === "string" && v) {
+    if (isSecretKey(k) && typeof v === "string" && v) {
       out[k] = v.length > 8 ? `${v.slice(0, 4)}****${v.slice(-4)}` : "****";
     } else out[k] = typeof v === "object" && v !== null ? maskSecrets(v) : v;
   }

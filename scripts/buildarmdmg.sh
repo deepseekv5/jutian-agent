@@ -9,6 +9,14 @@ echo ""
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_DIR"
 
+# edge-tts 语音服务源码目录（package.json 的 extraResources 通过 ${env.EDGE_TTS_DIR} 读取）
+# 默认指向本机已知路径；换机器构建时用 EDGE_TTS_DIR=... 覆盖即可。
+export EDGE_TTS_DIR="${EDGE_TTS_DIR:-$HOME/Desktop/项目文件夹/openai-edge-tts}"
+if [ ! -d "$EDGE_TTS_DIR" ]; then
+  echo "警告: 未找到 edge-tts 源码目录 ($EDGE_TTS_DIR)，打包后语音功能将不可用。"
+  echo "      如需打包语音功能，请设置 EDGE_TTS_DIR 环境变量指向该目录。"
+fi
+
 # 1. 清理旧产物
 echo "[1/5] 清理旧的构建产物..."
 rm -rf dist release
