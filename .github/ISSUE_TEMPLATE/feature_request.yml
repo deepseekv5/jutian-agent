@@ -1,0 +1,22 @@
+name: 功能建议
+description: 提出一个让巨天agent更好的想法
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 场景与痛点
+      description: 你想完成什么,现在卡在哪。讲场景,别只讲方案。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的形态
+      description: 你心目中的交互/结果。有参考产品更好。
+  - type: checkboxes
+    id: constraint
+    attributes:
+      label: 原则确认
+      options:
+        - label: 这个功能可以做到「本地优先」,不强制上云

@@ -103,7 +103,7 @@ export default function BrowserOverlay({ initialUrl, onClose }: Props) {
 
       {/* Webview */}
       <div className="flex-1 relative" style={{ background: '#ffffff' }}>
-        {/* @ts-ignore */}
+        {/* webview 无官方类型定义,按 any 处理 */}
         <webview ref={webviewRef} src={url} className="w-full h-full" style={{ border: 'none' }} />
       </div>
     </div>

@@ -26,6 +26,12 @@ __pycache__/
 *.tsbuildinfo
 vite.config.ts.timestamp-*.mjs
 
+# 本地工具与私人目录(不入库:宣传片工程/工具日志/遗留备份)
+tools/
+.workbuddy-ai/
+archive/
+*.bak
+
 # 网站构建
 pages/node_modules/
 

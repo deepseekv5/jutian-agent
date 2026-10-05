@@ -6,6 +6,7 @@
 
 一句话，它把活干完。
 
+[![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/v7.0.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Platform](https://img.shields.io/badge/macOS%20·%20Windows-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Tools](https://img.shields.io/badge/tools--38-10a37f?style=for-the-badge&labelColor=0a0a0b)](docs/)
@@ -221,7 +222,7 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 
 ## ✦ 贡献
 
-欢迎 Issue 与 PR。提交前请阅读 [COPYRIGHT.md](./COPYRIGHT.md) 中的第三方组件说明。
+欢迎 Issue 与 PR:贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md),安全漏洞走 [SECURITY.md](./SECURITY.md) 的私密渠道,更新历史见 [CHANGELOG.md](./CHANGELOG.md)。提交前请阅读 [COPYRIGHT.md](./COPYRIGHT.md) 中的第三方组件说明。
 
 <br>
 

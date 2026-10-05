@@ -489,7 +489,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
     // 会话切换时先把未保存的旧草稿写回旧会话，再载入新会话草稿
     if (prevSessionRef.current !== undefined && prevSessionRef.current !== sessionId) {
       const oldKey = `lyclaw_draft_${prevSessionRef.current}`
-      try { valueRef.current ? localStorage.setItem(oldKey, valueRef.current) : localStorage.removeItem(oldKey) } catch { /* ignore */ }
+      try { if (valueRef.current) { localStorage.setItem(oldKey, valueRef.current) } else { localStorage.removeItem(oldKey) } } catch { /* ignore */ }
     }
     prevSessionRef.current = sessionId
     if (!sessionId) return
@@ -498,7 +498,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   useEffect(() => {
     if (!sessionId) return
     const key = `lyclaw_draft_${sessionId}`
-    const t = setTimeout(() => { try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key) } catch { /* ignore */ } }, 400)
+    const t = setTimeout(() => { try { if (value) { localStorage.setItem(key, value) } else { localStorage.removeItem(key) } } catch { /* ignore */ } }, 400)
     return () => clearTimeout(t)
   }, [value, sessionId])
 

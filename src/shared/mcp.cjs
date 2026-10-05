@@ -13,7 +13,7 @@
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
+const nodeCrypto = require('crypto')
 
 let DATA_DIR = path.join(require('os').homedir(), '.lyclaw', 'data')
 const CFG_FILE = () => path.join(DATA_DIR, 'mcp.json')
@@ -183,7 +183,7 @@ class McpClient {
   }
 
   kill() {
-    try { this.proc && this.proc.kill() } catch (e) {}
+    try { if (this.proc) { this.proc.kill() } } catch (e) {}
     this.proc = null
     this.ready = false
   }
@@ -251,7 +251,7 @@ function upsertServer(input) {
     if (i >= 0) { list[i] = { ...list[i], ...input, name }; saveConfig(list); return list[i] }
   }
   const srv = {
-    id: 'mcp_' + crypto.randomBytes(4).toString('hex'),
+    id: 'mcp_' + nodeCrypto.randomBytes(4).toString('hex'),
     name, command: String(input.command || '').trim(),
     args: Array.isArray(input.args) ? input.args : String(input.args || '').split(/\s+/).filter(Boolean),
     env: input.env || {}, enabled: input.enabled !== false,

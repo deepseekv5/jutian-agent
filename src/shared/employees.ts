@@ -30,7 +30,6 @@ export interface Group {
   createdAt?: number
 }
 
-const EMPTY = ''
 /* 内置团队 */
 const builtinTeam: Employee[] = [
   {

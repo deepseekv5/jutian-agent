@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: ESLint(零 error)
+        run: npm run lint
+
+      - name: 构建后端(serve.cjs)
+        run: npm run build:server
+
+      - name: 构建前端(dist/)
+        run: npx vite build
+
+      - name: 上传构建产物(供排查,3 天)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 3
+          if-no-files-found: error

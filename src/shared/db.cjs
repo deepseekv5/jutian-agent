@@ -9,7 +9,7 @@ const Database = require('better-sqlite3')
 const { join } = require('path')
 const { homedir } = require('os')
 const { mkdirSync, existsSync } = require('fs')
-const crypto = require('crypto')
+const nodeCrypto = require('crypto')
 
 const DB_DIR = join(homedir(), '.lyclaw')
 const DB_PATH = join(DB_DIR, 'data.db')
@@ -116,7 +116,7 @@ try {
 }
 
 function genId() {
-  return crypto.randomUUID()
+  return nodeCrypto.randomUUID()
 }
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)

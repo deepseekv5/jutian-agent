@@ -316,7 +316,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
               </div>
               <div className="text-[11px] truncate mt-0.5 flex items-center gap-1" style={{ color: c.textMuted }}>
                 {e.links?.length ? <span style={{ color: '#0f766e' }}>⤳ {e.links.length}</span> : null}
-                <span className="truncate">{e.content.replace(/[#*>`\[\]]/g, '').replace(/\s+/g, ' ').slice(0, 30) || '空白笔记'}</span>
+                <span className="truncate">{e.content.replace(/[#*>`[\]]/g, '').replace(/\s+/g, ' ').slice(0, 30) || '空白笔记'}</span>
               </div>
             </button>
           ))}
@@ -344,7 +344,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
                   h1{font-size:26px} h2{font-size:19px;margin:1.4em 0 .5em} pre{background:#f5f5f7;padding:12px;border-radius:8px;overflow:auto;font-size:12px}
                   code{background:#f5f5f7;padding:1px 5px;border-radius:4px;font-size:13px} blockquote{border-left:3px solid #ddd;margin:0;padding-left:14px;color:#555}
                   @media print { body{margin:0} }
-                </style></head><body><h1>${title || '未命名'}</h1><div id="b"></div><script>window.onload=()=>{}<\/script></body></html>`)
+                </style></head><body><h1>${title || '未命名'}</h1><div id="b"></div><script>window.onload=()=>{}</script></body></html>`)
                 w.document.close()
                 // 简易 Markdown → HTML（标题/加粗/代码/引用/列表/段落）
                 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

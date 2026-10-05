@@ -13,7 +13,6 @@
  *   jtcode --help             帮助
  */
 import readline from 'node:readline'
-import process from 'node:process'
 
 const VERSION = '__APP_VERSION__'  // 安装时由 serve.cjs 注入真实版本(单一来源 package.json)
 const C = {

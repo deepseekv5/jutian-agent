@@ -200,7 +200,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
 
         {/* 前导状态指示 */}
         {manageMode ? (
-          <button onClick={e => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(session.id) ? n.delete(session.id) : n.add(session.id); return n }) }}
+          <button onClick={e => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); if (n.has(session.id)) { n.delete(session.id) } else { n.add(session.id) } return n }) }}
             className="w-3.5 h-3.5 shrink-0 rounded border flex items-center justify-center transition-colors"
             style={{ borderColor: selectedIds.has(session.id) ? c.accent : c.border, background: selectedIds.has(session.id) ? c.accent : 'transparent' }}>
             {selectedIds.has(session.id) && (

@@ -1619,7 +1619,7 @@ http.createServer(async (req, res) => {
       return json(res, r);
     }
     // --- 定时任务 API ---
-    const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^\/]+))?$/);
+    const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^/]+))?$/);
     if (tasksMatch) {
       const taskId = tasksMatch[1];
       if (!taskId) {
@@ -2352,7 +2352,7 @@ http.createServer(async (req, res) => {
     }
 
     // GET/POST /api/sessions/:id/messages
-    const msgMatch = url.pathname.match(/^\/api\/sessions\/([^\/]+)\/messages$/);
+    const msgMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
     if (msgMatch) {
       const sid = msgMatch[1];
       if (req.method === "GET") {
@@ -2375,7 +2375,7 @@ http.createServer(async (req, res) => {
       }
     }
     // DELETE /api/sessions/:sid/messages/after/:msgId
-    const afterMatch = url.pathname.match(/^\/api\/sessions\/([^\/]+)\/messages\/after\/([^\/]+)$/);
+    const afterMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages\/after\/([^/]+)$/);
     if (afterMatch && req.method === "DELETE") {
       const [, sid, msgId] = afterMatch;
       if (sharedDb) {
@@ -2394,7 +2394,7 @@ http.createServer(async (req, res) => {
       return json(res, { ok: true });
     }
     // PUT /api/messages/:id
-    const msgSingleMatch = url.pathname.match(/^\/api\/messages\/([^\/]+)$/);
+    const msgSingleMatch = url.pathname.match(/^\/api\/messages\/([^/]+)$/);
     if (msgSingleMatch && req.method === "PUT") {
       const msgId = msgSingleMatch[1];
       const patch = await body(req);

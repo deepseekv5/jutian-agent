@@ -352,7 +352,7 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
       if (messages.length === 0) { pushLocalMsg('没有可导出的对话。'); return true }
       const md = [
         `# ${projectName} — Code 对话记录`,
-        `> 导出时间：${new Date().toLocaleString()}　模型：${settings.model || 'default'}`,
+        `> 导出时间：${new Date().toLocaleString()}\u3000模型：${settings.model || 'default'}`,
         '',
         ...messages.map(m => m.role === 'user'
           ? `## ❯ 用户\n\n${m.content.split('\n--- 附加文件 ---\n')[0]}\n`
@@ -672,8 +672,8 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
         <div ref={bottomRef} />
       </div>
 
-      {/* 附件 + 思考等级工具栏 */}
-      {(attachedFiles.length > 0 || true) && (
+      {/* 附件 + 思考等级工具栏(常驻,附件区按需显示) */}
+      {(
         <div className="px-3 py-1.5 flex items-center gap-2 border-t" style={{ borderColor }}>
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1">

@@ -1,0 +1,40 @@
+name: 缺陷报告
+description: 报告一个可复现的问题
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 期望行为 vs 实际行为。涉及安全(密钥/远程访问)的问题请改用 Security 标签页私密报告。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开…
+        2. 点击…
+        3. 出现…
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 开发者工具 Console 或后端日志的相关片段。注意先抹掉密钥。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: 7.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options: [macOS (Apple Silicon), macOS (Intel), Windows, 其他]
+    validations:
+      required: true

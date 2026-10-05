@@ -5,6 +5,26 @@
   "main": "electron/main.cjs",
   "type": "module",
   "description": "巨天agent - 桌面 AI 智能体（终端 / 文件 / PPT / 代码）",
+  "keywords": [
+    "electron",
+    "ai-agent",
+    "desktop",
+    "local-first",
+    "mcp",
+    "computer-use",
+    "openai-compatible"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseekv5/jutian-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deepseekv5/jutian-agent/issues"
+  },
+  "homepage": "https://github.com/deepseekv5/jutian-agent#readme",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build:server && vite build",
