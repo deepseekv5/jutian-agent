@@ -106,7 +106,7 @@ function safeCwd(cwd) {
 // 旧实现对所有响应回 `Access-Control-Allow-Origin: *`，导致任意网页的 JS 可直接
 // fetch('http://localhost:3211/api/settings') 读走用户 API Key，并调用 /api/tools/execute。
 // 现在：只对同源/本机可信来源回显 CORS，其余请求一律不带 CORS 头（由浏览器拦截）。
-var isTrustedOrigin = (origin) => {
+var isTrustedOrigin = (origin, host) => {
   if (!origin) return true; // 同源请求无 Origin 头；Electron file:// 与 curl 属此类
   var o = String(origin);
   // 注意：`Origin: null` 不可信。sandbox iframe / file:// 页面都能发出这种请求，
@@ -114,11 +114,17 @@ var isTrustedOrigin = (origin) => {
   if (/^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(o)) return true;
   if (/^https?:\/\/localhost(?::\d+)?$/i.test(o)) return true;
   if (/^https?:\/\/\[::1\](?::\d+)?$/i.test(o)) return true;
+  // 手机远程：页面由本服务经局域网 IP 提供，浏览器 POST 会带
+  // Origin: http://<lan-ip>:3211。与 Host 头一致即「同宿主」——恶意页面无法
+  // 伪造出与目标 Host 相同的 Origin；DNS-rebinding 由 421（回环 + Host 非本机）兜底。
+  var h = String(host || "").toLowerCase();
+  if (h && o.toLowerCase() === "http://" + h) return true;
+  if (h && o.toLowerCase() === "https://" + h) return true;
   return false;
 };
 var corsHeaders = (req) => {
   var origin = req && req.headers ? req.headers.origin : "";
-  if (!isTrustedOrigin(origin)) return null;
+  if (!isTrustedOrigin(origin, req && req.headers && req.headers.host)) return null;
   var h = { Vary: "Origin" };
   if (origin) {
     h["Access-Control-Allow-Origin"] = origin;
@@ -152,6 +158,15 @@ var json = (res, d, s = 200) => {
   res.writeHead(s, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(payload));
 };
+// 不做掩码的 JSON 出口：仅用于备份导出。备份必须携带真实密钥，否则还原即丢
+// 配置；该端点已被同宿主 Origin 门卫保护，只有本机与已配对设备可达。
+var jsonRaw = (res, d, s = 200) => {
+  res.writeHead(s, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(d));
+};
+// 掩码值（如 sk-6****9Ylc）一律不得写回存储：客户端整表回传设置时会带着
+// GET 拿到的掩码，原样落库会把真密钥冲成掩码垃圾。
+var isMasked = (v) => typeof v === "string" && v.indexOf("****") >= 0;
 // 需要按请求 Origin 决定 CORS 的响应（如流式/代理响应，绕过了 json()）
 var jsonAs = (req, res, d, s = 200) => {
   var c = corsHeaders(req) || {};
@@ -1363,7 +1378,7 @@ http.createServer(async (req, res) => {
   // 浏览器发起的跨源请求必带 Origin。恶意网页 → http://localhost:3211/api/settings
   // 就是一次典型的跨站请求；即便它读不到响应（无 CORS 头），请求本身仍会执行。
   // 这里在服务端直接拒绝不信任的 Origin，并额外校验 Host 头，防 DNS-rebinding。
-  if (!isTrustedOrigin(req.headers.origin)) {
+  if (!isTrustedOrigin(req.headers.origin, req.headers.host)) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "跨站请求已拒绝" }));
     return;
@@ -2045,6 +2060,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/settings" && req.method === "POST") {
       const { key, value } = await body(req);
       if (!key) return json(res, { error: "缺少 key" }, 400);
+      if (isMasked(value)) return json(res, { ok: true, skipped: "masked" });
       if (sharedDb) {
         try { sharedDb.setSetting(key, value == null ? "" : String(value)); if (key === "keepAwake") syncKeepAwake(); return json(res, { ok: true }); } catch {}
       }
@@ -2992,7 +3008,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const settingsRows = sharedDb.getAllSettings();
         const settingsObj = Object.fromEntries(settingsRows.map((r) => [r.key, r.value]));
         const memories = sharedDb.getAllMemories();
-        return json(res, { version: 1, exported_at: new Date().toISOString(), sessions, messages, settings: settingsObj, memories });
+        return jsonRaw(res, { version: 1, exported_at: new Date().toISOString(), sessions, messages, settings: settingsObj, memories });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/backup/import" && req.method === "POST") {
@@ -3010,7 +3026,11 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
             nm++;
           }
         }
-        for (const [k, v] of Object.entries(data.settings || {})) sharedDb.setSetting(k, String(v));
+        for (const [k, v] of Object.entries(data.settings || {})) {
+          // 旧版（掩码导出时期）的备份文件里密钥是 ****，跳过以免把掩码写回库
+          if (isMasked(v)) continue;
+          sharedDb.setSetting(k, String(v));
+        }
         for (const mem of (data.memories || [])) sharedDb.setMemory(mem.key || sharedDb.genId(), mem.value || "");
         return json(res, { ok: true, sessions: ns, messages: nm });
       } catch (e) { return json(res, { error: e.message }, 500); }
