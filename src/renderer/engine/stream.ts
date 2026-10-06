@@ -11,6 +11,7 @@
  */
 
 import type { Settings, ToolCall, ToolDef } from '../types'
+import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool, checkToolServer } from './tools'
 
@@ -156,7 +157,7 @@ export async function streamChat(
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'X-Target-Base': settings.apiBaseUrl,
-        'X-Api-Key': settings.apiKey || '',
+        'X-Api-Key': effectiveApiKey(settings.apiKey),
       }
 
       const makeBody = () => JSON.stringify({

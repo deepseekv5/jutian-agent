@@ -1781,14 +1781,29 @@ http.createServer(async (req, res) => {
         let bodyData = JSON.parse(bodyStr);
         const _tbHeader = String(req.headers["x-target-base"] || bodyData.targetBase || "");
         let targetBase = _tbHeader || "";
-        let apiKey = (req.headers["x-api-key"] || bodyData.apiKey || "");
-        // 手机远程(v5.5)：请求未带密钥时,回退到本机存储的设置(密钥不出电脑)
-        if (!targetBase || !apiKey) {
+        let apiKey = String(req.headers["x-api-key"] || bodyData.apiKey || "").trim();
+        // 掩码回显(GET /api/settings 返回 sk-6****9Ylc)不是真钥匙:
+        // 头里是掩码/为空时,回退到本机存储的真实配置(密钥不出电脑)。
+        // SQLite 优先,遗留 settings.json 仅作兜底。
+        const headerKeyUsable = apiKey !== "" && apiKey.indexOf("****") < 0;
+        if (!headerKeyUsable || !targetBase) {
+          let __dbKey = "", __dbBase = "";
           try {
-            const __st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8"));
-            if (!targetBase && __st.apiBaseUrl) targetBase = String(__st.apiBaseUrl);
-            if (!apiKey && __st.apiKey) apiKey = String(__st.apiKey);
+            const __rows = sharedDb ? sharedDb.getAllSettings() : [];
+            for (const __r of __rows) {
+              if (__r.key === "apiKey" && __r.value) __dbKey = String(__r.value);
+              if (__r.key === "apiBaseUrl" && __r.value) __dbBase = String(__r.value);
+            }
           } catch {}
+          if (!__dbKey || !__dbBase) {
+            try {
+              const __st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8"));
+              if (!__dbBase && __st.apiBaseUrl) __dbBase = String(__st.apiBaseUrl);
+              if (!__dbKey && __st.apiKey) __dbKey = String(__st.apiKey);
+            } catch {}
+          }
+          if (!headerKeyUsable) apiKey = __dbKey;
+          if (!targetBase) targetBase = __dbBase;
         }
         // v7.0：未配置模型服务时明确报错,不再回退到任何默认提供商
         if (!targetBase || !apiKey) {
@@ -2963,7 +2978,14 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/models-list" && req.method === "POST") {
       try {
         const targetBase = String(req.headers["x-target-base"] || "").trim();
-        const apiKey = String(req.headers["x-api-key"] || "").trim();
+        let apiKey = String(req.headers["x-api-key"] || "").trim();
+        // 掩码回显不是真钥匙:为空/含 **** 时回退 SQLite 存储密钥
+        if (!apiKey || apiKey.indexOf("****") >= 0) {
+          try {
+            const __rows = sharedDb ? sharedDb.getAllSettings() : [];
+            for (const __r of __rows) { if (__r.key === "apiKey" && __r.value) apiKey = String(__r.value); }
+          } catch {}
+        }
         if (!targetBase) return json(res, { models: [], error: "缺少 API 地址" }, 200);
         const r = await fetch(`${targetBase.replace(/\/+$/, "")}/models`, {
           headers: apiKey ? { "Authorization": `Bearer ${apiKey}` } : {},

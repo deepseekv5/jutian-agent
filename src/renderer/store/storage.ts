@@ -137,10 +137,19 @@ export async function getSettings(): Promise<Settings> {
   return localSettings
 }
 
+/** 发请求用的有效密钥:掩码回显(GET 返回)不是真钥匙,剥掉让服务端用存储密钥 */
+export function effectiveApiKey(key?: string): string {
+  const k = String(key || '')
+  return k.indexOf('****') >= 0 ? '' : k
+}
+
 export async function saveSettings(s: Settings): Promise<void> {
   try { localStorage.setItem('lyclaw_settings', JSON.stringify(s)) } catch {}
   await apiPost('/api/settings', { key: 'apiBaseUrl', value: s.apiBaseUrl })
-  await apiPost('/api/settings', { key: 'apiKey', value: s.apiKey })
+  // 掩码值(GET 回显)与空值都不回写:掩码只是显示,空值视为保留服务器现有密钥
+  if (s.apiKey && s.apiKey.indexOf('****') < 0) {
+    await apiPost('/api/settings', { key: 'apiKey', value: s.apiKey })
+  }
   await apiPost('/api/settings', { key: 'model', value: s.model })
   await apiPost('/api/settings', { key: 'provider', value: s.provider })
   await apiPost('/api/settings', { key: 'localModel', value: s.localModel })

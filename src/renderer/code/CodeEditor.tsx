@@ -11,6 +11,7 @@ export function stepEditorFont(delta: number): number {
   } catch { return 13 }
 }
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
+import { effectiveApiKey } from '../store/storage'
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers, Decoration, DecorationSet, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view'
 import { EditorState, StateField, StateEffect, Compartment } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab, undo, toggleComment } from '@codemirror/commands'
@@ -187,7 +188,7 @@ async function fetchAICompletion(prompt: AIPrompt, settings: Settings): Promise<
       headers: {
         'Content-Type': 'application/json',
         'X-Target-Base': settings.apiBaseUrl,
-        'X-Api-Key': settings.apiKey || '',
+        'X-Api-Key': effectiveApiKey(settings.apiKey),
       },
       body: JSON.stringify({
         model: settings.model,

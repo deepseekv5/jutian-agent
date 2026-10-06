@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
-import { getSettingsSync } from '../store/storage'
+import { getSettingsSync, effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from '../engine/tools'
 
@@ -191,7 +191,7 @@ export default function QQBotTab() {
       for (let round = 0; round < 50; round++) {
         const res = await fetch('/api/llm-proxy', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': settings.apiKey || '' },
+          headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
           body: JSON.stringify({ model: settings.model, messages, tools: toolDefs, max_tokens: 2000, stream: false }),
         })
         if (!res.ok) break
@@ -250,7 +250,7 @@ export default function QQBotTab() {
     try {
       const res = await fetch('/api/llm-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': settings.apiKey || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
         body: JSON.stringify({
           model: settings.model,
           messages: [

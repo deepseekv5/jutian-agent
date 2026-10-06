@@ -8,6 +8,7 @@ import UsageStats from '../panels/UsageStats';
 import McpSection from './McpSection'
 import RemoteAccess from './RemoteAccess'
 import { summarizeUsage } from '../store/usage';
+import { effectiveApiKey } from '../store/storage';
 import { fmtTokens } from '../utils/tokens';
 
 interface Props {
@@ -262,7 +263,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     try {
       const res = await fetch('/api/llm-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Target-Base': form.apiBaseUrl, 'X-Api-Key': form.apiKey || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': form.apiBaseUrl, 'X-Api-Key': effectiveApiKey(form.apiKey) },
         body: JSON.stringify({ model: form.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5, stream: false }),
       })
       const text = await res.text().catch(() => '')
@@ -302,7 +303,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     try {
       const res = await fetch('/api/models-list', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Target-Base': base, 'X-Api-Key': key || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': base, 'X-Api-Key': effectiveApiKey(key) },
         body: '{}',
       })
       const data = await res.json()

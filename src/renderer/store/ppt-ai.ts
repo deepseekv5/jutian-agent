@@ -1,5 +1,5 @@
 import type { GenerateOptions, SlideSpec } from '../types/ppt'
-import { getSettingsSync } from './storage'
+import { getSettingsSync, effectiveApiKey } from './storage'
 
 /**
  * PPT AI 智能生成：由大模型根据主题产出完整大纲与内容（JSON），
@@ -121,7 +121,7 @@ export async function aiGenerateSlides(opts: GenerateOptions): Promise<SlideSpec
       headers: {
         'Content-Type': 'application/json',
         'X-Target-Base': settings.apiBaseUrl,
-        'X-Api-Key': settings.apiKey || '',
+        'X-Api-Key': effectiveApiKey(settings.apiKey),
       },
       body: JSON.stringify({
         model: settings.model,

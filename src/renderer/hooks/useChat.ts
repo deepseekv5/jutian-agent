@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Message, Settings, ToolCall, ToolDef, AttachedFile } from '../types'
 import { BUILTIN_TOOLS } from '../types'
-import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter } from '../store/storage'
+import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter, effectiveApiKey } from '../store/storage'
 import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
@@ -112,7 +112,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
         headers: {
           'Content-Type': 'application/json',
           'X-Target-Base': settings.apiBaseUrl,
-          'X-Api-Key': settings.apiKey || '',
+          'X-Api-Key': effectiveApiKey(settings.apiKey),
         },
         body: JSON.stringify({
           model: settings.model,
@@ -593,7 +593,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           try {
             const res = await fetch('/api/llm-proxy', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': settings.apiKey || '' },
+              headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
               body: JSON.stringify({
                 model: settings.model,
                 messages: [

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
+import { effectiveApiKey } from '../store/storage'
 import PageShell from '../app/PageShell'
 import type { KbEntry } from '../types/kb'
 
@@ -390,7 +391,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
                 const s = await fetch('/api/settings').then(r => r.json()).catch(() => null)
                 const res = await fetch('/api/llm-proxy', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Target-Base': s?.apiBaseUrl || '', 'X-Api-Key': s?.apiKey || '' },
+                  headers: { 'Content-Type': 'application/json', 'X-Target-Base': s?.apiBaseUrl || '', 'X-Api-Key': effectiveApiKey(s?.apiKey) },
                   body: JSON.stringify({
                     model: s?.model || '',
                     messages: [

@@ -5,6 +5,7 @@ import { useTheme } from '../hooks/useTheme'
 import TerminalPanel from '../code/TerminalPanel'
 import type { Message, Settings } from '../types'
 import { estimateTokens, fmtTokens } from '../utils/tokens'
+import { effectiveApiKey } from '../store/storage'
 
 type SideTab = 'assistant' | 'review' | 'terminal' | 'browser' | 'stats'
 
@@ -157,7 +158,7 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
     try {
       const res = await fetch('/api/llm-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': settings.apiKey || '' },
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
         body: JSON.stringify({
           model: settings.model,
           messages: [
@@ -241,7 +242,7 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
         max_tokens: 1500,
         stream: false,
       })
-      const headers = { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': settings.apiKey || '' }
+      const headers = { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) }
       let res: Response
       try {
         res = await fetch('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
