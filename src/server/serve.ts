@@ -2989,6 +2989,67 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         return json(res, { models });
       } catch { return json(res, { models: [] }); }
     }
+    // ─── 免费模型面板:v7.1 Kilo Gateway 免 key 全量目录(10 分钟缓存)───
+    var FREE_MODELS_CACHE = null;
+    var FREE_MODELS_TS = 0;
+    if (url.pathname === "/api/free-models" && req.method === "GET") {
+      const now = Date.now();
+      if (FREE_MODELS_CACHE && now - FREE_MODELS_TS < 600000) return json(res, FREE_MODELS_CACHE);
+      try {
+        const r = await fetch("https://api.kilo.ai/api/gateway/v1/models", {
+          headers: { "Accept": "application/json" },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!r.ok) return json(res, { error: `Kilo 目录拉取失败 HTTP ${r.status}` }, 502);
+        const data = await r.json().catch(() => null);
+        const arr = Array.isArray(data?.data) ? data.data : [];
+        const pick = (m) => ({
+          id: String(m?.id || ""),
+          name: String(m?.name || m?.id || ""),
+          context: Number(m?.context_length) || 0,
+          desc: String(m?.description || "").slice(0, 120),
+          vision: /image|vision|multimodal|omni|识图/i.test(String(m?.description || "") + JSON.stringify(m?.architecture || "")),
+        });
+        const free = arr.filter((m) => String(m?.id || "").indexOf(":free") >= 0 || m?.isFree === true || /^kilo-/.test(String(m?.id || ""))).map(pick).filter((m) => m.id);
+        free.sort((a, b) => {
+          if (/^kilo-auto\/free/.test(a.id)) return -1;
+          if (/^kilo-auto\/free/.test(b.id)) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        const out = {
+          ok: true,
+          source: "Kilo Gateway",
+          keyless: true,
+          base: "https://api.kilo.ai/api/gateway/v1",
+          total: arr.length,
+          paidCount: arr.length - free.length,
+          free,
+          ts: new Date().toISOString(),
+        };
+        FREE_MODELS_CACHE = out; FREE_MODELS_TS = now;
+        return json(res, out);
+      } catch (e) { return json(res, { error: String(e?.message || e) }, 502); }
+    }
+    // 单个免费模型测速(5 token 最小请求)
+    if (url.pathname === "/api/free-model-test" && req.method === "POST") {
+      try {
+        const { model } = await body(req);
+        if (!model) return json(res, { error: "缺少 model" }, 400);
+        const t0 = Date.now();
+        const r = await fetch("https://api.kilo.ai/api/gateway/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, messages: [{ role: "user", content: "hi" }], max_tokens: 5 }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const ms = Date.now() - t0;
+        if (!r.ok) {
+          const detail = await r.text().catch(() => "");
+          return json(res, { ok: false, ms, error: `HTTP ${r.status} ${detail.slice(0, 120)}` });
+        }
+        return json(res, { ok: true, ms });
+      } catch (e) { return json(res, { ok: false, error: String(e?.message || e) }); }
+    }
     // 按请求头传入的 baseUrl/apiKey 拉取模型列表（供设置面板"拉取模型"，无需先保存）
     if (url.pathname === "/api/models-list" && req.method === "POST") {
       try {

@@ -370,6 +370,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             { tab: 'employees', label: t('集群','Swarm'), title: t('集群指挥室','Swarm console'), icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', fill: false },
             { tab: 'code', label: 'Code', title: t('代码模式','Code mode'), icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z', fill: false },
             { tab: 'kb', label: t('知识库','KB'), title: t('知识库：文档索引 / 知识图谱','Knowledge base'), icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', fill: false },
+            { tab: 'freemodels', label: t('免费AI','Free'), title: t('免费模型：Kilo 网关免 key 全量目录，一键切换','Free models: Kilo keyless catalog, one-click switch'), icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', fill: false },
           ].map(item => (
             <button key={item.tab} onClick={() => onOpenTab(item.tab as any)}
               className="flex-1 h-8 rounded-lg flex items-center justify-center gap-1.5 text-[11.5px] font-medium transition-colors"
