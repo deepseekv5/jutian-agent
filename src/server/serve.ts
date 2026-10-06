@@ -268,10 +268,20 @@ async function read_file(a) {
 }
 // ─── 可编辑 diff（v5.6）：写入前留底,聊天内可查看/撤销/编辑应用 ───
 const DIFF_CHANGES = [];
+const DIFF_FILE = path.join(DATA_DIR, "diff_changes.json");
+// 变更留底持久化:重启后仍可撤销(内存版在 App 重启后全部丢失,撤销变成假动作)
+try {
+  const __saved = JSON.parse(fs.readFileSync(DIFF_FILE, "utf-8"));
+  if (Array.isArray(__saved)) DIFF_CHANGES.push(...__saved.slice(0, 200));
+} catch {}
+function persistDiff() {
+  try { fs.writeFileSync(DIFF_FILE, JSON.stringify(DIFF_CHANGES.slice(0, 200))); } catch {}
+}
 function recordChange(p, oldC, newC) {
   const id = "chg_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   DIFF_CHANGES.unshift({ id, path: p, old: oldC, new: newC, ts: Date.now() });
-  if (DIFF_CHANGES.length > 40) DIFF_CHANGES.pop();
+  if (DIFF_CHANGES.length > 200) DIFF_CHANGES.length = 200;
+  persistDiff();
   return id;
 }
 
@@ -2280,20 +2290,24 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/diff/undo" && req.method === "POST") {
       const { id } = await body(req);
       const ch = DIFF_CHANGES.find((x) => x.id === id);
-      if (!ch) return json(res, { error: "变更不存在或已过期" }, 404);
+      if (!ch) return json(res, { error: "变更记录不存在(已超上限或数据文件被清理)" }, 404);
       try {
         if (ch.old) await fsp.writeFile(ch.path, ch.old, "utf-8");
         else { try { fs.unlinkSync(ch.path); } catch {} }
+        ch.undone = true;
+        persistDiff();
         return json(res, { ok: true, path: ch.path });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/diff/apply" && req.method === "POST") {
       const { id, content } = await body(req);
       const ch = DIFF_CHANGES.find((x) => x.id === id);
-      if (!ch) return json(res, { error: "变更不存在或已过期" }, 404);
+      if (!ch) return json(res, { error: "变更记录不存在(已超上限或数据文件被清理)" }, 404);
       try {
         await fsp.writeFile(ch.path, String(content || ""), "utf-8");
         ch.new = String(content || "");
+        ch.undone = false;
+        persistDiff();
         return json(res, { ok: true, path: ch.path });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }

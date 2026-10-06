@@ -45,6 +45,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
   const [state, setState] = useState<'applied' | 'undone' | 'editing'>('applied')
   const [editText, setEditText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [opErr, setOpErr] = useState('')
   let path = '', rows: { type: 'ctx' | 'del' | 'add'; text: string }[] = [], added = 0, removed = 0
   try {
     const a = JSON.parse(tc.arguments || '{}')
@@ -74,20 +75,24 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
   }
   const undo = async () => {
     if (!changeId || busy) return
-    setBusy(true)
+    setBusy(true); setOpErr('')
     try {
-      await fetch('/api/diff/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId }) })
-      setState('undone'); onFileMutated?.(path)
-    } catch { /* ignore */ }
+      const r = await fetch('/api/diff/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId }) })
+      const d = await r.json().catch(() => ({} as any))
+      if (r.ok && d.ok) { setState('undone'); onFileMutated?.(path) }
+      else setOpErr(d.error || `撤销失败 (HTTP ${r.status})`)
+    } catch (e: any) { setOpErr(String(e?.message || e)) }
     setBusy(false)
   }
   const applyEdit = async () => {
     if (!changeId || busy) return
-    setBusy(true)
+    setBusy(true); setOpErr('')
     try {
-      await fetch('/api/diff/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId, content: editText }) })
-      setState('applied'); onFileMutated?.(path)
-    } catch { /* ignore */ }
+      const r = await fetch('/api/diff/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId, content: editText }) })
+      const d = await r.json().catch(() => ({} as any))
+      if (r.ok && d.ok) { setState('applied'); setChg({ old: chg?.old || '', new: editText }); onFileMutated?.(path) }
+      else setOpErr(d.error || `应用失败 (HTTP ${r.status})`)
+    } catch (e: any) { setOpErr(String(e?.message || e)) }
     setBusy(false)
   }
   const isWrite = tc.name === 'write_file' || tc.name === 'edit_file'
@@ -102,6 +107,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
         <span className="shrink-0" style={{ color: '#4ade80' }}>+{added}</span>
         <span className="shrink-0" style={{ color: ERR }}>-{removed}</span>
         {state === 'undone' && <span className="shrink-0" style={{ color: ERR }}>已撤销</span>}
+        {opErr && <span className="shrink-0 max-w-[55%] truncate" style={{ color: ERR }} title={opErr}>⚠ {opErr}</span>}
         {!open && <span className="ml-auto shrink-0" style={{ color: TEXT_MUTED }}>点击查看</span>}
       </button>
       {open && blockIdxs.length > 1 && (
