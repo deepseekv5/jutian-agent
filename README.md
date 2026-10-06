@@ -1,7 +1,7 @@
 <div align="center">
-# 建议使用OpenRouter Free Models Router作为主力免费模型,仍可使用自己的模型
-# 巨天agent
 
+# 巨天agent
+# ⚠️建议使用OpenRouter Free Models Router作为主力免费模型,仍可使用自己的模型⚠️
 **桌面 AI 工作台 — 对话 · 代码 · 集群 · 免费模型**
 
 一句话,它把活干完。
