@@ -868,5 +868,22 @@
     "action"
    ]
   }
+ },
+ {
+  "name": "consult_guidance",
+  "description": "查阅你的工作规则知识库（约束纪律与领域最佳实践，共 9 个领域）。应当在：开始复杂任务前（topic=plan）、写代码前（topic=code）、执行删除/写文件等敏感操作前（topic=files）、跑命令前（topic=terminal）、git 提交前（topic=git）、声称完成前（topic=verify）、联网检索前（topic=web），以及任何拿不准做法的时候调用。不传参数返回目录+工作铁律。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "topic": {
+     "type": "string",
+     "description": "规则域：core(工作纪律) / plan(任务规划) / code(写代码) / files(文件操作) / terminal(终端命令) / git(版本管理) / verify(验证交付) / web(联网检索) / safety(安全红线)"
+    },
+    "keyword": {
+     "type": "string",
+     "description": "跨域关键词搜索，如：删除、提交、密钥、超时、重试"
+    }
+   }
+  }
  }
 ]

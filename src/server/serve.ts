@@ -1310,6 +1310,49 @@ async function toolSaveKnowledge(args) {
 async function recall(args) { return read_memory(args); }
 async function forget(args) { return delete_memory(args); }
 
+// ─── consult_guidance:约束知识库检索 ───
+// 规则库单一来源 src/shared/guidance/rules.json(随构建进安装包)。
+// 主提示词只注入 core 铁律摘要;完整规则由模型按需检索,节省常驻上下文。
+var GUIDANCE_CACHE = null;
+function loadGuidance() {
+  if (GUIDANCE_CACHE) return GUIDANCE_CACHE;
+  try {
+    GUIDANCE_CACHE = JSON.parse(fs.readFileSync(path.join(__dirname, "src", "shared", "guidance", "rules.json"), "utf-8"));
+  } catch (e) { GUIDANCE_CACHE = { domains: [] }; }
+  return GUIDANCE_CACHE;
+}
+function guidanceRulesText(d) {
+  if (!d) return "";
+  return (d.rules || []).map((r) =>
+    (r.level === "hard" ? "◆" : "◇") + " " + r.id + " " + r.title + ": " + r.rule
+  ).join("\n");
+}
+async function consultGuidance(a) {
+  const g = loadGuidance();
+  const domains = g.domains || [];
+  const topic = String((a && a.topic) || "").trim().toLowerCase();
+  const kw = String((a && a.keyword) || "").trim().toLowerCase();
+  if (!topic && !kw) {
+    const catalog = domains.map((d) => d.id + " " + d.title + " — " + d.when).join("\n");
+    const core = domains.find((d) => d.id === "core");
+    return { success: true, output: "规则域目录:\n" + catalog + "\n\n【工作铁律】\n" + guidanceRulesText(core) + "\n\n用 topic 查看某域完整规则,或 keyword 跨域搜索关键词。" };
+  }
+  const direct = domains.filter((d) => topic && (d.id === topic || (d.title + d.when).indexOf(topic) >= 0));
+  let matched = direct.length ? direct : domains.map((d) => {
+    const needle = kw || topic;
+    const rs = (d.rules || []).filter((r) =>
+      (r.title + r.rule + (r.why || "") + " " + d.title).toLowerCase().indexOf(needle) >= 0);
+    return rs.length ? { id: d.id, title: d.title, when: d.when, rules: rs } : null;
+  }).filter(Boolean);
+  if (!matched.length) {
+    return { success: true, output: "未匹配到规则。可用 topic: " + domains.map((d) => d.id).join(" / ") };
+  }
+  return {
+    success: true,
+    output: matched.map((d) => "【" + d.id + " " + d.title + "】适用: " + d.when + "\n" + guidanceRulesText(d)).join("\n\n"),
+  };
+}
+
 var TOOLS = {
   read_file, write_file, edit_file, list_dir, search_files, search_content,
   get_file_info, move_file, delete_file,
@@ -1321,7 +1364,8 @@ var TOOLS = {
   uuid_generate, timestamp_tools, random_tools, color_tools, image_generate,
   list_skills, load_skill, install_skill, create_skill,
   remember, recall, forget,
-  save_knowledge: toolSaveKnowledge
+  save_knowledge: toolSaveKnowledge,
+  consult_guidance: consultGuidance
 };
 // ─── 静态资源：磁盘 LRU 缓存 + gzip 压缩 + HTTP 缓存协商 ───
 // 首屏 JS 总计约 800KB；手机远程经 LAN 访问时压缩能从 ~2.1MB 降到 ~500KB。
