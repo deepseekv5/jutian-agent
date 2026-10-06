@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, memo } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, Fragment } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -548,7 +548,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             for (const tc of tcs) {
               const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, shownContent.length))
               if (cut > last) seq.push(<Text key={'t' + seq.length} v={displayContent.slice(last, Math.min(cut, displayContent.length))} />)
-              seq.push(<React.Fragment key={'c' + tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</React.Fragment>)
+              seq.push(<Fragment key={'c' + tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</Fragment>)
               last = cut
             }
             if (last < displayContent.length) seq.push(<Text key="t-end" v={displayContent.slice(last)} />)
@@ -557,7 +557,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           return (
             <>
               {shownContent ? <Text v={displayContent} /> : null}
-              {tcs.map(tc => <React.Fragment key={tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</React.Fragment>)}
+              {tcs.map(tc => <Fragment key={tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</Fragment>)}
             </>
           )
         })()}
