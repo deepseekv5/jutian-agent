@@ -3,6 +3,16 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [8.0.0] - 2026-10-06
+
+### 新增
+- **免费模型面板**:Kilo Gateway 免 key 全量目录(399 个模型、21 个免费档),免注册一键切换、逐模型测速;配置 Kilo 账户密钥解锁 378 个付费档,密钥仅存本机
+- 主张:「科技不是高高而上,而是服务于人民」— 免费档每 IP 200 次/小时,AI 没有门槛
+- llm-proxy / models-list 支持免 key 网关(key 为 free 时不发 Authorization 头);付费档模型自动换用 Kilo 账户密钥
+
+### 移除
+- Computer Use(截屏操作循环):专注「对话/代码/集群」主链路,移除 UI、主进程注册、预加载 API 与全部引用(代码在 git 历史中可溯)
+
 ## [7.0.0] - 2026-10-04
 
 ### 新增(10-06 增补)

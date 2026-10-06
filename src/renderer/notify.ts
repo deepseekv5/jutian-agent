@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 
 export interface AppNotice {
   id: string
-  type: 'swarm' | 'subagent' | 'computer' | 'system'
+  type: 'swarm' | 'subagent' | 'system'
   title: string
   body?: string
   ts: number

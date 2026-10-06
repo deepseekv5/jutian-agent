@@ -1793,16 +1793,17 @@ http.createServer(async (req, res) => {
         let targetBase = _tbHeader || "";
         let apiKey = String(req.headers["x-api-key"] || bodyData.apiKey || "").trim();
         // 掩码回显(GET /api/settings 返回 sk-6****9Ylc)不是真钥匙:
-        // 头里是掩码/为空时,回退到本机存储的真实配置(密钥不出电脑)。
+        // 头里是掩码/free 占位/为空时,回退到本机存储的真实配置(密钥不出电脑)。
         // SQLite 优先,遗留 settings.json 仅作兜底。
-        const headerKeyUsable = apiKey !== "" && apiKey.indexOf("****") < 0;
+        const headerKeyUsable = apiKey !== "" && apiKey.indexOf("****") < 0 && apiKey !== "free" && apiKey !== "keyless";
         if (!headerKeyUsable || !targetBase) {
-          let __dbKey = "", __dbBase = "";
+          let __dbKey = "", __dbBase = "", __dbKiloKey = "";
           try {
             const __rows = sharedDb ? sharedDb.getAllSettings() : [];
             for (const __r of __rows) {
               if (__r.key === "apiKey" && __r.value) __dbKey = String(__r.value);
               if (__r.key === "apiBaseUrl" && __r.value) __dbBase = String(__r.value);
+              if (__r.key === "kilo_api_key" && __r.value) __dbKiloKey = String(__r.value);
             }
           } catch {}
           if (!__dbKey || !__dbBase) {
@@ -1814,6 +1815,10 @@ http.createServer(async (req, res) => {
           }
           if (!headerKeyUsable) apiKey = __dbKey;
           if (!targetBase) targetBase = __dbBase;
+          // Kilo 付费档:免费占位/free 到达但模型非免费档 → 用 Kilo 账户密钥
+          const __mdl = String(bodyData?.model || "");
+          if ((apiKey === "" || apiKey === "free" || apiKey === "keyless") && __dbKiloKey
+            && __mdl && __mdl.indexOf(":free") < 0 && !/^kilo-/.test(__mdl)) apiKey = __dbKiloKey;
         }
         // v7.0：未配置模型服务时明确报错,不再回退到任何默认提供商
         if (!targetBase || !apiKey) {
@@ -3016,14 +3021,16 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           if (/^kilo-auto\/free/.test(b.id)) return 1;
           return a.name.localeCompare(b.name);
         });
+        const paid = arr.filter((m) => !(String(m?.id || "").indexOf(":free") >= 0 || m?.isFree === true || /^kilo-/.test(String(m?.id || "")))).map(pick).filter((m) => m.id);
         const out = {
           ok: true,
           source: "Kilo Gateway",
           keyless: true,
           base: "https://api.kilo.ai/api/gateway/v1",
           total: arr.length,
-          paidCount: arr.length - free.length,
+          paidCount: paid.length,
           free,
+          paid,
           ts: new Date().toISOString(),
         };
         FREE_MODELS_CACHE = out; FREE_MODELS_TS = now;

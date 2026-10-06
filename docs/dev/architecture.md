@@ -9,8 +9,8 @@
 │                   Electron 主进程                     │
 │  ┌──────────────┐   ┌──────────────────────────────┐ │
 │  │   serve.cjs  │   │  窗口 / 托盘 / 全局快捷键      │ │
-│  │  (HTTP :3211)│   │  computer-use.cjs            │ │
-│  │  38 内置工具  │   │  (desktopCapturer + 自动化)   │ │
+│  │  (HTTP :3211)│   │  窗口状态记忆                 │ │
+│  │  38 内置工具  │   │                              │ │
 │  │  llm-proxy   │   └──────────────────────────────┘ │
 │  │  MCP 客户端   │   ┌──────────────────────────────┐ │
 │  │  定时任务     │───│  手机远程门卫 (配对码)          │ │
@@ -40,7 +40,6 @@
 ### 2. Electron 主进程(`electron/`)
 
 - 窗口生命周期、托盘、状态记忆(window-state 持久化)
-- `computer-use.cjs`:desktopCapturer 截屏 + 系统级自动化(Computer Use 的执行端)
 - 打包时 serve.cjs 直接运行在主进程内,无需独立终端窗口
 
 ### 3. React 渲染层(`src/renderer/`)
@@ -53,8 +52,7 @@ src/renderer/
 ├── chat/       主对话:composer / 消息气泡 / 思考档位 / 模式开关
 ├── code/       代码模式:文件树 / 多标签编辑器 / 终端 / diff
 ├── agents/     集群:员工对话 / 群聊
-├── computer/   Computer Use:预览 / 逐步确认
-├── panels/     独立面板:知识库 / PPT 等
+├── panels/     独立面板:免费模型 / 知识库 / PPT 等
 ├── settings/   设置:推理 / 远程 / 语言 / 备份
 ├── media/      语音 / 音频
 ├── engine/     流式引擎 / 子代理并行池 / 代理循环

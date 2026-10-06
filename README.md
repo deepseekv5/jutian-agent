@@ -2,7 +2,7 @@
 
 # 巨天agent
 
-**桌面 AI 工作台 — 对话 · 代码 · 集群 · Computer Use**
+**桌面 AI 工作台 — 对话 · 代码 · 集群 · 免费模型**
 
 一句话,它把活干完。
 
@@ -24,6 +24,8 @@
 
 > 桌面,是 AI 最好的位置。
 >
+> 科技不是高高在上,而是服务于人民。
+>
 > 浏览器里的 AI 要你迁就它。装在桌面上的 AI,直接住进你的文件、终端和工作流。
 
 <br>
@@ -32,7 +34,7 @@
 
 | | | |
 |---|---|---|
-| [六件事,做到位](#highlights) | [子代理 — AI 派出 AI](#swarm) | [Computer Use](#computer-use) |
+| [六件事,做到位](#highlights) | [子代理 — AI 派出 AI](#swarm) | [免费模型 — AI 没有门槛](#free-models) |
 | [手机远程](#remote) | [三条原则](#principles) | [📖 文档导航](#docs) |
 | [快速开始](#quick-start) | [架构](#architecture) | [数据一览](#stats) |
 | [路线图](#roadmap) | [常见问题](#faq) | [参与贡献](#contributing) |
@@ -87,19 +89,18 @@ LY HARNESS 插件中心:38 个工具逐个开关、MCP 服务即插即用、Skil
 
 <br>
 
-<a id="computer-use"></a>
+<a id="free-models"></a>
 
-## ✦ Computer Use — 它操作这台电脑
+## ✦ 免费模型 — AI 没有门槛
 
-说目标,它截屏观察、决定点哪里、输入什么,执行后再截图确认,直到完成。
+内置**免费模型面板**:21 个免费模型免 key 一键切换,不注册、不付费、每 IP 200 次/小时;配一个 Kilo 账户密钥即可解锁全部 378 个付费档。科技不是高高在上,而是服务于人民。
 
 ```
-  观察 → 决策 → 执行 → 验证 → (循环)
+  免费档 ──▶ kilo-auto 自动路由 · Nemotron 3 Ultra 550B · Step 3.7 Flash …
+  付费档 ──▶ 配置 Kilo 密钥,同一切换体验
 ```
 
-每一步可见、可打断;「逐步确认」模式下每个动作先等你放行。
-
-→ **完整文档**:[Computer Use](docs/guide/computer-use.md)
+→ **完整文档**:[免费模型与模型接入](docs/guide/free-models.md)
 
 <br>
 
@@ -142,7 +143,7 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 | [📥 安装与启动](docs/guide/install.md) | 安装包 / 源码 / 手动三种方式,首次配置,常见安装问题 |
 | [🧠 模型接入](docs/guide/models.md) | OpenAI 兼容配置、拉取模型、思考档位、模式开关、语音 |
 | [🧩 子代理集群](docs/guide/swarm.md) | 集群指挥室 vs 并行池、团队模板、@接力、通知聚合 |
-| [🖥 Computer Use](docs/guide/computer-use.md) | 操作循环、逐步确认、屏幕录制权限、边界建议 |
+| [🎁 免费模型](docs/guide/free-models.md) | Kilo 免 key 免费档一键切换、账户密钥配置、付费档解锁 |
 | [📱 手机远程](docs/guide/remote.md) | 扫码配对、能力清单、局域网信任模型、常见问题 |
 | [🔌 LY HARNESS](docs/guide/harness.md) | 38 工具逐个开关、MCP 管理、Skills 挂载 |
 | [📚 知识库与记忆](docs/guide/knowledge.md) | RAG 检索、embedding 配置、记忆与知识库怎么选 |
@@ -209,8 +210,8 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 ┌──────────────────────────────────────────────────┐
 │                  Electron 主进程                   │
 │  ┌─────────────┐  ┌────────────────────────────┐ │
-│  │  serve.cjs  │  │    窗口 / 托盘 / 截屏        │ │
-│  │  38 工具     │  │    Computer Use / 状态记忆   │ │
+│  │  serve.cjs  │  │    窗口 / 托盘 / 状态记忆     │ │
+│  │  38 工具     │  │    窗口 / 托盘 / 状态记忆     │ │
 │  │  llm-proxy  │  └────────────────────────────┘ │
 │  │  MCP 客户端  │                                  │
 │  │  定时任务    │    ┌─────────────────────┐     │
@@ -235,8 +236,7 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 │   │   ├── chat/              主对话
 │   │   ├── code/              代码模式
 │   │   ├── agents/            集群
-│   │   ├── computer/          Computer Use
-│   │   ├── panels/            独立面板
+│   │   ├── panels/            独立面板(免费模型/知识库/PPT)
 │   │   ├── media/             多媒体
 │   │   ├── settings/          设置
 │   │   ├── engine/            流式引擎/子代理/代理循环
@@ -299,9 +299,6 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 
 **手机远程安全吗?**
 局域网信任模型 + 配对码,陌生人连页面都看不到。前提是你信任同一网络。详见 [手机远程](docs/guide/remote.md)。
-
-**让模型操作电脑会不会乱来?**
-开着「逐步确认」,每个动作先等你放行。详见 [Computer Use](docs/guide/computer-use.md)。
 
 **可以商用吗?**
 可以。MIT 许可证允许任意使用(含商用),仅需保留版权声明。

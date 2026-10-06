@@ -34,7 +34,6 @@ const DiaryPanel = lazy(() => import('../panels/DiaryPanel'));
 const EmployeesPanel = lazy(() => import('../agents/EmployeesPanel'));
 const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
-const ComputerUseTab = lazy(() => import('../computer/ComputerUseTab'));
 const HarnessPanel = lazy(() => import('./HarnessPanel'));
 const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 
@@ -374,8 +373,6 @@ function MainApp() {
         return <HarnessPanel onClose={() => closeTab(tab.id)} />;
       case 'freemodels':
         return <FreeModelsPanel settings={settings} onSettingsChange={s => saveSettings(s)} />;
-      case 'computer':
-        return <ComputerUseTab settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'employees':
         return <EmployeesPanel onClose={() => closeTab(tab.id)} onOpenTab={openTab} />;
       case 'employee':

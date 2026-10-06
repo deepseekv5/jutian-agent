@@ -1,12 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // ─── Computer Use（v5.0）───
-  cuPermission: () => ipcRenderer.invoke('cu-permission'),
-  cuOpenPerms: (kind) => ipcRenderer.invoke('cu-open-perms', kind),
-  cuDisplays: () => ipcRenderer.invoke('cu-displays'),
-  cuCapture: (displayId, purpose) => ipcRenderer.invoke('cu-capture', displayId, purpose),
-  cuAction: (action) => ipcRenderer.invoke('cu-action', action),
   platform: process.platform,
   isElectron: true,
 
