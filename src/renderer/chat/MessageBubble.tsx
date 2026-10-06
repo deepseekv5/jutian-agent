@@ -469,34 +469,33 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
                                 )
                               }
                               if (m.role === 'assistant') {
-                                if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-                                  return (
-                                    <div key={j} className="space-y-1.5">
-                                      {m.tool_calls.map((tc: any) => {
-                                        const res = a.messages.find((x: any) => x.role === 'tool' && x.tool_call_id === tc.id)
-                                        return (
-                                          <ToolCallCard key={tc.id} tool={{
-                                            id: tc.id,
-                                            name: tc.function?.name,
-                                            arguments: tc.function?.arguments,
-                                            status: res ? (/^(错误|【安全拦截】)/.test(String(res.content || '')) ? 'error' : 'done') : 'running',
-                                            result: res?.content || undefined,
-                                          }} />
-                                        )
-                                      })}
-                                    </div>
-                                  )
-                                }
-                                if (m.content) {
-                                  return (
-                                    <div key={j} className="flex justify-start">
+                                const cards = Array.isArray(m.tool_calls) && m.tool_calls.length > 0
+                                  ? m.tool_calls.map((tc: any) => {
+                                      const res = a.messages.find((x: any) => x.role === 'tool' && x.tool_call_id === tc.id)
+                                      return (
+                                        <ToolCallCard key={tc.id} tool={{
+                                          id: tc.id,
+                                          name: tc.function?.name,
+                                          arguments: tc.function?.arguments,
+                                          status: res ? (/^(错误|【安全拦截】)/.test(String(res.content || '')) ? 'error' : 'done') : 'running',
+                                          result: res?.content || undefined,
+                                        }} />
+                                      )
+                                    })
+                                  : null
+                                // 话在前,操作在后:员工先说的话不再被工具卡吞掉
+                                if (!m.content) return cards ? <div key={j} className="space-y-1.5">{cards}</div> : null
+                                return (
+                                  <div key={j} className="space-y-1.5">
+                                    <div className="flex justify-start">
                                       <div className="text-[11px] leading-relaxed px-3 py-1.5 rounded-xl max-w-[92%] whitespace-pre-wrap break-words"
                                         style={{ background: 'transparent', border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>
                                         {m.content}
                                       </div>
                                     </div>
-                                  )
-                                }
+                                    {cards}
+                                  </div>
+                                )
                               }
                               return null
                             })
@@ -526,35 +525,56 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
         })()}
 
         <ThinkingCard thinking={thinking || ''} isStreaming={!!isStreaming} open={thinkingOpen} onToggle={() => setThinkingOpen(v => !v)} />
-        {toolCalls && toolCalls.length > 0 && toolCalls.map(tc => <ToolCallCard key={tc.id} tool={tc} />)}
-        {/* 可编辑 diff 卡（v7.0）：写入类工具且服务端留底成功时出现 */}
-        {toolCalls && toolCalls.filter((tc: any) => (tc.name === 'write_file' || tc.name === 'edit_file') && tc.changeId && tc.status !== 'pending').map((tc: any) => (
-          <DiffCardView key={'d_' + tc.id} tc={tc} c={c} />
-        ))}
-
-        {shownContent ? (
-          <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeHighlight]}
-              components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
-              {displayContent}
-            </ReactMarkdown>
-            {isLong && longCollapsed && (
-              <button onClick={() => setLongCollapsed(false)}
-                className="mt-1 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors"
-                style={{ background: c.surfaceInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>
-                展开全文（共 {shownContent.length.toLocaleString()} 字）
-              </button>
-            )}
-            {isStreaming && <span className="inline-block w-2 h-4 rounded-sm animate-pulse align-middle ml-0.5" style={{ background: c.accent }} />}
-          </div>
-        ) : isStreaming && (!toolCalls || toolCalls.length === 0) ? (
+        {(() => {
+          const tcs: any[] = toolCalls || []
+          const diffFor = (tc: any) => ((tc.name === 'write_file' || tc.name === 'edit_file') && tc.changeId && tc.status !== 'pending')
+            ? <DiffCardView key={'d_' + tc.id} tc={tc} c={c} />
+            : null
+          const Text = ({ v }: { v: string }) => !v ? null : (
+            <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
+                {v}
+              </ReactMarkdown>
+            </div>
+          )
+          // 时序交错:带 preLen 标记(本轮会话产生)→ 文本与工具卡按真实顺序排布,
+          // 说在工具前的话在卡片上方,最终输出收尾;历史无标记行 → 文在前卡在后
+          if (tcs.some((tc: any) => typeof tc.preLen === 'number')) {
+            let last = 0
+            const seq: any[] = []
+            for (const tc of tcs) {
+              const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, shownContent.length))
+              if (cut > last) seq.push(<Text key={'t' + seq.length} v={displayContent.slice(last, Math.min(cut, displayContent.length))} />)
+              seq.push(<React.Fragment key={'c' + tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</React.Fragment>)
+              last = cut
+            }
+            if (last < displayContent.length) seq.push(<Text key="t-end" v={displayContent.slice(last)} />)
+            return seq
+          }
+          return (
+            <>
+              {shownContent ? <Text v={displayContent} /> : null}
+              {tcs.map(tc => <React.Fragment key={tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</React.Fragment>)}
+            </>
+          )
+        })()}
+        {isLong && longCollapsed && (
+          <button onClick={() => setLongCollapsed(false)}
+            className="mt-1 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors"
+            style={{ background: c.surfaceInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>
+            展开全文（共 {shownContent.length.toLocaleString()} 字）
+          </button>
+        )}
+        {isStreaming && shownContent && <span className="inline-block w-2 h-4 rounded-sm animate-pulse align-middle ml-0.5" style={{ background: c.accent }} />}
+        {isStreaming && !shownContent && (!toolCalls || toolCalls.length === 0) && (
           <div className="flex items-center gap-2 py-1">
             <BrandMark size={18} color={c.textTertiary} className="animate-pulse" />
             <span className="text-[13px]" style={{ color: c.textTertiary }}>正在生成…</span>
           </div>
-        ) : null}
+        )}
 
         {/* 悬停操作栏（含时间戳） */}
         {!isStreaming && shownContent && (

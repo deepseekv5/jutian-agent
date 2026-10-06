@@ -199,6 +199,9 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
   const streamingRef = useRef(false)
   const userScrolledUp = useRef(false)
   const allToolCallsRef = useRef<ToolCall[]>([])
+  // 时序交错:工具调用开始时正文已流出的长度,渲染按真实顺序排布
+  const chunkLenRef = useRef(0)
+  const toolPreLenRef = useRef<Record<string, number>>({})
   const followModeRef = useRef(followMode)
   const onFollowTargetRef = useRef(onFollowTarget)
   const onFileChangedRef = useRef(onFileChanged)
@@ -482,11 +485,11 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
     setStreamToolCalls([])
 
     const callbacks: StreamCallbacks = {
-      onChunk: (delta) => setStreamContent(prev => prev + delta),
+      onChunk: (delta) => { chunkLenRef.current += delta.length; setStreamContent(prev => prev + delta) },
       onThinking: (delta) => setStreamThinking(prev => prev + delta),
-      onToolStart: (tc) => setStreamToolCalls(prev => prev.some(t => t.id === tc.id) ? prev : [...prev, { ...tc, status: 'running' as const }]),
+      onToolStart: (tc) => { toolPreLenRef.current[tc.id] = chunkLenRef.current; setStreamToolCalls(prev => prev.some(t => t.id === tc.id) ? prev : [...prev, { ...tc, status: 'running' as const, preLen: chunkLenRef.current }]) },
       onToolEnd: (tc) => {
-        allToolCallsRef.current.push(tc)
+        allToolCallsRef.current.push({ ...tc, preLen: toolPreLenRef.current[tc.id] ?? 0 })
         setStreamToolCalls(prev => prev.map(t => t.id === tc.id ? tc : t))
         // AGENTS.md 被改写后自动重载项目指令
         try {
@@ -631,15 +634,37 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke={c.accentText} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
                 <div className="flex-1 min-w-0 text-[12.5px] leading-relaxed">
-                <RenderContent content={msg.content} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />
-                {msg.tool_calls && msg.tool_calls.length > 0 && (
-                  <div className="mt-1.5 space-y-1">
-                    {msg.tool_calls.map((tc: any) => <ToolLine key={tc.id} tc={tc} textMuted={textMuted} c={c} />)}
-                    {msg.tool_calls.filter((tc: any) => (tc.status === 'done') && (tc.name === 'edit_file' || tc.name === 'write_file')).map((tc: any) => (
-                      <DiffCardView key={`d_${tc.id}`} tc={tc} c={c} onFileMutated={onFileMutated} />
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const tcs = msg.tool_calls || []
+                  const diffFor = (tc: any) => (tc.status === 'done') && (tc.name === 'edit_file' || tc.name === 'write_file')
+                    ? <DiffCardView key={`d_${tc.id}`} tc={tc} c={c} onFileMutated={onFileMutated} /> : null
+                  // 时序交错:话在前,工具调用随后,最终输出收尾
+                  if (tcs.some((tc: any) => typeof tc.preLen === 'number')) {
+                    let last = 0
+                    const seq: any[] = []
+                    for (const tc of tcs) {
+                      const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, msg.content.length))
+                      if (cut > last) seq.push(<RenderContent key={'t' + seq.length} content={msg.content.slice(last, cut)} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />)
+                      seq.push(<div key={'c' + tc.id} className="mt-1"><ToolLine tc={tc} textMuted={textMuted} c={c} />{diffFor(tc)}</div>)
+                      last = cut
+                    }
+                    if (last < msg.content.length) seq.push(<RenderContent key="t-end" content={msg.content.slice(last)} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />)
+                    return seq
+                  }
+                  return (
+                    <>
+                      <RenderContent content={msg.content} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />
+                      {tcs.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          {tcs.map((tc: any) => <ToolLine key={tc.id} tc={tc} textMuted={textMuted} c={c} />)}
+                          {tcs.filter((tc: any) => (tc.status === 'done') && (tc.name === 'edit_file' || tc.name === 'write_file')).map((tc: any) => (
+                            <DiffCardView key={`d_${tc.id}`} tc={tc} c={c} onFileMutated={onFileMutated} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 </div>
               </div>
             )}
@@ -653,15 +678,29 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke={c.accentText} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               </div>
               <div className="flex-1 min-w-0 text-[12.5px] leading-relaxed">
-                <RenderContent content={streamContent} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />
-                {!streamContent && !streamThinking && <span className="typing-cursor" />}
+                {(() => {
+                  const tcs = streamToolCalls
+                  if (tcs.some((tc: any) => typeof tc.preLen === 'number')) {
+                    let last = 0
+                    const seq: any[] = []
+                    for (const tc of tcs) {
+                      const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, streamContent.length))
+                      if (cut > last) seq.push(<RenderContent key={'t' + seq.length} content={streamContent.slice(last, cut)} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />)
+                      seq.push(<div key={'c' + tc.id} className="mt-1"><ToolLine tc={tc} textMuted={textMuted} /></div>)
+                      last = cut
+                    }
+                    if (last < streamContent.length) seq.push(<RenderContent key="t-end" content={streamContent.slice(last)} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />)
+                    return seq
+                  }
+                  return (
+                    <>
+                      <RenderContent content={streamContent} inputBg={inputBg} borderColor={borderColor} textMuted={textMuted} />
+                      {!streamContent && !streamThinking && <span className="typing-cursor" />}
+                    </>
+                  )
+                })()}
               </div>
             </div>
-            {streamToolCalls.length > 0 && (
-              <div className="mt-1 space-y-0.5">
-                {streamToolCalls.map(tc => <ToolLine key={tc.id} tc={tc} textMuted={textMuted} />)}
-              </div>
-            )}
           </div>
         )}
         {error && (

@@ -671,6 +671,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     let fullContent = ''
     let fullThinking = ''
     const allToolCalls: ToolCall[] = []
+    // 时序交错:记录每个工具调用开始时正文已流出的长度(preLen),
+    // 渲染层据此把「话→工具→话」按真实顺序排布
+    const toolPreLen: Record<string, number> = {}
 
     // ─── 流式渲染节流：chunk 先入缓冲，50ms 批量刷新，避免每 token 全列表重渲染 ───
     let flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -696,6 +699,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       },
 
       onToolStart: (toolCall) => {
+        toolPreLen[toolCall.id] = fullContent.length
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id
             ? { ...m, tool_calls: [...(m.tool_calls || []), { ...toolCall, status: 'running' as const }] }
@@ -716,7 +720,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       },
 
       onToolEnd: (toolCall) => {
-        allToolCalls.push(toolCall)
+        allToolCalls.push({ ...toolCall, preLen: toolPreLen[toolCall.id] ?? 0 })
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id
             ? {
