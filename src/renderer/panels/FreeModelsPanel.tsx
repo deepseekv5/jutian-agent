@@ -196,16 +196,17 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           <div className="mb-3 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.14), rgba(255,255,255,.6) 70%)', border: '1px solid rgba(16,163,127,.4)' }}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('推荐', 'Top pick')}</span>
-              <span className="text-[13px] font-bold" style={{ color: c.textHead }}>GitHub Models</span>
+              <span className="text-[13px] font-bold" style={{ color: c.textHead }}>Pollinations · GPT-OSS 20B</span>
               <span className="text-[10px]" style={{ color: c.textTertiary }}>{t('免 key 直连', 'keyless')}</span>
             </div>
             <div className="text-[11.5px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
-              {t('GPT-4o/5、o4-mini、DeepSeek V3/R1、Llama、Mistral、Grok — 全部免 key 可用,有速率限制,失败会自动重试。', 'GPT-4o/5, o4-mini, DeepSeek V3/R1, Llama, Mistral, Grok — all keyless. Rate-limited; empty replies auto-retry.')}
+              {t('推理 + 工具调用能力,完全免费无需注册;另有 Kilo 网关 21 个免费档(默认 openrouter/free 自动路由)。', 'Reasoning + tool calling, fully free, no signup. Plus Kilo gateway with 21 free tiers (default openrouter/free auto-routing).')}
             </div>
-            <button onClick={() => switchTo(gh.models[0], gh, false)} disabled={isGh && settings.model === gh.models[0].id}
+            <button onClick={() => { const src = sources.find(s => s.id === 'pollinations'); if (src) switchTo(src.models[0], src, false) }}
+              disabled={!sources.some(s => s.id === 'pollinations')}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
               style={{ background: '#10a37f', color: '#fff' }}>
-              {isGh && settings.model === gh.models[0].id ? t('使用中', 'In use') : t('一键切换 GPT-4o mini', 'Switch to GPT-4o mini')}
+              {t('一键切换 GPT-OSS 20B', 'Switch to GPT-OSS 20B')}
             </button>
           </div>
         )}
@@ -234,19 +235,25 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           <div className="grid place-items-center py-16 text-[12.5px]" style={{ color: c.textTertiary }}>{t('正在拉取免费模型目录…', 'Loading free catalogs…')}</div>
         ) : (
           <>
-            {/* GitHub Models 全列表 */}
-            {gh && (
-              <div className="mb-5">
+            {/* 通用多源渲染:Pollinations / Kilo / 未来新源 */}
+            {sources.map(src => (
+              <div key={src.id} className="mb-5">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[12px] font-bold" style={{ color: c.textHead }}>GitHub Models</span>
-                  <span className="text-[10px]" style={{ color: c.textTertiary }}>{gh.models.length} {t('个', 'models')}</span>
-                  {isGh && settings.model && <span className="ml-auto text-[10.5px]" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>}
+                  <span className="text-[12px] font-bold" style={{ color: c.textHead }}>{src.name}{src.paid ? ` · ${t('免费档', 'free')}` : ''}</span>
+                  <span className="text-[10px]" style={{ color: c.textTertiary }}>{src.models.length} {t('个', 'models')}</span>
+                  {src.note && <span className="text-[10px] truncate" style={{ color: c.textTertiary }}>{src.note}</span>}
+                  {((src.id === 'kilo' ? isKilo : /pollinations/.test(currentBase)) && settings.model) &&
+                    <span className="ml-auto text-[10.5px]" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>}
                 </div>
                 <div className="space-y-1.5">
-                  {filter(gh.models).map(m => row(m, gh, false, m.id === 'openai/gpt-4o-mini'))}
+                  {filter(src.models).map(m => row(m, src, false,
+                    src.id === 'kilo' ? m.id === 'openrouter/free' : m.id === 'openai-fast'))}
+                  {filter(src.models).length === 0 && (
+                    <div className="text-center py-6 text-[12px]" style={{ color: c.textTertiary }}>{t('没有匹配的模型', 'No match')}</div>
+                  )}
                 </div>
               </div>
-            )}
+            ))}
 
             {/* Kilo 免费档 */}
             {kilo && (

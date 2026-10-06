@@ -1831,7 +1831,8 @@ http.createServer(async (req, res) => {
         // 从 body 中移除内部字段
         delete bodyData.targetBase;
         delete bodyData.apiKey;
-        const upstreamUrl = `${targetBase}/chat/completions`;
+        // Pollinations 的端点本身就是 /openai(chat completions),不拼后缀
+        const upstreamUrl = /\/openai$/.test(targetBase) ? targetBase : `${targetBase}/chat/completions`;
         console.log(`\u2192 llm-proxy \u2192 ${targetBase}`);
         // 免 key 网关(如 Kilo Gateway):密钥填 free/keyless 时完全不带
         // Authorization 头——此类网关对任何无效 token 反而报 INVALID_TOKEN
@@ -3119,6 +3120,12 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           ok: true,
           sources: [
             {
+              id: "pollinations", name: "Pollinations", keyless: true,
+              base: "https://text.pollinations.ai/openai",
+              note: "免 key 匿名档:GPT-OSS 20B(推理·工具调用)",
+              models: [{ id: "openai-fast", name: "GPT-OSS 20B(推理·工具)", context: 131072, vision: false, tools: true }],
+            },
+            {
               id: "kilo", name: "Kilo Gateway", keyless: true,
               base: "https://api.kilo.ai/api/gateway/v1",
               total: arr.length,
@@ -3138,7 +3145,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
       try {
         const { model, base } = await body(req);
         if (!model) return json(res, { error: "缺少 model" }, 400);
-        const target = String(base || "") === "github" ? "https://models.github.ai/inference" : "https://api.kilo.ai/api/gateway/v1";
+        const target = String(base || "") === "pollinations" ? "https://text.pollinations.ai/openai"
+          : String(base || "") === "github" ? "https://models.github.ai/inference"
+          : "https://api.kilo.ai/api/gateway/v1";
         const t0 = Date.now();
         const r = await fetch(`${target}/chat/completions`, {
           method: "POST",
