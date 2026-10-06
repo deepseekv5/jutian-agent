@@ -25,6 +25,7 @@ export default function ComputerUseTab({ settings, onClose }: { settings: Settin
   const [displays, setDisplays] = useState<{ id: string; w: number; h: number; primary: boolean }[]>([])
   const [displayId, setDisplayId] = useState<string>('')
   const [shot, setShot] = useState<string>('')
+  const [shotErr, setShotErr] = useState('')
   const [monitoring, setMonitoring] = useState(false)
   const [goal, setGoal] = useState('')
   const [running, setRunning] = useState(false)
@@ -51,8 +52,9 @@ export default function ComputerUseTab({ settings, onClose }: { settings: Settin
   const refreshShot = useCallback(async () => {
     try {
       const r = await captureScreen(displayId || undefined, 'preview')
-      if ('dataUrl' in r) setShot(r.dataUrl)
-    } catch { /* 忽略瞬时错误 */ }
+      if ('dataUrl' in r) { setShot(r.dataUrl); setShotErr('') }
+      else setShotErr(r.error || '截屏失败')
+    } catch (e: any) { setShotErr(String(e?.message || e) || '截屏失败') }
   }, [displayId])
 
   useEffect(() => { refreshPerms() }, [refreshPerms])
@@ -132,13 +134,28 @@ export default function ComputerUseTab({ settings, onClose }: { settings: Settin
           </div>
         </div>
         <div className="flex-1 overflow-auto p-3 min-h-0">
+          {shotErr && (
+            <div className="mb-2 rounded-lg p-2.5 text-[12px]" style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444' }}>
+              {shotErr}
+              {shotErr.includes('屏幕录制') && (
+                <button onClick={() => (window as any).electronAPI?.cuOpenPerms?.('screen')}
+                  className="ml-2 underline font-medium">{t('打开设置授权', 'Open Settings')}</button>
+              )}
+            </div>
+          )}
           {shot
             ? <img src={shot} alt="屏幕截图" decoding="async" className="w-full rounded-lg" style={{ border: `1px solid ${c.border}`, aspectRatio: '16 / 10', objectFit: 'contain', background: '#0a0a0b' }} />
             : <div className="h-full grid place-items-center text-[12px]" style={{ color: c.textTertiary }}>{t('点「刷新」或开启「监视」查看屏幕', 'Refresh or turn on Live view')}</div>}
         </div>
         {/* 权限状态 */}
         <div className="shrink-0 border-t p-3 space-y-1.5" style={{ borderColor: c.border }}>
-          <PermRow ok={!!perms} label={t('截屏能力', 'Capture')} hint={perms ? t('屏幕捕获可用', 'Screen capture ready') : '仅在 App 内可用'} c={c} />
+          <PermRow ok={!!perms?.screen} label={t('屏幕录制（截屏）', 'Screen recording')} hint={perms?.screen ? t('已授权', 'Granted') : (perms ? t('未授权——截屏为空/黑屏的根因', 'Not granted — blank captures') : '仅在 App 内可用')} c={c} />
+          {!perms?.screen && perms && (
+            <button onClick={() => (window as any).electronAPI?.cuOpenPerms?.('screen')}
+              className="w-full h-8 rounded-lg text-[12px] font-medium" style={{ background: c.accent, color: c.accentText }}>
+              {t('打开「屏幕录制」授权', 'Grant Screen Recording')}
+            </button>
+          )}
           <PermRow ok={!!canControl} label={t('辅助功能（控制权限）', 'Accessibility (control)')} hint={canControl ? (perms?.cliclick ? 'cliclick 已就绪（支持拖拽）' : t('已授权（osascript 模式）', 'Granted (osascript mode)')) : t('需要授权后才能点击/键入', 'Grant to enable clicks & typing')} c={c} />
           {!canControl && perms && (
             <button onClick={() => (window as any).electronAPI?.cuOpenPerms?.('access')}
@@ -156,7 +173,7 @@ export default function ComputerUseTab({ settings, onClose }: { settings: Settin
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={accent} stroke-width="1.8" stroke-linecap="round"><path d="M15 7a3 3 0 10-6 0v2a3 3 0 006 0V7z" /><path d="M9 21h6M12 3v4" /></svg>
           </span>
           <span className="text-[14px] font-bold" style={{ color: c.textHead }}>Computer Use</span>
-          <span className="text-[11px]" style={{ color: c.textTertiary }}>t('说目标，它操作这台电脑', 'Say the goal; it drives this computer')</span>
+          <span className="text-[11px]" style={{ color: c.textTertiary }}>{t('说目标，它操作这台电脑', 'Say the goal; it drives this computer')}</span>
           <div className="ml-auto flex items-center gap-1.5">
             <label className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[11.5px] cursor-pointer select-none" style={{ background: c.bgInput, color: c.textSecondary }} title="每个动作执行前先等你确认（更安全）">
               <input type="checkbox" checked={confirmEach} onChange={e => { setConfirmEach(e.target.checked); try { localStorage.setItem('jutian-cu-confirm', e.target.checked ? '1' : '0') } catch {} }} className="accent-[#10a37f]" />

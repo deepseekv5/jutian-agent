@@ -12,7 +12,7 @@
  * 回退 osascript System Events（点击/键入/按键）。Windows 走 PowerShell。
  * 坐标一律为「屏幕逻辑坐标」(global display coordinates)。
  */
-const { ipcMain, desktopCapturer, screen, shell } = require('electron')
+const { ipcMain, desktopCapturer, screen, shell, systemPreferences } = require('electron')
 const { execFile } = require('child_process')
 
 const IS_MAC = process.platform === 'darwin'
@@ -47,8 +47,8 @@ async function findCliclick() {
 async function checkPermissions() {
   const state = { platform: process.platform, screen: true, accessibility: true, cliclick: false }
   if (IS_MAC) {
-    // 屏幕录制：抓一帧 1x1 判定是否被系统允许（无权限时 desktopCapturer 仍返回但内容为纯桌面）
-    // 经验做法：直接标记 true，由渲染层用首帧提示用户；这里只检测辅助功能。
+    // 屏幕录制:真实检测(mediaAccessStatus),不再写死 true
+    try { state.screen = systemPreferences.getMediaAccessStatus('screen') === 'granted' } catch { state.screen = true }
     const ui = await run('osascript', ['-e', 'tell application "System Events" to get UI elements enabled'], 3000)
     state.accessibility = ui.ok && /true/i.test(ui.out)
     state.cliclick = !!(await findCliclick())
@@ -217,13 +217,27 @@ async function capture(displayId, purpose) {
   let w = Math.round(target.size.width * scale)
   let h = Math.round(target.size.height * scale)
   if (w > capW) { h = Math.round(h * capW / w); w = capW }
-  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: w, height: h } })
-  // 多显示器：按 display_id 匹配，匹配不到取第一个
-  const src = sources.find(s => String(s.display_id) === String(target.id)) || sources[0]
+  // 空帧重试:Electron 首帧常为空;无屏幕录制权限时恒为纯黑帧
+  let src = null
+  for (let i = 0; i < 3; i++) {
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: w, height: h } })
+    const hit = sources.find(s => String(s.display_id) === String(target.id)) || sources[0]
+    if (hit && !hit.thumbnail.isEmpty()) { src = hit; break }
+    await new Promise(r => setTimeout(r, 350))
+  }
   if (!src) return { ok: false, error: '没有可截取的屏幕' }
+  let dataUrl = ''
+  try { dataUrl = src.thumbnail.toJPEG(purpose === 'preview' ? 55 : 68) } catch (e) { return { ok: false, error: '截图编码失败: ' + String(e?.message || e) } }
+  // 过小帧 = 无权限时的纯色画面:明确报权限,不再静默显示黑屏
+  if (!dataUrl || dataUrl.length < 2048) {
+    let granted = true
+    try { granted = systemPreferences.getMediaAccessStatus('screen') === 'granted' } catch {}
+    if (IS_MAC && !granted) return { ok: false, needPerm: 'screen', error: '屏幕截图为空:请在 系统设置 → 隐私与安全性 → 屏幕录制 中勾选巨天agent,然后重启应用' }
+    return { ok: false, error: '屏幕截图为空,请重试一次' }
+  }
   return {
     ok: true,
-    dataUrl: src.thumbnail.toJPEG(purpose === 'preview' ? 55 : 68),
+    dataUrl,
     width: src.thumbnail.getSize().width,
     height: src.thumbnail.getSize().height,
     display: { id: target.id, w: target.size.width, h: target.size.height, scaleFactor: target.scaleFactor },
