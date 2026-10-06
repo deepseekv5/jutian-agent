@@ -12,15 +12,16 @@
 
 | 模型 | 说明 |
 |---|---|
-| `kilo-auto/free` | 自动路由,永远挑当前最快的免费活源,推荐默认 |
+| `openrouter/free` | **默认** — OpenRouter 免费路由器(经 Kilo 网关免 key,实测可用),聚合 20+ 免费模型自动路由,识图+推理 |
+| `kilo-auto/free` | Kilo 自动路由备选,永远挑当前最快的免费活源 |
 | `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B MoE,1M 上下文 |
 | `stepfun/step-3.7-flash:free` | 多模态,262K 上下文,识图 |
 | `poolside/laguna-s-2.1:free` / `xs:free` | 编码向,262K |
 | `nvidia/nemotron-3-nano-omni:free` | 30B MoE,识图 |
 | `cohere/north-mini-code:free` | 代码向,256K |
 
+- 默认模型为 **OpenRouter Free Models Router**(`openrouter/free`);**其余免费档请自行测试可用性**——免费源按网关负载轮换,面板里每个模型旁有「测速」按钮,空响应服务端会自动重试(最多 3 次,推理模型自动加大 token 预算)
 - 额度:**每 IP 200 次/小时**,超限等待或切换模型
-- 每个模型旁有「测速」按钮,发最小请求实测延迟,挑快的用
 - 「切换」= 自动写入网关地址 + 免鉴权占位 + 模型名,无需任何配置
 
 ## 付费档(Kilo 账户密钥)

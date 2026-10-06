@@ -404,7 +404,7 @@ function MainApp() {
       case 'qqbot':
         return <QQBotTab />;
       case 'settings':
-        return <SettingsModal embedded settings={settings} onSave={s => saveSettings({ ...s })} onClose={() => closeTab(tab.id)} />;
+        return <SettingsModal embedded settings={settings} onSave={s => saveSettings({ ...s })} onClose={() => closeTab(tab.id)} onOpenFreeModels={() => openTab('freemodels')} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:

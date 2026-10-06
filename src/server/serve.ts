@@ -1793,7 +1793,8 @@ http.createServer(async (req, res) => {
         let targetBase = _tbHeader || "";
         let apiKey = String(req.headers["x-api-key"] || bodyData.apiKey || "").trim();
         // 掩码回显(GET /api/settings 返回 sk-6****9Ylc)不是真钥匙:
-        // 头里是掩码/free 占位/为空时,回退到本机存储的真实配置(密钥不出电脑)。
+        // 头里是掩码/为空时,回退到本机存储的真实配置(密钥不出电脑)。
+        // free/keyless 是免鉴权网关哨兵,一律保持原值,绝不用库内 key 覆盖。
         // SQLite 优先,遗留 settings.json 仅作兜底。
         const headerKeyUsable = apiKey !== "" && apiKey.indexOf("****") < 0 && apiKey !== "free" && apiKey !== "keyless";
         if (!headerKeyUsable || !targetBase) {
@@ -1813,12 +1814,13 @@ http.createServer(async (req, res) => {
               if (!__dbKey && __st.apiKey) __dbKey = String(__st.apiKey);
             } catch {}
           }
-          if (!headerKeyUsable) apiKey = __dbKey;
+          // 仅掩码/为空才回退库内 key;free/keyless 哨兵不动
+          if (apiKey === "" || apiKey.indexOf("****") >= 0) apiKey = __dbKey;
           if (!targetBase) targetBase = __dbBase;
-          // Kilo 付费档:免费占位/free 到达但模型非免费档 → 用 Kilo 账户密钥
+          // Kilo 付费档:免费占位/空 到达但模型非免费档 → 用 Kilo 账户密钥
           const __mdl = String(bodyData?.model || "");
-          if ((apiKey === "" || apiKey === "free" || apiKey === "keyless") && __dbKiloKey
-            && __mdl && __mdl.indexOf(":free") < 0 && !/^kilo-/.test(__mdl)) apiKey = __dbKiloKey;
+          const __mdlFree = __mdl.indexOf(":free") >= 0 || __mdl.endsWith("/free") || /^kilo-/.test(__mdl);
+          if ((apiKey === "" || apiKey === "free" || apiKey === "keyless") && __dbKiloKey && __mdl && !__mdlFree) apiKey = __dbKiloKey;
         }
         // v7.0：未配置模型服务时明确报错,不再回退到任何默认提供商
         if (!targetBase || !apiKey) {
@@ -1868,20 +1870,79 @@ http.createServer(async (req, res) => {
           }));
           return;
         }
-        // 流式透传 SSE
-        res.writeHead(200, {
+        // ─── 空响应自动重试(v8.1:免费模型高发 — reasoning 吃满 max_tokens 时 content 为空)───
+        const isStreamReq = bodyData.stream === true;
+        const basePayload = (() => { const p = { ...bodyData }; delete p.targetBase; delete p.apiKey; return p; })();
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const callUpstream = (payload) => fetch(upstreamUrl, {
+          method: "POST", headers: proxyHeaders, body: JSON.stringify(payload), signal: AbortSignal.timeout(120000),
+        });
+        const escalate = (payload, fr: string) =>
+          (fr === "length" ? { ...payload, max_tokens: Math.min(8192, Math.max(1024, (Number(payload.max_tokens) || 256) * 4)) } : payload);
+        const sseHeaders = {
           ...(corsHeaders(req) || {}),
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           "Connection": "keep-alive",
-        });
-        const reader = proxyRes.body.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(decoder.decode(value, { stream: true }));
+        };
+        const bodyEmpty = (j) => {
+          const msg = j?.choices?.[0]?.message;
+          return !msg || typeof msg.content !== "string" || msg.content.trim() === "";
+        };
+        if (!isStreamReq) {
+          // 非流式:整体缓冲,空内容自动重试(最多 3 次)
+          let payload = basePayload;
+          let text = await proxyRes.text();
+          let j = null; try { j = JSON.parse(text); } catch {}
+          for (let att = 1; att <= 3 && bodyEmpty(j); att++) {
+            console.log(`llm-proxy 空响应(attempt ${att}${j?.choices?.[0]?.finish_reason ? ", finish=" + j.choices[0].finish_reason : ""})${att < 3 ? ",重试" : ",放弃"}`);
+            if (att < 3) {
+              await sleep(400 * att);
+              payload = escalate(payload, j?.choices?.[0]?.finish_reason || "");
+              const r2 = await callUpstream(payload);
+              if (r2.ok) { text = await r2.text(); try { j = JSON.parse(text); } catch { j = null; } }
+              else break;
+            }
+          }
+          res.writeHead(200, sseHeaders);
+          res.end(text);
+          return;
         }
+        // 流式:实时透传;押后 [DONE],整条流没有任何正文内容则自动重试
+        res.writeHead(200, sseHeaders);
+        let payload = basePayload;
+        for (let att = 1; att <= 3; att++) {
+          const r = att === 1 ? proxyRes : await callUpstream(payload);
+          if (!r.ok) { const t = await r.text().catch(() => ""); res.end(t || JSON.stringify({ error: `上游 ${r.status}`, upstreamStatus: r.status })); return; }
+          const reader = r.body.getReader();
+          const decoder = new TextDecoder();
+          let sawContent = false, finishFr = "", tail = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            tail += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = tail.indexOf("\n")) >= 0) {
+              const line = tail.slice(0, idx); tail = tail.slice(idx + 1);
+              if (line.trim() === "data: [DONE]") continue; // 押后:空了要换一发
+              const m = line.match(/^data:\s*(.+)$/);
+              if (m) {
+                try {
+                  const j = JSON.parse(m[1]);
+                  const delta = j?.choices?.[0]?.delta?.content;
+                  if (typeof delta === "string" && delta.length > 0) sawContent = true;
+                  if (j?.choices?.[0]?.finish_reason) finishFr = j.choices[0].finish_reason;
+                } catch {}
+              }
+              res.write(line + "\n");
+            }
+          }
+          if (tail && tail.trim() !== "data: [DONE]") res.write(tail);
+          if (sawContent) break;
+          console.log(`llm-proxy 流式空响应(attempt ${att}${finishFr ? ", finish=" + finishFr : ""})${att < 3 ? ",重试" : ",放弃"}`);
+          if (att < 3) { await sleep(400 * att); payload = escalate(payload, finishFr); }
+        }
+        res.write("data: [DONE]\n\n");
         res.end();
       } catch (e) {
         console.error("llm-proxy error:", e.message);
@@ -3015,13 +3076,19 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           desc: String(m?.description || "").slice(0, 120),
           vision: /image|vision|multimodal|omni|识图/i.test(String(m?.description || "") + JSON.stringify(m?.architecture || "")),
         });
-        const free = arr.filter((m) => String(m?.id || "").indexOf(":free") >= 0 || m?.isFree === true || /^kilo-/.test(String(m?.id || ""))).map(pick).filter((m) => m.id);
+        // 免费档判定::free 后缀 / isFree / kilo- 前缀 / /free 结尾(openrouter/free)
+        const isFreeId = (id: string) => id.indexOf(":free") >= 0 || id.endsWith("/free") || /^kilo-/.test(id);
+        const free = arr.filter((m) => { const id = String(m?.id || ""); return isFreeId(id) || m?.isFree === true; }).map(pick).filter((m) => m.id);
         free.sort((a, b) => {
-          if (/^kilo-auto\/free/.test(a.id)) return -1;
-          if (/^kilo-auto\/free/.test(b.id)) return 1;
+          // 默认:openrouter/free(OpenRouter 免费路由器,经 Kilo 网关免 key,
+          // 实测 2026-10-06 无 Authorization 直连可用);kilo-auto/free 备选
+          if (a.id === "openrouter/free") return -1;
+          if (b.id === "openrouter/free") return 1;
+          if (a.id === "kilo-auto/free") return -1;
+          if (b.id === "kilo-auto/free") return 1;
           return a.name.localeCompare(b.name);
         });
-        const paid = arr.filter((m) => !(String(m?.id || "").indexOf(":free") >= 0 || m?.isFree === true || /^kilo-/.test(String(m?.id || "")))).map(pick).filter((m) => m.id);
+        const paid = arr.filter((m) => { const id = String(m?.id || ""); return !(isFreeId(id) || m?.isFree === true); }).map(pick).filter((m) => m.id);
         const out = {
           ok: true,
           source: "Kilo Gateway",

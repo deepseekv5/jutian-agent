@@ -122,12 +122,14 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
 
   const row = (m: ModelInfo, isPaid: boolean) => {
     const active = isKilo && settings.model === m.id
+    const isDefault = m.id === 'openrouter/free'
     return (
       <div key={m.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3"
-        style={{ background: active ? 'rgba(16,163,127,.10)' : c.surfaceCard, border: `1px solid ${active ? 'rgba(16,163,127,.45)' : c.border}` }}>
+        style={{ background: active ? 'rgba(16,163,127,.10)' : c.surfaceCard, border: `1px ${active ? 'solid rgba(16,163,127,.45)' : isDefault ? 'dashed rgba(16,163,127,.5)' : `solid ${c.border}`}` }}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[13px] font-medium truncate" style={{ color: c.textHead }}>{m.name}</span>
+            {isDefault && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('默认', 'Default')}</span>}
             {m.vision && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(59,130,246,.14)', color: '#60a5fa' }}>{t('识图', 'Vision')}</span>}
             {active && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('使用中', 'In use')}</span>}
             {isPaid && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(245,158,11,.14)', color: '#f59e0b' }}>{t('付费', 'Paid')}</span>}
@@ -165,6 +167,24 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       <div className="flex-1 overflow-auto p-4 min-h-0">
         {error && (
           <div className="mb-3 rounded-lg p-2.5 text-[12px]" style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444' }}>{error}</div>
+        )}
+
+        {/* 推荐大卡:默认 openrouter/free */}
+        {models.length > 0 && (
+          <div className="mb-3 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.14), rgba(255,255,255,.6) 70%)', border: '1px solid rgba(16,163,127,.4)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('默认推荐', 'Recommended')}</span>
+              <span className="text-[13px] font-bold" style={{ color: c.textHead }}>openrouter/free</span>
+            </div>
+            <div className="text-[11.5px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
+              {t('OpenRouter 免费路由器:免 key、免注册,自动在 20+ 个免费模型间路由,每 IP 200 次/小时。点「切换」即可用。', 'OpenRouter free router: keyless, no signup, auto-routes across 20+ free models, 200 req/hour per IP.')}
+            </div>
+            <button onClick={() => switchTo(models[0], false)} disabled={isKilo && settings.model === models[0].id}
+              className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
+              style={{ background: '#10a37f', color: '#fff' }}>
+              {isKilo && settings.model === models[0].id ? t('使用中', 'In use') : t('一键切换', 'Switch now')}
+            </button>
+          </div>
         )}
 
         {/* Kilo 账户密钥配置(解锁付费档) */}
@@ -228,8 +248,8 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       </div>
 
       <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
-        {t('科技不是高高在上,而是服务于人民。免费档每 IP 200 次/小时、无需注册;配置 Kilo 账户密钥后可用全部付费档。',
-           'Technology should serve people, not stand above them. Free tier: 200 req/hour per IP, no signup. Add a Kilo key to unlock all models.')}
+        {t('科技不是高高在上,而是服务于人民。默认 openrouter/free(OpenRouter 免费路由器,免 key,聚合 20+ 免费模型);其余免费档请自行测试可用性,空响应会自动重试。免费档每 IP 200 次/小时、无需注册;配置 Kilo 账户密钥后可用全部付费档。',
+           'Technology should serve people, not stand above them. Default: openrouter/free (OpenRouter free router, keyless, 20+ free models). Other free tiers: test yourself — empty replies auto-retry. Free tier: 200 req/hour per IP, no signup. Add a Kilo key to unlock all models.')}
       </div>
     </div>
   )

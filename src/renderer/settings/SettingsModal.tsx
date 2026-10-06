@@ -16,6 +16,8 @@ interface Props {
   onSave: (s: Settings) => void;
   onClose: () => void;
   embedded?: boolean;
+  /** 打开免费模型面板(设置内一键跳转) */
+  onOpenFreeModels?: () => void;
 }
 
 type TabId = 'inference' | 'workspace' | 'security' | 'usage' | 'data' | 'appearance' | 'language' | 'about';
@@ -117,7 +119,7 @@ const Field = ({ label, children, c }: { label: string; children: React.ReactNod
   </div>
 );
 
-export default function SettingsModal({ settings, onSave, onClose, embedded = false }: Props) {
+export default function SettingsModal({ settings, onSave, onClose, embedded = false, onOpenFreeModels }: Props) {
   const { c, theme, setTheme } = useTheme();
   // 强调色面板重渲染标记
   const [, setAccentTick] = useState(0);
@@ -137,6 +139,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     return SEARCH_INDEX.filter(it => it.keywords.toLowerCase().includes(q) || it.label.toLowerCase().includes(q)).slice(0, 12);
   }, [searchQuery]);
   const [form, setForm] = useState<Settings>({ ...settings });
+  const [savedFlash, setSavedFlash] = useState('');
   const [saving, setSaving] = useState(false);
   const [lmModels, setLmModels] = useState<{ id: string }[]>([]);
   const [lmScanning, setLmScanning] = useState(false);
@@ -508,6 +511,34 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
             <CliBanner />
 
             {tab === 'inference' && (<>
+
+              {/* 免费模型一键启用:不填任何东西,0 元用上 AI */}
+              <div className="mb-4 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.12), rgba(255,255,255,.55) 70%)', border: '1px solid rgba(16,163,127,.35)' }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
+                  <span className="text-[13.5px] font-bold" style={{ color: c.textHead }}>{t('不想配置?一键免费用 AI', 'No setup? Use AI for free')}</span>
+                </div>
+                <p className="text-[12px] leading-relaxed mb-3" style={{ color: c.textSecondary }}>
+                  {t('默认走 OpenRouter 免费路由器(openrouter/free,免 key、免注册,聚合 20+ 免费模型),每 IP 200 次/小时。科技不是高高在上,而是服务于人民。', 'Default: OpenRouter free router (openrouter/free) — keyless, no signup, 20+ free models, 200 req/hour per IP.')}
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button"
+                    onClick={() => {
+                      const next = { ...form, provider: 'api' as const, apiBaseUrl: 'https://api.kilo.ai/api/gateway/v1', apiKey: 'free', model: 'openrouter/free', models: ['openrouter/free'] }
+                      setForm(next)
+                      onSave(next)
+                      setSavedFlash('free')
+                    }}
+                    className="px-4 h-9 rounded-full text-[12.5px] font-semibold" style={{ background: '#10a37f', color: '#fff' }}>
+                    {t('一键启用免费模型', 'Enable free models')}
+                  </button>
+                  <button type="button" onClick={() => onOpenFreeModels?.()}
+                    className="px-4 h-9 rounded-full text-[12.5px] font-medium" style={{ background: 'rgba(255,255,255,.7)', color: '#0f766e', border: '1px solid rgba(16,163,127,.35)' }}>
+                    {t('浏览全部 21 个免费模型 →', 'Browse all 21 free models →')}
+                  </button>
+                  {savedFlash === 'free' && <span className="text-[11.5px]" style={{ color: '#10a37f' }}>{t('已启用,去对话试试', 'Enabled — try it in chat')}</span>}
+                </div>
+              </div>
 
               <Sub c={c} title={t('推理方式', 'Provider')}>
                 <div className="flex rounded-lg p-0.5 w-fit" style={{ background: c.bgInput, border: `1px solid ${c.border}` }}>
