@@ -175,7 +175,9 @@ Please report this to https://github.com/markedjs/marked.`,r){let s="<p>An error
   var mdParser = new MarkedLib.Marked({ gfm: true, breaks: true })
   function md(text) {
     if (!text) return ''
+    // marked 对 [x](javascript:…) 这类链接不拦,渲染后统一中和脚本类地址
     return mdParser.parse(String(text).replace(/</g, '&lt;'))
+      .replace(/ href="(?:javascript|vbscript):[^"]*"/gi, ' href="#"')
   }
 
   function api(path, opts) {

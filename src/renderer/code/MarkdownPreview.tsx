@@ -9,9 +9,12 @@ interface Props {
 /** Lightweight Markdown rendering */
 function renderMarkdown(md: string): string {
   const html = md
+    // 先转义裸 HTML:预览只渲染 Markdown 语法,内联标签一律按文本显示,
+    // 否则模型/文件里的 <img onerror> 会在本渲染进程(可调工具 API)执行
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     // Code block
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      return `<pre class="cm-md-pre"><code class="cm-md-code">${escHtml(code.trim())}</code></pre>`
+      return `<pre class="cm-md-pre"><code class="cm-md-code">${code.trim()}</code></pre>`
     })
     // Inline code
     .replace(/`([^`]+)`/g, '<code class="cm-md-inline">$1</code>')
@@ -51,10 +54,13 @@ function renderMarkdown(md: string): string {
     })
     // Merge consecutive blockquotes
     .replace(/<\/blockquote>\s*<blockquote/g, '')
+    // 中和脚本类链接/图片地址(javascript: / vbscript:)
+    .replace(/ (?:href|src)="(?:javascript|vbscript):[^"]*"/gi, ' href="#"')
   return html
 }
 
-function escHtml(s: string): string {
+/** 首道转义已统一处理 HTML 元字符,此函数保留给需要局部转义的调用方 */
+function _escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
