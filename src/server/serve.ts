@@ -3058,6 +3058,30 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     // ─── 免费模型面板:Kilo Gateway 免 key 全量目录(10 分钟缓存)───
     // 注:GitHub Models 的 models.github.ai/inference 匿名/带 token 均返回
     // text/plain "OK" 桩响应(2026-10-06 实测),非 OpenAI 兼容,不可用。
+    // 注册即免费额度提供商(端点均实测存活,OpenAI 兼容,用户自备免费 key)
+    var FREE_TIER_PROVIDERS = [
+      { id: "zhipu", name: "智谱 GLM", base: "https://open.bigmodel.cn/api/paas/v4", signup: "https://open.bigmodel.cn", free: "GLM-4-Flash 完全免费", models: [
+        { id: "glm-4-flash", name: "GLM-4-Flash(免费)", context: 128000 },
+        { id: "glm-4.5-flash", name: "GLM-4.5-Flash", context: 128000 } ] },
+      { id: "siliconflow", name: "硅基流动", base: "https://api.siliconflow.cn/v1", signup: "https://siliconflow.cn", free: "注册送 14 元,部分模型免费", models: [
+        { id: "Qwen/Qwen2.5-7B-Instruct", name: "Qwen2.5-7B(免费)", context: 32768 },
+        { id: "THUDM/glm-4-9b-chat", name: "GLM-4-9B(免费)", context: 32768 } ] },
+      { id: "google", name: "Google AI Studio", base: "https://generativelanguage.googleapis.com/v1beta/openai", signup: "https://aistudio.google.com", free: "Gemini 免费档(每分钟限额)", models: [
+        { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1048576 },
+        { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1048576 } ] },
+      { id: "groq", name: "Groq", base: "https://api.groq.com/openai/v1", signup: "https://console.groq.com", free: "免费额度,推理速度极快", models: [
+        { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", context: 128000 },
+        { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B", context: 128000 } ] },
+      { id: "mistral", name: "Mistral", base: "https://api.mistral.ai/v1", signup: "https://console.mistral.ai", free: "免费档(需验证手机号)", models: [
+        { id: "mistral-small-latest", name: "Mistral Small", context: 32000 } ] },
+      { id: "hunyuan", name: "腾讯混元", base: "https://api.hunyuan.cloud.tencent.com/v1", signup: "https://console.cloud.tencent.com/hunyuan", free: "hunyuan-lite 免费", models: [
+        { id: "hunyuan-lite", name: "混元 lite(免费)", context: 256000 } ] },
+      { id: "modelscope", name: "ModelScope 魔搭", base: "https://api-inference.modelscope.cn/v1", signup: "https://modelscope.cn", free: "每日 2000 次免费调用", models: [
+        { id: "Qwen/Qwen2.5-7B-Instruct", name: "Qwen2.5-7B", context: 32768 },
+        { id: "Qwen/Qwen3-32B", name: "Qwen3-32B", context: 40960 } ] },
+      { id: "volcengine", name: "火山方舟(豆包)", base: "https://ark.cn-beijing.volces.com/api/v3", signup: "https://console.volcengine.com/ark", free: "每个模型 50 万免费 token", models: [
+        { id: "ep-xxxxxxxx", name: "填入你的接入点 ID", context: 32000 } ] },
+    ];
     var FREE_MODELS_CACHE = null;
     var FREE_MODELS_TS = 0;
     if (url.pathname === "/api/free-models" && req.method === "GET") {
@@ -3102,6 +3126,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
               paid,
             },
           ],
+          providers: FREE_TIER_PROVIDERS,
           ts: new Date().toISOString(),
         };
         FREE_MODELS_CACHE = out; FREE_MODELS_TS = now;

@@ -28,11 +28,21 @@ interface Source {
   paid?: ModelInfo[]
   total?: number
 }
+interface Provider {
+  id: string
+  name: string
+  base: string
+  signup: string
+  free: string
+  models: { id: string; name: string; context: number }[]
+}
 
 export default function FreeModelsPanel({ settings, onSettingsChange }: { settings: Settings; onSettingsChange?: (s: Settings) => void }) {
   const { t } = useLanguage()
   const { c } = useTheme()
   const [sources, setSources] = useState<Source[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [showProviders, setShowProviders] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
@@ -51,7 +61,10 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     try {
       const r = await fetch('/api/free-models')
       const d = await r.json()
-      if (d?.ok && Array.isArray(d.sources)) setSources(d.sources)
+      if (d?.ok && Array.isArray(d.sources)) {
+        setSources(d.sources)
+        setProviders(Array.isArray(d.providers) ? d.providers : [])
+      }
       else setError(d?.error || '拉取失败')
     } catch (e: any) { setError(String(e?.message || e)) }
     setLoading(false)
@@ -117,6 +130,18 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   }
 
   const fmtCtx = (n: number) => n ? (n >= 1024 ? (n / 1024).toFixed(0) + 'K' : String(n)) : '—'
+
+  const fillProvider = (p: Provider, modelId: string) => {
+    const next: Settings = {
+      ...settings,
+      provider: 'api',
+      apiBaseUrl: p.base,
+      apiKey: settings.apiKey && !settings.apiKey.includes('****') ? settings.apiKey : '',
+      model: modelId,
+    }
+    onSettingsChange?.(next)
+    pushNotice({ type: 'system', title: '已填入模型地址', body: `${p.name} · ${modelId} — 请到 设置→推理 粘贴该平台的免费密钥` })
+  }
 
   const row = (m: ModelInfo, src: Source, isPaid: boolean, isDefault = false) => {
     const active = (src.id === 'github' ? isGh : isKilo) && settings.model === m.id
@@ -258,7 +283,46 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
         )}
       </div>
 
-      <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
+        {/* 免费额度提供商(注册即免费,自备 key) */}
+        {providers.length > 0 && (
+          <div className="mt-5">
+            <button onClick={() => setShowProviders(v => !v)} className="flex items-center gap-2 mb-2 w-full text-left">
+              <span className="text-[12px] font-bold" style={{ color: c.textHead }}>{t('免费额度提供商', 'Free-tier providers')}</span>
+              <span className="text-[10px]" style={{ color: c.textTertiary }}>{providers.length} {t('家 · 注册即免费', 'providers · free on signup')}</span>
+              <span className="ml-auto text-[11px]" style={{ color: c.textTertiary }}>{showProviders ? '▴' : '▾'}</span>
+            </button>
+            {showProviders && (
+              <div className="space-y-2">
+                <div className="text-[10.5px] leading-relaxed" style={{ color: c.textTertiary }}>
+                  {t('均为 OpenAI 兼容端点(实测存活)。「填入」会写好地址和模型,密钥需到各平台免费注册后粘贴到 设置 → 推理。', 'All are verified OpenAI-compatible endpoints. Fill sets the URL + model; paste your free key in Settings → Inference.')}
+                </div>
+                {providers.map(p => (
+                  <div key={p.id} className="rounded-xl p-3" style={{ background: c.surfaceCard, border: `1px solid ${c.border}` }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[12.5px] font-semibold" style={{ color: c.textHead }}>{p.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.12)', color: '#10a37f' }}>{p.free}</span>
+                      <a href={p.signup} target="_blank" rel="noopener" className="ml-auto text-[10.5px]" style={{ color: '#60a5fa' }}>{t('去注册 →', 'Sign up →')}</a>
+                    </div>
+                    <div className="font-mono text-[10px] mb-2 truncate" style={{ color: c.textTertiary }}>{p.base}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {p.models.map(m => (
+                        <button key={m.id} onClick={() => fillProvider(p, m.id)}
+                          className="px-2.5 h-7 rounded-full text-[11px] flex items-center gap-1.5"
+                          style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.border}` }}
+                          title={`${m.id} · ctx ${fmtCtx(m.context)}`}>
+                          {m.name}
+                          <span style={{ color: '#10a37f' }}>{t('填入', 'Fill')}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
         {t('科技不是高高在上,而是服务于人民。Kilo 网关免 key,每 IP 200 次/小时。其余模型请自行测试可用性,空响应会自动重试;配置 Kilo 账户密钥后可用全部付费档。',
            'Technology should serve people, not stand above them. Kilo gateway is keyless, 200 req/hour per IP. Other models: test yourself — empty replies auto-retry. Add a Kilo key to unlock paid tiers.')}
       </div>
