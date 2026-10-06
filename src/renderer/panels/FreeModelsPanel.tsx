@@ -1,8 +1,9 @@
 /**
- * FreeModelsPanel — 免费模型面板（v8.0）
+ * FreeModelsPanel — 免费模型面板（v8.2）
  *
- * 数据源:Kilo Gateway。免费档免 key 一键切换;配置 Kilo 账户密钥后解锁付费档。
- * 主张:科技不是高高在上,而是服务于人民。
+ * 双免 key 源:GitHub Models(匿名免费档)+ Kilo Gateway(免费档/付费档)。
+ * 一键切换 = 写入对应网关地址 + free 占位密钥 + 模型。
+ * 主张:科技不是高高而上,而是服务于人民。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
@@ -17,13 +18,21 @@ interface ModelInfo {
   desc: string
   vision: boolean
 }
+interface Source {
+  id: string
+  name: string
+  keyless: boolean
+  base: string
+  note?: string
+  models: ModelInfo[]
+  paid?: ModelInfo[]
+  total?: number
+}
 
 export default function FreeModelsPanel({ settings, onSettingsChange }: { settings: Settings; onSettingsChange?: (s: Settings) => void }) {
   const { t } = useLanguage()
   const { c } = useTheme()
-  const [models, setModels] = useState<ModelInfo[]>([])
-  const [paid, setPaid] = useState<ModelInfo[]>([])
-  const [meta, setMeta] = useState<{ total: number; ts: string } | null>(null)
+  const [sources, setSources] = useState<Source[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
@@ -42,22 +51,17 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     try {
       const r = await fetch('/api/free-models')
       const d = await r.json()
-      if (d?.ok && Array.isArray(d.free)) {
-        setModels(d.free)
-        setPaid(Array.isArray(d.paid) ? d.paid : [])
-        setMeta({ total: d.total || 0, ts: d.ts || '' })
-      } else setError(d?.error || '拉取失败')
+      if (d?.ok && Array.isArray(d.sources)) setSources(d.sources)
+      else setError(d?.error || '拉取失败')
     } catch (e: any) { setError(String(e?.message || e)) }
     setLoading(false)
   }, [])
 
-  // 读取已配置的 Kilo 账户密钥(掩码态)
   const loadKiloKey = useCallback(async () => {
     try {
       const r = await fetch('/api/settings')
       const d = await r.json()
-      const v = String(d?.kilo_api_key || '')
-      setKiloKey(v)
+      setKiloKey(String(d?.kilo_api_key || ''))
     } catch { /* ignore */ }
   }, [])
 
@@ -76,31 +80,25 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     setKiloKeySaving(false)
   }
 
+  const gh = sources.find(s => s.id === 'github')
+  const kilo = sources.find(s => s.id === 'kilo')
   const currentBase = settings.apiBaseUrl || ''
+  const isGh = /models\.github\.ai/.test(currentBase)
   const isKilo = /api\.kilo\.ai/.test(currentBase)
   const kiloReady = kiloKey !== '' && !kiloKey.includes('****')
 
-  const filteredFree = useMemo(() => {
+  const filter = (list: ModelInfo[]) => {
     const k = q.trim().toLowerCase()
-    if (!k) return models
-    return models.filter(m => m.id.toLowerCase().includes(k) || m.name.toLowerCase().includes(k))
-  }, [models, q])
+    if (!k) return list
+    return list.filter(m => m.id.toLowerCase().includes(k) || m.name.toLowerCase().includes(k))
+  }
 
-  const filteredPaid = useMemo(() => {
-    const k = q.trim().toLowerCase()
-    const list = k ? paid.filter(m => m.id.toLowerCase().includes(k) || m.name.toLowerCase().includes(k)) : paid
-    return list.slice(0, paidLimit)
-  }, [paid, q, paidLimit])
-
-  const switchTo = (m: ModelInfo, isPaid: boolean) => {
-    if (isPaid && !kiloReady) {
-      setKiloKeyMsg('请先在上方配置 Kilo 账户密钥')
-      return
-    }
+  const switchTo = (m: ModelInfo, src: Source, isPaid: boolean) => {
+    if (isPaid && !kiloReady) { setKiloKeyMsg('请先在上方配置 Kilo 账户密钥'); return }
     const next: Settings = {
       ...settings,
       provider: 'api',
-      apiBaseUrl: 'https://api.kilo.ai/api/gateway/v1',
+      apiBaseUrl: src.base,
       apiKey: 'free',
       model: m.id,
     }
@@ -108,10 +106,10 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     pushNotice({ type: 'system', title: isPaid ? '已切换付费模型' : '已切换免费模型', body: m.name })
   }
 
-  const testModel = async (m: ModelInfo) => {
+  const testModel = async (m: ModelInfo, src: Source) => {
     setTesting(m.id)
     try {
-      const r = await fetch('/api/free-model-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m.id }) })
+      const r = await fetch('/api/free-model-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m.id, base: src.id }) })
       const d = await r.json()
       setLatency(prev => ({ ...prev, [m.id]: d.ok ? d.ms : `✕ ${String(d.error || '失败').slice(0, 30)}` }))
     } catch (e: any) { setLatency(prev => ({ ...prev, [m.id]: `✕ ${e?.message || '失败'}` })) }
@@ -120,11 +118,10 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
 
   const fmtCtx = (n: number) => n ? (n >= 1024 ? (n / 1024).toFixed(0) + 'K' : String(n)) : '—'
 
-  const row = (m: ModelInfo, isPaid: boolean) => {
-    const active = isKilo && settings.model === m.id
-    const isDefault = m.id === 'openrouter/free'
+  const row = (m: ModelInfo, src: Source, isPaid: boolean, isDefault = false) => {
+    const active = (src.id === 'github' ? isGh : isKilo) && settings.model === m.id
     return (
-      <div key={m.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3"
+      <div key={src.id + m.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3"
         style={{ background: active ? 'rgba(16,163,127,.10)' : c.surfaceCard, border: `1px ${active ? 'solid rgba(16,163,127,.45)' : isDefault ? 'dashed rgba(16,163,127,.5)' : `solid ${c.border}`}` }}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -136,13 +133,13 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           </div>
           <div className="font-mono text-[10.5px] mt-0.5 truncate" style={{ color: c.textTertiary }}>{m.id} · ctx {fmtCtx(m.context)}</div>
         </div>
-        <button onClick={() => testModel(m)} disabled={testing === m.id}
+        <button onClick={() => testModel(m, src)} disabled={testing === m.id}
           className="px-2 h-7 rounded-lg text-[11px] shrink-0 disabled:opacity-50"
           style={{ background: c.bgInput, color: c.textSecondary }}
           title={t('发送最小请求测延迟', 'Ping latency')}>
           {testing === m.id ? '…' : (latency[m.id] !== undefined ? (typeof latency[m.id] === 'number' ? latency[m.id] + 'ms' : String(latency[m.id])) : t('测速', 'Ping'))}
         </button>
-        <button onClick={() => switchTo(m, isPaid)} disabled={active}
+        <button onClick={() => switchTo(m, src, isPaid)} disabled={active}
           className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40"
           style={{ background: isPaid ? '#b45309' : '#10a37f', color: '#fff' }}>
           {t('切换', 'Use')}
@@ -156,7 +153,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       <div className="flex items-center gap-2 px-4 h-12 border-b shrink-0" style={{ borderColor: c.border }}>
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
         <span className="text-[13px] font-bold" style={{ color: c.textHead }}>{t('免费模型', 'Free Models')}</span>
-        <span className="text-[11px]" style={{ color: c.textTertiary }}>Kilo Gateway</span>
+        <span className="text-[11px]" style={{ color: c.textTertiary }}>{t('免 key · 免注册', 'keyless · no signup')}</span>
         <div className="ml-auto flex items-center gap-1.5">
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('搜索模型', 'Search')}
             className="h-7 px-2 rounded-md text-[11.5px] w-32 outline-none" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.border}` }} />
@@ -169,20 +166,21 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           <div className="mb-3 rounded-lg p-2.5 text-[12px]" style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444' }}>{error}</div>
         )}
 
-        {/* 推荐大卡:默认 openrouter/free */}
-        {models.length > 0 && (
+        {/* 推荐:GitHub Models 匿名免费档(质量最高) */}
+        {gh && gh.models.length > 0 && (
           <div className="mb-3 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.14), rgba(255,255,255,.6) 70%)', border: '1px solid rgba(16,163,127,.4)' }}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('默认推荐', 'Recommended')}</span>
-              <span className="text-[13px] font-bold" style={{ color: c.textHead }}>openrouter/free</span>
+              <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('推荐', 'Top pick')}</span>
+              <span className="text-[13px] font-bold" style={{ color: c.textHead }}>GitHub Models</span>
+              <span className="text-[10px]" style={{ color: c.textTertiary }}>{t('免 key 直连', 'keyless')}</span>
             </div>
             <div className="text-[11.5px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
-              {t('OpenRouter 免费路由器:免 key、免注册,自动在 20+ 个免费模型间路由,每 IP 200 次/小时。点「切换」即可用。', 'OpenRouter free router: keyless, no signup, auto-routes across 20+ free models, 200 req/hour per IP.')}
+              {t('GPT-4o/5、o4-mini、DeepSeek V3/R1、Llama、Mistral、Grok — 全部免 key 可用,有速率限制,失败会自动重试。', 'GPT-4o/5, o4-mini, DeepSeek V3/R1, Llama, Mistral, Grok — all keyless. Rate-limited; empty replies auto-retry.')}
             </div>
-            <button onClick={() => switchTo(models[0], false)} disabled={isKilo && settings.model === models[0].id}
+            <button onClick={() => switchTo(gh.models[0], gh, false)} disabled={isGh && settings.model === gh.models[0].id}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
               style={{ background: '#10a37f', color: '#fff' }}>
-              {isKilo && settings.model === models[0].id ? t('使用中', 'In use') : t('一键切换', 'Switch now')}
+              {isGh && settings.model === gh.models[0].id ? t('使用中', 'In use') : t('一键切换 GPT-4o mini', 'Switch to GPT-4o mini')}
             </button>
           </div>
         )}
@@ -207,39 +205,52 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           {kiloKeyMsg && <div className="text-[10.5px] mt-1.5" style={{ color: kiloKeyMsg.includes('✓') ? '#10a37f' : '#f59e0b' }}>{kiloKeyMsg}</div>}
         </div>
 
-        {/* 状态摘要 */}
-        <div className="mb-3 flex items-center gap-2 flex-wrap text-[11.5px]" style={{ color: c.textSecondary }}>
-          <span className="px-2 py-1 rounded-full" style={{ background: 'rgba(16,163,127,.12)', color: '#10a37f' }}>
-            {models.length} {t('个免费模型可用', 'free models')}
-          </span>
-          {meta && paid.length > 0 && (
-            <button onClick={() => setShowPaid(v => !v)} className="px-2 py-1 rounded-full" style={{ background: 'rgba(245,158,11,.12)', color: '#f59e0b' }}>
-              {t('付费档', 'Paid')} {paid.length} {showPaid ? '▴' : '▾'}
-            </button>
-          )}
-          {isKilo && settings.model && (
-            <span className="ml-auto" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>
-          )}
-        </div>
-
         {loading ? (
-          <div className="grid place-items-center py-16 text-[12.5px]" style={{ color: c.textTertiary }}>{t('正在拉取 Kilo 模型目录…', 'Loading Kilo catalog…')}</div>
+          <div className="grid place-items-center py-16 text-[12.5px]" style={{ color: c.textTertiary }}>{t('正在拉取免费模型目录…', 'Loading free catalogs…')}</div>
         ) : (
           <>
-            <div className="space-y-1.5">
-              {filteredFree.map(m => row(m, false))}
-              {filteredFree.length === 0 && (
-                <div className="text-center py-10 text-[12px]" style={{ color: c.textTertiary }}>{t('没有匹配的模型', 'No match')}</div>
-              )}
-            </div>
-            {showPaid && (
-              <div className="mt-4 space-y-1.5">
-                <div className="text-[11px] font-semibold mb-1.5" style={{ color: '#f59e0b' }}>{t('付费档模型(使用上方 Kilo 账户密钥)', 'Paid models (uses your Kilo key)')}</div>
-                {filteredPaid.map(m => row(m, true))}
-                {paid.length > paidLimit && filteredPaid.length >= paidLimit && (
-                  <button onClick={() => setPaidLimit(v => v + 80)} className="w-full py-2 rounded-lg text-[11.5px]" style={{ background: c.bgInput, color: c.textSecondary }}>
-                    {t('显示更多', 'Show more')}（{paid.length - paidLimit}）
-                  </button>
+            {/* GitHub Models 全列表 */}
+            {gh && (
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[12px] font-bold" style={{ color: c.textHead }}>GitHub Models</span>
+                  <span className="text-[10px]" style={{ color: c.textTertiary }}>{gh.models.length} {t('个', 'models')}</span>
+                  {isGh && settings.model && <span className="ml-auto text-[10.5px]" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>}
+                </div>
+                <div className="space-y-1.5">
+                  {filter(gh.models).map(m => row(m, gh, false, m.id === 'openai/gpt-4o-mini'))}
+                </div>
+              </div>
+            )}
+
+            {/* Kilo 免费档 */}
+            {kilo && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[12px] font-bold" style={{ color: c.textHead }}>Kilo Gateway · {t('免费档', 'free')}</span>
+                  <span className="text-[10px]" style={{ color: c.textTertiary }}>{kilo.models.length} {t('个', 'models')}</span>
+                  {kilo.paid && kilo.paid.length > 0 && (
+                    <button onClick={() => setShowPaid(v => !v)} className="ml-auto px-2 py-1 rounded-full" style={{ background: 'rgba(245,158,11,.12)', color: '#f59e0b' }}>
+                      {t('付费档', 'Paid')} {kilo.paid.length} {showPaid ? '▴' : '▾'}
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {filter(kilo.models).map(m => row(m, kilo, false, m.id === 'openrouter/free'))}
+                  {filter(kilo.models).length === 0 && (
+                    <div className="text-center py-6 text-[12px]" style={{ color: c.textTertiary }}>{t('没有匹配的模型', 'No match')}</div>
+                  )}
+                </div>
+                {showPaid && kilo.paid && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: '#f59e0b' }}>{t('付费档模型(使用上方 Kilo 账户密钥)', 'Paid models (uses your Kilo key)')}</div>
+                    {filter(kilo.paid).slice(0, paidLimit).map(m => row(m, kilo, true))}
+                    {kilo.paid.length > paidLimit && filter(kilo.paid).length >= paidLimit && (
+                      <button onClick={() => setPaidLimit(v => v + 80)} className="w-full py-2 rounded-lg text-[11.5px]" style={{ background: c.bgInput, color: c.textSecondary }}>
+                        {t('显示更多', 'Show more')}（{kilo.paid.length - paidLimit}）
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -248,8 +259,8 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       </div>
 
       <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
-        {t('科技不是高高在上,而是服务于人民。默认 openrouter/free(OpenRouter 免费路由器,免 key,聚合 20+ 免费模型);其余免费档请自行测试可用性,空响应会自动重试。免费档每 IP 200 次/小时、无需注册;配置 Kilo 账户密钥后可用全部付费档。',
-           'Technology should serve people, not stand above them. Default: openrouter/free (OpenRouter free router, keyless, 20+ free models). Other free tiers: test yourself — empty replies auto-retry. Free tier: 200 req/hour per IP, no signup. Add a Kilo key to unlock all models.')}
+        {t('科技不是高高在上,而是服务于人民。两个源都免 key:GitHub Models(有速率限制)+ Kilo(每 IP 200 次/小时)。其余模型请自行测试可用性,空响应会自动重试;配置 Kilo 账户密钥后可用全部付费档。',
+           'Technology should serve people, not stand above them. Both sources are keyless: GitHub Models (rate-limited) + Kilo (200 req/hour per IP). Other models: test yourself — empty replies auto-retry. Add a Kilo key to unlock paid tiers.')}
       </div>
     </div>
   )
