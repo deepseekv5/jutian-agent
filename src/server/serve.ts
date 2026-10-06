@@ -809,7 +809,7 @@ function checkSecurity(name, args, sec) {
 }
 
 function cleanHtml(text) {
-  return text.replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+  return text.replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 10)); } catch { return " "; } }).replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
 // 解码 Bing 点击追踪链接（u=a1 + base64 编码的真实网址）
@@ -922,6 +922,45 @@ async function bingSearch(q) {
   } catch { return []; }
 }
 
+// DuckDuckGo HTML 端点直抓(结果链接经 /l/?uddg= 包装,需解码真实网址)
+async function ddgSearch(q) {
+  try {
+    const html = await fetchHtml(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`);
+    const out = [];
+    const snippets = [];
+    const sn = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+    let s;
+    while ((s = sn.exec(html)) && snippets.length < 10) snippets.push(cleanHtml(s[1]));
+    const re = /class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = re.exec(html)) && out.length < 8) {
+      let url = m[1];
+      const u = url.match(/[?&]uddg=([^&]+)/);
+      if (u) { try { url = decodeURIComponent(u[1]); } catch {} }
+      out.push({ title: cleanHtml(m[2]), url, snippet: snippets[out.length] || "" });
+    }
+    return out.filter((x) => x.title && x.url && !x.url.includes("duckduckgo.com"));
+  } catch { return []; }
+}
+
+// 多来源合并:解码追踪链接 + 去重 + 限量
+function mergeSources(lists) {
+  const out = [];
+  const seen = new Set();
+  for (const list of lists) {
+    for (const item of list || []) {
+      if (item.url) item.url = decodeBingUrl(item.url);
+      const key = item.url || item.title;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+      if (out.length >= 12) return out;
+    }
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 // ─── Electron 真实浏览器搜索（隐藏窗口访问 Google/Bing，真实指纹反爬免疫）───
 let searchWin = null;
 async function electronSearch(q) {
@@ -969,22 +1008,13 @@ async function web_search(args) {
   try {
     const q = args.query || args.q || "";
     if (!q) return { success: false, error: "缺少 query 参数" };
-    const results = [];
-    const [searxResults, electronResults] = await Promise.all([searxngSearch(q), electronSearch(q)]);
-    // SearXNG 优先；真实浏览器结果其次；Bing 抓取垫底
-    const sources = [searxResults, electronResults, await bingSearch(q)];
-    const seen = new Set();
-    for (const list of sources) {
-      for (const item of list) {
-        // 解码 Bing 追踪链接为真实网址
-        if (item.url) item.url = decodeBingUrl(item.url);
-        const key = item.url || item.title;
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        results.push(item);
-        if (results.length >= 12) break;
-      }
-      if (results.length >= 12) break;
+    // 策略一(首选):直接抓搜索引擎结果页——零依赖、无需 key、1-2s 出结果。
+    // Bing SERP 直抓优先;不足 5 条再补 DuckDuckGo HTML 端点。
+    let results = mergeSources([await bingSearch(q), await ddgSearch(q)]);
+    if (results.length < 5) {
+      // 策略二(补强):Electron 真实浏览器指纹 + SearXNG 并行,合并去重
+      const [searxResults, electronResults] = await Promise.all([searxngSearch(q), electronSearch(q)]);
+      results = mergeSources([results, searxResults, electronResults]);
     }
     // 相关性排序：标题包含查询关键词的结果排前面（压制垃圾/缓存污染）
     const tokens = q.replace(/[^\u4e00-\u9fff\w]/g, " ").split(/\s+/).filter(Boolean);
