@@ -1826,13 +1826,14 @@ http.createServer(async (req, res) => {
         delete bodyData.apiKey;
         const upstreamUrl = `${targetBase}/chat/completions`;
         console.log(`\u2192 llm-proxy \u2192 ${targetBase}`);
-        const authHeader = `Bearer ${apiKey}`;
+        // 免 key 网关(如 Kilo Gateway):密钥填 free/keyless 时完全不带
+        // Authorization 头——此类网关对任何无效 token 反而报 INVALID_TOKEN
+        const keyless = apiKey === "free" || apiKey === "keyless" || apiKey === "";
+        const proxyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        if (!keyless) proxyHeaders["Authorization"] = `Bearer ${apiKey}`;
         const proxyRes = await fetch(upstreamUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": authHeader,
-          },
+          headers: proxyHeaders,
           body: JSON.stringify(bodyData),
           signal: AbortSignal.timeout(120000),
         });
@@ -3002,7 +3003,8 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         }
         if (!targetBase) return json(res, { models: [], error: "缺少 API 地址" }, 200);
         const r = await fetch(`${targetBase.replace(/\/+$/, "")}/models`, {
-          headers: apiKey ? { "Authorization": `Bearer ${apiKey}` } : {},
+          // 免 key 网关:free/keyless/空 都不带 Authorization
+          headers: apiKey && apiKey !== "free" && apiKey !== "keyless" ? { "Authorization": `Bearer ${apiKey}` } : {},
           signal: AbortSignal.timeout(15e3)
         });
         if (!r.ok) {
