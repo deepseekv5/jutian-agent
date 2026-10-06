@@ -3055,20 +3055,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         return json(res, { models });
       } catch { return json(res, { models: [] }); }
     }
-    // ─── 免费模型面板:v8.2 双免 key 源(Kilo + GitHub Models)───
-    // GitHub Models 匿名免费档(2026-10-06 实测免 key 直连可用)
-    var GITHUB_MODELS_CATALOG = [
-      { id: "openai/gpt-4o-mini", name: "GPT-4o mini", context: 128000, vision: false },
-      { id: "openai/gpt-4o", name: "GPT-4o", context: 128000, vision: true },
-      { id: "openai/gpt-5", name: "GPT-5", context: 400000, vision: true },
-      { id: "openai/o4-mini", name: "o4-mini(推理)", context: 200000, vision: false },
-      { id: "deepseek-ai/DeepSeek-V3-0324", name: "DeepSeek V3", context: 128000, vision: false },
-      { id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1(推理)", context: 64000, vision: false },
-      { id: "meta/meta-llama-3.1-8b-instruct", name: "Llama 3.1 8B", context: 128000, vision: false },
-      { id: "mistral-ai/mistral-small-2503", name: "Mistral Small", context: 32000, vision: false },
-      { id: "xai/grok-3-mini", name: "Grok 3 mini", context: 131072, vision: false },
-      { id: "cohere/command-r-08-2024", name: "Command R", context: 128000, vision: false },
-    ];
+    // ─── 免费模型面板:Kilo Gateway 免 key 全量目录(10 分钟缓存)───
+    // 注:GitHub Models 的 models.github.ai/inference 匿名/带 token 均返回
+    // text/plain "OK" 桩响应(2026-10-06 实测),非 OpenAI 兼容,不可用。
     var FREE_MODELS_CACHE = null;
     var FREE_MODELS_TS = 0;
     if (url.pathname === "/api/free-models" && req.method === "GET") {
@@ -3105,12 +3094,6 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const out = {
           ok: true,
           sources: [
-            {
-              id: "github", name: "GitHub Models", keyless: true,
-              base: "https://models.github.ai/inference",
-              note: "匿名免费档(实测免 key):GPT-4o/5、o4-mini、DeepSeek、Llama、Mistral、Grok;有速率限制,失败自动重试",
-              models: GITHUB_MODELS_CATALOG,
-            },
             {
               id: "kilo", name: "Kilo Gateway", keyless: true,
               base: "https://api.kilo.ai/api/gateway/v1",

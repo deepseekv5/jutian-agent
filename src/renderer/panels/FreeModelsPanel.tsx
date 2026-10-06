@@ -259,8 +259,8 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       </div>
 
       <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
-        {t('科技不是高高在上,而是服务于人民。两个源都免 key:GitHub Models(有速率限制)+ Kilo(每 IP 200 次/小时)。其余模型请自行测试可用性,空响应会自动重试;配置 Kilo 账户密钥后可用全部付费档。',
-           'Technology should serve people, not stand above them. Both sources are keyless: GitHub Models (rate-limited) + Kilo (200 req/hour per IP). Other models: test yourself — empty replies auto-retry. Add a Kilo key to unlock paid tiers.')}
+        {t('科技不是高高在上,而是服务于人民。Kilo 网关免 key,每 IP 200 次/小时。其余模型请自行测试可用性,空响应会自动重试;配置 Kilo 账户密钥后可用全部付费档。',
+           'Technology should serve people, not stand above them. Kilo gateway is keyless, 200 req/hour per IP. Other models: test yourself — empty replies auto-retry. Add a Kilo key to unlock paid tiers.')}
       </div>
     </div>
   )
