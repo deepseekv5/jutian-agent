@@ -281,9 +281,8 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             )}
           </>
         )}
-      </div>
 
-        {/* 免费额度提供商(注册即免费,自备 key) */}
+        {/* 免费额度提供商(注册即免费,自备 key)— 位于滚动容器内 */}
         {providers.length > 0 && (
           <div className="mt-5">
             <button onClick={() => setShowProviders(v => !v)} className="flex items-center gap-2 mb-2 w-full text-left">
@@ -321,6 +320,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             )}
           </div>
         )}
+      </div>
 
         <div className="shrink-0 px-4 py-2.5 border-t text-[10.5px] leading-relaxed" style={{ borderColor: c.border, color: c.textTertiary }}>
         {t('科技不是高高在上,而是服务于人民。Kilo 网关免 key,每 IP 200 次/小时。其余模型请自行测试可用性,空响应会自动重试;配置 Kilo 账户密钥后可用全部付费档。',
