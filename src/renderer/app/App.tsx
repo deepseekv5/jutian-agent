@@ -371,7 +371,7 @@ function MainApp() {
     switch (tab.type) {
       case 'chat':
         return tab.sessionId ? (
-          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} active={tab.id === activeTabId} onOpenTab={openTab} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
+          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
         ) : null;
       case 'call':
         return <VoiceCall settings={settings} onClose={() => closeTab(tab.id)} />;

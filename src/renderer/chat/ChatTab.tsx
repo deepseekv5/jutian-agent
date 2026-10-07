@@ -21,7 +21,7 @@ function loadLastCheckpoint(sessionId: string): Checkpoint | null {
   try { return JSON.parse(localStorage.getItem(CP_KEY) || '{}')[sessionId] || null } catch { return null }
 }
 
-export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, active, onOpenTab, incomingScreenshot, onScreenshotConsumed }: {
+export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, active, incomingScreenshot, onScreenshotConsumed }: {
   sessionId: string
   settings: Settings
   onTitleGenerated: (sessionId: string, firstMsg: string) => void
@@ -30,7 +30,6 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   onStreamingChange?: (sessionId: string, streaming: boolean) => void
   onModelChange?: (model: string) => void
   active: boolean
-  onOpenTab?: (type: any) => void
   incomingScreenshot?: string | null
   onScreenshotConsumed?: () => void
 }) {
@@ -321,7 +320,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         <div className="flex-1 flex flex-col min-h-0">
           {messages.length === 0 ? (
             <>
-              <WelcomeHero onPick={(text: string) => { setTimeout(() => sendRef.current(text), 100) }} onOpenTab={onOpenTab} />
+              <WelcomeHero onPick={(text: string) => { setTimeout(() => sendRef.current(text), 100) }} />
               <div className="shrink-0">
                 <MessageInput
                   sessionId={sessionId}

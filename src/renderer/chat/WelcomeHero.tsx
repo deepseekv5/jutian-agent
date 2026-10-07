@@ -1,6 +1,6 @@
 /**
- * 欢迎首页 —— ChatGPT/Codex 风格：居中问候 + 建议胶囊。
- * 场景案例 / 快速入口全部保留，收纳为轻量胶囊与文字入口，保持画面克制。
+ * 欢迎首页 —— ChatGPT/Codex 风格：居中问候 + 建议胶囊 + 紧凑分段控件。
+ * 场景切换 / 换一批收进一个控件行；页面快捷入口已移除（侧边栏与标签栏已有，不重复占画面）。
  */
 import { useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
@@ -10,7 +10,6 @@ import { fmtTokens } from '../utils/tokens'
 
 interface Props {
   onPick: (prompt: string) => void
-  onOpenTab?: (type: any) => void
 }
 
 interface CaseItem { title: string; titleEn?: string; desc: string; descEn?: string; prompt: string; promptEn?: string; icon: string }
@@ -47,8 +46,8 @@ const CASES: Record<string, { label: string; labelEn?: string; items: CaseItem[]
 
 const CAT_KEYS = Object.keys(CASES)
 
-export default function WelcomeHero({ onPick, onOpenTab }: Props) {
-  const { lang, t } = useLanguage()
+export default function WelcomeHero({ onPick }: Props) {
+  const { lang } = useLanguage()
   const [cat, setCat] = useState(CAT_KEYS[0])
   const [offset, setOffset] = useState(0)
   const { c } = useTheme()
@@ -57,14 +56,6 @@ export default function WelcomeHero({ onPick, onOpenTab }: Props) {
   const greeting = lang === 'en'
     ? (_h < 12 ? 'Good morning' : _h < 18 ? 'Good afternoon' : 'Good evening')
     : (_h < 6 ? '夜深了' : _h < 11 ? '早上好' : _h < 14 ? '中午好' : _h < 18 ? '下午好' : '晚上好')
-
-  const QUICK_ENTRIES = [
-    { label: '代码模式', tab: 'code', icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z' },
-    { label: '终端', tab: 'terminal', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
-    { label: '定时任务', tab: 'tasks', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { label: '技能市场', tab: 'skills', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
-    { label: '知识库', tab: 'kb', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-  ]
 
   const items = useMemo(() => {
     const list = CASES[cat].items
@@ -97,31 +88,30 @@ export default function WelcomeHero({ onPick, onOpenTab }: Props) {
           ))}
         </div>
 
-        {/* 次级入口：场景切换 / 换一批 / 快速入口（保留全部功能，视觉弱化） */}
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[12px]" style={{ color: c.textTertiary }}>
-          {CAT_KEYS.map(key => (
-            <button key={key} onClick={() => { setCat(key); setOffset(0) }}
-              className="transition-colors hover:opacity-100"
-              style={{ color: cat === key ? c.text : c.textTertiary, fontWeight: cat === key ? 500 : 400 }}>
-              {lang === 'en' ? (CASES[key].labelEn || CASES[key].label) : CASES[key].label}
-            </button>
-          ))}
-          <span style={{ color: c.border }}>|</span>
-          <button onClick={() => setOffset(o => o + 1)} className="transition-opacity hover:opacity-70">换一批</button>
-          {onOpenTab && (
-            <>
-              <span style={{ color: c.border }}>|</span>
-              {QUICK_ENTRIES.map(e => (
-                <button key={e.label} onClick={() => onOpenTab(e.tab)} className="transition-opacity hover:opacity-70" title={e.label}>
-                  {t(e.label, ({ '代码模式': 'Code', '终端': 'Terminal', '定时任务': 'Tasks', '技能市场': 'Skills', '知识库': 'Knowledge' } as Record<string, string>)[e.label] || e.label)}
-                </button>
-              ))}
-            </>
-          )}
+        {/* 场景分段控件 + 换一批 —— 单一控件行，替代旧的多链接行 */}
+        <div className="mb-8 flex items-center gap-2">
+          <div className="inline-flex items-center p-0.5 rounded-full" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+            {CAT_KEYS.map(key => (
+              <button key={key} onClick={() => { setCat(key); setOffset(0) }}
+                className="px-3 h-7 rounded-full text-[12px] transition-colors"
+                style={{ background: cat === key ? c.bg : 'transparent', color: cat === key ? c.textHead : c.textTertiary, fontWeight: cat === key ? 500 : 400, boxShadow: cat === key ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' }}>
+                {lang === 'en' ? (CASES[key].labelEn || CASES[key].label) : CASES[key].label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setOffset(o => o + 1)} title={lang === 'en' ? 'Shuffle' : '换一批'}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+            style={{ border: `1px solid ${c.borderLight}`, color: c.textTertiary }}
+            onMouseEnter={e => { e.currentTarget.style.color = c.text; e.currentTarget.style.borderColor = c.border }}
+            onMouseLeave={e => { e.currentTarget.style.color = c.textTertiary; e.currentTarget.style.borderColor = c.borderLight }}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
 
-        {/* 今日用量 —— 极轻量 */}
-        <div className="mt-10 text-[11px] font-mono" style={{ color: c.textMuted }}>
+        {/* 今日用量 —— 极轻量页脚 */}
+        <div className="text-[11px] font-mono" style={{ color: c.textMuted }}>
           今日 {usage.msgs} 轮 · {fmtTokens(usage.prompt + usage.completion)} tokens
         </div>
       </div>
