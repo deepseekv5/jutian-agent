@@ -4,6 +4,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   isElectron: true,
 
+  // ─── 应用内自更新(v8.1)───
+  updateCheck: () => ipcRenderer.invoke('update-check'),
+  updateApply: (asarUrl) => ipcRenderer.invoke('update-apply', asarUrl),
+
   // Loading page status listeners
   onStatus: (callback) => {
     ipcRenderer.on('status-update', (_event, msg) => callback(msg))

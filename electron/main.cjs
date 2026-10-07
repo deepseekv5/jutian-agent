@@ -9,6 +9,9 @@ const http = require('http')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
 
+// ─── 应用内自更新(v8.1):检查/下载/原子替换 app.asar ───
+require('./updater.cjs').register()
+
 app.on('gpu-process-crashed', (_e, killed) => log(`GPU 进程崩溃(${killed ? 'killed' : 'crashed'})，Chromium 将自动恢复渲染`))
 
 const IS_WIN = process.platform === 'win32'
