@@ -3,6 +3,15 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [9.0.0] - 2026-10-08
+
+### 新增(Windows 专项)
+- **shell 工具全面 Windows 化**:PowerShell 执行 + `[Console]::OutputEncoding=UTF8` 前缀(修掉 PS5.1 ANSI 码页中文乱码);黑名单补 PowerShell 破坏性命令形态(Remove-Item -Recurse / Cipher /W 等)
+- **system_info / process_list / port_check 原生重写**:不再调用 macOS 专属 zsh/lsof/ps aux;Windows 走 PowerShell Get-Command / Get-Process / netstat,统统可用
+- **工具乱用兜底**:模型调用不存在的工具时,返回「相近工具名 + 当前可用工具全清单(39 个)」,模型下一轮自动纠正,不再空转烧额度
+- **jtcode CLI 工具调用循环**:从服务端拉取工具 schema,和桌面端同构的「模型→工具→结果→再问」循环,单轮最多 10 次;/tools 查看可用工具
+- shell 工具描述平台化(不再写死「用户 Mac」,明确 Windows 用 PowerShell 语法)
+
 ## [8.1.0] - 2026-10-07
 
 ### 新增

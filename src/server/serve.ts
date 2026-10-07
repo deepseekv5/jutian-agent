@@ -232,24 +232,31 @@ var body = async (req) => {
   for await (const c of req) b.push(c);
   return JSON.parse(Buffer.concat(b).toString() || "{}");
 };
-var BLOCKED = IS_WIN ? ["format c:", "del /f /s /q c:\\", "rd /s /q c:\\", "diskpart", "shutdown /s", "shutdown /r"] : ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "chmod -R 777 /", "> /dev/sda", "format", "shutdown"];
+// Windows 黑名单补 PowerShell 形态(cmd 形态对 PS 无效,之前的列表漏了整个 PS 面)
+var BLOCKED = IS_WIN ? ["format c:", "del /f /s /q c:\\", "rd /s /q c:\\", "diskpart", "shutdown /s", "shutdown /r",
+  "remove-item -path c:\\ -recurse", "remove-item c:\\windows", "rmdir /s", "cipher /w",
+  "stop-process -id 0", "remove-item $env:systemroot"] : ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "chmod -R 777 /", "> /dev/sda", "format", "shutdown"];
 async function shell(a) {
-  if (!a.command) return { success: false, error: "\u65E0\u547D\u4EE4" };
+  if (!a.command) return { success: false, error: "无命令" };
   const n = a.command.toLowerCase();
-  if (BLOCKED.some((b) => n.includes(b))) return { success: false, error: "\u5DF2\u963B\u6B62" };
+  if (BLOCKED.some((b) => n.includes(b))) return { success: false, error: "已阻止" };
   const cwd = safeCwd(a.workdir);
   try {
     let r;
     if (IS_WIN) {
-      r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", a.command], { timeout: (a.timeout || 30) * 1e3, maxBuffer: MAX_OUT, env: process.env, cwd });
+      // Windows:PowerShell。两件事必须做:
+      // 1) 前置 [Console]::OutputEncoding=UTF8 — PS5.1 默认按系统 ANSI 码页(GBK)输出,
+      //    Node 按 UTF-8 解码会乱码;常量前缀不引入注入面。
+      // 2) -NoProfile 避免用户 profile 拖慢/污染输出。
+      const wrapped = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${a.command}`;
+      r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wrapped],
+        { timeout: (a.timeout || 30) * 1e3, maxBuffer: MAX_OUT, env: process.env, cwd, encoding: "utf8" });
     } else {
       r = await execAsync("zsh", ["-c", a.command], { timeout: (a.timeout || 30) * 1e3, maxBuffer: MAX_OUT, env: { ...process.env, TERM: "dumb" }, cwd });
     }
-    return { success: true, output: (r.stdout || "").trim() + ((r.stderr || "").trim() ? `
-[stderr]
-${r.stderr.trim()}` : "") };
+    return { success: true, output: (r.stdout || "").trim() + ((r.stderr || "").trim() ? `\n[stderr]\n${r.stderr.trim()}` : "") };
   } catch (e) {
-    return { success: false, output: (e.stdout || "").trim(), error: e.message };
+    return { success: false, output: e.stdout || "", error: e.message };
   }
 }
 async function read_file(a) {
@@ -472,34 +479,61 @@ async function code_analysis(a) {
 async function system_info() {
   try {
     const mu = ((os.totalmem() - os.freemem()) / 1073741824).toFixed(1), mt = (os.totalmem() / 1073741824).toFixed(1);
-    const r = await execAsync("zsh", ["-c", 'for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'], { timeout: 5e3, maxBuffer: 65536 });
-    const tools = {};
-    for (const l of r.stdout.trim().split("\n")) {
-      const [k, v] = l.split("=");
-      if (k && v) tools[k.trim()] = v.trim() === "yes";
+    let tools: Record<string, boolean> = {};
+    if (IS_WIN) {
+      // Windows:用 PowerShell 的 Get-Command 探测,不依赖 zsh/which
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8; foreach ($t in 'node','npm','python','pip','git','docker','go','java') { if (Get-Command $t -ErrorAction SilentlyContinue) { Write-Output \"$t=yes\" } else { Write-Output \"$t=no\" } }"],
+        { timeout: 8000, maxBuffer: 65536, encoding: "utf8" });
+      for (const l of r.stdout.trim().split("\n")) {
+        const [k, v] = l.split("=");
+        if (k && v) tools[k.trim()] = v.trim() === "yes";
+      }
+    } else {
+      const r = await execAsync("zsh", ["-c", 'for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'], { timeout: 5e3, maxBuffer: 65536 });
+      for (const l of r.stdout.trim().split("\n")) {
+        const [k, v] = l.split("=");
+        if (k && v) tools[k.trim()] = v.trim() === "yes";
+      }
     }
-    return { success: true, output: JSON.stringify({ os: `${os.platform()} ${os.release()}`, arch: os.arch, cpu: `${os.cpus().length} \u6838`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: os.homedir(), tools }, null, 2) };
+    return { success: true, output: JSON.stringify({ os: `${os.platform()} ${os.release()}`, arch: os.arch, cpu: `${os.cpus().length} 核`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: os.homedir(), tools }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function process_list(a) {
   try {
-    const r = await execAsync("zsh", ["-c", a.filter ? `ps aux | grep -i "${a.filter}" | head -30` : "ps aux | head -40"], { timeout: 1e4, maxBuffer: MAX_OUT });
-    return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
+    let r;
+    if (IS_WIN) {
+      // Windows:Get-Process;filter 为空时按 CPU 时间取前 40
+      const ps = a.filter
+        ? `Get-Process | Where-Object { $_.ProcessName -like '*${a.filter.replace(/'/g, "''")}*' } | Select-Object -First 30 Id,ProcessName,CPU,WS | Format-Table -AutoSize`
+        : "Get-Process | Sort-Object CPU -Descending | Select-Object -First 40 Id,ProcessName,CPU,WS | Format-Table -AutoSize";
+      r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`], { timeout: 1e4, maxBuffer: MAX_OUT, encoding: "utf8" });
+    } else {
+      r = await execAsync("zsh", ["-c", a.filter ? `ps aux | grep -i "${a.filter}" | head -30` : "ps aux | head -40"], { timeout: 1e4, maxBuffer: MAX_OUT });
+    }
+    return { success: true, output: r.stdout.trim() || "(无匹配)" };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function port_check(a) {
   try {
+    if (IS_WIN) {
+      // Windows:netstat -ano 过滤端口(lsof 不存在)
+      const r = await execAsync("cmd.exe", ["/c", `netstat -ano | findstr :${a.port}`], { timeout: 5000, maxBuffer: 65536, encoding: "utf8" });
+      const out = r.stdout.trim();
+      return { success: true, output: out ? `端口 ${a.port}: 被占用\n${out}` : `端口 ${a.port} 空闲 ✅` };
+    }
     const r = await execAsync("lsof", ["-ti", `:${a.port}`], { timeout: 5e3 });
     const pid = r.stdout.trim();
-    if (!pid) return { success: true, output: `\u7AEF\u53E3 ${a.port} \u7A7A\u95F2 \u2705` };
+    if (!pid) return { success: true, output: `端口 ${a.port} 空闲 ✅` };
     const i = await execAsync("ps", ["-p", pid, "-o", "pid,comm"], { timeout: 5e3 });
-    return { success: true, output: `\u7AEF\u53E3 ${a.port}: ${i.stdout.trim()}` };
+    return { success: true, output: `端口 ${a.port}: ${i.stdout.trim()}` };
   } catch {
-    return { success: true, output: `\u7AEF\u53E3 ${a.port} \u7A7A\u95F2 \u2705` };
+    return { success: true, output: `端口 ${a.port} 空闲 ✅` };
   }
 }
 async function json_process(a) {
@@ -1693,7 +1727,21 @@ http.createServer(async (req, res) => {
         return json(res, r.success ? r : { success: false, error: r.error || r.output });
       }
       const h = TOOLS[name];
-      if (!h) return json(res, { success: false, error: `未知工具: ${name}` }, 404);
+      if (!h) {
+        // 工具乱用兜底(v9.0):模型幻觉调用了不存在的工具，不再只报 404——
+        // 返回「相近工具名 + 当前可用清单」，让模型下一轮自己纠正，不空转烧钱
+        let near: string[] = []
+        try {
+          const target = String(name || "").toLowerCase();
+          near = Object.keys(TOOLS)
+            .map((k) => ({ k, s: k.toLowerCase().includes(target) || target.includes(k.toLowerCase()) ? 1 : 0 }))
+            .filter((x) => x.s > 0).slice(0, 5).map((x) => x.k);
+        } catch {}
+        return json(res, {
+          success: false,
+          error: `未知工具「${name}」。${near.length ? `你是不是想用: ${near.join("、")}?` : ""}当前可用工具（${Object.keys(TOOLS).length} 个）：${Object.keys(TOOLS).join("、")}`,
+        }, 404);
+      }
       console.log(`→ ${name}`);
       let r;
       try { r = await h(args); }

@@ -224,7 +224,7 @@
  },
  {
   "name": "shell",
-  "description": "在用户 Mac 上执行 shell 命令（bash/zsh）。可以运行任何终端命令：ls/cat/grep/find/python/node/git/npm/pip/brew/docker 等。用于探索文件系统、运行脚本、管理项目、安装包、查看系统信息等。命令超时30秒。",
+  "description": "在用户电脑上执行命令:macOS/Linux 用 bash/zsh(ls/cat/grep/find/python/node/npm/git 等);Windows 用 PowerShell(Get-ChildItem/Get-Content/Select-String/node/npm/git 等;不要用 ls/cat/grep/del、路径用反斜杠或正斜杠均可)。用于探索文件系统、运行脚本、管理项目、安装包、查看系统信息等。命令超时30秒。",
   "parameters": {
    "type": "object",
    "properties": {

@@ -176,8 +176,10 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 ```bash
 git clone https://github.com/deepseekv5/jutian-agent.git
 cd jutian-agent
-./run.sh                  # 自动装依赖 + 启动(Windows 下载后直接双击 run.bat)
+./run.sh                  # macOS/Linux:自动装依赖 + 启动
+run.bat                   # Windows:双击或命令行运行(同样自动装依赖)
 npm run electron:build    # 打包 macOS (dmg + zip)
+npm run electron:build:win  # 打包 Windows (setup.exe)
 ```
 
 > 也可以手动执行 `npm install && npm start`。`run.sh` / `run.bat` 检测到缺依赖时会自动安装。
@@ -186,6 +188,8 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 本软件不内置任何模型服务与密钥——你的配置只属于你。
 
 → **详细步骤**:[安装与启动](docs/guide/install.md) · [模型接入](docs/guide/models.md)
+
+**Windows 用户**:内置免费模型(面板免 key,无需注册)、PowerShell 命令执行、系统信息/进程/端口检测均为原生实现;命令行客户端 `jtcode` 支持完整工具调用,详见 [docs/guide/free-models.md](docs/guide/free-models.md)。
 
 <details>
 <summary><b>📥 下载安装包</b></summary>

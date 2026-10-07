@@ -46,13 +46,13 @@ const command = rest[0] || ''
 function printHelp() {
   console.log(BANNER)
   console.log(`  ${C.bold('用法')}`)
-  console.log(`    jtcode                  ${C.dim('交互对话（REPL）')}`)
+  console.log(`    jtcode                  ${C.dim('交互对话（REPL，可用工具）')}`)
   console.log(`    jtcode "你的问题"       ${C.dim('单次提问')}`)
   console.log(`    jtcode status           ${C.dim('服务状态 / 当前模型')}`)
   console.log(`    jtcode -m <model> "..." ${C.dim('指定模型')}`)
   console.log('')
   console.log(`  ${C.bold('交互模式命令')}`)
-  console.log(`    /clear ${C.dim('清空上下文')}   /status ${C.dim('查看状态')}   /exit ${C.dim('退出')}`)
+  console.log(`    /tools ${C.dim('查看可用工具')}   /clear ${C.dim('清空上下文')}   /status ${C.dim('查看状态')}   /exit ${C.dim('退出')}`)
 }
 
 async function findServer() {
@@ -89,17 +89,48 @@ async function cmdStatus() {
   if (h.workDir) console.log(`  ${C.dim('工作区:')} ${h.workDir}`)
 }
 
+/** 从服务拉取内置工具 schema(单一来源,与桌面端/手机端一致) */
+async function getTools(port) {
+  try {
+    const r = await fetch(`http://localhost:${port}/api/remote/tools`, { signal: AbortSignal.timeout(2000) })
+    if (r.ok) {
+      const d = await r.json()
+      return Array.isArray(d.tools) ? d.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })) : []
+    }
+  } catch { /* 忽略,工具不可用 */ }
+  return []
+}
+
+/** 执行一个工具调用,结果回给模型 */
+async function execTool(port, name, args, cwd) {
+  try {
+    const r = await fetch(`http://localhost:${port}/api/tools/execute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(cwd ? { 'X-Work-Dir': encodeURIComponent(cwd) } : {}) },
+      body: JSON.stringify({ name, args: typeof args === 'string' ? JSON.parse(args || '{}') : (args || {}) }),
+      signal: AbortSignal.timeout(120000),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (j.success === false || r.status >= 400) {
+      return typeof (j.error || j.output) === 'string' ? (j.error || j.output) : JSON.stringify(j)
+    }
+    return typeof j.output === 'string' ? j.output : JSON.stringify(j)
+  } catch (e) { return `工具执行失败: ${e.message || e}` }
+}
+
 /** 调 /api/llm-proxy 流式对话，返回完整回复 */
-async function chatStream(port, settings, messages, onDelta) {
+async function chatStream(port, settings, messages, onDelta, tools, workDir) {
   const isLocal = settings.provider === 'local'
   const targetBase = isLocal ? 'http://localhost:1234/v1' : (settings.apiBaseUrl || 'https://openrouter.ai/api/v1')
   const apiKey = isLocal ? 'lm-studio' : (settings.apiKey || '')
   const model = modelOverride || settings.model || 'default'
 
+  const body = { model, messages, stream: true }
+  if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = 'auto' }
+
   const res = await fetch(`http://localhost:${port}/api/llm-proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Target-Base': targetBase, 'X-Api-Key': apiKey },
-    body: JSON.stringify({ model, messages, stream: true }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(180000),
   })
   if (!res.ok) {
@@ -109,7 +140,7 @@ async function chatStream(port, settings, messages, onDelta) {
       const j = JSON.parse(t)
       if (res.status === 429) friendly = '今日 API 免费额度已用完，请明天再试'
       else if (res.status === 401) friendly = 'API 密钥无效或已过期，请在桌面 App 设置中检查'
-      else if (j.error) friendly = typeof j.error === 'string' ? j.error : JSON.stringify(j.error)
+      if (j.error) friendly = typeof j.error === 'string' ? j.error : JSON.stringify(j.error)
     } catch {}
     throw new Error(friendly)
   }
@@ -118,6 +149,7 @@ async function chatStream(port, settings, messages, onDelta) {
   const decoder = new TextDecoder()
   let buf = ''
   let full = ''
+  const toolCalls = []
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -131,12 +163,20 @@ async function chatStream(port, settings, messages, onDelta) {
       if (payload === '[DONE]') continue
       try {
         const j = JSON.parse(payload)
-        const delta = j.choices?.[0]?.delta?.content || j.choices?.[0]?.message?.content || ''
-        if (delta) { full += delta; onDelta?.(delta) }
+        const d = j.choices?.[0]?.delta
+        if (d?.content) { full += d.content; onDelta?.(d.content, false) }
+        if (d?.reasoning_content || d?.reasoning) onDelta?.(d.reasoning_content || d.reasoning, true)
+        for (const tc of d?.tool_calls || []) {
+          const i = tc.index ?? 0
+          if (!toolCalls[i]) toolCalls[i] = { id: tc.id || '', name: '', argStr: '' }
+          if (tc.id) toolCalls[i].id = tc.id
+          if (tc.function?.name) toolCalls[i].name += tc.function.name
+          if (tc.function?.arguments) toolCalls[i].argStr += tc.function.arguments
+        }
       } catch { /* 忽略非 JSON 行 */ }
     }
   }
-  return full
+  return { text: full, toolCalls: toolCalls.filter(Boolean) }
 }
 
 function spinnerStart(label) {
@@ -148,12 +188,32 @@ function spinnerStart(label) {
   return () => { clearInterval(timer); process.stdout.write('\r\x1b[K') }
 }
 
+/** 一轮完整对话:模型可调工具,循环执行直到给出最终文本(v9.0:与桌面端同构) */
+async function chatOnce(port, settings, history, onDelta) {
+  const tools = await getTools(port)
+  const workDir = settings.workDir || ''
+  for (let turn = 0; turn < 10; turn++) {
+    const r = await chatStream(port, settings, history, onDelta, tools, workDir)
+    if (r.toolCalls.length === 0) return r.text
+    // 模型要求调工具:执行,把结果回传,继续下一轮
+    for (const tc of r.toolCalls) {
+      history.push({ role: 'assistant', tool_calls: [{ id: tc.id || ('call_' + Math.random().toString(36).slice(2, 8)), type: 'function', function: { name: tc.name, arguments: tc.argStr || '{}' } }] })
+      let args = {}
+      try { args = JSON.parse(tc.argStr || '{}') } catch { /* 模型偶发输出半个 JSON */ }
+      const result = await execTool(port, tc.name, args, workDir)
+      if (process.stdout.isTTY) process.stdout.write(C.dim(`\n  ⚙ ${tc.name}\n`))
+      history.push({ role: 'tool', tool_call_id: tc.id || ('call_' + Math.random().toString(36).slice(2, 8)), content: result.slice(0, 12000) })
+    }
+  }
+  return '(达到工具调用轮数上限)'
+}
+
 async function ask(port, settings, history, question) {
   history.push({ role: 'user', content: question })
   const stopSpinner = process.stdout.isTTY ? spinnerStart('思考中…') : () => {}
   let reasoningLine = false
   try {
-    const reply = await chatStream(port, settings, history, (delta, reasoning) => {
+    const reply = await chatOnce(port, settings, history, (delta, reasoning) => {
       if (!process.stdout.isTTY) return
       if (!stopSpinner.done) { stopSpinner(); stopSpinner.done = true }
       if (reasoning) {
@@ -196,7 +256,8 @@ async function main() {
   // 交互模式
   console.log(BANNER)
   console.log(`  ${C.green('●')} 已连接 ${C.dim(`localhost:${port} · ${settings.model || 'default'}`)}`)
-  console.log(C.dim('  输入问题开始对话，/exit 退出\n'))
+  console.log(C.dim('  输入问题开始对话(模型可调用工具),/exit 退出'))
+  console.log(C.dim('  /tools 查看可用工具 /status 查看状态\n'))
   const history = []
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: C.cyan('❯ ') })
   rl.prompt()
@@ -206,10 +267,16 @@ async function main() {
     if (q === '/exit' || q === '/quit' || q === 'exit') { rl.close(); return }
     if (q === '/clear') { history.length = 0; console.log(C.dim('已清空上下文')); rl.prompt(); return }
     if (q === '/status') { await cmdStatus(); rl.prompt(); return }
+    if (q === '/tools') {
+      const tools = await getTools(port)
+      console.log(`  ${C.bold('可用工具')} ${tools.length} 个:`)
+      for (const t of tools) console.log(`  ${C.green('·')} ${t.function.name} ${C.dim(t.function.description.slice(0, 60))}`)
+      rl.prompt(); return
+    }
     await ask(port, settings, history, q)
     rl.prompt()
   })
-  rl.on('close', () => { console.log(C.dim('\n再见 👋')); process.exit(0) })
+  rl.on('close', () => { console.log(C.dim('\n再见')); process.exit(0) })
 }
 
 main().catch((e) => { console.error(C.red('✗ ' + (e.message || e))); process.exit(1) })
