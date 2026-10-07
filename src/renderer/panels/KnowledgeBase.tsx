@@ -790,7 +790,7 @@ function KnowledgeGraph({ entries, theme, onSelect }: { entries: KbEntry[]; them
         for (const [i, j] of edges) { const a = nodes[i], b = nodes[j]; if (!a || !b) continue
           const dx = b.x - a.x, dy = b.y - a.y; const d = Math.max(1, Math.sqrt(dx * dx + dy * dy)); const f = (d - 180) * 0.02
           a.vx += (dx / d) * f; a.vy += (dy / d) * f; if (b.fx === undefined) { b.vx -= (dx / d) * f; b.vy -= (dy / d) * f } }
-        for (const n of nodes) { if (n.fx !== undefined) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue }
+        for (const n of nodes) { if (n.fx !== undefined && n.fy !== undefined) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; continue }
           n.vx -= n.x * 0.0014; n.vy -= n.y * 0.0014; n.vx *= 0.85; n.vy *= 0.85; n.x += n.vx; n.y += n.vy } }
       // 绘制
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = bgCol; ctx.fillRect(0, 0, W, H)

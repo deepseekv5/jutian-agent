@@ -243,7 +243,7 @@ npm run electron:build    # 打包 macOS (dmg + zip)
 │   │   ├── engine/            流式引擎/子代理/代理循环
 │   │   └── hooks/ store/ types/ utils/
 │   ├── server/serve.ts        后端唯一源码
-│   └── shared/                工具 schema / MCP / 员工模型 / CLI
+│   └── shared/                工具 schema / MCP / 约束知识库(guidance)/ 员工模型 / CLI
 ├── docs/                      产品官网(Pages)+ 全部文档
 │   ├── guide/                 用户指南(8 篇)
 │   ├── dev/                   开发者文档(3 篇)

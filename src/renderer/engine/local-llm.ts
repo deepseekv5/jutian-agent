@@ -38,7 +38,7 @@ export async function loadLocalModel(
 ): Promise<void> {
   console.log('[WebLLM] Starting to load model:', modelId)
   const engine = await CreateMLCEngine(modelId, {
-    initProgressCallback: (report) => {
+    initProgressCallback: (report: { progress: number; text: string }) => {
       console.log('[WebLLM] Progress:', Math.round(report.progress * 100) + '%', report.text)
       try {
         onProgress(report.progress, report.text)

@@ -3,7 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
 import { getAllMemories } from '../store/storage'
 
-export default function AboutPage({ onClose }: { onClose: () => void }) {
+export default function AboutPage({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
   const { c } = useTheme()
   const [stats, setStats] = useState<{ sessions: number; memories: number } | null>(null)
 

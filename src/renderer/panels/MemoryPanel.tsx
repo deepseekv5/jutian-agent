@@ -3,7 +3,7 @@ import { getAllMemories, setMemory, deleteMemory } from '../store/storage'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
 
-interface Props { onClose: () => void }
+interface Props { onClose: () => void; embedded?: boolean }
 
 export default function MemoryPanel({ onClose }: Props) {
   const { c } = useTheme()

@@ -23,7 +23,7 @@ export default function ContextGauge({ parts, limit, compact = false }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
 
   const total = parts.reduce((s, p) => s + p.tokens, 0)
-  const frac = Math.min(total / limit, 1)
+  const frac = Math.min(total / effectiveLimit, 1)
 
   useEffect(() => {
     if (!open) return
@@ -70,7 +70,7 @@ export default function ContextGauge({ parts, limit, compact = false }: Props) {
             {fmtPercent(frac)}
           </text>
           <text x={cx} y={cy + 8} textAnchor="middle" fontSize="6.5" fill={c.textMuted}>
-            {fmtTokens(total)}/{fmtTokens(limit)}
+            {fmtTokens(total)}/{fmtTokens(effectiveLimit)}
           </text>
         </svg>
       </button>
@@ -82,7 +82,7 @@ export default function ContextGauge({ parts, limit, compact = false }: Props) {
           <div className="flex items-baseline justify-between mb-2.5">
             <span className="text-[12px] font-semibold" style={{ color: c.textHead }}>上下文占用</span>
             <span className="text-[11px] font-mono" style={{ color: c.textMuted }}>
-              {fmtTokens(total)} / {fmtTokens(limit)}
+              {fmtTokens(total)} / {fmtTokens(effectiveLimit)}
             </span>
           </div>
 
@@ -108,7 +108,7 @@ export default function ContextGauge({ parts, limit, compact = false }: Props) {
           </div>
 
           <div className="mt-2.5 pt-2 text-[10px]" style={{ borderTop: `1px solid ${c.borderLight}`, color: c.textMuted }}>
-            上下文窗口 {fmtTokens(limit)} tokens · 估算值
+            上下文窗口 {fmtTokens(effectiveLimit)} tokens · 估算值
           </div>
         </div>
       )}

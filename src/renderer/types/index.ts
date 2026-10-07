@@ -23,6 +23,8 @@ export interface ToolCall {
   result?: string
   started_at?: string
   finished_at?: string
+  /** 时序交错:工具调用开始时正文已流出的长度,渲染按真实顺序排布 */
+  preLen?: number
 }
 
 export interface Message {

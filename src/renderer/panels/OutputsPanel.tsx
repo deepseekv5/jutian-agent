@@ -4,7 +4,7 @@ import PageShell from '../app/PageShell'
 
 interface FileEntry { path: string; sessionTitle: string; createdAt: string }
 
-export default function OutputsPanel({ onClose }: { onClose: () => void }) {
+export default function OutputsPanel({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
   const { c } = useTheme()
   const [files, setFiles] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)

@@ -13,8 +13,8 @@ export function stepEditorFont(delta: number): number {
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { effectiveApiKey } from '../store/storage'
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers, Decoration, DecorationSet, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view'
-import { EditorState, StateField, StateEffect, Compartment } from '@codemirror/state'
-import { defaultKeymap, history, historyKeymap, indentWithTab, undo, toggleComment } from '@codemirror/commands'
+import { EditorState, StateField, StateEffect, Compartment, type Range } from '@codemirror/state'
+import { defaultKeymap, history, historyKeymap, undo, toggleComment, indentMore } from '@codemirror/commands'
 import { bracketMatching, indentOnInput, foldKeymap, foldGutter } from '@codemirror/language'
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import { lintKeymap } from '@codemirror/lint'
@@ -132,7 +132,7 @@ const diffField = StateField.define<DecorationSet>({
       if (e.is(setDiffLines)) {
         const changed = e.value
         if (changed.length === 0) return Decoration.none
-        const decos: { from: number; value: Decoration }[] = []
+        const decos: Range<Decoration>[] = []
         for (const cl of changed) {
           try {
             const line = tr.state.doc.line(cl.line)
@@ -434,7 +434,7 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
           })
           return true
         }
-        return indentWithTab(view)
+        return indentMore(view)
       },
     }])
 

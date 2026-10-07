@@ -673,7 +673,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     className="px-3 py-1.5 rounded-lg text-[12px] font-medium" style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.border}` }}>
                     {testingConn === 'ok' ? '已连接' : '测试连接'}
                   </button>
-                  <button type="button" onClick={fetchModels} disabled={fetchingModels}
+                  <button type="button" onClick={() => fetchModels()} disabled={fetchingModels}
                     className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50"
                     style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.border}` }}>
                     {fetchingModels ? '拉取中…' : '拉取模型列表'}
@@ -1094,7 +1094,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     </select>
                     <button type="button"
                       onClick={() => {
-                        try { window.__ttsPreview?.pause?.() } catch {}
+                        try { (window as any).__ttsPreview?.pause?.() } catch {}
                         fetch('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '你好，我是巨天，这是朗读音色试听效果。', voice: form.voiceId || 'zh-CN-XiaoxiaoNeural', speed: Number(form.ttsSpeed) || 1.0 }) })
                           .then(r => { if (!r.ok) throw new Error(); return r.blob() })
                           .then(b => { const a = new Audio(URL.createObjectURL(b)); (window as any).__ttsPreview = a; a.play() })
@@ -1252,7 +1252,7 @@ function CliBanner() {
       <button
         onClick={() => { try { localStorage.setItem('settings-cli-banner', '0') } catch {} ; setHidden(true) }}
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full grid place-items-center border"
-        style={{ background: c.bgElevated || c.surfaceCard, borderColor: c.border, color: c.textTertiary }}
+        style={{ background: c.surfaceCard, borderColor: c.border, color: c.textTertiary }}
         title={t('收起这条提示', 'Dismiss')}>
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 18L18 6M6 6l12 12" /></svg>
       </button>

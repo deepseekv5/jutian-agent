@@ -38,6 +38,7 @@
     "patch:fast": "node scripts/patch-update.mjs --no-build",
     "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs",
     "check": "tsc --noEmit",
+    "verify": "node scripts/verify.mjs",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix"
   },

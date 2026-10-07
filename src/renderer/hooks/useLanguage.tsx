@@ -5,7 +5,7 @@ type Language = 'zh' | 'en';
 interface LanguageCtx {
   lang: Language;
   setLang: (lang: Language) => void;
-  t: (zh: string, en: string) => string;
+  t: (zh: string, en?: string) => string;
 }
 
 const LanguageContext = createContext<LanguageCtx>({ lang: 'zh', setLang: () => {}, t: (zh, en) => zh });
@@ -27,7 +27,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('app-language', l);
   };
 
-  const t = (zh: string, en: string) => lang === 'zh' ? zh : en;
+  const t = (zh: string, en?: string) => lang === 'zh' ? zh : (en ?? zh);
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

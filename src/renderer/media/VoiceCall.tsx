@@ -102,7 +102,7 @@ export default function VoiceCall({ settings, onClose }: Props) {
       if (p === 'idle' && frame % 4 !== 0) return  // 空闲：降到 ~15fps
       let level = 0
       const analyser = analyserRef.current
-      let bins: Uint8Array | null = null
+      let bins: Uint8Array<ArrayBuffer> | null = null
       if (p === 'listening' && analyser) {
         bins = new Uint8Array(analyser.frequencyBinCount)
         analyser.getByteFrequencyData(bins)

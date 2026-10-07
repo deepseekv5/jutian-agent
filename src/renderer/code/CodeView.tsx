@@ -602,7 +602,7 @@ export default function CodeView({ settings, onBack }: Props) {
       </div>
 
       {showNewProject && (
-        <NewProjectDialog onClose={() => setShowNewProject(false)} onCreate={code.createProject} />
+        <NewProjectDialog onClose={() => setShowNewProject(false)} onCreateProject={code.createProject} />
       )}
 
       {/* 全局搜索面板 */}

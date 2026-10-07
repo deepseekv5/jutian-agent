@@ -812,7 +812,7 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
 }
 
 /** diff 审查卡片：AI 完成文件修改后展示变更内容（Codex 风格） */
-function ToolLine({ tc, textMuted, c }: { tc: ToolCall; textMuted: string; c: any }) {
+function ToolLine({ tc, textMuted }: { tc: ToolCall; textMuted: string; c?: any }) {
   let brief = ''
   try { const a = JSON.parse(tc.arguments || '{}'); brief = Object.values(a).filter((v: any) => typeof v === 'string' && v.length < 60).join(' ') || JSON.stringify(a).slice(0, 80) } catch { brief = (tc.arguments || '').slice(0, 80) }
   const done = tc.status === 'done', err = tc.status === 'error'
@@ -825,7 +825,7 @@ function ToolLine({ tc, textMuted, c }: { tc: ToolCall; textMuted: string; c: an
   )
 }
 
-function RenderContent({ content }: { content: string }) {
+function RenderContent({ content }: { content: string; inputBg?: string; borderColor?: string; textMuted?: string }) {
   if (!content) return null
   return (
     <div className="markdown-body" style={{ fontSize: 12, lineHeight: 1.65 }}>

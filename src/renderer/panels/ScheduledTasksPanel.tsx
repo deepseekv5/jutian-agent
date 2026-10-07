@@ -9,7 +9,7 @@ function saveTasks(tasks: ScheduledTask[]) { localStorage.setItem('lyclaw_schedu
 
 const TYPE_LABELS: Record<string, string> = { once: '一次性', daily: '每天', weekly: '每周' }
 
-export default function ScheduledTasksPanel({ onClose }: { onClose: () => void }) {
+export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
   const { c } = useTheme()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)

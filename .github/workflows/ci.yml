@@ -22,6 +22,12 @@ jobs:
       - name: ESLint(零 error)
         run: npm run lint
 
+      - name: TypeScript 类型门禁(零 error)
+        run: npm run check
+
+      - name: 契约校验(工具 schema / 约束知识库 / 免 key 常量)
+        run: npm run verify
+
       - name: 构建后端(serve.cjs)
         run: npm run build:server
 

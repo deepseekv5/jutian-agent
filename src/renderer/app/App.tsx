@@ -135,7 +135,7 @@ function MainApp() {
 
   // 聊天字号 → CSS 变量（消息气泡/正文读取 --chat-font）
   useEffect(() => {
-    const map = { small: '14.5px', standard: '16px', large: '18px' } as const;
+    const map: Record<string, string> = { small: '14.5px', standard: '16px', large: '18px' };
     const size = map[(settings as any).chatFontSize || 'standard'] || '16px';
     document.documentElement.style.setProperty('--chat-font', size);
   }, [settings]);

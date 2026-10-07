@@ -286,7 +286,7 @@ export async function streamChat(
       // 添加 assistant message（含 tool_calls）到历史
       messages.push({
         role: 'assistant',
-        content: fullContent || null,
+        content: fullContent || undefined,
         tool_calls: toolCalls.map((tc, idx) => ({
           id: tc.id,
           type: 'function' as const,

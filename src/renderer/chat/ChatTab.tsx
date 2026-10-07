@@ -61,7 +61,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (dirs?.length) setSessionWorkDir(dirs[0])
   }, [setSessionWorkDir])
 
-  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage } = useChat(sessionId, chatSettings, onTitleGenerated, onAiTitle)
+  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
   const lastSendRef = useRef<{ content: string; skillIds?: string[] }>({ content: '' })
@@ -149,8 +149,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     a2.click()
     URL.revokeObjectURL(a2.href)
   }, [messages, sessionId])
-  const [queue, setQueue] = useState<{ id: string; content: string; skillIds?: string[] }[]>([])
-  const queueRef = useRef<{ id: string; content: string; skillIds?: string[] }[]>([])
+  const [queue, setQueue] = useState<{ id: string; content: string; skillIds?: string[]; attachedFiles?: any[]; sendOpts?: any }[]>([])
+  const queueRef = useRef<{ id: string; content: string; skillIds?: string[]; attachedFiles?: any[]; sendOpts?: any }[]>([])
   const sendingRef = useRef(false)
   const enqueue = useCallback((content: string, skillIds?: string[], attachedFiles?: any[], sendOpts?: any) => {
     const item = { id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, content, skillIds, attachedFiles, sendOpts }

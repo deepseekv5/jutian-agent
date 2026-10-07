@@ -5,7 +5,7 @@ import PageShell from '../app/PageShell'
 interface SkillTool { name: string; description: string }
 interface MarketSkill { id: string; name: string; version: string; author: string; description: string; tags: string[]; tools: SkillTool[]; source_url?: string }
 
-export default function SkillMarket({ onClose }: { onClose: () => void }) {
+export default function SkillMarket({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
   const { c } = useTheme()
   const [skills, setSkills] = useState<MarketSkill[]>([])
   const [search, setSearch] = useState('')
