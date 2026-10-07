@@ -53,7 +53,28 @@
       "electron/**/*",
       "serve.cjs",
       "src/shared/**/*",
-      "package.json"
+      "src/server/serve.ts",
+      "package.json",
+      "node_modules/better-sqlite3/lib/**/*",
+      "node_modules/better-sqlite3/package.json",
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "node_modules/@codemirror/**/*",
+      "node_modules/@lezer/**/*",
+      "node_modules/qrcode/**/*",
+      "node_modules/react/**/*",
+      "node_modules/react-dom/**/*",
+      "node_modules/react-markdown/**/*",
+      "node_modules/rehype-highlight/**/*",
+      "node_modules/remark-gfm/**/*",
+      "node_modules/pptxgenjs/**/*",
+      "node_modules/zustand/**/*",
+      "!**/*.map",
+      "!**/*.o",
+      "!**/*.obj",
+      "!**/test_extension.node"
+    ],
+    "asarUnpack": [
+      "**/better_sqlite3.node"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -82,7 +103,20 @@
           "from": "python-runtime",
           "to": "python-runtime",
           "filter": [
-            "**/*"
+            "bin/**",
+            "lib/python3.11/site-packages/**",
+            "!**/onnxruntime/**",
+            "!**/av/**",
+            "!**/onnxruntime",
+            "!**/av",
+            "!**/pip/**",
+            "!**/pip-*.dist-info/**",
+            "!**/setuptools/**",
+            "!**/*.pyc",
+            "!**/*.pyo",
+            "!**/__pycache__/**",
+            "!**/tests/**",
+            "!**/test_*.py"
           ]
         },
         {
@@ -150,9 +184,8 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.43.1",
     "@lezer/highlight": "^1.2.3",
+    "@types/qrcode": "^1.5.6",
     "better-sqlite3": "^12.10.0",
-    "immer": "^11.1.18",
-    "marked": "^18.0.14",
     "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -160,10 +193,10 @@
     "react-markdown": "^9.0.1",
     "rehype-highlight": "^7.0.1",
     "remark-gfm": "^4.0.0",
-    "ws": "^8.21.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@eslint/js": "^9.17.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -171,16 +204,15 @@
     "autoprefixer": "^10.4.20",
     "electron": "^33.4.11",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.21.5",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "esbuild": "^0.21.5",
-    "eslint": "^9.17.0",
-    "@eslint/js": "^9.17.0",
     "typescript-eslint": "^8.19.0",
-    "eslint-plugin-react-hooks": "^5.1.0",
-    "globals": "^15.14.0"
+    "vite": "^5.4.11"
   },
   "license": "MIT"
 }
