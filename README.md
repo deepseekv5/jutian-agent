@@ -28,6 +28,7 @@
 > 科技不是高高在上,而是服务于人民。
 >
 > 浏览器里的 AI 要你迁就它。装在桌面上的 AI,直接住进你的文件、终端和工作流。
+> 下载地址:https://github.com/deepseekv5/jutian-agent/releases#release-v8.1.0
 
 <br>
 
