@@ -5,6 +5,7 @@ import type { AttachedFile, Message, Settings } from '../types'
 import { BUILTIN_TOOLS } from '../types'
 import ContextGauge, { type ContextPart } from './ContextGauge'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
+import { refreshSkillManifest } from '../engine/skillManifest'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
 
@@ -286,6 +287,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
 
   // 技能列表
   const loadSkills = useCallback(() => {
+    refreshSkillManifest()
     fetch('/api/skills/list').then(res => res.json()).then(data => {
       const list = Array.isArray(data) ? data : JSON.parse(data.output || '[]')
       setInstalledSkills(list.filter((s: InstalledSkill) => s.name !== 'builtin'))

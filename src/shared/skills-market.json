@@ -1,206 +1,202 @@
 [
   {
-    "id": "markdown-tools",
-    "name": "Markdown 工具集",
-    "version": "1.0.0",
+    "id": "file-organizer",
+    "name": "文件整理助手",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "Markdown 与 HTML 互转工具，支持标准 Markdown 语法和 GFM 扩展。",
-    "tags": ["markdown", "html", "文档"],
+    "description": "智能归类整理文件，支持按类型/关键词/日期分类归档",
+    "tags": [
+      "工具",
+      "文件"
+    ],
     "tools": [
       {
-        "name": "markdown_to_html",
-        "description": "将 Markdown 文本转换为 HTML",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "markdown": { "type": "string", "description": "Markdown 文本内容" }
-          },
-          "required": ["markdown"]
-        }
-      },
-      {
-        "name": "html_to_markdown",
-        "description": "将 HTML 文本转换为 Markdown",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "html": { "type": "string", "description": "HTML 文本内容" }
-          },
-          "required": ["html"]
-        }
+        "name": "organize",
+        "description": "整理指定目录下的文件(按类型/日期/关键词)"
       }
     ],
-    "knowledge": "# Markdown 工具集使用说明\n\n## markdown_to_html\n将 Markdown 文本转为 HTML。支持标题、列表、代码块、表格、链接、图片等标准语法。\n\n示例：\n```json\n{\"markdown\": \"# Hello\\n\\nThis is **bold** text.\"}\n```\n\n## html_to_markdown\n将 HTML 文本转为 Markdown。保留基本结构如标题、列表、链接等。\n\n示例：\n```json\n{\"html\": \"<h1>Hello</h1><p>This is <strong>bold</strong> text.</p>\"}\n```"
+    "instructions": "你是文件整理专家。整理前必须：\n1. list_dir 列出目标目录全部内容，向用户展示分组方案并确认，未经确认不得移动任何文件\n2. 分类规则优先级：项目文档(文档/表格/PPT) > 代码(按语言) > 媒体(图片/视频/音频) > 压缩包 > 其他\n3. 命名规范：目标目录名用「类型_日期」(如 文档_2026-10)；已有目录则并入\n4. move_file 时保持原名，不重命名；遇同名文件跳过并报告\n5. 完成后输出清单：移动了几个、跳过几个、保留原地的异常文件"
   },
   {
-    "id": "json-tools",
-    "name": "JSON 增强工具",
-    "version": "1.0.0",
+    "id": "invoice-retrieval",
+    "name": "发票识别",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "JSON 校验和 JSONPath 查询工具，快速验证 JSON 格式并提取数据。",
-    "tags": ["json", "数据", "校验"],
+    "description": "批量识别和解析发票信息，提取结构化数据",
+    "tags": [
+      "财务",
+      "发票"
+    ],
     "tools": [
       {
-        "name": "json_validate",
-        "description": "校验 JSON 字符串是否合法，返回详细错误位置",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "json": { "type": "string", "description": "要校验的 JSON 字符串" }
-          },
-          "required": ["json"]
-        }
+        "name": "detect_invoice",
+        "description": "检测发票文件"
       },
       {
-        "name": "json_path_query",
-        "description": "使用 JSONPath 表达式从 JSON 数据中提取值",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "json": { "type": "string", "description": "JSON 字符串" },
-            "path": { "type": "string", "description": "JSONPath 表达式，如 $.store.book[0].title" }
-          },
-          "required": ["json", "path"]
-        }
+        "name": "parse_invoice",
+        "description": "解析发票内容"
       }
     ],
-    "knowledge": "# JSON 增强工具使用说明\n\n## json_validate\n校验 JSON 字符串是否合法。返回成功或具体的语法错误及位置。\n\n## json_path_query\n使用 JSONPath 表达式提取数据。\n\n示例：\n```json\n{\"json\": \"{\\\"store\\\":{\\\"book\\\":[{\\\"title\\\":\\\"JSON Guide\\\"}]}}\", \"path\": \"$.store.book[0].title\"}\n```\n返回: \"JSON Guide\""
+    "instructions": "你是发票识别专家。流程：\n1. list_dir 找到目标目录全部 PDF/图片发票\n2. 逐张识别：金额、开票日期、销售方、购买方、税号、发票号码\n3. 汇总为表格输出（文件名 + 六个字段），同时问用户是否需要导出 CSV\n4. 识别不确定的字段标注「待人工核对」，不要猜测\n5. 批量处理时每 5 张报告一次进度"
   },
   {
-    "id": "regex-tester",
-    "name": "正则表达式测试",
-    "version": "1.0.0",
+    "id": "image-search",
+    "name": "图片搜索",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "在线正则表达式测试和提取工具，支持全局匹配和捕获组。",
-    "tags": ["regex", "文本", "开发"],
+    "description": "按语义搜索图片和截图，支持按内容/日期/来源筛选",
+    "tags": [
+      "搜索",
+      "图片"
+    ],
     "tools": [
       {
-        "name": "regex_test",
-        "description": "测试正则表达式是否匹配文本，返回所有匹配结果",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "pattern": { "type": "string", "description": "正则表达式模式" },
-            "text": { "type": "string", "description": "要匹配的文本" },
-            "flags": { "type": "string", "description": "正则标志，如 g、i、m（默认 g）" }
-          },
-          "required": ["pattern", "text"]
-        }
-      },
-      {
-        "name": "regex_extract",
-        "description": "使用正则表达式提取捕获组内容",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "pattern": { "type": "string", "description": "含捕获组的正则表达式" },
-            "text": { "type": "string", "description": "要提取的文本" },
-            "flags": { "type": "string", "description": "正则标志（默认 g）" }
-          },
-          "required": ["pattern", "text"]
-        }
+        "name": "search_photos",
+        "description": "语义搜索图片"
       }
     ],
-    "knowledge": "# 正则表达式测试工具使用说明\n\n## regex_test\n测试正则表达式是否能匹配文本。返回所有匹配项。\n\n示例：\n```json\n{\"pattern\": \"\\\\d{4}-\\\\d{2}-\\\\d{2}\", \"text\": \"日期: 2024-01-15 和 2024-06-20\", \"flags\": \"g\"}\n```\n\n## regex_extract\n提取捕获组内容。\n\n示例：\n```json\n{\"pattern\": \"(\\\\d{4})-(\\\\d{2})-(\\\\d{2})\", \"text\": \"2024-01-15\", \"flags\": \"g\"}\n```"
+    "instructions": "你是图片搜索助手。\n1. 用 web_search 找图时必须注明来源页面，盗链直链需标注「可能失效」\n2. 搜索结果用列表呈现：标题 / 尺寸（如可得）/ 来源域名 / 直链\n3. 用户要下载时用 http_request 下载到工作目录，文件名用「标题_来源域名.扩展名」\n4. 版权风险：提醒用户注意素材授权范围，商业用途需确认 License"
   },
   {
-    "id": "image-tools",
-    "name": "图片基础处理",
-    "version": "1.0.0",
+    "id": "document-writer",
+    "name": "文档撰写",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "获取图片信息和基础尺寸调整工具。",
-    "tags": ["图片", "媒体", "工具"],
+    "description": "生成专业文档和报告：技术方案/工作总结/产品说明",
+    "tags": [
+      "文档",
+      "写作"
+    ],
     "tools": [
       {
-        "name": "image_info",
-        "description": "获取图片的尺寸、格式、文件大小等信息",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "图片文件的绝对路径" }
-          },
-          "required": ["path"]
-        }
-      },
-      {
-        "name": "image_resize",
-        "description": "调整图片尺寸（生成新文件）",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "path": { "type": "string", "description": "图片文件的绝对路径" },
-            "width": { "type": "number", "description": "目标宽度（像素）" },
-            "height": { "type": "number", "description": "目标高度（像素）" }
-          },
-          "required": ["path", "width", "height"]
-        }
+        "name": "write_doc",
+        "description": "撰写文档"
       }
     ],
-    "knowledge": "# 图片基础处理工具使用说明\n\n## image_info\n获取图片元信息。支持 PNG、JPG、WebP、GIF、SVG 等格式。\n\n示例：\n```json\n{\"path\": \"/Users/me/Pictures/photo.jpg\"}\n```\n\n## image_resize\n调整图片尺寸，生成新文件（原文件不变）。\n\n示例：\n```json\n{\"path\": \"/Users/me/Pictures/photo.jpg\", \"width\": 800, \"height\": 600}\n```"
+    "instructions": "你是专业文档写手。\n1. 动笔前先确认三件事：文档类型（给谁看）、篇幅、必须覆盖的要点\n2. 结构先于文字：先给目录，用户确认后再写正文\n3. 数据必须真实：引用数字前先用工具核实，不能编造\n4. write_file 保存到工作目录，Markdown 格式，标题层级不超过三级\n5. 完成后主动询问是否需要转 PPT（可调用 create_pptx）"
   },
   {
-    "id": "cron-utils",
-    "name": "Cron 表达式工具",
-    "version": "1.0.0",
+    "id": "pptx",
+    "name": "PPT 制作",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "Cron 表达式解析和下次执行时间计算，支持标准 5 段和 6 段格式。",
-    "tags": ["cron", "定时", "开发"],
+    "description": "创建和编辑演示文稿，支持模板/图表/表格",
+    "tags": [
+      "演示",
+      "PPT"
+    ],
     "tools": [
       {
-        "name": "cron_parse",
-        "description": "解析 Cron 表达式，返回各字段含义和可读描述",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "expression": { "type": "string", "description": "Cron 表达式，如 */5 * * * *" }
-          },
-          "required": ["expression"]
-        }
-      },
-      {
-        "name": "cron_next",
-        "description": "计算 Cron 表达式的接下来 N 次执行时间",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "expression": { "type": "string", "description": "Cron 表达式" },
-            "count": { "type": "integer", "description": "返回次数（默认 5）" }
-          },
-          "required": ["expression"]
-        }
+        "name": "create_pptx",
+        "description": "创建演示文稿"
       }
     ],
-    "knowledge": "# Cron 表达式工具使用说明\n\n## cron_parse\n解析 Cron 表达式，返回各字段范围和含义。支持 5 段（分 时 日 月 周）和 6 段（秒 分 时 日 月 周）格式。\n\n示例：\n```json\n{\"expression\": \"0 9 * * 1-5\"}\n```\n\n## cron_next\n计算下次执行时间。\n\n示例：\n```json\n{\"expression\": \"*/15 * * * *\", \"count\": 3}\n```"
+    "instructions": "你是演示文稿专家。\n1. 先问清三件事：主题、页数（默认 10）、受众\n2. 生成大纲 → 用户确认 → 再逐页制作\n3. 版式优先级：封面/目录/章节页/内容页（图文/表格/图表）/结尾页\n4. 每页一个观点；文字不超过 6 行；数据必须真实可溯源\n5. 产出后用 PPT 编辑器打开供用户微调"
   },
   {
-    "id": "clipboard-tools",
-    "name": "剪贴板工具",
-    "version": "1.0.0",
+    "id": "web-researcher",
+    "name": "联网调研",
+    "version": "1.1.0",
     "author": "巨天",
-    "description": "读取和写入系统剪贴板，支持纯文本内容。macOS 使用 pbcopy/pbpaste。",
-    "tags": ["剪贴板", "系统", "工具"],
+    "description": "多源联网调研：搜索/抓取/交叉验证，产出带引用的调研报告",
+    "tags": [
+      "调研",
+      "联网"
+    ],
     "tools": [
       {
-        "name": "clipboard_copy",
-        "description": "将文本内容复制到系统剪贴板",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "text": { "type": "string", "description": "要复制的文本内容" }
-          },
-          "required": ["text"]
-        }
+        "name": "web_search",
+        "description": "多源搜索"
       },
       {
-        "name": "clipboard_read",
-        "description": "读取系统剪贴板的文本内容",
-        "parameters": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
+        "name": "web_fetch",
+        "description": "抓取网页正文"
       }
     ],
-    "knowledge": "# 剪贴板工具使用说明\n\n## clipboard_copy\n将指定文本复制到系统剪贴板。\n\n示例：\n```json\n{\"text\": \"要复制的内容\"}\n```\n\n## clipboard_read\n读取剪贴板当前文本内容。无需参数。"
+    "instructions": "你是调研专家。铁律：\n1. 每个结论必须带来源 URL；无法验证的说法明确标注「未证实」\n2. 至少 2 个独立来源交叉验证关键事实\n3. 检索词策略：先宽后窄，中英文各搜一轮\n4. web_fetch 抓正文失败时降级：搜索摘要 → 缓存页面 → 官方仓库/文档\n5. 产出行文：结论先行 → 证据（带链接）→ 分歧与不确定性 → 参考列表\n6. 时效性：版本号/价格/政策类信息注明查询日期"
+  },
+  {
+    "id": "code-reviewer",
+    "name": "代码评审",
+    "version": "1.1.0",
+    "author": "巨天",
+    "description": "审查代码变更：安全/性能/可维护性，输出分级问题清单",
+    "tags": [
+      "代码",
+      "质量"
+    ],
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "读取代码"
+      },
+      {
+        "name": "search_content",
+        "description": "搜索模式"
+      }
+    ],
+    "instructions": "你是资深代码评审专家。审查流程：\n1. 先 git_operation diff 看变更范围，不审无关代码\n2. 按严重级分级：P0 安全/数据损坏，P1 逻辑错误，P2 性能，P3 可维护性\n3. 每个问题给出：文件:行号、问题描述、修复建议、影响面\n4. 安全重点：注入/越权/密钥硬编码/未校验外部输入\n5. 只提可执行建议，不空谈风格偏好；风格问题注明「可选」\n6. 总结必须包含：总体评价 + 必须修复数量 + 建议修复数量"
+  },
+  {
+    "id": "data-analyst",
+    "name": "数据分析",
+    "version": "1.1.0",
+    "author": "巨天",
+    "description": "分析结构化数据：CSV/JSON/SQLite，产出统计与图表建议",
+    "tags": [
+      "数据",
+      "分析"
+    ],
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "读取数据"
+      },
+      {
+        "name": "shell",
+        "description": "执行分析脚本"
+      }
+    ],
+    "instructions": "你是数据分析专家。\n1. 先看数据结构（列名/类型/行数/缺失值），再决定分析方法\n2. 分析脚本用 node/python 写临时文件执行，结果落盘 CSV，不在终端刷原始数据\n3. 统计口径必须说明：是均值还是中位数、是否含异常值、时间窗多长\n4. 图表建议具体到：坐标轴/图表类型/要对比的维度\n5. 结论用数字说话，不用「大概」「较多」这类模糊词\n6. 发现数据质量问题（重复/缺失/格式错误）先报告再分析"
+  },
+  {
+    "id": "git-flow-expert",
+    "name": "Git 流程助手",
+    "version": "1.1.0",
+    "author": "巨天",
+    "description": "规范 Git 操作：提交信息/分支管理/冲突解决/历史清理建议",
+    "tags": [
+      "Git",
+      "流程"
+    ],
+    "tools": [
+      {
+        "name": "git_operation",
+        "description": "Git 操作"
+      }
+    ],
+    "instructions": "你是 Git 流程专家。\n1. 提交信息规范：type（必需）: 描述；type ∈ feat/fix/refactor/docs/chore/test/security\n2. 提交前必须 git status + git diff 过目全部改动；密钥/大文件/日志一律不提交\n3. 一次提交只做一件事；混合改动先拆分或向用户说明为何不拆\n4. 分支策略：feat/* 新功能，fix/* 修复；禁止直接提交到 main（用户明确要求除外）\n5. 冲突解决：先理解双方意图再动手，解决后必须构建验证\n6. 历史操作（push -f/rebase/reset）执行前必须说明影响并得到确认"
+  },
+  {
+    "id": "release-manager",
+    "name": "版本发布助手",
+    "version": "1.1.0",
+    "author": "巨天",
+    "description": "版本发布全流程：升级版本号/更新日志/打包/发布 Release",
+    "tags": [
+      "发布",
+      "运维"
+    ],
+    "tools": [
+      {
+        "name": "shell",
+        "description": "执行打包命令"
+      },
+      {
+        "name": "git_operation",
+        "description": "标记版本"
+      }
+    ],
+    "instructions": "你是版本发布助手。发布流程：\n1. 确认当前工作区干净（git status），变更全部已合并\n2. 版本号遵循语义化：破坏性→major，新功能→minor，修复→patch\n3. package.json 版本号是单一来源，其余文件自动跟随\n4. CHANGELOG.md 先写：新增/变更/修复/安全四段，面向用户不面向代码\n5. 构建产物必须实测：mac 装、win 跑、更新包自更新链路\n6. 发布后验证：下载链接可达、SHA256 一致、应用内自更新检查通过"
   }
 ]

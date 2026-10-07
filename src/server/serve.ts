@@ -608,18 +608,100 @@ function parseSkillMd(skillDir) {
   } catch { return null; }
 }
 
-// 预设 Skill 市场数据
+// 预设 Skill 市场数据（v10.0：每个技能带 instructions，安装时写入 SKILL.md —— 真指令，不是空壳）
 var DEFAULT_MARKET = [
-  { id: "file-organizer", name: "\u6587\u4EF6\u6574\u7406\u52A9\u624B", version: "1.0.0", author: "巨天", description: "\u667A\u80FD\u5F52\u7C7B\u6574\u7406\u6587\u4EF6\uFF0C\u652F\u6301\u6309\u7C7B\u578B/\u5173\u952E\u8BCD\u5206\u7C7B", tags: ["\u5DE5\u5177", "\u6587\u4EF6"], tools: [{ name: "organize", description: "\u6574\u7406\u6307\u5B9A\u76EE\u5F55\u4E0B\u7684\u6587\u4EF6" }] },
-  { id: "invoice-retrieval", name: "\u53D1\u7968\u8BC6\u522B", version: "1.0.0", author: "巨天", description: "\u6279\u91CF\u8BC6\u522B\u548C\u89E3\u6790\u53D1\u7968\u4FE1\u606F", tags: ["\u8D22\u52A1", "\u53D1\u7968"], tools: [{ name: "detect_invoice", description: "\u68C0\u6D4B\u53D1\u7968\u6587\u4EF6" }, { name: "parse_invoice", description: "\u89E3\u6790\u53D1\u7968\u5185\u5BB9" }] },
-  { id: "image-search", name: "\u56FE\u7247\u641C\u7D22", version: "1.0.0", author: "巨天", description: "\u6309\u8BED\u4E49\u641C\u7D22\u56FE\u7247\u548C\u622A\u56FE", tags: ["\u641C\u7D22", "\u56FE\u7247"], tools: [{ name: "search_photos", description: "\u8BED\u4E49\u641C\u7D22\u56FE\u7247" }] },
-  { id: "document-writer", name: "\u6587\u6863\u64B0\u5199", version: "1.0.0", author: "巨天", description: "\u751F\u6210\u4E13\u4E1A\u6587\u6863\u548C\u62A5\u544A", tags: ["\u6587\u6863", "\u5199\u4F5C"], tools: [{ name: "write_doc", description: "\u64B0\u5199\u6587\u6863" }] },
-  { id: "pptx", name: "PPT \u5236\u4F5C", version: "1.0.0", author: "巨天", description: "\u521B\u5EFA\u548C\u7F16\u8F91\u6F14\u793A\u6587\u7A3F", tags: ["\u6F14\u793A", "PPT"], tools: [{ name: "create_pptx", description: "\u521B\u5EFA\u6F14\u793A\u6587\u7A3F" }] }
+  { id: "file-organizer", name: "文件整理助手", version: "1.1.0", author: "巨天", description: "智能归类整理文件，支持按类型/关键词/日期分类归档", tags: ["工具", "文件"], tools: [{ name: "organize", description: "整理指定目录下的文件(按类型/日期/关键词)" }],
+    instructions: `你是文件整理专家。整理前必须：
+1. list_dir 列出目标目录全部内容，向用户展示分组方案并确认，未经确认不得移动任何文件
+2. 分类规则优先级：项目文档(文档/表格/PPT) > 代码(按语言) > 媒体(图片/视频/音频) > 压缩包 > 其他
+3. 命名规范：目标目录名用「类型_日期」(如 文档_2026-10)；已有目录则并入
+4. move_file 时保持原名，不重命名；遇同名文件跳过并报告
+5. 完成后输出清单：移动了几个、跳过几个、保留原地的异常文件` },
+  { id: "invoice-retrieval", name: "发票识别", version: "1.1.0", author: "巨天", description: "批量识别和解析发票信息，提取结构化数据", tags: ["财务", "发票"], tools: [{ name: "detect_invoice", description: "检测发票文件" }, { name: "parse_invoice", description: "解析发票内容" }],
+    instructions: `你是发票识别专家。流程：
+1. list_dir 找到目标目录全部 PDF/图片发票
+2. 逐张识别：金额、开票日期、销售方、购买方、税号、发票号码
+3. 汇总为表格输出（文件名 + 六个字段），同时问用户是否需要导出 CSV
+4. 识别不确定的字段标注「待人工核对」，不要猜测
+5. 批量处理时每 5 张报告一次进度` },
+  { id: "image-search", name: "图片搜索", version: "1.1.0", author: "巨天", description: "按语义搜索图片和截图，支持按内容/日期/来源筛选", tags: ["搜索", "图片"], tools: [{ name: "search_photos", description: "语义搜索图片" }],
+    instructions: `你是图片搜索助手。
+1. 用 web_search 找图时必须注明来源页面，盗链直链需标注「可能失效」
+2. 搜索结果用列表呈现：标题 / 尺寸（如可得）/ 来源域名 / 直链
+3. 用户要下载时用 http_request 下载到工作目录，文件名用「标题_来源域名.扩展名」
+4. 版权风险：提醒用户注意素材授权范围，商业用途需确认 License` },
+  { id: "document-writer", name: "文档撰写", version: "1.1.0", author: "巨天", description: "生成专业文档和报告：技术方案/工作总结/产品说明", tags: ["文档", "写作"], tools: [{ name: "write_doc", description: "撰写文档" }],
+    instructions: `你是专业文档写手。
+1. 动笔前先确认三件事：文档类型（给谁看）、篇幅、必须覆盖的要点
+2. 结构先于文字：先给目录，用户确认后再写正文
+3. 数据必须真实：引用数字前先用工具核实，不能编造
+4. write_file 保存到工作目录，Markdown 格式，标题层级不超过三级
+5. 完成后主动询问是否需要转 PPT（可调用 create_pptx）` },
+  { id: "pptx", name: "PPT 制作", version: "1.1.0", author: "巨天", description: "创建和编辑演示文稿，支持模板/图表/表格", tags: ["演示", "PPT"], tools: [{ name: "create_pptx", description: "创建演示文稿" }],
+    instructions: `你是演示文稿专家。
+1. 先问清三件事：主题、页数（默认 10）、受众
+2. 生成大纲 → 用户确认 → 再逐页制作
+3. 版式优先级：封面/目录/章节页/内容页（图文/表格/图表）/结尾页
+4. 每页一个观点；文字不超过 6 行；数据必须真实可溯源
+5. 产出后用 PPT 编辑器打开供用户微调` },
+  { id: "web-researcher", name: "联网调研", version: "1.1.0", author: "巨天", description: "多源联网调研：搜索/抓取/交叉验证，产出带引用的调研报告", tags: ["调研", "联网"], tools: [{ name: "web_search", description: "多源搜索" }, { name: "web_fetch", description: "抓取网页正文" }],
+    instructions: `你是调研专家。铁律：
+1. 每个结论必须带来源 URL；无法验证的说法明确标注「未证实」
+2. 至少 2 个独立来源交叉验证关键事实
+3. 检索词策略：先宽后窄，中英文各搜一轮
+4. web_fetch 抓正文失败时降级：搜索摘要 → 缓存页面 → 官方仓库/文档
+5. 产出行文：结论先行 → 证据（带链接）→ 分歧与不确定性 → 参考列表
+6. 时效性：版本号/价格/政策类信息注明查询日期` },
+  { id: "code-reviewer", name: "代码评审", version: "1.1.0", author: "巨天", description: "审查代码变更：安全/性能/可维护性，输出分级问题清单", tags: ["代码", "质量"], tools: [{ name: "read_file", description: "读取代码" }, { name: "search_content", description: "搜索模式" }],
+    instructions: `你是资深代码评审专家。审查流程：
+1. 先 git_operation diff 看变更范围，不审无关代码
+2. 按严重级分级：P0 安全/数据损坏，P1 逻辑错误，P2 性能，P3 可维护性
+3. 每个问题给出：文件:行号、问题描述、修复建议、影响面
+4. 安全重点：注入/越权/密钥硬编码/未校验外部输入
+5. 只提可执行建议，不空谈风格偏好；风格问题注明「可选」
+6. 总结必须包含：总体评价 + 必须修复数量 + 建议修复数量` },
+  { id: "data-analyst", name: "数据分析", version: "1.1.0", author: "巨天", description: "分析结构化数据：CSV/JSON/SQLite，产出统计与图表建议", tags: ["数据", "分析"], tools: [{ name: "read_file", description: "读取数据" }, { name: "shell", description: "执行分析脚本" }],
+    instructions: `你是数据分析专家。
+1. 先看数据结构（列名/类型/行数/缺失值），再决定分析方法
+2. 分析脚本用 node/python 写临时文件执行，结果落盘 CSV，不在终端刷原始数据
+3. 统计口径必须说明：是均值还是中位数、是否含异常值、时间窗多长
+4. 图表建议具体到：坐标轴/图表类型/要对比的维度
+5. 结论用数字说话，不用「大概」「较多」这类模糊词
+6. 发现数据质量问题（重复/缺失/格式错误）先报告再分析` },
+  { id: "git-flow-expert", name: "Git 流程助手", version: "1.1.0", author: "巨天", description: "规范 Git 操作：提交信息/分支管理/冲突解决/历史清理建议", tags: ["Git", "流程"], tools: [{ name: "git_operation", description: "Git 操作" }],
+    instructions: `你是 Git 流程专家。
+1. 提交信息规范：type（必需）: 描述；type ∈ feat/fix/refactor/docs/chore/test/security
+2. 提交前必须 git status + git diff 过目全部改动；密钥/大文件/日志一律不提交
+3. 一次提交只做一件事；混合改动先拆分或向用户说明为何不拆
+4. 分支策略：feat/* 新功能，fix/* 修复；禁止直接提交到 main（用户明确要求除外）
+5. 冲突解决：先理解双方意图再动手，解决后必须构建验证
+6. 历史操作（push -f/rebase/reset）执行前必须说明影响并得到确认` },
+  { id: "release-manager", name: "版本发布助手", version: "1.1.0", author: "巨天", description: "版本发布全流程：升级版本号/更新日志/打包/发布 Release", tags: ["发布", "运维"], tools: [{ name: "shell", description: "执行打包命令" }, { name: "git_operation", description: "标记版本" }],
+    instructions: `你是版本发布助手。发布流程：
+1. 确认当前工作区干净（git status），变更全部已合并
+2. 版本号遵循语义化：破坏性→major，新功能→minor，修复→patch
+3. package.json 版本号是单一来源，其余文件自动跟随
+4. CHANGELOG.md 先写：新增/变更/修复/安全四段，面向用户不面向代码
+5. 构建产物必须实测：mac 装、win 跑、更新包自更新链路
+6. 发布后验证：下载链接可达、SHA256 一致、应用内自更新检查通过` },
 ];
-
 function loadMarket() {
   try {
-    if (fs.existsSync(MARKET_FILE)) return JSON.parse(fs.readFileSync(MARKET_FILE, "utf-8"));
+    if (fs.existsSync(MARKET_FILE)) {
+      const saved = JSON.parse(fs.readFileSync(MARKET_FILE, "utf-8"));
+      if (Array.isArray(saved) && saved.length > 0) {
+        // v10.0：内置市场升级(旧文件条目缺 instructions 时用新版数据补齐)，
+        // 用户自行添加的条目保留
+        const byId = new Map(saved.map((s: { id?: string }) => [s.id as string, s]));
+        let upgraded = false;
+        for (const d of DEFAULT_MARKET) {
+          const cur = byId.get(d.id);
+          if (!cur || !cur.instructions) { byId.set(d.id, { ...d, ...cur, ...(cur && cur.instructions ? {} : d) }); upgraded = true; }
+        }
+        if (upgraded) { const merged = [...byId.values()]; saveMarket(merged); return merged; }
+        return saved;
+      }
+    }
   } catch {}
   return DEFAULT_MARKET;
 }
@@ -700,7 +782,27 @@ async function install_skill(a) {
   try {
     const dir = path.join(SKILL_DIR, a.name);
     await fsp.mkdir(dir, { recursive: true });
-    await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({ name: a.name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
+    // v10.0：优先按市场条目的完整数据安装(元数据/指令/工具全落地)，
+    // 市场里没有时才走通用兜底——不再写什么都不干的空壳
+    const market = loadMarket();
+    const hit = market.find((s) => s.id === a.name || s.name === a.name);
+    if (hit) {
+      await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({
+        name: a.name, display_name: hit.name, version: hit.version,
+        author: hit.author, description: hit.description, tags: hit.tags,
+        tools: hit.tools, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
+      }, null, 2));
+      writeSkillMd(dir, {
+        name: a.name, display_name: hit.name, version: hit.version,
+        author: hit.author, description: hit.description,
+        instructions: hit.instructions, hasTools: !!(hit.tools && hit.tools.length),
+      });
+      if (hit.tools && hit.tools.length) {
+        await fsp.writeFile(path.join(dir, "tools.json"), JSON.stringify(hit.tools, null, 2), "utf-8");
+      }
+      return { success: true, output: `已安装「${hit.name}」(含完整指令与工具定义)` };
+    }
+    await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({ name: a.name, display_name: a.name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
     writeSkillMd(dir, { name: a.name, description: a.description || "", hasTools: false });
     return { success: true, output: "已安装（含 SKILL.md）" };
   } catch (e) {
@@ -2186,11 +2288,11 @@ http.createServer(async (req, res) => {
           author: skill.author, description: skill.description, tags: skill.tags,
           tools: skill.tools, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
         }, null, 2));
-        // 真实技能文件：SKILL.md + tools.json
+        // 真实技能文件：SKILL.md（含 instructions 真指令）+ tools.json
         writeSkillMd(dir, {
           name: skillId, display_name: skill.name, version: skill.version,
           author: skill.author, description: skill.description,
-          hasTools: !!(skill.tools && skill.tools.length),
+          instructions: skill.instructions, hasTools: !!(skill.tools && skill.tools.length),
         });
         if (skill.tools && skill.tools.length) {
           await fsp.writeFile(path.join(dir, "tools.json"), JSON.stringify(skill.tools, null, 2), "utf-8");

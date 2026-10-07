@@ -13,6 +13,7 @@ import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
 import TerminalPanel from '../code/TerminalPanel';
 import NewTabPage from './NewTabPage';
+import { refreshSkillManifest } from '../engine/skillManifest';
 import type { Settings } from '../types';
 
 /* ─── 重功能按需加载：首屏只保留对话核心，PPT / 代码 / 通话 / 集群等首次打开时才拉取 ─── */
@@ -190,6 +191,15 @@ function MainApp() {
     window.addEventListener('open-harness', h)
     return () => { window.removeEventListener('open-skills-market', h); window.removeEventListener('open-harness', h) }
   }, [openTab])
+
+  // v10.0：启动即拉取已安装技能清单（系统提示词据此提示模型按需 load_skill）
+  useEffect(() => {
+    refreshSkillManifest()
+    const onChanged = () => refreshSkillManifest()
+    window.addEventListener('skills-changed', onChanged)
+    window.addEventListener('focus', onChanged)
+    return () => { window.removeEventListener('skills-changed', onChanged); window.removeEventListener('focus', onChanged) }
+  }, [])
 
   const closeTab = useCallback((id: string) => {
     const idx = tabs.findIndex(t => t.id === id);

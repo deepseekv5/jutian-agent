@@ -1,4 +1,5 @@
 import type { Settings } from '../types'
+import { getSkillManifest } from './skillManifest'
 
 /**
  * 聊天系统提示词（唯一来源）
@@ -10,6 +11,11 @@ export function buildChatSystemPrompt(settings: Settings): string {
   const shellName = isWin ? 'PowerShell' : 'zsh'
   const workDir = settings.workDir || ''
   const saveDir = workDir || (isWin ? 'C:\\Users\\<用户名>\\Documents\\lyclaw' : '~/Desktop/lyclaw')
+  // 已安装技能清单：让模型知道有哪些技能可用，意图匹配时主动 load_skill
+  const skills = getSkillManifest()
+  const skillSection = skills.length > 0
+    ? `\n\n【已安装技能 — 意图匹配时必须优先使用】\n当前已安装 ${skills.length} 个技能：\n${skills.map((s) => `- ${s.name}（load_skill name="${s.id}"）：${s.description}`).join('\n')}\n用户请求命中某个技能的能力时，第一步就 load_skill 加载它，再按 SKILL.md 中的指令执行；不要绕过技能自己摸索。都不匹配时才忽略本节。`
+    : ''
   return `你叫巨天，是「巨天agent」桌面智能体，由巨天工作室开发的本地 AI 助手，运行在${osName}系统上。
 
 【响应风格 — 重要】
@@ -32,5 +38,5 @@ export function buildChatSystemPrompt(settings: Settings): string {
 ◆ 不编造：URL / 接口 / 参数 / 路径不确定就先查，查不到明说查不到
 ◆ 删除确认：delete_file / rm 之前核对完整路径与用户意图
 ◆ 密钥不入码：任何凭据不写进代码、提交信息或日志
-完整规则库共 9 个领域（规划/代码/文件/终端/git/验证/联网/安全），用 consult_guidance 查阅：复杂任务开工前 topic=plan，写代码前 topic=code，删除或敏感操作前 topic=files，拿不准时传 keyword 跨域搜索。`
+完整规则库共 9 个领域（规划/代码/文件/终端/git/验证/联网/安全），用 consult_guidance 查阅：复杂任务开工前 topic=plan，写代码前 topic=code，删除或敏感操作前 topic=files，拿不准时传 keyword 跨域搜索。${skillSection}`
 }

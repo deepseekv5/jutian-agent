@@ -3,7 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
 
 interface SkillTool { name: string; description: string }
-interface MarketSkill { id: string; name: string; version: string; author: string; description: string; tags: string[]; tools: SkillTool[]; source_url?: string }
+interface MarketSkill { id: string; name: string; version: string; author: string; description: string; tags: string[]; tools: SkillTool[]; instructions?: string; source_url?: string }
 
 export default function SkillMarket({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
   const { c } = useTheme()
@@ -17,6 +17,7 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
   const [githubUrl, setGithubUrl] = useState('')
   const [githubInstalling, setGithubInstalling] = useState(false)
   const [activeTab, setActiveTab] = useState<'market' | 'installed'>('market')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const loadMarket = useCallback(async () => {
     try {
@@ -183,6 +184,18 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
                           <span key={t.name} className="text-[10px] font-mono px-1.5 py-0.5 rounded-md" style={{ background: c.bgInput, color: c.textMuted }}>{t.name}</span>
                         ))}
                         {skill.tools.length > 4 && <span className="text-[10px]" style={{ color: c.textMuted }}>+{skill.tools.length - 4}</span>}
+                      </div>
+                    )}
+                    {skill.instructions && (
+                      <div className="mt-2">
+                        <button onClick={() => setExpandedId(prev => prev === skill.id ? null : skill.id)}
+                          className="text-[11px] font-medium flex items-center gap-1" style={{ color: c.accent }}>
+                          {expandedId === skill.id ? '收起指令' : '查看指令'}
+                          <svg className={`w-3 h-3 transition-transform ${expandedId === skill.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        {expandedId === skill.id && (
+                          <pre className="mt-2 px-3 py-2.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap max-h-52 overflow-y-auto" style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>{skill.instructions}</pre>
+                        )}
                       </div>
                     )}
                   </div>
