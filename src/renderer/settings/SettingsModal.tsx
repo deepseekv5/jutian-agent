@@ -9,6 +9,7 @@ import McpSection from './McpSection'
 import RemoteAccess from './RemoteAccess'
 import { summarizeUsage } from '../store/usage';
 import { effectiveApiKey } from '../store/storage';
+import AboutContent from './AboutContent';
 import { fmtTokens } from '../utils/tokens';
 
 interface Props {
@@ -1163,70 +1164,51 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               </Sub>
             </>)}
 
-            {tab === 'about' && (<>
-              <div className="text-center pt-2 pb-4">
-                <div className="w-14 h-14 mx-auto rounded-xl flex items-center justify-center" style={{ background: c.brand }}>
-                  <svg className="w-7 h-7" style={{ color: c.onBrand }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                  </svg>
-                </div>
-                <h3 className="text-[15px] font-semibold mt-3" style={{ color: c.textHead }}>{'巨天agent v' + APP_VERSION}</h3>
-                <p className="text-[11px] mt-1" style={{ color: c.textTertiary }}>ly-next 架构 · AI 桌面工作台</p>
-              </div>
-              <div className="space-y-2 text-[12px]" style={{ color: c.textSecondary }}>
-                {[
-                  ['架构', 'ly-next：单一后端 + SQLite 单一数据源'],
-                  ['核心能力', '对话 · Agent 集群 · 代码 · PPT · 终端 · 语音'],
-                  ['数据', '全部存储于本机，支持一键导出备份'],
-                  ['环境', navigator.platform.includes('Mac') ? 'macOS（Apple Silicon）' : navigator.platform],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex gap-3 px-3 py-2 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
-                    <span className="w-16 shrink-0 font-medium" style={{ color: c.textMuted }}>{k}</span>
-                    <span>{v}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* 环境诊断：一键体检各子系统 */}
-              <div className="mt-4">
-                <button onClick={async () => {
-                  setDiagLoading(true); setDiagResult(null)
-                  try {
-                    const r = await fetch('/api/diagnostics')
-                    setDiagResult(await r.json())
-                  } catch { setDiagResult({ success: false, checks: [], allOk: false }) }
-                  setDiagLoading(false)
-                }} disabled={diagLoading}
-                  className="w-full h-9 rounded-lg text-[12.5px] font-medium transition-all active:scale-[0.98] disabled:opacity-40"
-                  style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.border}` }}>
-                  {diagLoading ? '诊断中…' : '环境诊断'}
-                </button>
-                {diagResult && (
-                  <div className="mt-2 rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                    {diagResult.checks.map((c2: any, i: number) => (
-                      <div key={c2.name} className="flex items-center gap-2 px-3 py-2 text-[11.5px]"
-                        style={{ background: i % 2 === 0 ? c.bgInput : 'transparent' }}>
-                        <span style={{ color: c2.ok ? c.toolOk : c.toolErr }}>{c2.ok ? '✓' : '✗'}</span>
-                        <span style={{ color: c.text }}>{c2.name}</span>
-                        <span className="ml-auto truncate max-w-[55%] text-[10.5px]" style={{ color: c.textMuted }}>{c2.detail}</span>
+            {tab === 'about' && (
+              <>
+                {/* 更新与关于内容:与独立「关于」页同一份(AboutContent),不再维护两套 */}
+                <AboutContent />
+                {/* 环境诊断:一键体检各子系统 */}
+                <div className="mt-4">
+                  <button onClick={async () => {
+                    setDiagLoading(true); setDiagResult(null)
+                    try {
+                      const r = await fetch('/api/diagnostics')
+                      setDiagResult(await r.json())
+                    } catch { setDiagResult({ success: false, checks: [], allOk: false }) }
+                    setDiagLoading(false)
+                  }} disabled={diagLoading}
+                    className="w-full h-9 rounded-lg text-[12.5px] font-medium transition-all active:scale-[0.98] disabled:opacity-40"
+                    style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.border}` }}>
+                    {diagLoading ? '诊断中…' : '环境诊断'}
+                  </button>
+                  {diagResult && (
+                    <div className="mt-2 rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
+                      {diagResult.checks.map((c2: any, i: number) => (
+                        <div key={c2.name} className="flex items-center gap-2 px-3 py-2 text-[11.5px]"
+                          style={{ background: i % 2 === 0 ? c.bgInput : 'transparent' }}>
+                          <span style={{ color: c2.ok ? c.toolOk : c.toolErr }}>{c2.ok ? '✓' : '✗'}</span>
+                          <span style={{ color: c.text }}>{c2.name}</span>
+                          <span className="ml-auto truncate max-w-[55%] text-[10.5px]" style={{ color: c.textMuted }}>{c2.detail}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: c.bgCard }}>
+                        <span className="text-[11px] font-medium flex-1" style={{ color: diagResult.allOk ? c.toolOk : c.toolWarn }}>
+                          {diagResult.allOk ? '所有子系统正常' : '部分子系统不可用（语音相关在部分环境为预期行为）'}
+                        </span>
+                        <button onClick={() => {
+                          const text = diagResult.checks.map((c2: any) => `${c2.ok ? '[OK]' : '[FAIL]'} ${c2.name}: ${c2.detail}`).join('\n')
+                          navigator.clipboard.writeText(`巨天agent 环境诊断 ${new Date().toLocaleString()}\n${text}`).catch(() => {})
+                          setDiagCopied(true); setTimeout(() => setDiagCopied(false), 1800)
+                        }} className="text-[10.5px] px-2 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
+                          {diagCopied ? '已复制' : '复制报告'}
+                        </button>
                       </div>
-                    ))}
-                    <div className="flex items-center gap-2 px-3 py-1.5" style={{ background: c.bgCard }}>
-                      <span className="text-[11px] font-medium flex-1" style={{ color: diagResult.allOk ? c.toolOk : c.toolWarn }}>
-                        {diagResult.allOk ? '所有子系统正常' : '部分子系统不可用（语音相关在部分环境为预期行为）'}
-                      </span>
-                      <button onClick={() => {
-                        const text = diagResult.checks.map((c2: any) => `${c2.ok ? '[OK]' : '[FAIL]'} ${c2.name}: ${c2.detail}`).join('\n')
-                        navigator.clipboard.writeText(`巨天agent 环境诊断 ${new Date().toLocaleString()}\n${text}`).catch(() => {})
-                        setDiagCopied(true); setTimeout(() => setDiagCopied(false), 1800)
-                      }} className="text-[10.5px] px-2 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
-                        {diagCopied ? '已复制' : '复制报告'}
-                      </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            </>)}
+                  )}
+                </div>
+              </>
+            )}
 
             {tab !== 'language' && tab !== 'about' && (
               <p className="text-center text-[11px] mt-2" style={{ color: c.textMuted }}>{t('所有设置自动保存，改动即时生效', 'All settings save automatically and apply instantly')}</p>
