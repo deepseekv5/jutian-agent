@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ─── 应用内自更新(v8.1)───
   updateCheck: () => ipcRenderer.invoke('update-check'),
   updateApply: (asarUrl) => ipcRenderer.invoke('update-apply', asarUrl),
+  updateCancel: () => ipcRenderer.invoke('update-cancel'),
+  onUpdateProgress: (callback) => {
+    ipcRenderer.on('update-progress', (_event, p) => callback(p))
+  },
 
   // Loading page status listeners
   onStatus: (callback) => {
