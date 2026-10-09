@@ -90,5 +90,52 @@ try {
   else bad('openrouter/free 默认排序丢失')
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+// ─── 5. AI 角色聊天合规契约 ───
+// 依据《人工智能拟人化互动服务管理暂行办法》(五部门令第21号,2026-07-15 施行)
+// 与《人工智能生成合成内容标识办法》(2025-09-01 施行)。
+// 这些是法定义务的落地实现，删除即违规，故纳入门禁。
+section('AI 角色合规契约(拟人化办法 / 标识办法)')
+try {
+  const safety = fs.readFileSync(path.join(ROOT, 'src/shared/personaSafety.ts'), 'utf-8')
+  const personas = fs.readFileSync(path.join(ROOT, 'src/shared/personas.ts'), 'utf-8')
+  const chat = fs.readFileSync(path.join(ROOT, 'src/shared/personaChat.ts'), 'utf-8')
+
+  // 第十八条 + 标识办法第四条：AI 身份提示与逐条标识
+  if (safety.includes('AI_LABEL')) ok('AI 生成标识常量在列')
+  else bad('AI_LABEL 丢失 — 缺少逐条生成标识(标识办法第四条)')
+  if (safety.includes('EXPORT_LABEL_HEADER')) ok('导出显式标识在列(标识办法第四条第二款)')
+  else bad('导出标识丢失 — 导出文件须含显式标识')
+
+  // 第十三条：极端情境识别与干预
+  if (/export function detectCrisis/.test(safety)) ok('危机情境识别函数在列')
+  else bad('detectCrisis 丢失 — 第十三条强制干预失效')
+  if (safety.includes('12356')) ok('危机干预含援助热线')
+  else bad('危机干预未给出求助渠道')
+
+  // 第十九条：不得阻碍用户退出
+  if (safety.includes('EXIT_REPLY') && /export function detectExitIntent/.test(safety)) ok('退出识别与不挽留回复在列')
+  else bad('退出处理丢失 — 第十九条禁止阻碍退出')
+
+  // 第十四条：未成年人模式与虚拟亲密关系硬禁止
+  if (safety.includes('MINOR_NOTICE')) ok('未成年人告知在列(虚拟亲密关系禁止)')
+  else bad('未成年人告知丢失')
+
+  // 第十六条：敏感交互数据不得用于训练
+  if (safety.includes('NO_TRAINING_NOTICE')) ok('不用于训练承诺在列')
+  else bad('缺少不用于训练的声明(拟人化办法第十六条)')
+
+  // 角色边界：预置角色不得声称真人
+  if (/不(?:是|对应)真人|非真人/.test(personas)) ok('预置角色非真人声明在列')
+  else bad('预置角色缺少非真人声明')
+  if (personas.includes('PRESET_PERSONAS') && personas.includes('ANTI_DEPENDENCY_RULES')) ok('预置角色与反依赖红线在列')
+  else bad('反依赖红线丢失 — 第八条(五)诱导情感依赖')
+  if (/2026-07-15/.test(personas) || /令第21号/.test(personas)) ok('合规依据标注令第21号')
+  else bad('免责声明缺少令第21号依据')
+
+  // 免费优先：未配置模型时回落免 key 网关
+  if (chat.includes('FREE_FALLBACKS')) ok('免费模型回落配置在列(零配置可用)')
+  else bad('免费回落丢失 — 未配置模型将无法对话')
+} catch (e) { bad(`读取失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)

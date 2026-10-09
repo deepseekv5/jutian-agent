@@ -8,6 +8,8 @@ export default tseslint.config(
     ignores: [
       'dist/**', 'release/**', 'node_modules/**', 'python-runtime/**',
       'docs/**', 'tools/**', 'archive/**', 'public/**',
+      // 构建产物：esbuild 从同名 .ts 生成的 CJS，源文件才是被检查的对象
+      'src/shared/*.cjs', 'serve.cjs',
     ],
   },
   js.configs.recommended,

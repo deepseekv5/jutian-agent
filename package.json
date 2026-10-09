@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "10.0.0",
+  "version": "10.1.0",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -36,7 +36,7 @@
     "electron:dist": "npm run electron:build",
     "patch": "node scripts/patch-update.mjs",
     "patch:fast": "node scripts/patch-update.mjs --no-build",
-    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs",
+    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs && esbuild src/shared/personas.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/personas.cjs",
     "check": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "lint": "eslint src",

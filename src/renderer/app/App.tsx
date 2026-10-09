@@ -37,6 +37,7 @@ const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
 const HarnessPanel = lazy(() => import('./HarnessPanel'));
 const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
+const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
 function TabFallback() {
@@ -383,6 +384,8 @@ function MainApp() {
         return <HarnessPanel onClose={() => closeTab(tab.id)} />;
       case 'freemodels':
         return <FreeModelsPanel settings={settings} onSettingsChange={s => saveSettings(s)} />;
+      case 'persona':
+        return <PersonaChatTab settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'employees':
         return <EmployeesPanel onClose={() => closeTab(tab.id)} onOpenTab={openTab} />;
       case 'employee':

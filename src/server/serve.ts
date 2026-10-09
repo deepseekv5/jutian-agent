@@ -121,6 +121,10 @@ var sharedDb = null;
 /* ─── MCP（Model Context Protocol）客户端管理器 — v5.0 学自 Zode ─── */
 var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(DATA_DIR); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
 try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db.cjs load failed:", e.message); }
+// AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
+var PERSONA_MOD = (() => { try { return require("./src/shared/personas.cjs"); } catch (e) { console.error("personas.cjs load failed:", e.message); return null; } })();
+var PRESET_PERSONAS = PERSONA_MOD ? PERSONA_MOD.PRESET_PERSONAS : [];
+var PERSONA_DISCLAIMER = PERSONA_MOD ? PERSONA_MOD.DISCLAIMER : { disclaimer: [], privacy: [] };
 var PORT = parseInt(process.env.PORT || "3211");
 var MAX_OUT = 512 * 1024;
 var DIST = path.join(__dirname, "dist");
@@ -2734,6 +2738,147 @@ http.createServer(async (req, res) => {
         }
       }
       return json(res, { ok: true });
+    }
+
+    // --- AI 角色聊天（Persona）---
+    // 角色定义、会话、角色记忆三者分离；记忆复用 memories 表并按 persona:<id>: 前缀隔离。
+    var PERSONA_SAFE_ID = /^[a-zA-Z0-9_-]{1,64}$/;
+    var personaAll = () => {
+      const saved = loadJson("personas.json");
+      const items = Array.isArray(saved.items) ? saved.items : [];
+      const byId = new Map(items.map((p: { id?: string }) => [p.id as string, p]));
+      let touched = false;
+      for (const pre of PRESET_PERSONAS) {
+        const cur = byId.get(pre.id);
+        if (!cur) { byId.set(pre.id, { ...pre, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); touched = true; }
+        else if (!cur.persona) { byId.set(pre.id, { ...pre, ...cur }); touched = true; }
+      }
+      const list = [...byId.values()];
+      if (touched) saveJson("personas.json", { items: list });
+      return list;
+    };
+    var personaMemories = (pid) => {
+      const pfx = `persona:${pid}:`;
+      const out = [];
+      if (sharedDb) {
+        try {
+          for (const r of sharedDb.getAllMemories()) {
+            if (String(r.key).startsWith(pfx)) out.push({ key: String(r.key).slice(pfx.length), value: String(r.value || ""), updatedAt: "" });
+          }
+          if (out.length) return out;
+        } catch {}
+      }
+      const mem = loadJson("memories.json");
+      for (const k of Object.keys(mem)) if (k.startsWith(pfx)) out.push({ key: k.slice(pfx.length), value: String(mem[k] || ""), updatedAt: "" });
+      return out;
+    };
+    if (url.pathname === "/api/personas" && req.method === "GET") {
+      return json(res, { ok: true, items: personaAll(), presets: PRESET_PERSONAS.length });
+    }
+    if (url.pathname === "/api/personas" && req.method === "POST") {
+      try {
+        const b = await body(req);
+        const name = String(b.name || "").trim().slice(0, 40);
+        if (!name) return json(res, { success: false, error: "角色名不能为空" }, 400);
+        const id = PERSONA_SAFE_ID.test(String(b.id || "")) ? String(b.id)
+          : "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const now = new Date().toISOString();
+        const item = {
+          id, name,
+          avatar: String(b.avatar || name.slice(0, 2)).slice(0, 4),
+          tagline: String(b.tagline || "").slice(0, 80),
+          persona: String(b.persona || "").slice(0, 4000),
+          style: String(b.style || "").slice(0, 1000),
+          boundaries: Array.isArray(b.boundaries) ? b.boundaries.slice(0, 10).map((s) => String(s).slice(0, 200)) : [],
+          opening: String(b.opening || "").slice(0, 500),
+          isPreset: false, createdAt: now, updatedAt: now,
+        };
+        const list = personaAll();
+        const i = list.findIndex((p) => p.id === id);
+        if (i >= 0) { item.createdAt = list[i].createdAt || now; list[i] = item; }
+        else list.push(item);
+        saveJson("personas.json", { items: list });
+        return json(res, { success: true, item });
+      } catch (e) { return json(res, { success: false, error: e.message }, 500); }
+    }
+    if (url.pathname.startsWith("/api/personas/") && url.pathname.endsWith("/delete") && req.method === "POST") {
+      const id = decodeURIComponent(url.pathname.split("/api/personas/")[1].replace(/\/delete$/, ""));
+      const list = personaAll().filter((p) => p.id !== id);
+      saveJson("personas.json", { items: list });
+      return json(res, { success: true, count: list.length });
+    }
+    // 角色记忆：GET 列表 / POST 写入(单条) / DELETE 单条 / DELETE?purge=1 清空该角色全部
+    if (url.pathname.startsWith("/api/persona-memories/") && req.method === "GET") {
+      const id = decodeURIComponent(url.pathname.split("/api/persona-memories/")[1]);
+      return json(res, { ok: true, items: personaMemories(id) });
+    }
+    if (url.pathname.startsWith("/api/persona-memories/") && req.method === "POST") {
+      try {
+        const pid = decodeURIComponent(url.pathname.split("/api/persona-memories/")[1]);
+        const b = await body(req);
+        const slug = String(b.key || "").trim().slice(0, 64).replace(/[^\w一-龥-]/g, "_");
+        if (!slug) return json(res, { error: "记忆名不能为空" }, 400);
+        const value = String(b.value == null ? "" : b.value).slice(0, 4000);
+        const key = `persona:${pid}:${slug}`;
+        if (sharedDb) { try { sharedDb.setMemory(key, value); return json(res, { ok: true }); } catch {} }
+        const mem = loadJson("memories.json"); mem[key] = value; saveJson("memories.json", mem);
+        return json(res, { ok: true });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname.startsWith("/api/persona-memories/") && req.method === "DELETE") {
+      const raw = url.pathname.split("/api/persona-memories/")[1];
+      const purge = url.searchParams.get("purge") === "1";
+      // pathname 仍是百分号编码状态，必须逐段解码后再切分，
+      // 否则中文 key（如「作息」）解码错位导致删不掉
+      const segs = raw.replace(/\/delete$/, "").split("/").filter(Boolean).map((s) => decodeURIComponent(s));
+      const pid = segs[0] || "";
+      const slug = segs[1] || "";
+      const pfx = `persona:${pid}:`;
+      if (sharedDb) {
+        try {
+          if (purge) { for (const m of personaMemories(pid)) sharedDb.deleteMemory(pfx + m.key); }
+          else sharedDb.deleteMemory(pfx + slug);
+          return json(res, { ok: true });
+        } catch {}
+      }
+      const mem = loadJson("memories.json");
+      if (purge) { for (const k of Object.keys(mem)) if (k.startsWith(pfx)) delete mem[k]; }
+      else delete mem[pfx + slug];
+      saveJson("memories.json", mem);
+      return json(res, { ok: true });
+    }
+    // 角色会话：GET <pid> / POST 追加 / DELETE <pid> 清空
+    if (url.pathname.startsWith("/api/persona-sessions/") && req.method === "GET") {
+      const pid = decodeURIComponent(url.pathname.split("/api/persona-sessions/")[1]);
+      const all = loadJson("persona-sessions.json");
+      return json(res, { ok: true, items: (all.sessions && all.sessions[pid]) || [] });
+    }
+    if (url.pathname.startsWith("/api/persona-sessions/") && req.method === "POST") {
+      try {
+        const pid = decodeURIComponent(url.pathname.split("/api/persona-sessions/")[1]);
+        const b = await body(req);
+        const msg = { role: b.role === "user" ? "user" : "assistant", content: String(b.content || "").slice(0, 8000), ts: Date.now() };
+        if (!msg.content.trim()) return json(res, { error: "空消息" }, 400);
+        const all = loadJson("persona-sessions.json");
+        all.sessions = all.sessions || {};
+        all.sessions[pid] = all.sessions[pid] || [];
+        all.sessions[pid].push(msg);
+        // 单角色保留最近 500 条，避免 JSON 无限增长
+        if (all.sessions[pid].length > 500) all.sessions[pid] = all.sessions[pid].slice(-500);
+        saveJson("persona-sessions.json", all);
+        return json(res, { ok: true });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname.startsWith("/api/persona-sessions/") && req.method === "DELETE") {
+      const pid = decodeURIComponent(url.pathname.split("/api/persona-sessions/")[1]);
+      const all = loadJson("persona-sessions.json");
+      if (all.sessions) delete all.sessions[pid];
+      saveJson("persona-sessions.json", all);
+      return json(res, { ok: true });
+    }
+    // 合规：免责声明 + 隐私说明（前端首次进入时展示）
+    if (url.pathname === "/api/persona-disclaimer" && req.method === "GET") {
+      return json(res, { ok: true, ...PERSONA_DISCLAIMER });
     }
 
     // --- 长期记忆 API（统一 SQLite）---
