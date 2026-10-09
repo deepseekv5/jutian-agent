@@ -39,5 +39,8 @@ pages/node_modules/
 # 后端构建产物（由 src/server/serve.ts 经 `npm run build:server` 生成，勿手改）
 serve.cjs
 
+# 构建产物：由 build:server 从同名 .ts 生成
+src/shared/personas.cjs
+
 # lint/cache 临时文件
 .eslintcache
