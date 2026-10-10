@@ -517,7 +517,17 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     }
 
     // 保存用户消息
-    await createMessage({ session_id: sessionId, role: 'user', content: userContent })
+    const userMsg = await createMessage({ session_id: sessionId, role: 'user', content: userContent })
+    // 目标模式：把这条用户消息标记为「Goal」，气泡左上角显示标签（侧车存储，不动消息表）
+    if (sendOpts?.goal && !sendOpts.goalContinue) {
+      try {
+        const map = JSON.parse(localStorage.getItem('lyclaw_msg_goal') || '{}')
+        map[userMsg.id] = sendOpts.goal
+        const keys = Object.keys(map)
+        if (keys.length > 200) for (const k of keys.slice(0, keys.length - 200)) delete map[k]
+        localStorage.setItem('lyclaw_msg_goal', JSON.stringify(map))
+      } catch { /* ignore */ }
+    }
     const updated = await listMessages(sessionId)
     setMessages(updated)
     // 自动标题：仅首条消息时立即生成（避免后续消息不断改写标题）

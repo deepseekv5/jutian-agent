@@ -85,6 +85,16 @@ function readThinkMs(msgId?: string): number | null {
   } catch { return null }
 }
 
+/** 读取消息的「目标」侧车标记（useChat 在目标模式发送时写入），返回目标文本或 null */
+function readGoalMsg(msgId?: string): string | null {
+  if (!msgId) return null
+  try {
+    const map = JSON.parse(localStorage.getItem('lyclaw_msg_goal') || '{}')
+    const v = map[msgId]
+    return typeof v === 'string' && v ? v : null
+  } catch { return null }
+}
+
 function fmtThink(ms: number): string {
   return ms < 60000 ? `思考了 ${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} 秒` : `思考了 ${Math.round(ms / 60000)} 分钟`
 }
@@ -333,6 +343,12 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           ) : (
             <div className="px-4 py-2.5 leading-[1.6] whitespace-pre-wrap break-words"
               style={{ background: c.userBubbleBg, color: c.userBubbleText, borderRadius: 18, fontSize: 'var(--chat-font, 16px)' }}>
+              {(() => { const g = readGoalMsg(msgId); return g ? (
+                <span className="mb-1.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: c.userBubbleText, opacity: 0.75 }}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" /></svg>
+                  Goal
+                </span>
+              ) : null })()}
               {content}
             </div>
           )}
