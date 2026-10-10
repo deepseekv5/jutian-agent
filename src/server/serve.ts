@@ -2783,6 +2783,7 @@ http.createServer(async (req, res) => {
         const id = PERSONA_SAFE_ID.test(String(b.id || "")) ? String(b.id)
           : "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         const now = new Date().toISOString();
+        const existing = personaAll().find((p) => p.id === id);
         const item = {
           id, name,
           avatar: String(b.avatar || name.slice(0, 2)).slice(0, 4),
@@ -2791,7 +2792,8 @@ http.createServer(async (req, res) => {
           style: String(b.style || "").slice(0, 1000),
           boundaries: Array.isArray(b.boundaries) ? b.boundaries.slice(0, 10).map((s) => String(s).slice(0, 200)) : [],
           opening: String(b.opening || "").slice(0, 500),
-          isPreset: false, createdAt: now, updatedAt: now,
+          // 编辑预置角色时保留 isPreset，不被冲成 false
+          isPreset: existing ? !!existing.isPreset : false, createdAt: now, updatedAt: now,
         };
         const list = personaAll();
         const i = list.findIndex((p) => p.id === id);

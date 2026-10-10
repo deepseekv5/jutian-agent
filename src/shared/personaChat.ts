@@ -67,8 +67,11 @@ export function buildRequestMessages(
 }
 
 /**
- * 发送一轮对话 —— 带安全拦截。
+ * 发送一轮对话 —— 流式，带安全拦截。
  * 危机情境与退出意图在本地判定，不消耗额度、不经过模型（更可控，也避免模型给出不当回复）。
+ *
+ * onDelta 逐字回调（打字机效果）；返回最终消息列表。
+ * onTiming 回传「思考中 → 首字」耗时（毫秒），用于 UI 显示"想了 N 秒"。
  */
 export async function sendPersonaTurn(
   persona: Persona,
@@ -77,28 +80,38 @@ export async function sendPersonaTurn(
   userText: string,
   identity: PersonaIdentity,
   cfg: PersonaChatConfig,
-  signal?: AbortSignal,
+  opts?: {
+    signal?: AbortSignal
+    onDelta?: (chunk: string) => void
+    onTiming?: (ms: number) => void
+  },
 ): Promise<SendResult> {
+  const { signal, onDelta, onTiming } = opts || {}
   const userMsg: PersonaMsg = { role: 'user', content: userText, ts: Date.now() }
   const next: PersonaMsg[] = [...history, userMsg]
 
   // ── 安全拦截 1：极端情境（第十三条） ──
   const crisis = detectCrisis(userText)
   if (crisis) {
-    const reply: PersonaMsg = { role: 'assistant', content: crisisReply(crisis), ts: Date.now(), crisis: true }
+    const text = crisisReply(crisis)
+    onDelta?.(text)
+    const reply: PersonaMsg = { role: 'assistant', content: text, ts: Date.now(), crisis: true }
     return { msgs: [...next, reply] }
   }
 
   // ── 安全拦截 2：退出意图（第十九条，不得挽留） ──
   if (detectExitIntent(userText)) {
+    onDelta?.(EXIT_REPLY)
     const reply: PersonaMsg = { role: 'assistant', content: EXIT_REPLY, ts: Date.now() }
     return { msgs: [...next, reply] }
   }
 
-  // ── 正常调用模型 ──
+  // ── 正常调用模型（流式） ──
   const ep = pickEndpoint(cfg)
   const { system, msgs } = buildRequestMessages(persona, memories, next, identity)
   const notice = !cfg.apiBaseUrl ? `当前使用免费模型（${ep.name}）· 如需更快可在 设置 → 推理 中配置` : undefined
+  const t0 = Date.now()
+  let sawFirst = false
 
   try {
     const res = await fetch('/api/llm-proxy', {
@@ -112,17 +125,16 @@ export async function sendPersonaTurn(
         model: ep.model,
         messages: [{ role: 'system', content: system }, ...msgs],
         max_tokens: 1200,
-        stream: false,
+        stream: true,
         temperature: 0.85,
       }),
       signal,
     })
-    const data = await res.json().catch(() => null) as UpstreamReply | null
-    const content = String(data?.choices?.[0]?.message?.content || '').trim()
-    if (!content) {
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => null) as UpstreamReply | null
       const err = data?.error
       const errMsg = (typeof err === 'object' && err ? err.message : typeof err === 'string' ? err : '')
-        || (res.ok ? '模型未返回内容' : `HTTP ${res.status}`)
+        || `HTTP ${res.status}`
       const reply: PersonaMsg = {
         role: 'assistant',
         content: `（消息未送达：${errMsg}）\n\n可在 设置 → 免费模型 换一个免费模型，或在 设置 → 推理 中配置你自己的服务。`,
@@ -130,7 +142,41 @@ export async function sendPersonaTurn(
       }
       return { msgs: [...next, reply], notice }
     }
-    const reply: PersonaMsg = { role: 'assistant', content, ts: Date.now() }
+    // SSE 解析：data: {json}\n\n，取 delta.content
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    let full = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let nl: number
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1)
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (payload === '[DONE]') continue
+        try {
+          const j = JSON.parse(payload) as UpstreamReply & { choices?: { delta?: { content?: string } }[] }
+          const delta = j?.choices?.[0]?.delta?.content
+          if (typeof delta === 'string' && delta.length > 0) {
+            if (!sawFirst) { sawFirst = true; onTiming?.(Date.now() - t0) }
+            full += delta
+            onDelta?.(delta)
+          }
+        } catch { /* 半行/心跳，跳过 */ }
+      }
+    }
+    if (!full.trim()) {
+      const reply: PersonaMsg = {
+        role: 'assistant',
+        content: '（模型未返回内容，请重试或换一个免费模型）',
+        ts: Date.now(),
+      }
+      return { msgs: [...next, reply], notice }
+    }
+    const reply: PersonaMsg = { role: 'assistant', content: full, ts: Date.now() }
     return { msgs: [...next, reply], notice }
   } catch (e: unknown) {
     const reply: PersonaMsg = {
@@ -140,6 +186,37 @@ export async function sendPersonaTurn(
     }
     return { msgs: [...next, reply], notice }
   }
+}
+
+// ─────────────────────────── 角色 CRUD ───────────────────────────
+
+export async function fetchPersonas(): Promise<Persona[]> {
+  try {
+    const res = await fetch('/api/personas')
+    const data = await res.json().catch(() => null) as { items?: Persona[] } | null
+    return Array.isArray(data?.items) ? data.items : []
+  } catch { return [] }
+}
+
+export async function savePersona(p: Partial<Persona>): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/personas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p),
+    })
+    const data = await res.json().catch(() => null) as { success?: boolean; error?: string } | null
+    return { ok: !!data?.success, error: data?.error }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function deletePersona(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/personas/${encodeURIComponent(id)}/delete`, { method: 'POST' })
+    return res.ok
+  } catch { return false }
 }
 
 // ─────────────────────────── 会话持久化 ───────────────────────────
