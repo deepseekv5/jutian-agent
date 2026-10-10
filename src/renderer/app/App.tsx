@@ -220,13 +220,7 @@ function MainApp() {
       const neighbor = next[Math.min(idx, next.length - 1)];
       setActiveTabId(neighbor.id);
     }
-  }, [tabs, activeTabId, sessions, create]);
-
-  const handleNewTabPick = useCallback((type: PageType) => {
-    if (type === 'newtab') return;
-    openTab(type);
-    setTabs(prev => prev.filter(t => t.type !== 'newtab'));
-  }, [openTab, setTabs]);
+}, [tabs, activeTabId, sessions, create]);
 
   // 桌宠电话按钮 → 打开通话模式
   useEffect(() => {
@@ -327,6 +321,14 @@ function MainApp() {
     openTab('chat', { sessionId: s.id, title: '新对话' });
   }, [create, openTab]);
   handleCreateSessionRef.current = handleCreateSession;
+
+  // 新标签页选择功能入口：对话需先建会话（openTab('chat') 无 sessionId 渲染为空）
+  const handleNewTabPick = useCallback(async (type: PageType) => {
+    if (type === 'newtab') return;
+    if (type === 'chat') { await handleCreateSession(); setTabs(prev => prev.filter(t => t.type !== 'newtab')); return }
+    openTab(type);
+    setTabs(prev => prev.filter(t => t.type !== 'newtab'));
+  }, [openTab, setTabs, handleCreateSession]);
 
   const handleDeleteSession = useCallback(async (sid: string) => {
     tabs.filter(t => t.sessionId === sid).forEach(t => closeTab(t.id));

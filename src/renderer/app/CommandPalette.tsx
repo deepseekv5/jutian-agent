@@ -36,6 +36,7 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
   const items = useMemo<CmdItem[]>(() => {
     const cmds: CmdItem[] = [
       { id: 'new', label: '新建对话', hint: '开始一段新对话', icon: 'M12 4v16m8-8H4', run: () => { onCreateSession(); onClose() } },
+      { id: 'persona', label: '打开 AI 角色', hint: '有长期记忆的对话角色 · 免费直接聊', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', run: () => { onOpenTab('persona'); onClose() } },
       { id: 'code', label: '打开 Code 工作台', hint: '编辑器 / 终端 / AI 编程', icon: 'M8 9l-3 3 3 3m8-6l3 3-3 3M14 5l-4 14', run: () => { onOpenTab('code'); onClose() } },
       { id: 'kb', label: '打开知识库', hint: '笔记 / 双链 / 关系图谱', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', run: () => { onOpenTab('kb'); onClose() } },
       { id: 'diary', label: '打开日记', hint: '记录每一天（Beta）', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', run: () => { onOpenTab('diary'); onClose() } },
