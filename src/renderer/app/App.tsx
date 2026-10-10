@@ -79,7 +79,7 @@ function loadPersistedTabs(): WorkTab[] | null {
 
 function MainApp() {
   const { settings, loaded, saveSettings } = useSettings();
-  const { sessions, activeId, setActiveId, create, remove, updateTitle } = useSessions();
+  const { sessions, activeId, setActiveId, create, remove, updateTitle, setProject } = useSessions();
   const { c, theme } = useTheme();
 
   const [tabs, setTabs] = useState<WorkTab[]>(() => loadPersistedTabs() || []);
@@ -317,9 +317,10 @@ function MainApp() {
   }, [handleSelectSession]);
 
   const handleCreateSession = useCallback(async () => {
-    const s = await create();
+    // 新会话直接带上当前工作目录作为项目分组标签
+    const s = await create(undefined, settings.workDir || '');
     openTab('chat', { sessionId: s.id, title: '新对话' });
-  }, [create, openTab]);
+  }, [create, openTab, settings.workDir]);
   handleCreateSessionRef.current = handleCreateSession;
 
   // 新标签页选择功能入口：对话需先建会话（openTab('chat') 无 sessionId 渲染为空）
@@ -374,7 +375,7 @@ function MainApp() {
     switch (tab.type) {
       case 'chat':
         return tab.sessionId ? (
-          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
+          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} onProjectChange={setProject} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
         ) : null;
       case 'call':
         return <VoiceCall settings={settings} onClose={() => closeTab(tab.id)} />;

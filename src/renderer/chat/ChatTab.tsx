@@ -6,6 +6,7 @@ import MessageInput from './MessageInput'
 import ChatSidePanel from './ChatSidePanel'
 import WelcomeHero from './WelcomeHero'
 import GitPanel from './GitPanel'
+import GoalCard from './GoalCard'
 import type { Settings } from '../types'
 
 const WD_KEY = 'lyclaw_session_workdirs'
@@ -21,7 +22,7 @@ function loadLastCheckpoint(sessionId: string): Checkpoint | null {
   try { return JSON.parse(localStorage.getItem(CP_KEY) || '{}')[sessionId] || null } catch { return null }
 }
 
-export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, active, incomingScreenshot, onScreenshotConsumed }: {
+export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, onProjectChange, active, incomingScreenshot, onScreenshotConsumed }: {
   sessionId: string
   settings: Settings
   onTitleGenerated: (sessionId: string, firstMsg: string) => void
@@ -29,6 +30,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   onOpenBrowser: (url: string) => void
   onStreamingChange?: (sessionId: string, streaming: boolean) => void
   onModelChange?: (model: string) => void
+  /** 有效工作目录变化 → 会话项目分组标签同步 */
+  onProjectChange?: (sessionId: string, project: string) => void
   active: boolean
   incomingScreenshot?: string | null
   onScreenshotConsumed?: () => void
@@ -42,6 +45,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     () => ({ ...settings, workDir: ownWorkDir || settings.workDir || '' }),
     [settings, ownWorkDir]
   )
+
+  // 工作目录（本会话优先，否则全局）变化时同步项目分组标签 —— 见下方 effectiveWorkDir 的 effect
 
   const setSessionWorkDir = useCallback((dir: string) => {
     setOwnWorkDir(dir)
@@ -60,7 +65,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (dirs?.length) setSessionWorkDir(dirs[0])
   }, [setSessionWorkDir])
 
-  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
+  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
   const lastSendRef = useRef<{ content: string; skillIds?: string[] }>({ content: '' })
@@ -149,6 +154,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     URL.revokeObjectURL(a2.href)
   }, [messages, sessionId])
   const [queue, setQueue] = useState<{ id: string; content: string; skillIds?: string[]; attachedFiles?: any[]; sendOpts?: any }[]>([])
+  // 目标卡关闭记录：同一目标同一状态不重复弹出
+  const [goalDismissed, setGoalDismissed] = useState<string | null>(null)
   const queueRef = useRef<{ id: string; content: string; skillIds?: string[]; attachedFiles?: any[]; sendOpts?: any }[]>([])
   const sendingRef = useRef(false)
   const enqueue = useCallback((content: string, skillIds?: string[], attachedFiles?: any[], sendOpts?: any) => {
@@ -175,13 +182,13 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     setTimeout(() => { sendingRef.current = false }, 300)
   }, [createCheckpointForTurn])
 
-  // 流结束后自动发出队列中的下一条
+  // 流结束后自动发出队列中的下一条（目标模式自动续跑期间不排队列，避免与续跑轮次抢发）
   useEffect(() => {
-    if (streamingId === null && queueRef.current.length > 0) {
+    if (streamingId === null && queueRef.current.length > 0 && goal?.status !== 'running') {
       const t = setTimeout(() => dequeueSend(), 250)
       return () => clearTimeout(t)
     }
-  }, [streamingId, queue.length, dequeueSend])
+  }, [streamingId, queue.length, dequeueSend, goal?.status])
 
   const handleSendQueued = useCallback((content: string, skillIds?: string[], attachedFiles?: any[], sendOpts?: any) => {
     if (streamingId !== null) enqueue(content, skillIds, attachedFiles, sendOpts)
@@ -197,6 +204,11 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   }, [streamingId, sessionId, onStreamingChange])
 
   const effectiveWorkDir = chatSettings.workDir
+
+  // 有效工作目录变化 → 同步会话的项目分组标签
+  useEffect(() => {
+    onProjectChange?.(sessionId, effectiveWorkDir)
+  }, [sessionId, effectiveWorkDir, onProjectChange])
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -348,6 +360,11 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 onRollback={(idx) => rollbackTo(idx)}
                 onEditMessage={(idx, text) => editMessage(idx, text)}
               />
+              {goal && goalDismissed !== goal.text + goal.status && (
+                <div className="px-6 pt-1 pb-2 shrink-0">
+                  <GoalCard goal={goal} onStop={stopGoal} onDismiss={() => setGoalDismissed(goal.text + goal.status)} />
+                </div>
+              )}
               <MessageInput
                 sessionId={sessionId}
                 incomingScreenshot={incomingScreenshot}

@@ -16,12 +16,20 @@ export function useSessions() {
 
   useEffect(() => { refresh() }, [])
 
-  const create = useCallback(async (title?: string) => {
-    const s = await storage.createSession(title)
+  const create = useCallback(async (title?: string, project?: string) => {
+    const s = await storage.createSession(title, project)
     setSessions(prev => [s, ...prev])
     setActiveId(s.id)
     return s
   }, [])
+
+  const setProject = useCallback(async (id: string, project: string) => {
+    // 值未变化则跳过，避免每次打开会话都写盘
+    const cur = sessions.find(s => s.id === id)
+    if (cur && (cur.project || '') === (project || '')) return
+    setSessions(prev => prev.map(s => (s.id === id ? { ...s, project } : s)))
+    await storage.setSessionProject(id, project)
+  }, [sessions])
 
   const remove = useCallback(async (id: string) => {
     await storage.deleteSession(id)
@@ -40,5 +48,5 @@ export function useSessions() {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, title: safeTitle } : s))
   }, [])
 
-  return { sessions, activeId, setActiveId, create, remove, updateTitle, refresh }
+  return { sessions, activeId, setActiveId, create, remove, updateTitle, setProject, refresh }
 }

@@ -194,6 +194,7 @@ export async function listSessions(): Promise<Session[]> {
       title: typeof s.title === 'string' ? s.title : '新对话',
       created_at: String(s.created_at || ''),
       updated_at: String(s.updated_at || ''),
+      project: typeof s.project === 'string' ? s.project : '',
     }))
   }
   try {
@@ -203,16 +204,28 @@ export async function listSessions(): Promise<Session[]> {
   } catch { return [] }
 }
 
-export async function createSession(title?: string): Promise<Session> {
+export async function createSession(title?: string, project?: string): Promise<Session> {
   const id = uid()
-  const session: Session = { id, title: String(title || '新对话').slice(0, 200), created_at: now(), updated_at: now() }
-  const result = await apiPost<any>('/api/sessions', { id, title: session.title })
+  const session: Session = { id, title: String(title || '新对话').slice(0, 200), project: project || '', created_at: now(), updated_at: now() }
+  const result = await apiPost<any>('/api/sessions', { id, title: session.title, project: session.project })
   if (!result) {
     const raw = localStorage.getItem('lyclaw_sessions')
     const sessions = raw ? JSON.parse(raw) : []
     localStorage.setItem('lyclaw_sessions', JSON.stringify([session, ...sessions]))
   }
   return session
+}
+
+/** 更新会话所属项目（工作目录变化时同步分组标签） */
+export async function setSessionProject(id: string, project: string): Promise<void> {
+  await apiPut(`/api/sessions/${id}`, { project: project || '' })
+  try {
+    const raw = localStorage.getItem('lyclaw_sessions')
+    if (raw) {
+      const sessions = JSON.parse(raw).map((s: any) => (s.id === id ? { ...s, project: project || '' } : s))
+      localStorage.setItem('lyclaw_sessions', JSON.stringify(sessions))
+    }
+  } catch {}
 }
 
 export async function deleteSession(id: string): Promise<void> {

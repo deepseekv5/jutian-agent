@@ -75,18 +75,36 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   )
 }
 
-function ThinkingCard({ thinking, isStreaming, open, onToggle }: { thinking: string; isStreaming: boolean; open: boolean; onToggle: () => void }) {
+/** 读取消息的「首字耗时」侧车（useChat 在流式增量到达时写入） */
+function readThinkMs(msgId?: string): number | null {
+  if (!msgId) return null
+  try {
+    const map = JSON.parse(localStorage.getItem('lyclaw_msg_think_ms') || '{}')
+    const v = Number(map[msgId])
+    return v > 500 ? v : null
+  } catch { return null }
+}
+
+function fmtThink(ms: number): string {
+  return ms < 60000 ? `思考了 ${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} 秒` : `思考了 ${Math.round(ms / 60000)} 分钟`
+}
+
+function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thinking: string; isStreaming: boolean; open: boolean; onToggle: () => void; thinkMs?: number | null }) {
   const { c } = useTheme()
-  if (!thinking && !isStreaming) return null
+  if (!thinking && !isStreaming && !thinkMs) return null
+  const label = isStreaming ? '思考中…' : (thinkMs ? fmtThink(thinkMs) : '已深度思考')
+  const collapsible = !!thinking || isStreaming
   return (
     <div className="thinking-card my-2">
-      <div className="thinking-header" onClick={onToggle}>
-        <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-        <span>{isStreaming ? '思考中…' : '已深度思考'}</span>
+      <div className="thinking-header" onClick={collapsible ? onToggle : undefined} style={collapsible ? undefined : { cursor: 'default' }}>
+        {collapsible && (
+          <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+        <span>{label}</span>
       </div>
-      {open && (
+      {open && collapsible && (
         <div className="thinking-content">
           {thinking || (isStreaming ? '思考中…' : '')}
         </div>
@@ -524,7 +542,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           )
         })()}
 
-        <ThinkingCard thinking={thinking || ''} isStreaming={!!isStreaming} open={thinkingOpen} onToggle={() => setThinkingOpen(v => !v)} />
+        <ThinkingCard thinking={thinking || ''} isStreaming={!!isStreaming} open={thinkingOpen} onToggle={() => setThinkingOpen(v => !v)} thinkMs={isUser ? null : readThinkMs(msgId)} />
         {(() => {
           const tcs: any[] = toolCalls || []
           const diffFor = (tc: any) => ((tc.name === 'write_file' || tc.name === 'edit_file') && tc.changeId && tc.status !== 'pending')

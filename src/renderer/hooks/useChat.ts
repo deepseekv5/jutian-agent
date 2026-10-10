@@ -103,6 +103,47 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   // 消息分支：重新生成时把旧回答暂存于此，流结束后归档进新消息的 variants
   const pendingVariantRef = useRef<string[] | null>(null)
 
+  // ─── 目标模式：一个目标而非一串指令，独立评估器逐轮检查，未达标自动续跑（封顶 3 轮）───
+  const [goal, setGoal] = useState<{ text: string; rounds: number; status: 'running' | 'done' | 'stopped'; lastCheck: string } | null>(null)
+  const goalRef = useRef<{ text: string; rounds: number; active: boolean } | null>(null)
+  const MAX_GOAL_ROUNDS = 3
+  const stopGoal = useCallback(() => {
+    if (goalRef.current) goalRef.current.active = false
+    setGoal(g => (g ? { ...g, status: 'stopped' } : g))
+  }, [])
+
+  // 评估器：独立轻量请求，判断目标是否已达成（不污染主对话上下文）。
+  // 三态返回：ok=false 表示评估器本身不可用（模型未配置/请求失败/解析失败），
+  // 此时绝不能续跑 —— 拿"评估失败"当"未完成"会空转烧额度。
+  const evaluateGoal = useCallback(async (goalText: string, lastReply: string): Promise<{ done: boolean; note: string; ok: boolean }> => {
+    // 配置优先，否则免费回落（与角色聊天同一套免 key 网关）
+    const ep = settings.apiBaseUrl && settings.model
+      ? { base: settings.apiBaseUrl, key: effectiveApiKey(settings.apiKey), model: settings.model }
+      : { base: 'https://api.kilo.ai/api/gateway/v1', key: 'free', model: 'openrouter/free' }
+    if (!ep.base) return { done: false, note: '未配置模型，无法评估', ok: false }
+    try {
+      const res = await fetch('/api/llm-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': ep.base, 'X-Api-Key': ep.key },
+        body: JSON.stringify({
+          model: ep.model,
+          messages: [
+            { role: 'system', content: '你是任务完成度评估器。给定「目标」和「最新回复」，判断目标是否已被实质性完成。只输出 JSON：{"done":true|false,"note":"一句话说明还缺什么或已完成什么"}。不要因为客套话判定完成；宁可保守判未完成。' },
+            { role: 'user', content: `目标：${goalText}\n\n最新回复：${lastReply.slice(0, 3000)}` },
+          ],
+          max_tokens: 200, stream: false, temperature: 0,
+        }),
+      })
+      if (!res.ok) return { done: false, note: '评估服务暂不可用', ok: false }
+      const data = await res.json()
+      const text = String(data?.choices?.[0]?.message?.content || '')
+      const m = text.match(/\{[\s\S]*\}/)
+      if (!m) return { done: false, note: '', ok: false }
+      const parsed = JSON.parse(m[0])
+      return { done: !!parsed.done, note: String(parsed.note || '').slice(0, 120), ok: true }
+    } catch { return { done: false, note: '评估失败', ok: false } }
+  }, [settings.apiBaseUrl, settings.apiKey, settings.model])
+
   // AI 自动生成对话标题（轻量请求，失败时静默保留截断标题；设置中可关闭）
   const generateAiTitle = useCallback(async (sid: string, userContent: string, assistantExcerpt: string) => {
     try {
@@ -445,12 +486,22 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     try { await updateMessageVariants(assistantMsgId, sessionId!, pv) } catch { /* 分支归档失败不影响主流程 */ }
   }, [sessionId])
 
-  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean }) => {    if (!sessionId || streamingRef.current !== null) return
+  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {    if (!sessionId || streamingRef.current !== null) return
     setError(null)
 
     // Store for potential rollback
     lastUserContentRef.current = content
     lastSkillIdsRef.current = selectedSkillIds
+
+    // 目标模式：首次带 goal 发送时初始化目标状态（续跑轮次 goalContinue=true 不重复初始化）
+    if (sendOpts?.goal && !sendOpts.goalContinue) {
+      goalRef.current = { text: sendOpts.goal, rounds: 1, active: true }
+      setGoal({ text: sendOpts.goal, rounds: 1, status: 'running', lastCheck: '' })
+    } else if (!sendOpts?.goalContinue) {
+      // 普通发送：结束任何进行中的目标，避免残留
+      goalRef.current = null
+      setGoal(null)
+    }
 
     // 构建附加文件上下文
     let userContent = content
@@ -485,6 +536,22 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
     setStreamingId(assistantMsg.id)
     setMessages([...updated, assistantMsg])
+
+    // 「思考了 N 秒」：记录请求发出时刻，首个流式增量到达时落盘耗时（侧车存储，不动消息表）
+    const reqStartAt = Date.now()
+    let thinkMsSaved = false
+    const saveThinkMs = () => {
+      if (thinkMsSaved) return
+      thinkMsSaved = true
+      try {
+        const map = JSON.parse(localStorage.getItem('lyclaw_msg_think_ms') || '{}')
+        map[assistantMsg.id] = Date.now() - reqStartAt
+        // 只保留最近 300 条，防止无限增长
+        const keys = Object.keys(map)
+        if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete map[k]
+        localStorage.setItem('lyclaw_msg_think_ms', JSON.stringify(map))
+      } catch { /* ignore */ }
+    }
 
     // 构建 API 消息历史（系统提示词：通用 / Coding 双模式，随输入框开关切换）
     const chatMode = sendOpts?.chatMode === 'coding' ? 'coding' : 'general'
@@ -689,16 +756,19 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
     const callbacks: StreamCallbacks = {
       onChunk: (delta) => {
+        saveThinkMs()
         fullContent += delta
         scheduleFlush()
       },
 
       onThinking: (delta) => {
+        saveThinkMs()
         fullThinking += delta
         scheduleFlush()
       },
 
       onToolStart: (toolCall) => {
+        saveThinkMs()
         toolPreLen[toolCall.id] = fullContent.length
         setMessages(prev => prev.map(m =>
           m.id === assistantMsg.id
@@ -824,7 +894,35 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       }
       abortRef.current = null
     }
-  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm])
+
+    // ─── 目标模式：本轮回复完成后，独立评估器判定是否达成；未达成且未超轮次则自动续跑 ───
+    // 中止（controller.signal.aborted）时不续跑；goalContinue 递归调用不再重复初始化目标。
+    if (!controller.signal.aborted && goalRef.current?.active) {
+      const g = goalRef.current
+      const verdict = await evaluateGoal(g.text, fullContent)
+      // 评估器不可用（模型未配置/请求失败/解析失败）→ 停止，绝不拿"评估失败"当"未完成"续跑
+      if (!verdict.ok) {
+        g.active = false
+        setGoal({ text: g.text, rounds: g.rounds, status: 'stopped', lastCheck: verdict.note || '评估器暂不可用，已停止自动续跑' })
+        return
+      }
+      if (verdict.done) {
+        g.active = false
+        setGoal({ text: g.text, rounds: g.rounds, status: 'done', lastCheck: verdict.note || '目标已达成' })
+        return
+      }
+      if (g.rounds >= MAX_GOAL_ROUNDS) {
+        g.active = false
+        setGoal({ text: g.text, rounds: g.rounds, status: 'stopped', lastCheck: `已评估 ${g.rounds} 次仍未达成，自动停止` })
+        return
+      }
+      g.rounds += 1
+      setGoal({ text: g.text, rounds: g.rounds, status: 'running', lastCheck: verdict.note })
+      // 上一轮流已真正结束（onDone 已 await 落盘），解锁流式守卫后递归续跑
+      streamingRef.current = null
+      await send(`（目标模式 · 自动续跑 ${g.rounds}/${MAX_GOAL_ROUNDS}）评估器判断目标尚未达成：${verdict.note || '请继续'}。请接着完成目标：「${g.text}」`, lastSkillIdsRef.current, undefined, { ...sendOpts, goal: undefined, goalContinue: true })
+    }
+  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal])
 
   const rollbackTo = useCallback(async (messageIndex: number) => {
     if (!sessionId) return
@@ -890,6 +988,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     send, 
     abort: () => {
       abortRef.current?.abort()
+      // 中止即退出目标模式（用户点停止 = 不再自动续跑）
+      if (goalRef.current) { goalRef.current.active = false; setGoal(g => (g ? { ...g, status: 'stopped' } : g)) }
       // 集群/流式被暂停后立即解锁输入（集群会自行检测信号收尾）
       setStreamingId(null)
     },
@@ -897,6 +997,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     rollbackTo,
     editMessage,
     regenerateMessage,
+    /** 目标模式状态与手动停止 */
+    goal,
+    stopGoal,
     /** 手动加载 Skill */
     loadSkill: loadSkillTools,
     /** 已加载的 Skill 列表 */

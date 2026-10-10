@@ -2640,11 +2640,11 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/sessions" && req.method === "POST") {
       const s = await body(req);
       if (sharedDb) {
-        try { return json(res, sharedDb.createSession(s.id || sharedDb.genId(), s.title || "新对话")); } catch {}
+        try { return json(res, sharedDb.createSession(s.id || sharedDb.genId(), s.title || "新对话", s.project || "")); } catch {}
       }
       const sessions = loadJson("sessions.json");
       if (!sessions.items) sessions.items = [];
-      sessions.items.unshift({ id: s.id, title: s.title || "新对话", created_at: s.created_at || (new Date()).toISOString(), updated_at: s.updated_at || (new Date()).toISOString() });
+      sessions.items.unshift({ id: s.id, title: s.title || "新对话", project: s.project || "", created_at: s.created_at || (new Date()).toISOString(), updated_at: s.updated_at || (new Date()).toISOString() });
       saveJson("sessions.json", sessions);
       return json(res, sessions.items[0]);
     }
@@ -2663,7 +2663,7 @@ http.createServer(async (req, res) => {
       const patch = await body(req);
       if (sharedDb) {
         try {
-          sharedDb.updateSession(sid, { title: patch.title, updated_at: typeof patch.updated_at === "number" ? patch.updated_at : Date.now() });
+          sharedDb.updateSession(sid, { title: patch.title, project: patch.project, updated_at: typeof patch.updated_at === "number" ? patch.updated_at : Date.now() });
           return json(res, sharedDb.getSession(sid) || { ok: true });
         } catch {}
       }

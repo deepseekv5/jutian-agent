@@ -13,6 +13,8 @@ export interface Session {
   title: string
   created_at: string
   updated_at: string
+  /** 项目分组标签：会话绑定的工作目录绝对路径，空=未分组 */
+  project?: string
 }
 
 export interface ToolCall {

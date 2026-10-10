@@ -104,6 +104,12 @@ try {
 } catch (e) {
   if (!e.message?.includes('duplicate column name')) throw e
 }
+// 迁移：sessions 加 project 列（会话按项目文件夹分组，值为工作目录绝对路径）
+try {
+  db.exec(`ALTER TABLE sessions ADD COLUMN project TEXT DEFAULT ''`)
+} catch (e) {
+  if (!e.message?.includes('duplicate column name')) throw e
+}
 try {
   db.exec(`ALTER TABLE messages ADD COLUMN swarm TEXT`)
 } catch (e) {
@@ -126,10 +132,10 @@ function ts() {
 }
 
 // ─── Sessions ───
-function createSession(id, title) {
+function createSession(id, title, project) {
   const now = ts()
-  db.prepare('INSERT OR REPLACE INTO sessions (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
-    .run(id, title || '新对话', now, now)
+  db.prepare('INSERT OR REPLACE INTO sessions (id, title, created_at, updated_at, project) VALUES (?, ?, ?, ?, ?)')
+    .run(id, title || '新对话', now, now, project || '')
   return getSession(id)
 }
 
@@ -145,6 +151,7 @@ function updateSession(id, fields) {
   const sets = []
   const vals = []
   if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title) }
+  if (fields.project !== undefined) { sets.push('project = ?'); vals.push(fields.project) }
   sets.push('updated_at = ?'); vals.push(fields.updated_at || ts())
   vals.push(id)
   db.prepare('UPDATE sessions SET ' + sets.join(', ') + ' WHERE id = ?').run(...vals)

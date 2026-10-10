@@ -12,7 +12,7 @@ import { ASSISTANT_NAME } from '../brand'
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
 interface Props {
-  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean }) => void
+  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string }) => void
   disabled?: boolean
   /** 消息队列长度：流式中发送会排队 */
   queueCount?: number
@@ -83,6 +83,47 @@ const SLASH_COMMANDS: SlashCmd[] = [
 
 const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false }
 
+// ─── composer 状态条：模式 · 模型 · 工作目录 · git 分支（学 ClerkBox 输入框上方的状态行）───
+function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMode: 'general' | 'coding'; modelLabel: string; workDir: string; disabled?: boolean }) {
+  const { c } = useTheme()
+  const [git, setGit] = useState<{ branch: string; changes: number } | null>(null)
+  useEffect(() => {
+    let alive = true
+    setGit(null)
+    if (!workDir) return
+    const t = setTimeout(() => {
+      fetch(`/api/git/status?dir=${encodeURIComponent(workDir)}`)
+        .then(r => r.json())
+        .then(d => { if (alive && d?.success && d.isRepo) setGit({ branch: String(d.branch || ''), changes: (d.changes || []).length }) })
+        .catch(() => {})
+    }, 400)
+    return () => { alive = false; clearTimeout(t) }
+  }, [workDir, disabled])
+  const base = workDir ? workDir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''
+  return (
+    <div className="flex items-center gap-2 px-1 pb-1.5 text-[10.5px] min-w-0" style={{ color: c.textMuted }}>
+      <span className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
+        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m15 0h1.5M6 6l1.06 1.06m11.88-1.06-1.06 1.06M12 8.25a3 3 0 100 6 3 3 0 000-6z" /></svg>
+        {chatMode === 'coding' ? '编程模式' : '通用模式'}
+      </span>
+      <span className="font-mono truncate max-w-[180px]" title={modelLabel}>{modelLabel || '未配置模型'}</span>
+      {base && (
+        <span className="inline-flex items-center gap-1 truncate max-w-[160px]" title={workDir}>
+          <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>
+          <span className="truncate">{base}</span>
+        </span>
+      )}
+      {git && (
+        <span className="inline-flex items-center gap-1 shrink-0" title={`分支 ${git.branch}${git.changes ? ` · ${git.changes} 处变更` : ''}`}>
+          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v6m0 0l-3-3m3 3l3-3M6 9a3 3 0 100-6 3 3 0 000 6zm12 0a3 3 0 100-6 3 3 0 000 6zM6 9v6a3 3 0 003 3h6a3 3 0 003-3V9" /></svg>
+          <span className="font-mono">{git.branch}</span>
+          {git.changes > 0 && <span className="font-mono">+{git.changes}</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function MessageInput({ onSend, disabled, currentModel, onModelChange, messages, settings, queueCount = 0, queueItems, onRemoveQueued, incomingScreenshot, onScreenshotConsumed, sessionId }: Props) {
   const [value, setValue] = useState('')
   const [showToolbar, setShowToolbar] = useState(false)
@@ -109,6 +150,8 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   const [modes, setModes] = useState<Record<ModeKey, boolean>>(MODES_OFF)
   // 知识库开关（粘性：整段对话保持；默认关，避免每次悄悄注入并花 embedding）
   const [kbOn, setKbOn] = useState<boolean>(() => { try { return localStorage.getItem('lyclaw_kb_on') === '1' } catch { return false } })
+  // 目标模式开关：开启后下一条消息作为「目标」，评估器逐轮检查、未达成自动续跑（≤3 轮）
+  const [goalOn, setGoalOn] = useState(false)
   const toggleKb = () => setKbOn(v => { const n = !v; try { localStorage.setItem('lyclaw_kb_on', n ? '1' : '0') } catch {} return n })
   const [swarmTeam, setSwarmTeam] = useState<string>('auto')
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -519,7 +562,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
       content,
       selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
       attachedFiles.length > 0 ? attachedFiles : undefined,
-      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn },
+      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined },
     )
     // 输入历史（↑ 回溯最近 20 条）
     try {
@@ -530,6 +573,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
     setValue(''); setAttachedFiles([]); setSelectedSkillIds([])
     if (sessionId) { try { localStorage.removeItem(`lyclaw_draft_${sessionId}`) } catch { /* ignore */ } }
     setModes(MODES_OFF)   // 模式为单次生效，发送后复位，避免误触发
+    setGoalOn(false)      // 目标模式单次生效
   }
 
   // ─── 输入历史导航：空输入按 ↑ 逐条回溯，↓ 返回 ───
@@ -972,6 +1016,21 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
               </svg>
             </button>
 
+            {/* 目标模式开关 */}
+            <button onClick={() => setGoalOn(v => !v)} aria-pressed={goalOn}
+              title="目标模式：把这轮输入当作目标，评估器逐轮检查完成度，未达成自动续跑（最多 3 轮）"
+              className="h-8 pl-2.5 pr-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+              style={{
+                background: goalOn ? '#7c3aed1a' : 'transparent',
+                border: `1px solid ${goalOn ? '#7c3aed66' : c.border}`,
+                color: goalOn ? '#7c3aed' : c.textSecondary,
+              }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" />
+              </svg>
+              <span className="text-[12px] font-medium">目标</span>
+            </button>
+
             {/* 已启用项：ChatGPT 的 tools chip 位（点击即关闭，全部功能保留在 + 菜单内） */}
             {MODES.filter(m => modes[m.key]).map(m => (
               <button key={m.key} onClick={() => toggleMode(m.key)} title={`关闭${m.label}`}
@@ -1119,8 +1178,11 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
           </div>
         )}
 
+        {/* composer 状态条：模式 · 模型 · 工作目录 · git 分支 */}
+        <ComposerStatusBar chatMode={chatMode} modelLabel={currentModel || settings?.model || ''} workDir={settings?.workDir || ''} disabled={disabled} />
+
         {/* 免责声明 + 上下文仪表 */}
-        <div className="mt-2.5 flex items-center justify-center gap-3 text-[11.5px]" style={{ color: c.textTertiary }}>
+        <div className="mt-1 flex items-center justify-center gap-3 text-[11.5px]" style={{ color: c.textTertiary }}>
           <span className="text-center">
             {sttError ? <span style={{ color: c.toolErr }}>{sttError} </span> : null}
             {disabled ? '正在思考…' : `${ASSISTANT_NAME} 可能会犯错。请核查重要信息。`}

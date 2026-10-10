@@ -20,8 +20,8 @@ export interface StreamCallbacks {
   onThinking?: (delta: string) => void
   onToolStart: (toolCall: ToolCall) => void
   onToolEnd: (toolCall: ToolCall) => void
-  onDone: (full: string, toolCalls: ToolCall[], thinking?: string) => void
-  onError: (err: string) => void
+  onDone: (full: string, toolCalls: ToolCall[], thinking?: string) => void | Promise<void>
+  onError: (err: string) => void | Promise<void>
   /** 客户端工具：不走服务端执行，返回值作为 tool result 回传给模型 */
   onClientTool?: (tc: ToolCall) => string | Promise<string>
 }
@@ -134,7 +134,7 @@ export async function streamChat(
           } catch { /* 忽略解析错误 */ }
         }
       }
-      callbacks.onDone(fullContent, [], fullThinking || undefined)
+      await callbacks.onDone(fullContent, [], fullThinking || undefined)
     } catch (err: any) {
       if (err.name === 'AbortError') return
       callbacks.onError(err.message || 'LM Studio 连接错误')
@@ -277,7 +277,7 @@ export async function streamChat(
 
       // 没有 tool_calls → 完成，返回最终文本
       if (toolCalls.length === 0) {
-        callbacks.onDone(fullContent, [])
+        await callbacks.onDone(fullContent, [])
         return
       }
 

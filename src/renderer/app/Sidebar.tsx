@@ -92,6 +92,45 @@ function groupSessions(list: Session[], lang: 'zh' | 'en'): { label: string; ite
   return buckets.filter(b => b.items.length > 0)
 }
 
+/** 项目分组：有 project 标签的按文件夹归组（组间按最近活动排序），无标签的退回时间分组 */
+interface ProjectGroup { kind: 'project'; key: string; label: string; path: string; items: Session[] }
+interface TimeGroup { kind: 'time'; key: string; label: string; items: Session[] }
+type SessionGroup = ProjectGroup | TimeGroup
+
+function pathBase(p: string): string {
+  const seg = String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/)
+  return seg[seg.length - 1] || p
+}
+
+function groupSessionsMixed(list: Session[], lang: 'zh' | 'en'): SessionGroup[] {
+  const byProject = new Map<string, Session[]>()
+  const unassigned: Session[] = []
+  for (const s of list) {
+    const proj = String(s.project || '')
+    if (proj) {
+      if (!byProject.has(proj)) byProject.set(proj, [])
+      byProject.get(proj)!.push(s)
+    } else {
+      unassigned.push(s)
+    }
+  }
+  const projects: ProjectGroup[] = [...byProject.entries()]
+    .map(([path, items]) => ({
+      kind: 'project' as const, key: `p:${path}`, label: pathBase(path), path,
+      // 组内按时间排序，组间按组内最新活动排序
+      items: items.sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()),
+    }))
+    .sort((a, b) =>
+      new Date(b.items[0]?.updated_at || b.items[0]?.created_at || 0).getTime() -
+      new Date(a.items[0]?.updated_at || a.items[0]?.created_at || 0).getTime())
+  const times: TimeGroup[] = groupSessions(unassigned, lang).map(g => ({ kind: 'time' as const, key: `t:${g.label}`, label: g.label, items: g.items }))
+  return [...projects, ...times]
+}
+
+function loadCollapsedProjects(): Set<string> {
+  try { const raw = localStorage.getItem('lyclaw_collapsed_projects'); const arr = raw ? JSON.parse(raw) : []; return new Set(Array.isArray(arr) ? arr : []) } catch { return new Set() }
+}
+
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCreate, onDelete, onOpenTab, onCollapse, onJumpToMessage }: Props) {
@@ -111,6 +150,16 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     try { return JSON.parse(localStorage.getItem('lyclaw_session_colors') || '{}') || {} } catch { return {} }
   })
   const [colorPickerFor, setColorPickerFor] = useState<string | null>(null)
+  // 项目分组折叠状态（持久化）
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(loadCollapsedProjects)
+  const toggleProject = (key: string) => {
+    setCollapsedProjects(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      try { localStorage.setItem('lyclaw_collapsed_projects', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
   // 批量管理模式：勾选多个会话一键删除
   const [manageMode, setManageMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -154,7 +203,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     return base.filter(s => String(s.title || '').toLowerCase().includes(q))
   }, [search, sessions, starred])
 
-  const groups = useMemo(() => groupSessions(filtered, lang), [filtered, lang])
+  const groups = useMemo(() => groupSessionsMixed(filtered, lang), [filtered, lang])
 
   // 全局全文搜索：标题命中（即时，本地过滤）+ 消息正文命中（服务端 SQLite LIKE，防抖 350ms）
   useEffect(() => {
@@ -465,9 +514,28 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           </div>
         )}
         {groups.map(g => (
-          <div key={g.label}>
-            <div className="sidebar-group-label">{g.label}</div>
-            <div className="space-y-0.5">{g.items.map(renderItem)}</div>
+          <div key={g.key}>
+            {g.kind === 'project' ? (
+              <button onClick={() => toggleProject(g.key)} title={g.path}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 mt-1 rounded-lg text-left transition-colors group/proj"
+                style={{ color: c.textTertiary }}
+                onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                <svg className={`w-3 h-3 shrink-0 transition-transform ${collapsedProjects.has(g.key) ? '' : 'rotate-90'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ color: c.textSecondary }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                </svg>
+                <span className="text-[11.5px] font-medium truncate" style={{ color: c.textSecondary }}>{g.label}</span>
+                <span className="text-[10px] font-mono shrink-0 ml-auto" style={{ color: c.textMuted }}>{g.items.length}</span>
+              </button>
+            ) : (
+              <div className="sidebar-group-label">{g.label}</div>
+            )}
+            {!collapsedProjects.has(g.key) && (
+              <div className="space-y-0.5">{g.items.map(renderItem)}</div>
+            )}
           </div>
         ))}
       </div>
