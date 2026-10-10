@@ -152,6 +152,9 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   const [kbOn, setKbOn] = useState<boolean>(() => { try { return localStorage.getItem('lyclaw_kb_on') === '1' } catch { return false } })
   // 目标模式开关：开启后下一条消息作为「目标」，评估器逐轮检查、未达成自动续跑（≤3 轮）
   const [goalOn, setGoalOn] = useState(false)
+  // 本次权限档位（粘性）：ask=需确认 / edit=可编辑 / full=完全访问；useChat 据此注入权限提示
+  const [access, setAccess] = useState<string>(() => { try { return localStorage.getItem('lyclaw_access_level') || 'edit' } catch { return 'edit' } })
+  const pickAccess = (v: string) => { setAccess(v); try { localStorage.setItem('lyclaw_access_level', v) } catch {} }
   const toggleKb = () => setKbOn(v => { const n = !v; try { localStorage.setItem('lyclaw_kb_on', n ? '1' : '0') } catch {} return n })
   const [swarmTeam, setSwarmTeam] = useState<string>('auto')
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -562,7 +565,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
       content,
       selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
       attachedFiles.length > 0 ? attachedFiles : undefined,
-      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined },
+      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined, accessLevel: access },
     )
     // 输入历史（↑ 回溯最近 20 条）
     try {
@@ -1029,6 +1032,21 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
                 <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" />
               </svg>
               <span className="text-[12px] font-medium">目标</span>
+            </button>
+
+            {/* 本次权限档位：需确认 / 可编辑 / 完全访问 */}
+            <button onClick={() => pickAccess(access === 'ask' ? 'edit' : access === 'edit' ? 'full' : 'ask')}
+              title={`本次权限：${access === 'ask' ? '需要我确认（写/删/命令先问后做）' : access === 'edit' ? '可以编辑（删除前确认）' : '完全访问（自主完成）'} · 点击切换`}
+              className="h-8 pl-2.5 pr-2 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+              style={{
+                background: access === 'full' ? '#dc262614' : access === 'ask' ? '#d9770614' : 'transparent',
+                border: `1px solid ${access === 'full' ? '#dc262659' : access === 'ask' ? '#d9770659' : c.border}`,
+                color: access === 'full' ? '#dc2626' : access === 'ask' ? '#d97706' : c.textSecondary,
+              }}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+              <span className="text-[12px] font-medium">{access === 'ask' ? '需确认' : access === 'edit' ? '可编辑' : '完全访问'}</span>
             </button>
 
             {/* 已启用项：ChatGPT 的 tools chip 位（点击即关闭，全部功能保留在 + 菜单内） */}

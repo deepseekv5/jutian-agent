@@ -3,11 +3,13 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
 import TerminalPanel from '../code/TerminalPanel'
+import GitPanel from './GitPanel'
+import SubAgentTracker from '../app/SubAgentTracker'
 import type { Message, Settings } from '../types'
 import { estimateTokens, fmtTokens } from '../utils/tokens'
 import { effectiveApiKey } from '../store/storage'
 
-type SideTab = 'assistant' | 'review' | 'terminal' | 'browser' | 'stats'
+type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
 interface Props {
   workDir: string
@@ -63,14 +65,17 @@ export default function ChatSidePanel({ workDir, mainMessages, settings }: Props
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5l5 5 5-5M4 21h16"/></svg>
         </button>
         {([
-          ['assistant', '辅助对话'],
+          ['assistant', '辅助'],
           ['review', '审查'],
+          ['files', '文件'],
           ['terminal', '终端'],
           ['browser', '浏览器'],
+          ['subagent', '子Agent'],
+          ['git', 'Git'],
           ['stats', '统计'],
         ] as [SideTab, string][]).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
+            className="px-2 py-1 rounded-lg text-[11px] font-medium transition-colors"
             style={{ background: tab === id ? `${c.accent}12` : 'transparent', color: tab === id ? c.accent : c.textTertiary }}>
             {label}
           </button>
@@ -80,8 +85,18 @@ export default function ChatSidePanel({ workDir, mainMessages, settings }: Props
       <div className="flex-1 min-h-0 flex flex-col">
         {tab === 'assistant' && <AssistantChat settings={settings} workDir={workDir} />}
         {tab === 'review' && <ReviewChat mainMessages={mainMessages} settings={settings} />}
+        {tab === 'files' && <FilesPane workDir={workDir} />}
         {tab === 'terminal' && <TerminalPanel cwd={workDir || undefined as any} />}
         {tab === 'browser' && <BrowserPane />}
+        {tab === 'subagent' && (
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+            <SubAgentTracker />
+            <div className="text-[11px] text-center pt-8 px-3 leading-relaxed" style={{ color: c.textMuted }}>
+              主对话派出子代理（dispatch_subagents / 集群）时，<br />各成员的执行进度与回报会实时显示在这里
+            </div>
+          </div>
+        )}
+        {tab === 'git' && <GitPanel workDir={workDir} />}
         {tab === 'stats' && <StatsPane messages={mainMessages} />}
       </div>
     </div>
@@ -136,6 +151,113 @@ function StatsPane({ messages }: { messages: Message[] }) {
       )}
     </div>
   )
+}
+
+// ─── 文件：工作区轻量文件树（懒加载 + 点击预览），对应 ClerkBox 右侧「文件」页签 ───
+interface DirEntry { name: string; path: string; type: 'directory' | 'file' }
+
+function FilesPane({ workDir }: { workDir: string }) {
+  const { c } = useTheme()
+  const [entries, setEntries] = useState<DirEntry[] | null>(null)
+  const [error, setError] = useState('')
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [children, setChildren] = useState<Record<string, DirEntry[] | null>>({})
+  const [preview, setPreview] = useState<{ path: string; name: string; content: string } | null>(null)
+  const [loadingFile, setLoadingFile] = useState(false)
+
+  const root = workDir || ''
+  useEffect(() => {
+    setEntries(null); setError(''); setExpanded({}); setChildren({}); setPreview(null)
+    if (!root) { setError('未设置工作目录（在顶栏选择目录后浏览文件）'); return }
+    fetch('/api/code/read-dir?path=' + encodeURIComponent(root))
+      .then(r => r.json())
+      .then((d: any) => {
+        if (Array.isArray(d)) setEntries(d)
+        else setError(d?.error || '读取目录失败')
+      })
+      .catch(() => setError('读取目录失败'))
+  }, [root])
+
+  const toggleDir = useCallback(async (path: string) => {
+    if (expanded[path]) { setExpanded(p => ({ ...p, [path]: false })); return }
+    setExpanded(p => ({ ...p, [path]: true }))
+    if (children[path] === undefined) {
+      setChildren(ch => ({ ...ch, [path]: null }))
+      try {
+        const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(path))
+        const data = await res.json()
+        setChildren(ch => ({ ...ch, [path]: Array.isArray(data) ? data : [] }))
+      } catch { setChildren(ch => ({ ...ch, [path]: [] })) }
+    }
+  }, [expanded, children])
+
+  const openFile = useCallback(async (path: string, name: string) => {
+    setLoadingFile(true)
+    try {
+      const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(path))
+      const data = await res.json()
+      if (data?.success) setPreview({ path, name, content: String(data.content || '').slice(0, 200000) })
+      else setPreview({ path, name, content: `（无法预览：${data?.error || '读取失败'}）` })
+    } catch { setPreview({ path, name, content: '（读取失败）' }) }
+    setLoadingFile(false)
+  }, [])
+
+  const renderLevel = (list: DirEntry[], depth: number): React.ReactNode => list.map(e => (
+    <div key={e.path}>
+      <button onClick={() => (e.type === 'directory' ? toggleDir(e.path) : openFile(e.path, e.name))}
+        className="w-full flex items-center gap-1.5 py-1 pr-2 rounded-md text-left transition-colors hover:opacity-80"
+        style={{ paddingLeft: 6 + depth * 14, background: preview?.path === e.path ? `${c.accent}14` : 'transparent' }}>
+        {e.type === 'directory' ? (
+          <>
+            <svg className={`w-3 h-3 shrink-0 transition-transform ${expanded[e.path] ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} style={{ color: c.textMuted }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ color: '#f59e0b' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+          </>
+        ) : (
+          <>
+            <span className="w-3 shrink-0" />
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: c.textMuted }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
+            </svg>
+          </>
+        )}
+        <span className="text-[11.5px] truncate" style={{ color: e.type === 'directory' ? c.textSecondary : c.text }}>{e.name}</span>
+      </button>
+      {e.type === 'directory' && expanded[e.path] && (
+        children[e.path] === null || children[e.path] === undefined
+          ? <div className="text-[10.5px] py-1" style={{ paddingLeft: 6 + (depth + 1) * 14, color: c.textMuted }}>加载中…</div>
+          : children[e.path]!.length === 0
+            ? <div className="text-[10.5px] py-1" style={{ paddingLeft: 6 + (depth + 1) * 14, color: c.textMuted }}>（空）</div>
+            : renderLevel(children[e.path]!, depth + 1)
+      )}
+    </div>
+  ))
+
+  if (preview) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="h-8 flex items-center gap-2 px-2 border-b shrink-0" style={{ borderColor: c.borderLight }}>
+          <button onClick={() => setPreview(null)} className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: c.textTertiary }} title="返回文件树">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <span className="text-[11.5px] font-medium truncate" style={{ color: c.textHead }} title={preview.path}>{preview.name}</span>
+          {loadingFile && <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>加载中…</span>}
+          <span className="flex-1" />
+          <button onClick={() => navigator.clipboard?.writeText(preview.content)} className="text-[10.5px] px-1.5 py-0.5 rounded shrink-0" style={{ color: c.textTertiary }} title="复制文件内容">复制</button>
+        </div>
+        <pre className="flex-1 overflow-auto scrollbar-thin px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: c.textSecondary, fontFamily: 'var(--font-mono)' }}>
+          {preview.content}
+        </pre>
+      </div>
+    )
+  }
+
+  if (error) return <div className="flex-1 flex items-center justify-center px-6 text-center text-[11.5px]" style={{ color: c.textMuted }}>{error}</div>
+  if (!entries) return <div className="flex-1 flex items-center justify-center text-[11px]" style={{ color: c.textMuted }}>加载中…</div>
+  return <div className="flex-1 overflow-y-auto scrollbar-thin py-1 px-1">{entries.length === 0 ? <div className="text-center text-[11px] py-6" style={{ color: c.textMuted }}>（空目录）</div> : renderLevel(entries, 0)}</div>
 }
 
 // ─── 辅助对话：轻量独立小助手（不走主对话，不写库）───

@@ -163,6 +163,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   // 批量管理模式：勾选多个会话一键删除
   const [manageMode, setManageMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [webuiCopied, setWebuiCopied] = useState(false)
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
   const batchDelete = async (id: string) => { onDeleteRef.current(id); setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n }) }
@@ -413,25 +414,35 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
         )}
         {/* 功能入口：紧凑图标行（ChatGPT 风格弱化，功能全保留） */}
         <div className="flex items-center gap-1 mt-2">
-          {[
-            { tab: 'call', label: t('通话','Call'), title: t('打电话模式：语音对话，可执行任务','Voice call mode'), icon: 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2a1 1 0 011.11-.21 11.36 11.36 0 003.57.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.57 1 1 0 01-.21 1.11z', fill: true },
-            { tab: 'employees', label: t('集群','Swarm'), title: t('集群指挥室','Swarm console'), icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', fill: false },
-            { tab: 'code', label: 'Code', title: t('代码模式','Code mode'), icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z', fill: false },
-            { tab: 'kb', label: t('知识库','KB'), title: t('知识库：文档索引 / 知识图谱','Knowledge base'), icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', fill: false },
-            { tab: 'freemodels', label: t('免费AI','Free'), title: t('免费模型：Kilo 网关免 key 全量目录，一键切换','Free models: Kilo keyless catalog, one-click switch'), icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', fill: false },
-            { tab: 'persona', label: t('角色','Roles'), title: t('AI 角色：有长期记忆的对话角色，免费直接聊','AI personas: long-term memory companions, free to chat'), icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', fill: false },
-          ].map(item => (
-            <button key={item.tab} onClick={() => onOpenTab(item.tab as any)}
-              className="flex-1 h-8 rounded-lg flex items-center justify-center gap-1.5 text-[11.5px] font-medium transition-colors"
-              style={{ color: c.textTertiary, background: 'transparent', border: '1px solid transparent' }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover; e.currentTarget.style.color = c.text }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = c.textTertiary }}
-              title={item.title}>
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill={item.fill ? 'currentColor' : 'none'} stroke={item.fill ? 'none' : 'currentColor'} strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-              </svg>
-              {item.label}
-            </button>
+          {([
+            [
+              { tab: 'call', label: t('通话','Call'), title: t('打电话模式：语音对话，可执行任务','Voice call mode'), icon: 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2a1 1 0 011.11-.21 11.36 11.36 0 003.57.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.57 1 1 0 01-.21 1.11z', fill: true },
+              { tab: 'persona', label: t('角色','Roles'), title: t('AI 角色：有长期记忆的对话角色，免费直接聊','AI personas: long-term memory companions, free to chat'), icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', fill: false },
+              { tab: 'employees', label: t('集群','Swarm'), title: t('集群指挥室','Swarm console'), icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', fill: false },
+              { tab: 'code', label: 'Code', title: t('代码模式','Code mode'), icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z', fill: false },
+            ],
+            [
+              { tab: 'plugins', label: t('市场','Apps'), title: t('LY HARNESS 插件市场','LY HARNESS plugin market'), icon: 'M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z', fill: false },
+              { tab: 'tasks', label: t('任务','Tasks'), title: t('定时任务：按计划自动执行','Scheduled tasks'), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', fill: false },
+              { tab: 'kb', label: t('知识库','KB'), title: t('知识库：文档索引 / 知识图谱','Knowledge base'), icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', fill: false },
+              { tab: 'freemodels', label: t('免费AI','Free'), title: t('免费模型：Kilo 网关免 key 全量目录，一键切换','Free models: Kilo keyless catalog, one-click switch'), icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', fill: false },
+            ],
+          ] as { tab: string; label: string; title: string; icon: string; fill: boolean }[][]).map((row, ri) => (
+            <div key={ri} className="flex items-center gap-1">
+              {row.map(item => (
+                <button key={item.tab} onClick={() => onOpenTab(item.tab as any)}
+                  className="flex-1 h-8 rounded-lg flex items-center justify-center gap-1.5 text-[11.5px] font-medium transition-colors"
+                  style={{ color: c.textTertiary, background: 'transparent', border: '1px solid transparent' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover; e.currentTarget.style.color = c.text }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = c.textTertiary }}
+                  title={item.title}>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill={item.fill ? 'currentColor' : 'none'} stroke={item.fill ? 'none' : 'currentColor'} strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                  {item.label}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </div>
@@ -542,6 +553,28 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
 
       {/* ── 底部 ── */}
       <div className="px-3 py-2.5 shrink-0 border-t" style={{ borderColor: c.border }}>
+        {/* WebUI：手机远程访问地址（同设置→远程，一键复制） */}
+        <button onClick={async () => {
+          try {
+            const r = await fetch('/api/remote/info')
+            const d = await r.json()
+            if (d?.url) {
+              await navigator.clipboard.writeText(d.url)
+              setWebuiCopied(true)
+              setTimeout(() => setWebuiCopied(false), 1800)
+            }
+          } catch { /* 服务未就绪 */ }
+        }}
+          className="w-full mb-2 flex items-center gap-2 px-2 h-8 rounded-lg text-[12.5px] transition-colors"
+          style={{ color: c.textSecondary }}
+          onMouseEnter={e => e.currentTarget.style.background = c.surfaceHover}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          title="复制手机远程访问地址（同一 Wi-Fi 下浏览器打开即可用）">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0a8.949 8.949 0 004.951-1.488A3.987 3.987 0 0013 16.5h-2a3.987 3.987 0 00-3.951 3.012A8.949 8.949 0 0012 21zM3.6 9h16.8M3.6 15h16.8" />
+          </svg>
+          <span>{webuiCopied ? '已复制访问地址' : t('启动 WebUI', 'WebUI')}</span>
+        </button>
         <div className="flex items-center justify-between">
           <button onClick={toggle}
             className="flex items-center gap-2 px-2 h-8 rounded-lg text-[12.5px] transition-colors"
