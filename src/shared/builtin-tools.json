@@ -94,6 +94,10 @@
     "newText": {
      "type": "string",
      "description": "替换后的新文本"
+    },
+    "replaceAll": {
+     "type": "boolean",
+     "description": "是否替换全部匹配处（默认 false 只替换第一处）。重命名变量、统一改同一写法时设为 true"
     }
    },
    "required": [

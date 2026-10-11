@@ -399,6 +399,29 @@ function recordChange(p, oldC, newC) {
   return id;
 }
 
+/**
+ * 原子写入：先写同目录临时文件，再 rename 覆盖目标。
+ *
+ * 直接 writeFile 在写入中途断电/崩溃会留下半截文件——原内容已丢、新内容
+ * 不完整，对用户代码是数据损坏。rename 在同一文件系统内是原子操作，
+ * 要么看到旧内容、要么看到完整新内容。
+ *
+ * 同目录放临时文件是必须的：跨文件系统的 rename 会退化成拷贝+删除，
+ * 又变回非原子。
+ */
+async function writeFileAtomic(target, content) {
+  const dir = path.dirname(target);
+  const tmp = path.join(dir, `.${path.basename(target)}.tmp-${process.pid}-${Date.now()}`);
+  try {
+    await fsp.writeFile(tmp, content, "utf-8");
+    await fsp.rename(tmp, target);
+  } catch (e) {
+    // 失败时清掉临时文件，不在用户目录里留垃圾
+    try { await fsp.unlink(tmp); } catch {}
+    throw e;
+  }
+}
+
 async function write_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
@@ -406,7 +429,7 @@ async function write_file(a) {
     await fsp.mkdir(path.dirname(p), { recursive: true });
     let __old = "";
     try { __old = await fsp.readFile(p, "utf-8"); } catch {}
-    await fsp.writeFile(p, a.content, "utf-8");
+    await writeFileAtomic(p, a.content);
     const __chg = recordChange(p, __old, String(a.content || ""));
     return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}`, changeId: __chg };
   } catch (e) {
@@ -420,8 +443,12 @@ async function edit_file(a) {
     let c = await fsp.readFile(p, "utf-8");
     if (!c.includes(a.oldText)) return { success: false, error: "\u672A\u627E\u5230\u8981\u66FF\u6362\u7684\u6587\u672C" };
     const __oldFull = c;
-    c = c.replace(a.oldText, a.newText);
-    await fsp.writeFile(p, c, "utf-8");
+    // replaceAll：模型常期望替换所有匹配（重命名变量、统一改一处写法）。
+    // 默认仍只替换第一处，避免意外改动；需要全局时显式传 replaceAll
+    c = a.replaceAll
+      ? c.split(a.oldText).join(a.newText)
+      : c.replace(a.oldText, a.newText);
+    await writeFileAtomic(p, c);
     const __chg2 = recordChange(p, __oldFull, c);
     return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}`, changeId: __chg2 };
   } catch (e) {
