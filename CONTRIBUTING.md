@@ -15,9 +15,39 @@
 | `npm run dev` | 后端 + 前端热更新同时启动 |
 | `npm run lint` | ESLint 检查(提交前必须零 error) |
 | `npm run check` | TypeScript 全量类型检查 |
+| `npm run verify` | 契约校验(工具 schema / 约束知识库 / 免 key 常量 / 合规条款) |
+| `npm test` | 单元与安全回归测试(vitest) |
+| `npm run test:watch` | 测试监视模式 |
 | `npm run build` | 构建后端(serve.cjs)+ 前端(dist/) |
 | `npm run electron:build` | 打包 macOS dmg + zip |
 | `npm run electron:build:win` | 打包 Windows 安装器 |
+
+## 测试
+
+测试在 `tests/`，用 vitest。提交前请跑一遍：
+
+```bash
+npm run check && npm run lint && npm test && npm run build
+```
+
+四道门禁都必须通过。CI 会在 PR 上自动跑同样的命令。
+
+**两类测试的写法**
+
+- **纯函数单测**（多数）：直接 import 被测模块。适合判定逻辑、格式化、策略计算
+  ——`tests/sensitiveOps.test.ts`（敏感操作判定）、`tests/contextCompress.test.ts`
+  （上下文压缩策略）、`tests/toolLoopGuard.test.ts`（工具循环护栏）。
+  写这类测试时优先覆盖**边界与误判**：恰好到阈值、参数不同不该误拦、
+  非法输入不抛错。
+- **集成测试**（`tests/security.test.ts`）：`spawn` 真实的 `serve.cjs` 打 HTTP 端点。
+  用于验证路径穿越、SSRF、跨站门卫这类必须走完整请求链路的防护。
+  **前置**：需要先 `npm run build:server`（CI 里已排在 test 之前）。
+
+**什么时候该加测试**
+
+改判定/策略/解析逻辑时。这类代码的 bug 往往表现为「偶发」「难复现」，
+没有测试就只能靠用户报告。新增防护时同时加一条**防误伤**用例——
+判据过宽比漏判更难排查（用户会以为功能坏了）。
 
 ## 提交规范
 
