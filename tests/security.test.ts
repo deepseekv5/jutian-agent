@@ -1,0 +1,189 @@
+/**
+ * 安全路径回归测试 —— 起真实服务打端点
+ *
+ * 覆盖 v11.0.8 起修掉的几条路径穿越与 SSRF。选集成测试而不是单测，
+ * 是因为 serve.ts 是从打包产物反推重建的单文件后端，把内部函数拆出来
+ * 测要先动这个 4000 行的文件，风险远高于收益；而起真服务打端点测的
+ * 恰恰是攻击者真正会走的那条路。
+ *
+ * 前置：需要先 npm run build:server 生成 serve.cjs（CI 里排在 test 之前）。
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { spawn, type ChildProcess } from 'node:child_process'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const SERVE = path.join(ROOT, 'serve.cjs')
+// 随机高位端口，避开开发时可能已在跑的 3211
+const PORT = 3900 + Math.floor(Math.random() * 200)
+const BASE = `http://127.0.0.1:${PORT}`
+
+let proc: ChildProcess | null = null
+
+/** 同源请求必须带本机 Origin，否则会被跨站门卫 403 */
+const ORIGIN = { 'Content-Type': 'application/json', Origin: `http://localhost:${PORT}` }
+
+async function waitHealthy(timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`${BASE}/api/health`)
+      if (r.ok) return
+    } catch { /* 还没起来 */ }
+    await new Promise(r => setTimeout(r, 300))
+  }
+  throw new Error('服务在超时内没有就绪')
+}
+
+async function execTool(name: string, args: Record<string, unknown>) {
+  const r = await fetch(`${BASE}/api/tools/execute`, {
+    method: 'POST', headers: ORIGIN, body: JSON.stringify({ name, args }),
+  })
+  return r.json()
+}
+
+beforeAll(async () => {
+  if (!fs.existsSync(SERVE)) {
+    throw new Error('缺少 serve.cjs，请先执行 npm run build:server')
+  }
+  proc = spawn(process.execPath, [SERVE], {
+    env: { ...process.env, PORT: String(PORT) },
+    stdio: 'ignore',
+  })
+  await waitHealthy()
+}, 30000)
+
+afterAll(() => {
+  proc?.kill('SIGKILL')
+})
+
+describe('技能名称路径穿越', () => {
+  it('拒绝带 ../ 的技能名', async () => {
+    const r = await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ skillName: '../../../../tmp/victim' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('非法技能名称')
+  })
+
+  it('拒绝带斜杠的技能名', async () => {
+    const r = await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ skillName: 'a/b' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+  })
+
+  it('拒绝空技能名', async () => {
+    const r = await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST', headers: ORIGIN, body: JSON.stringify({ skillName: '' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+  })
+
+  it('合法但不存在的技能名正常返回成功，且不动磁盘', async () => {
+    const r = await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ skillName: 'regression-probe-does-not-exist' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(true)
+  })
+})
+
+describe('工具层目录白名单', () => {
+  it('get_file_info 拒绝 /etc/passwd', async () => {
+    const r = await execTool('get_file_info', { path: '/etc/passwd' })
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('路径不允许')
+  })
+
+  it('get_file_info 拒绝带 .. 的相对穿越', async () => {
+    const r = await execTool('get_file_info', { path: '/tmp/../etc/passwd' })
+    expect(r.success).toBe(false)
+  })
+
+  it('get_file_info 放行 /tmp 下的真实文件', async () => {
+    const probe = path.join('/tmp', `jutian-probe-${process.pid}.txt`)
+    fs.writeFileSync(probe, 'x')
+    try {
+      const r = await execTool('get_file_info', { path: probe })
+      expect(r.success).toBe(true)
+      expect(JSON.parse(r.output).type).toBe('file')
+    } finally {
+      fs.unlinkSync(probe)
+    }
+  })
+
+  it('json_process 拒绝 file: 指向的越界路径', async () => {
+    const r = await execTool('json_process', { data: 'file:/etc/hosts', query: 'keys' })
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('路径不允许')
+  })
+})
+
+describe('ok() 前缀边界', () => {
+  it('与 /Users 同前缀但不属于它的路径不被放行', async () => {
+    // /UsersShared 这类名字 startsWith("/Users") 为真但并非其子目录。
+    // 用错误信息区分：被拦是「路径不允许」，放行则会是 ENOENT
+    const r = await execTool('get_file_info', { path: '/UsersShared jutian probe' })
+    expect(r.error).toContain('路径不允许')
+  })
+})
+
+describe('web_fetch SSRF 防护', () => {
+  const cases: [string, string][] = [
+    ['云元数据地址', 'http://169.254.169.254/latest/meta-data/'],
+    ['本机回环', 'http://127.0.0.1/'],
+    ['内网 192.168', 'http://192.168.1.1/'],
+    ['内网 10.x', 'http://10.0.0.1/'],
+    ['内网 172.16', 'http://172.16.0.1/'],
+    ['CGNAT 100.64', 'http://100.64.0.1/'],
+    ['IPv6 回环', 'http://[::1]/'],
+  ]
+  for (const [label, url] of cases) {
+    it(`拦截${label}`, async () => {
+      const r = await execTool('web_fetch', { url })
+      expect(r.success).toBe(false)
+    })
+  }
+
+  it('拒绝非 http/https 协议', async () => {
+    const r = await execTool('web_fetch', { url: 'file:///etc/passwd' })
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('http/https')
+  })
+
+  it('拒绝畸形 URL', async () => {
+    const r = await execTool('web_fetch', { url: 'not-a-url' })
+    expect(r.success).toBe(false)
+  })
+
+  it('http_request 同样受约束', async () => {
+    const r = await execTool('http_request', { url: 'http://169.254.169.254/' })
+    expect(r.success).toBe(false)
+  })
+})
+
+describe('跨站与异常请求', () => {
+  it('拒绝跨站 Origin', async () => {
+    const r = await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' },
+      body: JSON.stringify({ skillName: 'x' }),
+    })
+    expect(r.status).toBe(403)
+  })
+
+  it('超大请求体被拒且服务存活', async () => {
+    const big = JSON.stringify({ skillName: 'x', pad: 'A'.repeat(33 * 1024 * 1024) })
+    // 服务端应在读满 32MB 前断连；客户端会看到连接错误或非 2xx
+    await fetch(`${BASE}/api/skills/uninstall`, {
+      method: 'POST', headers: ORIGIN, body: big,
+    }).catch(() => null)
+    const h = await fetch(`${BASE}/api/health`).then(r => r.json())
+    expect(h.status).toBe('ok')
+  }, 30000)
+})

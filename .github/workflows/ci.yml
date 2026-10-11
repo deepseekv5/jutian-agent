@@ -60,6 +60,11 @@ jobs:
       - name: 构建后端(serve.cjs)
         run: npm run build:server
 
+      # 安全回归测试：起真实服务打端点，覆盖路径穿越 / 目录白名单 / SSRF。
+      # 必须排在 build:server 之后——测试直接 spawn serve.cjs
+      - name: 安全回归测试
+        run: npm test
+
       - name: 构建前端(dist/)
         run: npx vite build
 
