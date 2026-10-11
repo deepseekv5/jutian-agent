@@ -21,6 +21,7 @@ import {
   type ToolCallAccum,
 } from './toolCallStream'
 import { buildHttpErrorMessage } from './httpErrors'
+import { checkRoundLimit, checkRepeatCall, callSignature } from './toolLoopGuard'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -124,8 +125,18 @@ export async function streamChat(
   // ─── API 模型分支 ───
   const url = '/api/llm-proxy'
 
+  // 工具循环护栏（判据与文案见 toolLoopGuard）
+  let toolRound = 0
+  const callSignatures = new Map<string, number>()
+
   while (true) {
     if (signal?.aborted) return
+    toolRound++
+    const roundCheck = checkRoundLimit(toolRound)
+    if (roundCheck.exceeded) {
+      await callbacks.onError(roundCheck.message)
+      return
+    }
 
     try {
       // 合并内置工具 + Skill 工具
@@ -235,6 +246,13 @@ export async function streamChat(
       // 逐个执行工具并收集结果
       for (const tc of toolCalls) {
         if (signal?.aborted) return
+
+        // 重复调用检测（判据见 toolLoopGuard）
+        const repeat = checkRepeatCall(callSignatures, callSignature(tc.name, tc.arguments))
+        if (repeat.blocked) {
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: repeat.message })
+          continue
+        }
 
         let args: Record<string, unknown>
         try { args = JSON.parse(tc.arguments || '{}') } catch { args = {} }
