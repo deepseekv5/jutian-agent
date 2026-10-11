@@ -12,7 +12,7 @@ import { ASSISTANT_NAME } from '../brand'
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
 interface Props {
-  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; research?: boolean }) => void
+  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string }) => void
   /** 打开深度调研专属工作台，参数为当前输入框内容（带过去当初始问题） */
   onOpenResearch?: (seed?: string) => void
   disabled?: boolean
@@ -576,7 +576,7 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
       content,
       selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
       attachedFiles.length > 0 ? attachedFiles : undefined,
-      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined, accessLevel: access, research: false },
+      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined, accessLevel: access },
     )
     // 输入历史（↑ 回溯最近 20 条）
     try {

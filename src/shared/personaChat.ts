@@ -8,6 +8,7 @@
  * - 流式输出 + 会话持久化（复制/删除由用户自行控制，第十六条）
  */
 import { buildPersonaPrompt, type Persona, type PersonaMemory } from './personas'
+import { ssePayloads } from './sse'
 import {
   detectCrisis, crisisReply, detectExitIntent, EXIT_REPLY,
   minorGuardPrompt, type PersonaIdentity,
@@ -143,30 +144,18 @@ export async function sendPersonaTurn(
       return { msgs: [...next, reply], notice }
     }
     // SSE 解析：data: {json}\n\n，取 delta.content
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
     let full = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      let nl: number
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1)
-        if (!line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (payload === '[DONE]') continue
-        try {
-          const j = JSON.parse(payload) as UpstreamReply & { choices?: { delta?: { content?: string } }[] }
-          const delta = j?.choices?.[0]?.delta?.content
-          if (typeof delta === 'string' && delta.length > 0) {
-            if (!sawFirst) { sawFirst = true; onTiming?.(Date.now() - t0) }
-            full += delta
-            onDelta?.(delta)
-          }
-        } catch { /* 半行/心跳，跳过 */ }
-      }
+    for await (const payload of ssePayloads(res.body)) {
+      if (payload === '[DONE]') continue
+      try {
+        const j = JSON.parse(payload) as UpstreamReply & { choices?: { delta?: { content?: string } }[] }
+        const delta = j?.choices?.[0]?.delta?.content
+        if (typeof delta === 'string' && delta.length > 0) {
+          if (!sawFirst) { sawFirst = true; onTiming?.(Date.now() - t0) }
+          full += delta
+          onDelta?.(delta)
+        }
+      } catch { /* 半行/心跳，跳过 */ }
     }
     if (!full.trim()) {
       const reply: PersonaMsg = {

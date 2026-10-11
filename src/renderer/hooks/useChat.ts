@@ -496,7 +496,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     try { await updateMessageVariants(assistantMsgId, sessionId!, pv) } catch { /* 分支归档失败不影响主流程 */ }
   }, [sessionId])
 
-  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean; research?: boolean }) => {    if (!sessionId || streamingRef.current !== null) return
+  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {    if (!sessionId || streamingRef.current !== null) return
     setError(null)
 
     // Store for potential rollback
@@ -529,66 +529,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     // 保存用户消息
     const userMsg = await createMessage({ session_id: sessionId, role: 'user', content: userContent })
 
-    // ─── v11 深度调研模式：服务端编排（拆词→搜索→抓取→带引用报告），进度实时写入占位消息 ───
-    if (sendOpts?.research) {
-      const researchMsg = await createMessage({ session_id: sessionId, role: 'assistant', content: '🔬 深度调研启动…', tool_calls: [] })
-      setMessages(await listMessages(sessionId))
-      // 会话已切换则放弃后续所有写回（闭包里的 sessionId 仍是旧会话）
-      if (sessionIdRef.current !== sessionId) { setStreamingId(null); return }
-      try {
-        const res = await fetch('/api/deep-research', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: content }),
-        })
-        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buf = ''
-        let report = ''
-        let sources: string[] = []
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buf += decoder.decode(value, { stream: true })
-          let nl: number
-          while ((nl = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1)
-            if (!line.startsWith('data:')) continue
-            try {
-              const ev = JSON.parse(line.slice(5).trim())
-              if (ev.error) {
-                await updateMessageContent(researchMsg.id, sessionId, `深度调研失败：${ev.error}`)
-                setMessages(await listMessages(sessionId))
-                setStreamingId(null)
-                return
-              }
-              if (ev.phase === 'plan') {
-                await updateMessageContent(researchMsg.id, sessionId, `🔬 **深度调研** · 拆解检索策略…\n\n调研问题：${content}`)
-              } else if (ev.phase === 'search' && ev.index) {
-                await updateMessageContent(researchMsg.id, sessionId, `🔬 **深度调研** · 检索中（${ev.index}/${ev.total}）\n\n当前检索词：${ev.query}`)
-              } else if (ev.phase === 'fetch' && ev.index) {
-                await updateMessageContent(researchMsg.id, sessionId, `🔬 **深度调研** · 阅读来源（${ev.index}/${ev.total}）${ev.relevant === false ? '\n\n（部分来源与主题无关，已过滤）' : ''}`)
-              } else if (ev.phase === 'write') {
-                await updateMessageContent(researchMsg.id, sessionId, '🔬 **深度调研** · 交叉验证来源，撰写报告…')
-              } else if (ev.done) {
-                report = String(ev.report || '')
-                sources = Array.isArray(ev.sources) ? ev.sources : []
-              }
-            } catch { /* 半行跳过 */ }
-          }
-        }
-        const srcList = sources.length > 0 ? `\n\n---\n**来源（${sources.length}）**\n${sources.map((u, i) => `${i + 1}. ${u}`).join('\n')}` : ''
-        await updateMessageContent(researchMsg.id, sessionId, report + srcList)
-        if (sessionIdRef.current === sessionId) setMessages(await listMessages(sessionId))
-        setStreamingId(null)
-        return
-      } catch (e: unknown) {
-        await updateMessageContent(researchMsg.id, sessionId, `深度调研失败：${e instanceof Error ? e.message : String(e)}`)
-        if (sessionIdRef.current === sessionId) setMessages(await listMessages(sessionId))
-        setStreamingId(null)
-        return
-      }
-    }
+    // 深度调研不在这里：v11.1 起它有自己的工作台（panels/ResearchPanel），
+    // 聊天内联跑只能把进度覆写进一条消息，来源与历史都没地方呈现
 
     // 目标模式：把这条用户消息标记为「Goal」，气泡左上角显示标签（侧车存储，不动消息表）
     if (sendOpts?.goal && !sendOpts.goalContinue) {

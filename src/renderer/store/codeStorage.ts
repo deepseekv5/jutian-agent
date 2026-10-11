@@ -1,9 +1,6 @@
 // Code 项目存储层 — localStorage 主存储 + SQLite 后端备份
 import type { CodeProject } from '../types/code'
-
-function uid(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
-}
+import { uid } from '../utils/uid'
 
 function now(): string {
   return new Date().toISOString()

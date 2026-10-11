@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
+import { uid } from '../utils/uid'
 import {
   loadEmployees, saveEmployees, exportEmployees, importEmployees,
   loadGroups, saveGroups, groupMembers, groupBoss, createGroup,
@@ -13,8 +14,6 @@ import {
 } from '../../shared/employees'
 import { CMEmpty, CMPrimaryBtn, CMInput } from '../code/ui'
 import { AgentAvatar } from './agent/AgentKit'
-
-const uid = () => 'emp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
 
 interface LiveState { running: boolean; phase: string; plan: any[] }
 
@@ -53,7 +52,7 @@ export default function EmployeesPanel({ onClose: _onClose, onOpenTab }: {
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(''), 1800) }
 
-  const create = () => setEditing({ id: uid(), name: '', role: '', prompt: '你是「新员工」，负责……完成后 @同事 接力或 @总管 交付。' })
+  const create = () => setEditing({ id: uid('emp_'), name: '', role: '', prompt: '你是「新员工」，负责……完成后 @同事 接力或 @总管 交付。' })
   const save = () => {
     if (!editing) return
     const name = editing.name.trim()

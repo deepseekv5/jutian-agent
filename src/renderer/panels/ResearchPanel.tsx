@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { reportError } from '../app/ErrorToast'
 import { onResearchSeed } from '../engine/researchBridge'
+import { ssePayloads } from '../../shared/sse'
 
 /* ─── 与服务端 SSE 事件对应的类型 ─── */
 type Phase = 'idle' | 'plan' | 'search' | 'fetch' | 'write' | 'done' | 'error'
@@ -108,72 +109,60 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
         signal: ctrl.signal,
       })
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        let nl: number
-        while ((nl = buf.indexOf('\n')) >= 0) {
-          const line = buf.slice(0, nl).trim()
-          buf = buf.slice(nl + 1)
-          if (!line.startsWith('data:')) continue
-          let ev: Record<string, unknown>
-          try { ev = JSON.parse(line.slice(5).trim()) } catch { continue }
+      for await (const payload of ssePayloads(res.body)) {
+        let ev: Record<string, unknown>
+        try { ev = JSON.parse(payload) } catch { continue }
 
-          if (ev.error) {
-            setError(String(ev.error))
-            setPhase('error')
-            return
+        if (ev.error) {
+          setError(String(ev.error))
+          setPhase('error')
+          return
+        }
+        const p = String(ev.phase || '')
+        if (p === 'plan') {
+          setPhase('plan')
+          if (ev.detail) setPhaseNote(String(ev.detail))
+        } else if (p === 'search') {
+          setPhase('search')
+          if (Array.isArray(ev.queries)) {
+            const qs = (ev.queries as unknown[]).map(String)
+            setQueries(qs); setSearchTotal(qs.length); setSearchIdx(0)
           }
-          const p = String(ev.phase || '')
-          if (p === 'plan') {
-            setPhase('plan')
-            if (ev.detail) setPhaseNote(String(ev.detail))
-          } else if (p === 'search') {
-            setPhase('search')
-            if (Array.isArray(ev.queries)) {
-              const qs = (ev.queries as unknown[]).map(String)
-              setQueries(qs); setSearchTotal(qs.length); setSearchIdx(0)
-            }
-            if (typeof ev.index === 'number') setSearchIdx(ev.index)
-            if (typeof ev.total === 'number') setSearchTotal(ev.total)
-            if (ev.query) setPhaseNote(String(ev.query))
-            if (typeof ev.found === 'number') setPhaseNote(`${String(ev.query || '')} · ${ev.found} 条`)
-          } else if (p === 'fetch') {
-            setPhase('fetch')
-            if (Array.isArray(ev.sources)) {
-              setSources((ev.sources as unknown[]).map(String).map(u => ({ url: u, ok: true })))
-              setFetchTotal((ev.sources as unknown[]).length)
-            }
-            if (typeof ev.index === 'number') setFetchIdx(ev.index)
-            if (typeof ev.total === 'number') setFetchTotal(ev.total)
-            if (ev.url) {
-              const u = String(ev.url)
-              setSources(prev => {
-                const has = prev.some(s => s.url === u)
-                const row: SourceRow = { url: u, ok: !!ev.ok, relevant: ev.relevant !== false }
-                return has ? prev.map(s => s.url === u ? { ...s, ...row } : s) : [...prev, row]
-              })
-            }
-          } else if (p === 'write') {
-            setPhase('write')
-            if (ev.detail) setPhaseNote(String(ev.detail))
-          } else if (ev.done) {
-            setReport(String(ev.report || ''))
-            if (Array.isArray(ev.sources)) {
-              setSources((ev.sources as unknown[]).map(String).map((u, i) => ({
-                url: u,
-                ok: sources[i]?.ok ?? true,
-                relevant: sources[i]?.relevant,
-                title: sources[i]?.title,
-              })))
-            }
-            setPhase('done')
-            loadHistory()
+          if (typeof ev.index === 'number') setSearchIdx(ev.index)
+          if (typeof ev.total === 'number') setSearchTotal(ev.total)
+          if (ev.query) setPhaseNote(String(ev.query))
+          if (typeof ev.found === 'number') setPhaseNote(`${String(ev.query || '')} · ${ev.found} 条`)
+        } else if (p === 'fetch') {
+          setPhase('fetch')
+          if (Array.isArray(ev.sources)) {
+            setSources((ev.sources as unknown[]).map(String).map(u => ({ url: u, ok: true })))
+            setFetchTotal((ev.sources as unknown[]).length)
           }
+          if (typeof ev.index === 'number') setFetchIdx(ev.index)
+          if (typeof ev.total === 'number') setFetchTotal(ev.total)
+          if (ev.url) {
+            const u = String(ev.url)
+            setSources(prev => {
+              const has = prev.some(s => s.url === u)
+              const row: SourceRow = { url: u, ok: !!ev.ok, relevant: ev.relevant !== false }
+              return has ? prev.map(s => s.url === u ? { ...s, ...row } : s) : [...prev, row]
+            })
+          }
+        } else if (p === 'write') {
+          setPhase('write')
+          if (ev.detail) setPhaseNote(String(ev.detail))
+        } else if (ev.done) {
+          setReport(String(ev.report || ''))
+          if (Array.isArray(ev.sources)) {
+            setSources((ev.sources as unknown[]).map(String).map((u, i) => ({
+              url: u,
+              ok: sources[i]?.ok ?? true,
+              relevant: sources[i]?.relevant,
+              title: sources[i]?.title,
+            })))
+          }
+          setPhase('done')
+          loadHistory()
         }
       }
     } catch (e) {

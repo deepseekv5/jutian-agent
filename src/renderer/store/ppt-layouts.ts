@@ -1,4 +1,5 @@
 import type { Block, BlockStyle, Box, BulletsBlock, ChartBlock, ChartKind, ChartSeries, DividerBlock, GraphicBlock, GraphicKind, ImageBlock, LayoutId, QuoteBlock, Slide, SlideSpec, StatsBlock, StepsBlock, TableBlock, TextBlock } from '../types/ppt';
+import { uid } from '../utils/uid';
 
 export const LAYOUT_LABELS: Record<LayoutId, string> = {
   cover: '封面', agenda: '目录', bullets: '要点列表', twoColumn: '双栏对比',
@@ -17,7 +18,6 @@ const S: Record<string, BlockStyle> = {
   bulletsSm: { fontSize: 19, color: 'text' },
 };
 
-function uid(p: string): string { return p + Math.random().toString(36).slice(2, 10); }
 function mkBox(x: number, y: number, w: number, h: number): Box { return { x, y, w, h }; }
 
 function text(type: 'title' | 'subtitle' | 'paragraph' | 'eyebrow', box: Box, value: string, style: BlockStyle): TextBlock {

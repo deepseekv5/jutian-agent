@@ -4,6 +4,7 @@ import type { Block, Deck, FontKey, GenerateOptions, LayoutId, Slide, SlideSpec 
 import { materialize, extractSpec, LAYOUT_LABELS } from './ppt-layouts';
 import { localGenerate } from './ppt-engine';
 import { aiGenerateSlides } from './ppt-ai';
+import { uid } from '../utils/uid';
 
 const STORAGE_KEY = 'claw:ppt:deck:v1';
 
@@ -58,7 +59,6 @@ interface PptState {
   resetDeck: () => void;
 }
 
-function uid(p: string): string { return p + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function clamp(v: number, min: number, max: number): number { return Math.max(min, Math.min(max, v)); }
 
 function emptyDeck(): Deck {

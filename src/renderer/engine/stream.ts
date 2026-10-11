@@ -14,6 +14,7 @@ import type { Settings, ToolCall, ToolDef } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
+import { ssePayloads } from '../../shared/sse'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -117,41 +118,28 @@ export async function streamChat(
         return
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) { callbacks.onError('无法读取响应流'); return }
-      const decoder = new TextDecoder()
+      if (!res.body) { callbacks.onError('无法读取响应流'); return }
       let fullContent = ''
       let fullThinking = ''
-      let buffer = ''
 
-      while (true) {
+      for await (const data of ssePayloads(res.body)) {
         if (signal?.aborted) return
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data: ')) continue
-          const data = trimmed.slice(6)
-          if (data === '[DONE]') break
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta
-            if (!delta) continue
-            // 深度思考内容
-            if (delta.reasoning_content) {
-              fullThinking += delta.reasoning_content
-              callbacks.onThinking?.(delta.reasoning_content)
-            }
-            // 文本输出
-            if (delta.content) {
-              fullContent += delta.content
-              callbacks.onChunk(delta.content)
-            }
-          } catch { /* 忽略解析错误 */ }
-        }
+        if (data === '[DONE]') break
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed.choices?.[0]?.delta
+          if (!delta) continue
+          // 深度思考内容
+          if (delta.reasoning_content) {
+            fullThinking += delta.reasoning_content
+            callbacks.onThinking?.(delta.reasoning_content)
+          }
+          // 文本输出
+          if (delta.content) {
+            fullContent += delta.content
+            callbacks.onChunk(delta.content)
+          }
+        } catch { /* 忽略解析错误 */ }
       }
       await callbacks.onDone(fullContent, [], fullThinking || undefined)
     } catch (err: unknown) {
@@ -219,72 +207,61 @@ export async function streamChat(
         throw new Error(detail ? `${head}：${detail}` : head)
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response body')
+      if (!res.body) throw new Error('No response body')
 
-      const decoder = new TextDecoder()
       let fullContent = ''
-      
+
       // 累积式 tool call 收集器
       const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>()
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      for await (const data of ssePayloads(res.body)) {
+        if (data === '[DONE]') break
 
-        const chunk = decoder.decode(value, { stream: true })
-        for (const line of chunk.split('\n')) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('data: ')) continue
-          const data = trimmed.slice(6)
-          if (data === '[DONE]') break
-          
-          try {
-            const parsed = JSON.parse(data)
-            const choice = parsed.choices?.[0]
-            if (!choice) continue
-            
-            const delta = choice.delta
+        try {
+          const parsed = JSON.parse(data)
+          const choice = parsed.choices?.[0]
+          if (!choice) continue
 
-            // 文本流式输出
-            if (delta?.content) {
-              fullContent += delta.content
-              callbacks.onChunk(delta.content)
-            }
+          const delta = choice.delta
 
-            // 工具调用流式累积 — 使用兼容性解析函数
-            const parsedTcs = parseToolCallsFromDelta(delta)
-            if (parsedTcs) {
-              for (const tc of parsedTcs) {
-                const idx = tc.index ?? 0
-                if (!toolCallMap.has(idx)) {
-                  toolCallMap.set(idx, { id: '', name: '', arguments: '' })
-                }
-                const existing = toolCallMap.get(idx)!
-                if (tc.id) existing.id += tc.id
-                if (tc.name) existing.name += tc.name
-                if (tc.args) existing.arguments += tc.args
-              }
-            }
-
-            // 兼容：检查 finish_reason 是否为 tool_calls（非流式模式）
-            if (choice.finish_reason === 'tool_calls' && toolCallMap.size === 0) {
-              // 有些模型在完整响应中返回 tool_calls 而非 delta 中
-              const msg = choice.message
-              if (msg?.tool_calls) {
-                for (const tc of msg.tool_calls) {
-                  const idx = tc.index ?? 0
-                  toolCallMap.set(idx, {
-                    id: tc.id || '',
-                    name: tc.function?.name || '',
-                    arguments: tc.function?.arguments || '',
-                  })
-                }
-              }
-            }
-          } catch {
-            // 忽略格式错误的 SSE 行
+          // 文本流式输出
+          if (delta?.content) {
+            fullContent += delta.content
+            callbacks.onChunk(delta.content)
           }
+
+          // 工具调用流式累积 — 使用兼容性解析函数
+          const parsedTcs = parseToolCallsFromDelta(delta)
+          if (parsedTcs) {
+            for (const tc of parsedTcs) {
+              const idx = tc.index ?? 0
+              if (!toolCallMap.has(idx)) {
+                toolCallMap.set(idx, { id: '', name: '', arguments: '' })
+              }
+              const existing = toolCallMap.get(idx)!
+              if (tc.id) existing.id += tc.id
+              if (tc.name) existing.name += tc.name
+              if (tc.args) existing.arguments += tc.args
+            }
+          }
+
+          // 兼容：检查 finish_reason 是否为 tool_calls（非流式模式）
+          if (choice.finish_reason === 'tool_calls' && toolCallMap.size === 0) {
+            // 有些模型在完整响应中返回 tool_calls 而非 delta 中
+            const msg = choice.message
+            if (msg?.tool_calls) {
+              for (const tc of msg.tool_calls) {
+                const idx = tc.index ?? 0
+                toolCallMap.set(idx, {
+                  id: tc.id || '',
+                  name: tc.function?.name || '',
+                  arguments: tc.function?.arguments || '',
+                })
+              }
+            }
+          }
+        } catch {
+          // 忽略格式错误的 SSE 行
         }
       }
 

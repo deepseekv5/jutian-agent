@@ -14,6 +14,7 @@ import ErrorBoundary from './ErrorBoundary';
 import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
 import { sendResearchSeed } from '../engine/researchBridge';
 import { loadVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
+import { uid } from '../utils/uid';
 import TerminalPanel from '../code/TerminalPanel';
 import NewTabPage from './NewTabPage';
 import { refreshSkillManifest } from '../engine/skillManifest';
@@ -63,10 +64,6 @@ function TabFallback() {
 
 const TABS_KEY = 'lyclaw_tabs';
 const ACTIVE_TAB_KEY = 'lyclaw_active_tab';
-
-function uid(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
-}
 
 // 低性能设备（老款 Intel Mac 等）：降级玻璃模糊与动画，CPU 核数≤4 或内存≤4GB 命中
 const _lc = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4

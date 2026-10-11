@@ -3,6 +3,28 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [11.1.1] - 2026-10-11
+
+### 简洁度收敛(行为不变)
+本轮不做高风险的大文件拆分，改为消除「同一个东西写很多遍」的重复债:
+
+- **SSE 流式解析 6→1**:此前 stream.ts(2 处)、useChat、ResearchPanel、personaChat、
+  jtcode-cli 各自手写「读流 → TextDecoder → 按行切 → 找 data: 前缀」，写法互有出入
+  (有的 `data:` 有的 `data: `、`[DONE]` 有的 break 有的 continue、跨 chunk 的半行处理不一)。
+  统一为 `src/shared/sse.ts` 的 `ssePayloads` 异步生成器。顺带修正了原 stream.ts
+  第二处用 `chunk.split` 不累积、导致跨 chunk 拆开的行会丢的潜在 bug。
+  jtcode-cli 是 node 直跑、无构建步骤，保留一份同语义内联实现并在注释标注
+- **uid 生成 6→1**:App/storage/codeStorage/EmployeesPanel/pptStore/ppt-layouts
+  六份内容相同、只差前缀与随机段长度的 `uid()`，收成 `src/renderer/utils/uid.ts`
+  的 `uid(prefix)`。先确认全站没有按 ID 内时间戳前缀做排序/解析的地方再统一
+- **删除聊天内联调研死代码**:调研已迁到专属工作台，`sendOpts.research` 全站再无
+  来源(true 的来源没了)，useChat 里整段内联调研分支连同类型定义一并移除
+
+### 测试
+- 新增 `tests/sse.test.ts`:纯函数用假 ReadableStream 驱动，覆盖跨 chunk 拼行、
+  带/不带空格的 data:、心跳注释跳过、[DONE]、流尾残包等形状。
+  测试总数 25 → 33。
+
 ## [11.1.0] - 2026-10-11
 
 ### 深度调研专属工作台

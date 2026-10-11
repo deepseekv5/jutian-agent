@@ -1,11 +1,8 @@
 // 存储层 — SQLite 后端 + localStorage 降级
 import type { Session, Message, Settings, PermissionLevel, ToolCall } from '../types'
+import { uid } from '../utils/uid'
 
 const API = ''  // 同源 API
-
-function uid(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
-}
 
 function now(): string {
   return new Date().toISOString()
