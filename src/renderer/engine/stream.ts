@@ -41,7 +41,7 @@ export interface StreamCallbacks {
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
-const CLIENT_TOOLS = new Set(['dispatch_subagents'])
+const CLIENT_TOOLS = new Set(['dispatch_subagents', 'update_plan'])
 
 /** OpenAI 兼容的 tool_call 线上格式（随 messages 直接序列化发给上游） */
 interface WireToolCall {

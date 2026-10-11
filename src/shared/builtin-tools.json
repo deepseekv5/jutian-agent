@@ -33,6 +33,47 @@
   }
  },
  {
+  "name": "update_plan",
+  "description": "维护当前任务的步骤清单。多步任务（≥3 步）必须先调用本工具列出步骤，之后每完成一步就再次调用更新状态——用户靠它了解进展。status 取值：pending / in_progress / completed。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "explanation": {
+     "type": "string",
+     "description": "一句话说明当前进展（可选）"
+    },
+    "steps": {
+     "type": "array",
+     "description": "完整步骤列表（每次都要传全量，不是增量）",
+     "items": {
+      "type": "object",
+      "properties": {
+       "title": {
+        "type": "string",
+        "description": "步骤描述，简短"
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "pending",
+         "in_progress",
+         "completed"
+        ]
+       }
+      },
+      "required": [
+       "title",
+       "status"
+      ]
+     }
+    }
+   },
+   "required": [
+    "steps"
+   ]
+  }
+ },
+ {
   "name": "read_file",
   "description": "读取文本文件内容。支持 .ts/.js/.py/.json/.md/.txt/.yaml/.html/.css/.sh 等所有文本格式。返回完整文件内容。",
   "parameters": {

@@ -7,6 +7,7 @@ import ChatSidePanel from './ChatSidePanel'
 import WelcomeHero from './WelcomeHero'
 import GitPanel from './GitPanel'
 import GoalCard from './GoalCard'
+import PlanCard from './PlanCard'
 import type { Settings } from '../types'
 import { dateTimeCN, hhmmss } from '../utils/datetime'
 
@@ -79,7 +80,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (dirs?.length) setSessionWorkDir(dirs[0])
   }, [setSessionWorkDir])
 
-  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
+  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal, plan, clearPlan } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
   // 同理给消息操作用 ref 包一层：下面传给 ChatView 的回调因此是全稳定引用，
@@ -396,6 +397,11 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
               {goal && goalDismissed !== goal.text + goal.status && (
                 <div className="px-6 pt-1 pb-2 shrink-0">
                   <GoalCard goal={goal} onStop={stopGoal} onDismiss={() => setGoalDismissed(goal.text + goal.status)} />
+                </div>
+              )}
+              {plan && plan.steps.length > 0 && (
+                <div className="px-6 pt-1 pb-2 shrink-0">
+                  <PlanCard plan={plan} onClear={clearPlan} />
                 </div>
               )}
               <MessageInput

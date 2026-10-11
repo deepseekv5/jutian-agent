@@ -6,6 +6,7 @@ import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { planCompression, mergeSummary, buildCompressedMessages, type ApiMsgLike } from '../engine/contextCompress'
 import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
+import { parsePlanArgs, planAck, planReject, loadPlan, savePlan, clearPlan, type Plan } from '../../shared/planTool'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
 import { runSubagents } from '../engine/subagent'
@@ -106,6 +107,23 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
     if (goalRef.current) goalRef.current.active = false
     setGoal(g => (g ? { ...g, status: 'stopped' } : g))
   }, [])
+
+  // ─── 任务清单（update_plan）：多步任务的实时进度，按会话隔离 ───
+  const [plan, setPlanState] = useState<Plan | null>(null)
+  const planSessionRef = useRef<string | null>(null)
+  const setPlan = useCallback((p: Plan | null) => {
+    setPlanState(p)
+    if (p === null && sessionIdRef.current) clearPlan(`lyclaw_plan_${sessionIdRef.current}`)
+  }, [])
+  // 切会话时读取该会话自己的清单（不清掉别人的进度）
+  useEffect(() => {
+    planSessionRef.current = sessionId
+    setPlanState(loadPlan(`lyclaw_plan_${sessionId || ''}`))
+  }, [sessionId])
+  const clearSessionPlan = useCallback(() => {
+    if (sessionId) clearPlan(`lyclaw_plan_${sessionId}`)
+    setPlanState(null)
+  }, [sessionId])
 
   // 评估器：独立轻量请求，判断目标是否已达成（不污染主对话上下文）。
   // 三态返回：ok=false 表示评估器本身不可用（模型未配置/请求失败/解析失败），
@@ -863,6 +881,14 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       },
 
       onClientTool: async (tc) => {
+        if (tc.name === 'update_plan') {
+          // 任务清单：解析后写入本会话的 plan 状态并持久化，UI 实时显示进度
+          const { plan: p, error } = parsePlanArgs(tc.arguments || '{}')
+          if (!p) return planReject(error || '参数无效')
+          setPlan(p)
+          savePlan(`lyclaw_plan_${sessionId}`, p)
+          return planAck(p)
+        }
         if (tc.name !== 'dispatch_subagents') return '{"ok":false,"error":"unknown"}'
         try {
           const args = JSON.parse(tc.arguments || '{}')
@@ -959,7 +985,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       streamingRef.current = null
       await send(`（目标模式 · 自动续跑 ${g.rounds}/${MAX_GOAL_ROUNDS}）评估器判断目标尚未达成：${verdict.note || '请继续'}。请接着完成目标：「${g.text}」`, lastSkillIdsRef.current, undefined, { ...sendOpts, goal: undefined, goalContinue: true })
     }
-  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal, flushPendingVariants])
+  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal, flushPendingVariants, setPlan])
 
   const rollbackTo = useCallback(async (messageIndex: number) => {
     if (!sessionId) return
@@ -1051,6 +1077,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     /** 目标模式状态与手动停止 */
     goal,
     stopGoal,
+    /** 任务清单（update_plan 维护）：进度展示与手动清除 */
+    plan,
+    clearPlan: clearSessionPlan,
     /** 手动加载 Skill */
     loadSkill: loadSkillTools,
     /** 已加载的 Skill 列表 */
