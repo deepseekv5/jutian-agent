@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { relativeShort } from '../utils/datetime'
 
 interface Props {
   workDir: string
@@ -17,12 +18,8 @@ interface GitChange { status: string; file: string }
 
 const fmtTime = (ts: number) => {
   if (!ts) return ''
-  const d = new Date(ts * 1000)
-  const today = new Date()
-  const sameDay = d.toDateString() === today.toDateString()
-  return sameDay
-    ? d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
-    : `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })}`
+  // git log 给的是秒级时间戳；relativeShort 已封装「今天给时分、更早给月/日 时分」
+  return relativeShort(new Date(ts * 1000))
 }
 
 const STATUS_COLORS: Record<string, string> = {

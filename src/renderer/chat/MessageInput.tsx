@@ -9,6 +9,7 @@ import { refreshSkillManifest } from '../engine/skillManifest'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
 import { MODE_ACCENT } from '../../shared/chatModes'
+import { hhmmss } from '../utils/datetime'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -444,7 +445,7 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
   // 接收全局截图（快捷键/按钮触发）→ 加入附件
   useEffect(() => {
     if (!incomingScreenshot) return
-    setAttachedFiles(prev => [...prev, { path: '', name: `截图 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.png`, size: 0, dataUrl: incomingScreenshot }])
+    setAttachedFiles(prev => [...prev, { path: '', name: `截图 ${hhmmss()}.png`, size: 0, dataUrl: incomingScreenshot }])
     onScreenshotConsumed?.()
     // onScreenshotConsumed 由父组件内联传入（每次渲染新引用）：纳入依赖会在消费完成前重复追加同一截图，故按挂载期快照处理
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -467,7 +468,7 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
     const h = (e: Event) => {
       const dataUrl = (e as CustomEvent).detail as string
       if (!dataUrl) return
-      setAttachedFiles(prev => [...prev, { path: '', name: `截图 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.png`, size: 0, dataUrl }])
+      setAttachedFiles(prev => [...prev, { path: '', name: `截图 ${hhmmss()}.png`, size: 0, dataUrl }])
     }
     window.addEventListener('attach-screenshot', h)
     return () => window.removeEventListener('attach-screenshot', h)
@@ -532,7 +533,7 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
             const type = it.types?.find((t: string) => t.startsWith('image/'))
             if (type) {
               const blob = await it.getType(type)
-              const name = `剪贴板图片 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.png`
+              const name = `剪贴板图片 ${hhmmss()}.png`
               setAttachedFiles(prev => [...prev, { path: '', name, size: blob.size, file: blob }])
               e.preventDefault()
               return
@@ -606,7 +607,7 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
         const f = it.getAsFile()
         if (!f) continue
         e.preventDefault()
-        setAttachedFiles(prev => [...prev, { path: '', name: f.name || `粘贴图片 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.png`, size: f.size, file: f }])
+        setAttachedFiles(prev => [...prev, { path: '', name: f.name || `粘贴图片 ${hhmmss()}.png`, size: f.size, file: f }])
         return
       }
     }

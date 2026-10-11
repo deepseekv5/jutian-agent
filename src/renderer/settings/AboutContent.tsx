@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
 import { getAllMemories } from '../store/storage'
+import { hhmm } from '../utils/datetime'
 
 /**
  * AboutContent — 关于页内容(单一来源,设置弹窗与独立关于页共用)
@@ -40,7 +41,7 @@ export default function AboutContent() {
     setChecking(true)
     a.updateCheck().then((d: UpdateInfo) => {
       setUpd(d)
-      setLastCheck(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }))
+      setLastCheck(hhmm())
     }).catch(() => {}).finally(() => setChecking(false))
   }
 

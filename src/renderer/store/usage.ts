@@ -1,3 +1,4 @@
+import { ymd } from '../utils/datetime'
 /**
  * 用量统计（localStorage 持久化，按 天+模型 聚合）
  * 在 useChat 每次流结束后写入；首页与设置页读取展示。
@@ -15,7 +16,7 @@ const KEY = 'lyclaw_usage'
 
 export function addUsage(model: string, prompt: number, completion: number): void {
   try {
-    const date = new Date().toLocaleDateString('sv-SE') // YYYY-MM-DD（本地时区）
+    const date = ymd() // YYYY-MM-DD（本地时区）
     const list: UsageEntry[] = JSON.parse(localStorage.getItem(KEY) || '[]')
     const hit = list.find(e => e.date === date && e.model === model)
     if (hit) {
@@ -43,7 +44,7 @@ export interface UsageSummary {
 
 export function summarizeUsage(days = 7): UsageSummary {
   const list = getUsage()
-  const today = new Date().toLocaleDateString('sv-SE')
+  const today = ymd()
   const sum = (es: UsageEntry[]) => es.reduce((s, e) => ({ msgs: s.msgs + e.msgs, prompt: s.prompt + e.prompt, completion: s.completion + e.completion }), { msgs: 0, prompt: 0, completion: 0 })
   const byDate = new Map<string, UsageEntry>()
   for (const e of list) {

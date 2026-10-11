@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { dateTimeCN } from '../utils/datetime'
 
 // 长线任务（GitHub Actions 风格）：后台执行、定时任务、长时间运行的 Agent 工作流
 interface LongTask {
@@ -124,7 +125,7 @@ export default function TasksPanel({ onClose, embedded = false }: { onClose?: ()
                       <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>{SOURCE_LABEL[task.source]}</span>
                     </div>
                     <div className="text-[10.5px] mt-0.5" style={{ color: c.textTertiary }}>
-                      {new Date(task.startedAt).toLocaleString('zh-CN', { hour12: false })}
+                      {dateTimeCN(task.startedAt)}
                       {task.duration ? ` · ${task.duration}` : ''}
                     </div>
                     {task.summary && <div className="text-[10.5px] mt-1 line-clamp-2" style={{ color: c.textSecondary }}>{task.summary}</div>}

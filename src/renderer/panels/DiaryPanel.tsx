@@ -4,10 +4,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import PageShell from '../app/PageShell'
 import { useTheme } from '../hooks/useTheme'
+import { ymd } from '../utils/datetime'
 
 interface Entry { id: string; date: string; title: string; content: string; createdAt?: string; updatedAt?: string }
 
-const todayStr = () => new Date().toLocaleDateString('sv-SE')
+const todayStr = () => ymd()
 const fmtDate = (d: string) => {
   if (!d) return ''
   const dt = new Date(d + 'T00:00:00')

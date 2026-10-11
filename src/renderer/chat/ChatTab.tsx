@@ -8,6 +8,7 @@ import WelcomeHero from './WelcomeHero'
 import GitPanel from './GitPanel'
 import GoalCard from './GoalCard'
 import type { Settings } from '../types'
+import { dateTimeCN, hhmmss } from '../utils/datetime'
 
 const WD_KEY = 'lyclaw_session_workdirs'
 const CP_KEY = 'lyclaw_last_checkpoint'
@@ -119,7 +120,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   const createCheckpointForTurn = useCallback((content: string) => {
     const dir = (ownWorkDir || settings.workDir || '').trim()
     if (!dir) return
-    const label = `对话 · ${(content || '').replace(/\s+/g, ' ').slice(0, 30) || new Date().toLocaleTimeString('zh-CN', { hour12: false })}`
+    const label = `对话 · ${(content || '').replace(/\s+/g, ' ').slice(0, 30) || hhmmss()}`
     fetch('/api/git/checkpoint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, label }) })
       .then(r => r.json())
       .then(r => {
@@ -173,7 +174,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
       blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
       name = `巨天对话-${date}.txt`
     } else {
-      const md = ['# 对话导出', `> ${new Date().toLocaleString()} · 巨天agent`, '', ...messages.map(m => m.role === 'user' ? `## ❯ 用户\n\n${m.content}\n` : `## ● 巨天\n\n${m.content}\n`)].join('\n')
+      const md = ['# 对话导出', `> ${dateTimeCN()} · 巨天agent`, '', ...messages.map(m => m.role === 'user' ? `## ❯ 用户\n\n${m.content}\n` : `## ● 巨天\n\n${m.content}\n`)].join('\n')
       blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
       name = `巨天对话-${date}.md`
     }

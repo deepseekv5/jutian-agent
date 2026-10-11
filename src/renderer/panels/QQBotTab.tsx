@@ -3,6 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import { getSettingsSync, effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from '../engine/tools'
+import { hhmmss } from '../utils/datetime'
 
 /**
  * QQ 机器人接入（双模式）
@@ -106,7 +107,7 @@ export default function QQBotTab() {
   }, [msgs])
 
   const pushMsg = useCallback((m: Omit<ChatMsg, 'id' | 'time'>) => {
-    setMsgs(prev => [...prev.slice(-99), { ...m, id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) }])
+    setMsgs(prev => [...prev.slice(-99), { ...m, id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, time: hhmmss() }])
   }, [])
 
   const shortId = (s: string) => (s && s.length > 8 ? `…${s.slice(-6)}` : s)
@@ -163,7 +164,7 @@ export default function QQBotTab() {
   const pushToolMsg = useCallback((chatKey: string, chatLabel: string, name: string, text: string, status: 'running' | 'done') => {
     setMsgs(prev => [...prev.slice(-99), {
       id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, direction: 'in', chatKey, chatLabel,
-      sender: name, text, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), kind: 'tool', status,
+      sender: name, text, time: hhmmss(), kind: 'tool', status,
     }])
   }, [])
 

@@ -13,6 +13,7 @@ import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import ContextGauge, { type ContextPart } from '../chat/ContextGauge'
+import { dateTimeCN } from '../utils/datetime'
 
 const CODE_TOOLS: ToolDef[] = [
   { name: 'read_file', description: '读取项目中的文本文件内容。', parameters: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'number' }, limit: { type: 'number' } }, required: ['path'] } },
@@ -330,7 +331,7 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
       if (messages.length === 0) { pushLocalMsg('没有可导出的对话。'); return true }
       const md = [
         `# ${projectName} — Code 对话记录`,
-        `> 导出时间：${new Date().toLocaleString()}\u3000模型：${settings.model || 'default'}`,
+        `> 导出时间：${dateTimeCN()}\u3000模型：${settings.model || 'default'}`,
         '',
         ...messages.map(m => m.role === 'user'
           ? `## ❯ 用户\n\n${m.content.split('\n--- 附加文件 ---\n')[0]}\n`

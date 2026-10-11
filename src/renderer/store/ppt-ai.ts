@@ -1,5 +1,6 @@
 import type { GenerateOptions, SlideSpec, LayoutId, ChartKind } from '../types/ppt'
 import { getSettingsSync, effectiveApiKey } from './storage'
+import { dateCN } from '../utils/datetime'
 
 /**
  * PPT AI 智能生成：由大模型根据主题产出完整大纲与内容（JSON），
@@ -109,7 +110,7 @@ function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null 
     }
     const quote = item.quote as { text?: unknown; author?: unknown } | null
     if (quote && typeof quote.text === 'string') spec.quote = { text: quote.text.trim().slice(0, 60), author: typeof quote.author === 'string' ? quote.author.trim().slice(0, 16) : 'AI' }
-    if (layout === 'cover') { spec.background = 'gradient'; if (!spec.subtitle) spec.subtitle = new Date().toLocaleDateString('zh-CN') }
+    if (layout === 'cover') { spec.background = 'gradient'; if (!spec.subtitle) spec.subtitle = dateCN() }
     if (layout === 'closing') { spec.background = 'deep' }
     // 基本校验：每个版式的必需字段
     const need: Record<string, string> = { cover: 'title', agenda: 'bullets', bullets: 'bullets', stats: 'stats', compare: 'columns', timeline: 'steps', twoColumn: 'columns', imageText: 'bullets', quote: 'quote', closing: 'title', table: 'table', chart: 'chart', gallery: 'images' }
@@ -128,7 +129,7 @@ function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null 
   // cover/closing 兜底补齐
   if (specs.length < 3) return null
   if (specs[0].layout !== 'cover') {
-    specs.unshift({ layout: 'cover', title: opts.topic, subtitle: new Date().toLocaleDateString('zh-CN'), eyebrow: 'AI 生成', background: 'gradient' } as SlideSpec)
+    specs.unshift({ layout: 'cover', title: opts.topic, subtitle: dateCN(), eyebrow: 'AI 生成', background: 'gradient' } as SlideSpec)
   }
   if (specs[specs.length - 1].layout !== 'closing') {
     specs.push({ layout: 'closing', title: '感谢聆听', subtitle: 'Q & A', background: 'deep' } as SlideSpec)

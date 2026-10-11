@@ -7,6 +7,7 @@ import { useTheme } from '../hooks/useTheme'
 import { textForSpeech } from '../utils/tts'
 import BrandMark from '../app/BrandMark'
 import DiffCardView from '../app/DiffCardView'
+import { hhmm } from '../utils/datetime'
 
 export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const { c } = useTheme()
@@ -682,7 +683,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               </span>
             )}
             <span className="text-[10.5px] font-mono ml-1.5 select-none" style={{ color: c.textMuted }}>
-              {(() => { const d = createdAt ? new Date(createdAt) : null; return d && !isNaN(d.getTime()) ? d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '' })()}
+              {(() => { const d = createdAt ? new Date(createdAt) : null; return d && !isNaN(d.getTime()) ? hhmm(d) : '' })()}
             </span>
           </div>
         )}

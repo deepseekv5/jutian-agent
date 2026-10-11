@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useNoticeBadge, getNotices, clearNotices, mergeServerNotices, type AppNotice } from '../notify'
+import { dateCN } from '../utils/datetime'
 
 const TYPE_META: Record<AppNotice['type'], { icon: string; label: string }> = {
   swarm: { icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: '集群' },
@@ -60,7 +61,7 @@ export default function NotificationCenter() {
     if (d < 60000) return '刚刚'
     if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前'
     if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前'
-    return new Date(t).toLocaleDateString('zh-CN')
+    return dateCN(t)
   }
 
   return (

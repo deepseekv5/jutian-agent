@@ -17,6 +17,7 @@ import remarkGfm from 'remark-gfm'
 import { reportError } from '../app/ErrorToast'
 import { onResearchSeed } from '../engine/researchBridge'
 import { ssePayloads } from '../../shared/sse'
+import { dateCN } from '../utils/datetime'
 
 /* ─── 与服务端 SSE 事件对应的类型 ─── */
 type Phase = 'idle' | 'plan' | 'search' | 'fetch' | 'write' | 'done' | 'error'
@@ -439,7 +440,7 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
                       <div className="text-[11px] leading-snug break-all" style={{ color: c.textSecondary }}>{h.title}</div>
                       <div className="flex items-center justify-between mt-0.5">
                         <span className="text-[9.5px]" style={{ color: c.textMuted }}>
-                          {new Date(h.ts).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN')}
+                          {dateCN(h.ts, lang === 'en' ? 'en-US' : 'zh-CN')}
                         </span>
                         <button onClick={e => { e.stopPropagation(); removeHistory(h.file) }}
                           className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"

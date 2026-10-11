@@ -1,4 +1,5 @@
 import type { GenerateOptions, GraphicKind, SlideSpec } from '../types/ppt';
+import { dateCN } from '../utils/datetime'
 
 const GRAPHIC_CYCLE: GraphicKind[] = ['orbit', 'nodes', 'bars', 'rings', 'ladder', 'grid', 'abstract', 'wave'];
 
@@ -73,7 +74,7 @@ function detectScene(topic: string): string {
 }
 
 function fillTemplate(spec: SlideSpec, opts: GenerateOptions): SlideSpec {
-  const today = new Date().toLocaleDateString('zh-CN');
+  const today = dateCN();
   const fill = (s: string) => s.replace('{topic}', opts.topic).replace('{date}', today);
   const filled: SlideSpec = { ...spec };
   filled.name = spec.name ? fill(spec.name) : undefined;

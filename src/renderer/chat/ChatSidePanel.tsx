@@ -8,6 +8,7 @@ import SubAgentTracker from '../app/SubAgentTracker'
 import type { Message, Settings } from '../types'
 import { estimateTokens, fmtTokens } from '../utils/tokens'
 import { effectiveApiKey } from '../store/storage'
+import { dateTimeCN } from '../utils/datetime'
 
 type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
@@ -23,10 +24,10 @@ function exportSessionMarkdown(messages: Message[]) {
   if (!messages.length) return
   const firstUser = messages.find(m => m.role === 'user')
   const title = (firstUser?.content || '对话').trim().split('\n')[0].slice(0, 40) || '对话'
-  const lines: string[] = [`# ${title}`, '', `- 导出时间：${new Date().toLocaleString('zh-CN')}`, `- 消息数：${messages.length}`, '', '---', '']
+  const lines: string[] = [`# ${title}`, '', `- 导出时间：${dateTimeCN()}`, `- 消息数：${messages.length}`, '', '---', '']
   for (const m of messages) {
     const who = m.role === 'user' ? '🧑 我' : m.role === 'assistant' ? '🤖 巨天' : m.role
-    const ts = (m as any).created_at ? new Date((m as any).created_at).toLocaleString('zh-CN') : ''
+    const ts = (m as any).created_at ? dateTimeCN((m as any).created_at) : ''
     lines.push(`## ${who}${ts ? `  ·  ${ts}` : ''}`, '')
     lines.push(m.content || '（无文本内容）')
     if (Array.isArray(m.tool_calls) && m.tool_calls.length) {

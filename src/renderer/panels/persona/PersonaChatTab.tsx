@@ -32,6 +32,7 @@ import {
 import PersonaConsent, { loadIdentity, saveIdentity } from './PersonaConsent'
 import PersonaMemoryPanel from './PersonaMemoryPanel'
 import PersonaEditor from './PersonaEditor'
+import { dateTimeCN } from '../../utils/datetime'
 
 type View = 'chat' | 'memory' | 'disclaimer' | 'create' | 'edit'
 
@@ -213,7 +214,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
     const lines = [
       EXPORT_LABEL_HEADER,
       `角色：${active.name}（${active.tagline}）`,
-      `导出时间：${new Date().toLocaleString('zh-CN')}`,
+      `导出时间：${dateTimeCN()}`,
       '='.repeat(40),
       '',
       ...msgs.map((m) => (m.role === 'user' ? `【我】${m.content}` : `【${active.name} · ${AI_LABEL}】${m.content}`)),
