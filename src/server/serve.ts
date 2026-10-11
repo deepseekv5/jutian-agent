@@ -377,6 +377,16 @@ async function shell(a) {
   const n = a.command.toLowerCase();
   if (BLOCKED.some((b) => n.includes(b))) return { success: false, error: "已阻止" };
   const cwd = safeCwd(a.workdir);
+  // 超时上限：模型偶尔会传超大 timeout（如 99999 秒）把对话挂住；
+  // 上限 10 分钟，同时下限 1 秒防止 0 被当成"无超时"
+  const timeoutSec = Math.min(Math.max(Number(a.timeout) || 30, 1), 600);
+  const opts = {
+    timeout: timeoutSec * 1e3,
+    maxBuffer: MAX_OUT,
+    // 超时后先 SIGTERM；若进程不理会（npm/docker 等会自己收尾），
+    // killSignal 不足以终止，需要 escalation —— 见下方 catch 处理
+    killSignal: "SIGTERM",
+  };
   try {
     let r;
     if (IS_WIN) {
@@ -386,12 +396,24 @@ async function shell(a) {
       // 2) -NoProfile 避免用户 profile 拖慢/污染输出。
       const wrapped = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${a.command}`;
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wrapped],
-        { timeout: (a.timeout || 30) * 1e3, maxBuffer: MAX_OUT, env: process.env, cwd, encoding: "utf8" });
+        { ...opts, env: process.env, cwd, encoding: "utf8" });
     } else {
-      r = await execAsync("zsh", ["-c", a.command], { timeout: (a.timeout || 30) * 1e3, maxBuffer: MAX_OUT, env: { ...process.env, TERM: "dumb" }, cwd });
+      r = await execAsync("zsh", ["-c", a.command], { ...opts, env: { ...process.env, TERM: "dumb" }, cwd });
     }
     return { success: true, output: (r.stdout || "").trim() + ((r.stderr || "").trim() ? `\n[stderr]\n${r.stderr.trim()}` : "") };
   } catch (e) {
+    // 超时的错误信息必须可辨识：默认的 "Command failed: xxx" 让人分不清
+    // 是命令本身失败还是被超时中断，模型会据此做出错误判断（比如以为
+    // 命令语法有误而反复改参数重试）
+    const killed = e.killed === true || e.signal === "SIGTERM" || /timed?\s*out/i.test(String(e.message || ""));
+    if (killed) {
+      return {
+        success: false,
+        output: e.stdout || "",
+        error: `命令超时（${timeoutSec} 秒）已被中断。若任务确实需要更久，请拆分执行；`
+          + `若是长驻进程（如 dev server），请改用后台方式启动。`,
+      };
+    }
     return { success: false, output: e.stdout || "", error: e.message };
   }
 }
