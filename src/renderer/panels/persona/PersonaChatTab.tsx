@@ -82,7 +82,28 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
   const updateTTS = (cfg: Partial<PersonaTTSConfig>) => { const n = { ...tts, ...cfg }; setTTS(n); saveTTSConfig(n) }
   const speakMsg = useCallback(async (id: string, content: string) => {
     // 再点一次 = 停止
-    if (speakingId === id) { audioRef.current?.pause(); audioRef.current = null; setSpeakingId(null); return }
+    if (speakingId === id) {
+      audioRef.current?.pause(); audioRef.current = null
+      try { window.speechSynthesis?.cancel() } catch {}
+      setSpeakingId(null); return
+    }
+    // 朗读多端适配：TTS 服务失败时降级到浏览器/系统内置语音（Win/macOS/手机端均有）
+    const browserFallback = () => {
+      try {
+        const synth = window.speechSynthesis
+        if (!synth) return false
+        const spoken = content.replace(/```[\s\S]*?```/g, '（代码已省略）').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/[*_#>`|]/g, '').slice(0, 1200)
+        const u = new SpeechSynthesisUtterance(spoken)
+        u.rate = Math.max(0.5, Math.min(2, tts.speed || 1))
+        const voices = synth.getVoices()
+        const zh = voices.find(v => v.lang.startsWith('zh')) || voices.find(v => v.lang === 'zh-CN')
+        if (zh) u.voice = zh
+        u.onend = () => setSpeakingId(null); u.onerror = () => setSpeakingId(null)
+        synth.cancel(); synth.speak(u)
+        setSpeakingId(id)
+        return true
+      } catch { return false }
+    }
     try {
       audioRef.current?.pause()
       const url = await speakText(content, tts)
@@ -92,7 +113,9 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
       audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; setSpeakingId(null) }
       setSpeakingId(id)
       await audio.play()
-    } catch { setSpeakingId(null) }
+    } catch {
+      if (!browserFallback()) setSpeakingId(null)
+    }
   }, [speakingId, tts])
 
   const needConsent = !identity.consentedAt || !identity.age

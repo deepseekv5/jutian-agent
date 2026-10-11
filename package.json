@@ -144,7 +144,36 @@
         }
       ],
       "icon": "electron/icon.ico",
-      "artifactName": "jutian-agent-${version}-setup.${ext}"
+      "artifactName": "jutian-agent-${version}-setup.${ext}",
+      "extraResources": [
+        {
+          "from": "python-runtime",
+          "to": "python-runtime",
+          "filter": [
+            "bin/**",
+            "Scripts/**",
+            "lib/python3.11/site-packages/**",
+            "!**/onnxruntime/**",
+            "!**/av/**",
+            "!**/pip/**",
+            "!**/pip-*.dist-info/**",
+            "!**/setuptools/**",
+            "!**/*.pyc",
+            "!**/__pycache__/**",
+            "!**/tests/**",
+            "!**/test_*.py"
+          ]
+        },
+        {
+          "from": "${env.EDGE_TTS_DIR}",
+          "to": "edge-tts",
+          "filter": [
+            "**/*",
+            "!__pycache__",
+            "!*.pyc"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
