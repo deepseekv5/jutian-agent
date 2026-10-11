@@ -27,7 +27,6 @@ export default function SubAgentTracker() {
 
   if (!batch || dismissed === batch.id || batch.agents.length === 0) return null
   const done = batch.agents.filter(a => a.status === 'done').length
-  const allDone = !batch.running
 
   return (
     <div className="mx-2 mb-2 rounded-xl border overflow-hidden shrink-0" style={{ borderColor: c.border, background: c.surfaceCard }}>

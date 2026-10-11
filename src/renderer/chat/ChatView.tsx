@@ -29,7 +29,7 @@ const QUICK_PROMPTS = [
 ]
 
 export default function ChatView({ messages, streamingId, onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage }: Props) {
-  const { lang, t } = useLanguage()
+  const { lang } = useLanguage()
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickToBottomRef = useRef(true)

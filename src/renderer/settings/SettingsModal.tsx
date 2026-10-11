@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
 import { reportError } from '../app/ErrorToast';
+import { loadVisualSettings, saveVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
 import CliInstallModal from '../app/CliInstallModal';
 import { useLanguage } from '../hooks/useLanguage';
 import { APP_VERSION } from '../brand'
@@ -182,12 +183,11 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const importRef = useRef<HTMLInputElement>(null);
   const workDirSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [visual, setVisual] = useState(() => {
-    try { const raw = localStorage.getItem('visual-settings'); return raw ? JSON.parse(raw) : { glassBlur: 12, bgImage: '/bg_upload.mp4', bgOpacityLight: 0.5, bgOpacityDark: 0.6 };
-    } catch { return { glassBlur: 12, bgImage: '/bg_upload.mp4', bgOpacityLight: 0.5, bgOpacityDark: 0.6 }; }
-  });
+  // 视觉设置：默认值、读写与壁纸回落规则统一走 store/visual，
+  // 不再在这里内联复制一份（此前 App.tsx 与这里各写一份，改一处忘一处就会漂移）
+  const [visual, setVisual] = useState<VisualSettings>(loadVisualSettings);
 
-  function saveVisual(v: typeof visual) { setVisual(v); localStorage.setItem('visual-settings', JSON.stringify(v)); document.documentElement.style.setProperty('--glass-blur', `${v.glassBlur}px`); window.dispatchEvent(new Event('visual-changed')); }
+  function saveVisual(v: VisualSettings) { setVisual(v); saveVisualSettings(v); }
 
   useEffect(() => {
     (window as any).electronAPI?.getAutoLaunch?.().then(setAutoLaunch).catch(() => {})
@@ -1148,14 +1148,14 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               <Sub c={c} title={t('动态壁纸', 'Dynamic Wallpaper')}>
                 <p className="text-[11px] mb-3" style={{ color: c.textTertiary }}>{t('默认使用内置动态视频壁纸，可切换为静态图、自定义上传或关闭。', 'Defaults to the built-in dynamic video wallpaper. Switch to a still image, upload your own, or turn it off.')}</p>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-20 h-14 rounded-lg overflow-hidden shrink-0" style={{ backgroundImage: `url('${visual.bgImage || '/bg_upload.mp4'}')`, backgroundSize: 'cover', backgroundPosition: 'center', background: c.bgInput }} />
+                  <div className="w-20 h-14 rounded-lg overflow-hidden shrink-0" style={{ backgroundImage: `url('${resolveWallpaper(visual.bgImage)}')`, backgroundSize: 'cover', backgroundPosition: 'center', background: c.bgInput }} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-mono truncate" style={{ color: c.textSecondary }}>{visual.bgImage || '/bg_upload.mp4'}</div>
+                    <div className="text-[12px] font-mono truncate" style={{ color: c.textSecondary }}>{resolveWallpaper(visual.bgImage)}</div>
                     <div className="text-[10.5px]" style={{ color: c.textMuted }}>{/\.(mp4|mov|webm)$/i.test(visual.bgImage||'') ? '动态视频' : (visual.bgImage ? '静态图片' : '跟随内置视频')}</div>
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap mb-3">
-                  <button type="button" onClick={() => saveVisual({ ...visual, bgImage: '/bg_upload.mp4' })} className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium" style={{ background: visual.bgImage==='/bg_upload.mp4' ? c.bgActive : c.bgInput, color: c.textHead, border: `1px solid ${c.border}` }}>{t('内置动态视频', 'Built-in video')}</button>
+                  <button type="button" onClick={() => saveVisual({ ...visual, bgImage: '/bg_upload.mp4' })} className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium" style={{ background: visual.bgImage===DEFAULT_VISUAL.bgImage ? c.bgActive : c.bgInput, color: c.textHead, border: `1px solid ${c.border}` }}>{t('内置动态视频', 'Built-in video')}</button>
                   <button type="button" onClick={handleBgUpload} className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium" style={{ background: c.accent, color: c.accentText }}>{t('上传图片/视频', 'Upload')}</button>
                   <button type="button" onClick={() => saveVisual({ ...visual, bgImage: '' })} className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium" style={{ background: (visual.bgImage || '') === '' ? 'rgba(16,163,127,.15)' : c.bgInput, color: (visual.bgImage || '') === '' ? c.accent : c.textSecondary, border: `1px solid ${(visual.bgImage || '') === '' ? 'rgba(16,163,127,.4)' : c.border}` }}>{t('关闭壁纸（渐变）', 'Off → gradient')}</button>
                 </div>

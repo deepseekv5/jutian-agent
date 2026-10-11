@@ -106,5 +106,5 @@ export function localGenerate(opts: GenerateOptions): SlideSpec[] {
     specs = [...specs, ...extras];
   }
 
-  return specs.map((s, i) => fillTemplate({ ...s }, opts));
+  return specs.map((s) => fillTemplate({ ...s }, opts));
 }

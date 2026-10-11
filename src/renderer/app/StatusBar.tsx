@@ -19,6 +19,8 @@ interface Props {
 export default function StatusBar({ serverOk, model, workDir }: Props) {
   const { c } = useTheme()
   const minuteKey = Math.floor(Date.now() / 60000)
+  // minuteKey 只作为「分钟时钟」参与依赖：每分钟变化一次以触发用量重算，回调内不直接引用它
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const usage = useMemo(() => summarizeUsage(1).today, [minuteKey])
   const usedTokens = usage.prompt + usage.completion
 

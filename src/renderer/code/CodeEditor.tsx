@@ -57,7 +57,7 @@ const ghostTextField = StateField.define<string | null>({
 
 const ghostTextPlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet
-  constructor(view: EditorView) {
+  constructor(_view: EditorView) {
     this.decorations = Decoration.none
   }
   update(update: ViewUpdate) {
@@ -383,7 +383,7 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
       })
       setTimeout(() => setAiError(false), 2500)
     }
-  }, [aiEnabled, onAICompletionEvent])
+  }, [aiEnabled, onAICompletionEvent, settings])
 
   // ====== Editor 生命周期 ======
 
@@ -522,6 +522,9 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
       view.destroy()
       viewRef.current = null
     }
+    // 编辑器仅按「文件路径/语言」重建：主题走专门的热切换 effect，内容变更走 dispatch；
+    // tab/c/回调每次渲染都是新引用，纳入依赖会导致每次输入都销毁重建编辑器
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab?.path, tab?.language])
 
   // 主题热切换：深浅色变化即重配编辑器主题（含语法高亮）
@@ -626,6 +629,8 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
         }
       }, 500)
     })
+    // tab 对象在每次内容编辑后都会换新引用：纳入依赖会令 ghost 扩展随每次输入重建并按期重配，故只跟语言
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiEnabled, tab?.language, settings, onAICompletionEvent])
 
   useEffect(() => {

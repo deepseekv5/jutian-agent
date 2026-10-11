@@ -58,7 +58,7 @@ interface Props {
 
 export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenType, toolServerOk, onOpenSettings, onOpenWorkDir, workingSessionIds }: Props) {
   const { c } = useTheme()
-  const { lang, t } = useLanguage()
+  const { lang } = useLanguage()
   const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
   // 氛围模式状态（App.tsx 渲染光晕层，此处只维护开关）
   const [ambient, setAmbient] = useState(() => localStorage.getItem('lyclaw_ambient') === '1')

@@ -1,6 +1,5 @@
 // Terminal Panel
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useTheme } from '../hooks/useTheme'
 
 interface Props {
   cwd?: string
@@ -13,7 +12,6 @@ interface HistoryEntry {
 }
 
 export default function TerminalPanel({ cwd }: Props) {
-  const { c } = useTheme()
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [input, setInput] = useState('')
   const [historyIdx, setHistoryIdx] = useState(-1)

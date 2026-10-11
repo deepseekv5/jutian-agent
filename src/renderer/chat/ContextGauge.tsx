@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../hooks/useTheme'
-import { CONTEXT_LIMIT, fmtTokens, fmtPercent, guessModelContext } from '../utils/tokens'
+import { CONTEXT_LIMIT, fmtTokens, fmtPercent } from '../utils/tokens'
 
 export interface ContextPart {
   label: string
@@ -16,7 +16,7 @@ interface Props {
 }
 
 /** 半圆环上下文仪表盘：显示用量占上下文窗口比例 + 各部分占比明细 */
-export default function ContextGauge({ parts, limit, compact = false }: Props) {
+export default function ContextGauge({ parts, limit, compact: _compact = false }: Props) {
   const effectiveLimit = limit ?? CONTEXT_LIMIT
   const { c } = useTheme()
   const [open, setOpen] = useState(false)

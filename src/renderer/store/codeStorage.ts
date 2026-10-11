@@ -14,7 +14,7 @@ const ACTIVE_KEY = 'lyclaw_code_active'
 const OPEN_TABS_KEY = 'lyclaw_code_tabs'
 
 // ─── API helpers ───
-async function apiPost(path: string, body: any): Promise<any | null> {
+async function apiPost(path: string, body: unknown): Promise<unknown> {
   try {
     const res = await fetch(path, {
       method: 'POST',
@@ -25,7 +25,7 @@ async function apiPost(path: string, body: any): Promise<any | null> {
   } catch { return null }
 }
 
-async function apiGet(path: string): Promise<any | null> {
+async function apiGet(path: string): Promise<unknown> {
   try {
     const res = await fetch(path)
     return res.ok ? await res.json() : null
@@ -117,7 +117,8 @@ export async function restoreFromBackend(): Promise<CodeProject[]> {
   try {
     const data = await apiGet('/api/code/projects')
     if (data && Array.isArray(data) && data.length > 0) {
-      const projects: CodeProject[] = data.map((row: any) => ({
+      // SQLite 行形状（下划线命名）→ 前端 CodeProject
+      const projects: CodeProject[] = (data as Array<{ id: string; name: string; root_path: string; created_at: string; updated_at: string }>).map((row) => ({
         id: row.id,
         name: row.name,
         rootPath: row.root_path,

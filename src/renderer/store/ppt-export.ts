@@ -1,5 +1,5 @@
-import type { ChartBlock, Deck, DeckTheme, GraphicKind, ImageBlock, Slide, TableBlock, Block } from '../types/ppt'
-import { SLIDE_W, SLIDE_H } from '../types/ppt'
+import type { ChartBlock, Deck, DeckTheme, GraphicBlock, GraphicKind, ImageBlock, Slide, TableBlock, Block, BlockStyle, BulletsBlock, QuoteBlock, StatsBlock, StepsBlock, TextBlock } from '../types/ppt'
+import { SLIDE_W } from '../types/ppt'
 
 /**
  * 巨天agent PPT 导出 —— 生成真正的 .pptx（PowerPoint / Keynote / WPS 可直接打开并继续编辑）
@@ -132,7 +132,7 @@ export async function exportDeckToPptx(deck: Deck, themeInput?: PptThemeInput): 
   // 允许只传主题 id / 强调色 / 部分主题（向后兼容），并与默认主题深合并
   const theme: DeckTheme = (() => {
     if (themeInput && typeof themeInput === 'object') {
-      const t: any = themeInput
+      const t = themeInput
       return {
         ...DEFAULT_THEME,
         ...t,
@@ -176,7 +176,13 @@ export async function exportDeckToPptx(deck: Deck, themeInput?: PptThemeInput): 
   await pptx.writeFile({ fileName })
 }
 
-function applyBackground(s: any, slide: Slide, pal: Palette, pptx: any) {
+/** pptxgenjs 实例与幻灯片类型（动态 import 的类型提取，供模块级渲染函数共用） */
+type PptxInstance = InstanceType<typeof import('pptxgenjs').default>
+type PptxSlide = ReturnType<PptxInstance['addSlide']>
+/** pptxgenjs 图表名联合类型（core-enums 导出） */
+type CHART_NAME = 'area' | 'bar' | 'bar3D' | 'bubble' | 'doughnut' | 'line' | 'pie' | 'radar' | 'scatter'
+
+function applyBackground(s: PptxSlide, slide: Slide, pal: Palette, pptx: PptxInstance) {
   const mode = slide.background.mode
   if (mode === 'gradient' || mode === 'deep') {
     s.background = { color: SLIDE_BG_DARK }
@@ -209,11 +215,11 @@ function applyBackground(s: any, slide: Slide, pal: Palette, pptx: any) {
   s.background = { color: SLIDE_BG_LIGHT }
 }
 
-function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
+function addBlock(s: PptxSlide, block: Block, pal: Palette, pptx: PptxInstance) {
   const x = px(block.box.x), y = px(block.box.y), w = px(block.box.w), h = px(block.box.h)
-  const st: any = block.style || {}
-  const align = (st.align || 'left') as any
-  const valign = (st.valign || 'top') as any
+  const st: BlockStyle = block.style || {}
+  const align = st.align || 'left'
+  const valign = st.valign || 'top'
 
   // 通用底/边框（卡片类）
   const fillToken = st.fill && st.fill !== 'none' ? st.fill : null
@@ -233,7 +239,7 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     case 'subtitle':
     case 'paragraph':
     case 'eyebrow': {
-      const b = block as any
+      const b = block as TextBlock
       const defSize = block.type === 'title' ? 74 : block.type === 'subtitle' ? 26 : block.type === 'eyebrow' ? 18 : 22
       s.addText(b.text || '', {
         x: x + pad, y: y + pad, w: w - pad * 2, h: h - pad * 2,
@@ -261,7 +267,7 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     }
 
     case 'bullets': {
-      const b = block as any
+      const b = block as BulletsBlock
       const items: string[] = b.items || []
       const icon: string = b.icon || 'dot'
       const runs = items.map((t, i) => ({
@@ -284,7 +290,7 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     }
 
     case 'stats': {
-      const items: { value: string; label: string }[] = (block as any).items || []
+      const items: { value: string; label: string }[] = (block as StatsBlock).items || []
       if (!items.length) break
       const cellW = (w - pad * 2) / items.length
       items.forEach((it, i) => {
@@ -302,8 +308,8 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     }
 
     case 'steps': {
-      const items: { title: string; desc?: string }[] = (block as any).items || []
-      const numbered = (block as any).numbered !== false
+      const items: { title: string; desc?: string }[] = (block as StepsBlock).items || []
+      const numbered = (block as StepsBlock).numbered !== false
       const n = items.length || 1
       const stepW = w / n
       items.forEach((it, i) => {
@@ -339,7 +345,8 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     }
 
     case 'quote': {
-      const b = block as any
+      // 兼容两种数据形状：QuoteBlock.text/author 或旧数据嵌套的 quote 对象
+      const b = block as QuoteBlock & { quote?: { text?: string; author?: string } }
       s.addText(`“${b.quote?.text || b.text || ''}”`, {
         x, y, w, h: h * 0.72,
         fontSize: pt(st.fontSize || 34), italic: true,
@@ -414,7 +421,7 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
       const b = block as ChartBlock
       if (!b.series?.length) break
       const data = b.series.map(se => ({ name: se.name || 'Series', labels: b.categories || [], values: se.values || [] }))
-      const typeMap: Record<string, any> = {
+      const typeMap: Record<ChartBlock['chart'], CHART_NAME> = {
         bar: pptx.ChartType.bar,
         line: pptx.ChartType.line,
         pie: pptx.ChartType.pie,
@@ -440,7 +447,7 @@ function addBlock(s: any, block: Block, pal: Palette, pptx: any) {
     }
 
     case 'graphic': {
-      drawGraphic(s, block as any, pal, pptx, { x, y, w, h })
+      drawGraphic(s, block as GraphicBlock, pal, pptx, { x, y, w, h })
       break
     }
 
@@ -460,7 +467,7 @@ function toPptxImageData(src: string): string | null {
 }
 
 /** 矢量图形 → PPTX 原生形状（可继续编辑，不再留白） */
-function drawGraphic(s: any, block: any, pal: Palette, pptx: any, r: { x: number; y: number; w: number; h: number }) {
+function drawGraphic(s: PptxSlide, block: GraphicBlock, pal: Palette, pptx: PptxInstance, r: { x: number; y: number; w: number; h: number }) {
   const kind: GraphicKind = block.graphic || 'abstract'
   const { x, y, w, h } = r
   const accent = hex(pal.accent)

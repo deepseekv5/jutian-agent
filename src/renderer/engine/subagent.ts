@@ -9,7 +9,7 @@
  */
 import { streamChat } from './stream'
 import { pushNotice } from '../notify'
-import type { Settings } from '../types'
+import type { Settings, ToolCall } from '../types'
 
 export interface SubAgentSpec { name: string; task: string }
 export interface SubAgentState {
@@ -74,12 +74,12 @@ export async function runSubagents(opts: {
             emit(batchId, states, true)
           }
         },
-        onToolStart: (tc: any) => {
+        onToolStart: (tc: ToolCall) => {
           toolName = tc?.name || 'tool'
           st.phase = '⚙ ' + toolName
           emit(batchId, states, true)
         },
-        onToolEnd: (tc: any) => { toolName = '' },
+        onToolEnd: (_tc: ToolCall) => { toolName = '' },
         onDone: (full: string) => { if (full) out = full },
         onError: (e: string) => { st.phase = '出错: ' + String(e).slice(0, 60) },
       },

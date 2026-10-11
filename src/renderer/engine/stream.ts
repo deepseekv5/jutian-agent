@@ -13,7 +13,7 @@
 import type { Settings, ToolCall, ToolDef } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
-import { executeTool, checkToolServer } from './tools'
+import { executeTool } from './tools'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -29,16 +29,35 @@ export interface StreamCallbacks {
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
 const CLIENT_TOOLS = new Set(['dispatch_subagents'])
 
+/** OpenAI 兼容的 tool_call 线上格式（随 messages 直接序列化发给上游） */
+interface WireToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+  index?: number
+}
+
+/** SSE delta 里解析出的原始 tool_call 片段（不同模型字段不全） */
+interface RawToolCallDelta {
+  index?: number
+  id?: string
+  function?: { name?: string; arguments?: string }
+}
+
 /**
  * 解析 SSE chunk 中的 delta，兼容不同模型的 tool_calls 格式。
- * 
+ *
  * OpenAI 格式：delta.tool_calls[{index, id, function: {name, arguments}}]
  * 某些模型可能用 delta.function_call 或其他格式
  */
-function parseToolCallsFromDelta(delta: any): Array<{index: number; id?: string; name?: string; args?: string}> | null {
+function parseToolCallsFromDelta(delta: unknown): Array<{index: number; id?: string; name?: string; args?: string}> | null {
+  const d = delta as {
+    tool_calls?: unknown
+    function_call?: { id?: string; name?: string; arguments?: string }
+  } | null | undefined
   // 标准 OpenAI 格式
-  if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
-    return delta.tool_calls.map((tc: any) => ({
+  if (d?.tool_calls && Array.isArray(d.tool_calls)) {
+    return (d.tool_calls as RawToolCallDelta[]).map((tc) => ({
       index: tc.index ?? 0,
       id: tc.id || undefined,
       name: tc.function?.name || undefined,
@@ -46,15 +65,15 @@ function parseToolCallsFromDelta(delta: any): Array<{index: number; id?: string;
     }))
   }
   // 兼容：某些模型用 function_call（单函数）
-  if (delta.function_call) {
+  if (d?.function_call) {
     return [{
       index: 0,
-      id: delta.function_call.id || undefined,
-      name: delta.function_call.name || undefined,
-      args: delta.function_call.arguments || undefined,
+      id: d.function_call.id || undefined,
+      name: d.function_call.name || undefined,
+      args: d.function_call.arguments || undefined,
     }]
   }
-  
+
   // 兼容：有些模型在 choices 层直接返回 tool_calls
   return null
 }
@@ -64,7 +83,7 @@ function parseToolCallsFromDelta(delta: any): Array<{index: number; id?: string;
  */
 export async function streamChat(
   settings: Settings,
-  messages: { role: string; content?: string; tool_calls?: any[]; tool_call_id?: string }[],
+  messages: { role: string; content?: string; tool_calls?: WireToolCall[]; tool_call_id?: string }[],
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
   extraTools?: ToolDef[],  // 来自 Skill 的额外工具
@@ -135,9 +154,10 @@ export async function streamChat(
         }
       }
       await callbacks.onDone(fullContent, [], fullThinking || undefined)
-    } catch (err: any) {
-      if (err.name === 'AbortError') return
-      callbacks.onError(err.message || 'LM Studio 连接错误')
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string }
+      if (e.name === 'AbortError') return
+      callbacks.onError(e.message || 'LM Studio 连接错误')
     }
     return
   }
@@ -299,7 +319,7 @@ export async function streamChat(
       for (const tc of toolCalls) {
         if (signal?.aborted) return
 
-        let args: Record<string, any>
+        let args: Record<string, unknown>
         try { args = JSON.parse(tc.arguments || '{}') } catch { args = {} }
 
         const toolCallObj: ToolCall = {
@@ -324,7 +344,7 @@ export async function streamChat(
           toolResult = result.success ? result.output : `❌ 错误: ${result.error}`
           toolCallObj.status = result.success ? 'done' : 'error'
           toolCallObj.result = toolResult
-          if ((result as any).changeId) (toolCallObj as any).changeId = (result as any).changeId
+          if (result.changeId) toolCallObj.changeId = result.changeId
         }
         toolCallObj.finished_at = new Date().toISOString()
 
@@ -340,9 +360,10 @@ export async function streamChat(
 
       // 循环回到顶部，将所有消息（含工具结果）发回 LLM
 
-    } catch (err: any) {
-      if (err.name === 'AbortError') return
-      callbacks.onError(err.message || 'Unknown error')
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string }
+      if (e.name === 'AbortError') return
+      callbacks.onError(e.message || 'Unknown error')
       return
     }
   }

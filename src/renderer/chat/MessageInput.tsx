@@ -171,7 +171,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const { c, theme } = useTheme()
-  const { lang, t } = useLanguage()
+  const { t } = useLanguage()
   const glass = theme === 'dark' ? 'rgba(45,45,48,0.62)' : 'rgba(255,255,255,0.66)'
 
   // --- 语音输入 ---
@@ -429,17 +429,19 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   }
 
   // 上下文上限：设置手动设置值优先；仍是默认 1M 时按模型名推断真实窗口
+  const configuredCtxWindow = settings?.contextWindow
   const effectiveCtxLimit = useMemo(() => {
-    const configured = (settings as any)?.contextWindow
-    if (configured && configured >= 4000 && configured !== 1000000) return configured
+    if (configuredCtxWindow && configuredCtxWindow >= 4000 && configuredCtxWindow !== 1000000) return configuredCtxWindow
     return guessModelContext(currentModel || settings?.model)
-  }, [(settings as any)?.contextWindow, currentModel, settings?.model])
+  }, [configuredCtxWindow, currentModel, settings?.model])
 
   // 接收全局截图（快捷键/按钮触发）→ 加入附件
   useEffect(() => {
     if (!incomingScreenshot) return
     setAttachedFiles(prev => [...prev, { path: '', name: `截图 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}.png`, size: 0, dataUrl: incomingScreenshot }])
     onScreenshotConsumed?.()
+    // onScreenshotConsumed 由父组件内联传入（每次渲染新引用）：纳入依赖会在消费完成前重复追加同一截图，故按挂载期快照处理
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingScreenshot])
 
   /** 手动截屏：请求主进程抓屏 → 打开框选浮层（由 App 统一渲染与派发） */
@@ -667,7 +669,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
     }
     parts.push({ label: '当前输入', tokens: estimateTokens(value), color: '#f59e0b' })
     return parts
-  }, [settings, msgsSig, value])
+  }, [settings, msgsSig, value, messages, c.accent, c.textTertiary])
 
   const canSend = !!value.trim()
 

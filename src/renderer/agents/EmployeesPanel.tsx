@@ -11,7 +11,7 @@ import {
   loadGroups, saveGroups, groupMembers, groupBoss, createGroup,
   type Employee, type Group,
 } from '../../shared/employees'
-import { CMEmpty, CMPrimaryBtn, CMInput, CMBtn } from '../code/ui'
+import { CMEmpty, CMPrimaryBtn, CMInput } from '../code/ui'
 import { AgentAvatar } from './agent/AgentKit'
 
 const uid = () => 'emp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
@@ -20,7 +20,7 @@ interface LiveState { running: boolean; phase: string; plan: any[] }
 
 const BOSS_ICON = 'M5 3l4.5 9L5 21h14l-4.5-9L19 3z'
 
-export default function EmployeesPanel({ onClose, onOpenTab }: {
+export default function EmployeesPanel({ onClose: _onClose, onOpenTab }: {
   onClose: () => void
   onOpenTab?: (type: any, opts?: { refId?: string; title?: string; iconPath?: string }) => void
 }) {
@@ -328,7 +328,6 @@ function GroupModal({ c, employees, group, onClose, onCommit }: {
   const [bossId, setBossId] = useState<string>(group?.bossId || '')
 
   const toggle = (id: string) => setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
-  const ok = name.trim().length > 0 && picked.length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-fade-in" style={{ background: c.modalOverlay }} onClick={onClose}>

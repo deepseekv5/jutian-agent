@@ -25,7 +25,7 @@ interface Props {
 }
 
 export default function CommandPalette({ open, onClose, onOpenTab, sessions, onSelectSession, onCreateSession }: Props) {
-  const { lang, t } = useLanguage()
+  const { t } = useLanguage()
   const { c } = useTheme()
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)

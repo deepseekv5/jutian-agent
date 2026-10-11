@@ -14,21 +14,19 @@ interface Props { initialUrl?: string | null; onClose: () => void }
 
 export default function BrowserOverlay({ initialUrl, onClose }: Props) {
   const [url, setUrl] = useState<string | null>(initialUrl || null)
-  const [history, setHistory] = useState<string[]>([])
-  const [historyIdx, setHistoryIdx] = useState(-1)
   const [loading, setLoading] = useState(false)
   const webviewRef = useRef<any>(null)
   const { c } = useTheme()
 
   useEffect(() => {
     if (window.electronAPI) {
-      window.electronAPI.onOpenBrowserOverlay((incomingUrl: string) => { setUrl(incomingUrl); setHistory(prev => [...prev, incomingUrl]); setHistoryIdx(prev => prev + 1) })
+      window.electronAPI.onOpenBrowserOverlay((incomingUrl: string) => { setUrl(incomingUrl) })
     }
     return () => { if (window.electronAPI) window.electronAPI.removeBrowserOverlayListener() }
   }, [])
 
   useEffect(() => {
-    if (initialUrl) { setUrl(initialUrl); setHistory(prev => [...prev, initialUrl]); setHistoryIdx(prev => prev + 1) }
+    if (initialUrl) { setUrl(initialUrl) }
   }, [initialUrl])
 
   useEffect(() => {

@@ -12,6 +12,7 @@ import WelcomeSplash from './WelcomeSplash';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
 import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
+import { loadVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
 import TerminalPanel from '../code/TerminalPanel';
 import NewTabPage from './NewTabPage';
 import { refreshSkillManifest } from '../engine/skillManifest';
@@ -118,7 +119,6 @@ function MainApp() {
   }, [activeTabId]);
 
   // 首帧引导：loaded 落定且尚无任何标签时建一个默认对话（仅此一次，之后靠用户操作增删标签）
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab
   useEffect(() => {
     if (!loaded || tabs.length > 0) return;
     (async () => {
@@ -127,6 +127,8 @@ function MainApp() {
       setTabs([tab]);
       setActiveTabId(tab.id);
     })();
+    // 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
   // 安全设置即时生效：设置页改动直接刷新全局 settings 状态（saveSettings 为 useCallback([]) 稳定引用）
@@ -361,25 +363,22 @@ function MainApp() {
     setTabs(prev => prev.map(t => t.sessionId === sid && t.type === 'chat' ? { ...t, title: title.slice(0, 12) || '对话' } : t));
   }, [updateTitle]);
 
-  // 视觉设置实时读取（设置页改动即时生效，含默认动态视频壁纸）
-  const [visualSettings, setVisualSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('visual-settings') || 'null') || { bgImage: '/bg_upload.mp4', bgOpacityLight: 0.5, bgOpacityDark: 0.6 } } catch { return { bgImage: '/bg_upload.mp4', bgOpacityLight: 0.5, bgOpacityDark: 0.6 } }
-  })
+  // 视觉设置实时读取（设置页改动即时生效，含默认动态视频壁纸）。
+  // 默认值与回落规则统一走 store/visual，避免这里与设置页各写一份导致漂移
+  const [visualSettings, setVisualSettings] = useState<VisualSettings>(loadVisualSettings)
   useEffect(() => {
-    const h = () => { try { setVisualSettings(JSON.parse(localStorage.getItem('visual-settings') || 'null') || {}) } catch { /* ignore */ } }
+    const h = () => setVisualSettings(loadVisualSettings())
     window.addEventListener('visual-changed', h)
     return () => window.removeEventListener('visual-changed', h)
   }, [])
-  const _rawBg = (visualSettings as any).bgImage as string | undefined
-  // 缺失或旧默认 /bg.jpg 一律回落到内置动态视频壁纸；用户显式设 '' 表示关闭
-  const bgImage: string = _rawBg === '' ? '' : (!_rawBg || _rawBg === '/bg.jpg' ? '/bg_upload.mp4' : _rawBg)
+  const bgImage: string = resolveWallpaper(visualSettings.bgImage)
   // 毛玻璃依赖壁纸折射：无壁纸时通知 CSS 关闭 backdrop-filter（退化为纯净底色）
   useEffect(() => {
     document.documentElement.setAttribute('data-wallpaper', bgImage ? 'on' : 'off')
   }, [bgImage])
   const bgOpacity = Math.max(0, Math.min(1, theme === 'dark'
-    ? ((visualSettings as any).bgOpacityDark ?? 0.6)
-    : ((visualSettings as any).bgOpacityLight ?? 0.5)))
+    ? (visualSettings.bgOpacityDark ?? DEFAULT_VISUAL.bgOpacityDark)
+    : (visualSettings.bgOpacityLight ?? DEFAULT_VISUAL.bgOpacityLight)))
 
   // 氛围模式（顶栏「氛围」按钮开关；Esc 退出）
   const [ambient, setAmbient] = useState(() => localStorage.getItem('lyclaw_ambient') === '1')

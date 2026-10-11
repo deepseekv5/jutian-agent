@@ -94,6 +94,8 @@ export default function GroupChatTab({ groupId, settings, onClose }: {
       setQueue([])
       setSpeaking(null)
     }
+  // speak 定义在下方（send 也为其所用，互为闭包捕获）：依赖数组里写 speak 会在渲染期触发 TDZ，故按渲染期闭包捕获处理
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group, members, boss, msgs, employees, settings])
 
   // 记录每个成员本轮最后一条回复（用于解析老板的 @ 指派）

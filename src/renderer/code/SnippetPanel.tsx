@@ -1,5 +1,5 @@
 // Code snippet library
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { Snippet } from '../types/code'
 

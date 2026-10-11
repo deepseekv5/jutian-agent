@@ -91,31 +91,6 @@ function toolsForMode(mode: ApprovalMode): ToolDef[] {
 
 interface PlanStep { title: string; status: 'pending' | 'in_progress' | 'completed' }
 
-// 计算简易 unified diff 行（edit_file: oldText → newText）
-function diffLines(oldText: string, newText: string): { type: 'ctx' | 'del' | 'add'; text: string }[] {
-  const a = oldText.split('\n'), b = newText.split('\n')
-  const out: { type: 'ctx' | 'del' | 'add'; text: string }[] = []
-  let i = 0, j = 0
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { out.push({ type: 'ctx', text: a[i] }); i++; j++ }
-    else if (j + 1 < b.length && a[i] === b[j + 1]) { out.push({ type: 'add', text: b[j] }); j++ }
-    else if (i + 1 < a.length && a[i + 1] === b[j]) { out.push({ type: 'del', text: a[i] }); i++ }
-    else {
-      // 找到下一个公共点，中间全部 del/add
-      let ni = -1, nj = -1
-      for (let k = 0; k < 6 && i + k < a.length; k++) for (let m = 0; m < 6 && j + m < b.length; m++) {
-        if (a[i + k] === b[j + m] && (k + m) > 0 && (ni === -1 || k + m < ni + nj)) { ni = i + k; nj = j + m }
-      }
-      if (ni === -1) { a.slice(i).forEach(t => out.push({ type: 'del', text: t })); b.slice(j).forEach(t => out.push({ type: 'add', text: t })); return out }
-      while (i < ni) { out.push({ type: 'del', text: a[i++] }) }
-      while (j < nj) { out.push({ type: 'add', text: b[j++] }) }
-    }
-  }
-  while (i < a.length) out.push({ type: 'del', text: a[i++] })
-  while (j < b.length) out.push({ type: 'add', text: b[j++] })
-  return out
-}
-
 /**
  * Code 控制台配色：固定深色（不随主题切换），近似 Codex 终端风格。
  * 定义在模块作用域，供主组件与 ToolLine / RenderContent 共用。
@@ -147,7 +122,7 @@ function flattenFilePaths(nodes: FileNode[], acc: string[] = []): string[] {
   return acc
 }
 
-export default function ChatPanel({ activeTab, projectName, projectRoot, settings, followMode, onFollowTarget, onFileChanged, onFileMutated, fileTree }: Props & { fileTree?: FileNode[] }) {
+export default function ChatPanel({ activeTab: _activeTab, projectName, projectRoot, settings, followMode, onFollowTarget, onFileChanged, onFileMutated, fileTree }: Props & { fileTree?: FileNode[] }) {
   const { c, theme } = useTheme()
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -182,7 +157,7 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
   const clearPlan = useCallback(() => {
     setPlan(null)
     try { localStorage.removeItem(planKey) } catch {}
-  }, [])
+  }, [planKey])
   // 读取项目 AGENTS.md（Codex 风格项目指令），失败静默
   useEffect(() => {
     let cancelled = false
@@ -224,7 +199,9 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
   const chatStorageKey = `lyclaw_code_chat_${projectRoot}`
   useEffect(() => {
     try { setMessages(JSON.parse(localStorage.getItem(chatStorageKey) || '[]') || []) } catch { setMessages([]) }
-  }, [projectRoot])
+  }, [projectRoot, chatStorageKey])
+  // chatStorageKey 不纳入保存 effect 依赖：切项目时先用旧 messages 写一次新 key 会造成串写，保持仅由 messages 触发
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     try { if (messages.length > 0) localStorage.setItem(chatStorageKey, JSON.stringify(messages.slice(-100))); else localStorage.removeItem(chatStorageKey) } catch {}
   }, [messages])
@@ -256,7 +233,6 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
     }
     parts.push({ label: '当前输入', tokens: estimateTokens(input), color: '#f59e0b' })
     return parts
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, input, settings])
 
   const pushLocalMsg = useCallback((content: string, role: 'user' | 'assistant' = 'assistant') => {
@@ -517,7 +493,7 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
     } finally {
       if (controller.signal.aborted) { setStreaming(false); streamingRef.current = false }
     }
-  }, [input, streaming, messages, attachedFiles, settings, projectName, projectRoot, thinking, approvalMode, agentsMd, handleSlashCommand, compactHistory])
+  }, [input, streaming, messages, attachedFiles, settings, projectName, projectRoot, thinking, approvalMode, agentsMd, handleSlashCommand, compactHistory, applyPlan])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (slashOpen && slashItems.length > 0) {
@@ -564,7 +540,6 @@ export default function ChatPanel({ activeTab, projectName, projectRoot, setting
   // 局部别名（取自模块级控制台配色）
   // 对话区跟随应用主题（浅色不再黑底）；深色调仍保持终端质感
   const dark = theme === 'dark'
-  const bg = dark ? CONSOLE_BG : c.bg
   const borderColor = dark ? CONSOLE_BORDER : c.border
   const textPrimary = dark ? CONSOLE_TEXT : c.textHead
   const textSecondary = dark ? CONSOLE_TEXT_SECONDARY : c.textSecondary

@@ -1,13 +1,16 @@
 export interface SkillBrief { id: string; name: string; description: string }
 
+/** 服务端 /api/skills/list 返回的原始技能条目（字段可能缺失，读取时统一 String() 兜底） */
+interface RawSkill { name?: string; display_name?: string; description?: string; status?: string }
+
 let cache: SkillBrief[] = []
 let inflight: Promise<void> | null = null
 
-function apply(list: any) {
-  const arr = Array.isArray(list) ? list : []
+function apply(list: unknown) {
+  const arr: RawSkill[] = Array.isArray(list) ? (list as RawSkill[]) : []
   cache = arr
-    .filter((s: any) => s && s.name && s.name !== 'builtin' && s.status !== 'incomplete')
-    .map((s: any) => ({
+    .filter((s: RawSkill) => s && s.name && s.name !== 'builtin' && s.status !== 'incomplete')
+    .map((s: RawSkill) => ({
       id: String(s.name),
       name: String(s.display_name || s.name),
       description: String(s.description || '').slice(0, 120),
@@ -25,10 +28,10 @@ export function refreshSkillManifest(): Promise<void> {
   if (inflight) return inflight
   inflight = fetch('/api/skills/list')
     .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
+    .then((data: RawSkill[] | { output?: string } | null) => {
       if (!data) return
       try {
-        apply(Array.isArray(data) ? data : JSON.parse((data as any).output || '[]'))
+        apply(Array.isArray(data) ? data : JSON.parse(data.output || '[]'))
       } catch { /* 响应形状异常时保留旧缓存 */ }
     })
     .catch(() => { /* 网络异常时保留旧缓存 */ })

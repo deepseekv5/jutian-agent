@@ -10,7 +10,7 @@
 
 export interface ToolRequest {
   name: string
-  args: Record<string, any>
+  args: Record<string, unknown>
 }
 
 export interface ToolResult {
@@ -18,6 +18,8 @@ export interface ToolResult {
   output: string
   error?: string
   duration_ms: number
+  /** 文件变更 id（edit_file 等写操作返回，供前端 diff 展示/撤销） */
+  changeId?: string
 }
 
 const API_BASE = '/api'
@@ -53,11 +55,12 @@ export async function executeTool(req: ToolRequest, workDir?: string): Promise<T
 
     const data = await res.json() as ToolResult
     return { ...data, duration_ms: Date.now() - start }
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const e = err as { message?: string }
     return {
       success: false,
       output: '',
-      error: `Cannot connect to tool server. Is the backend running?\n${err.message}`,
+      error: `Cannot connect to tool server. Is the backend running?\n${e.message}`,
       duration_ms: Date.now() - start,
     }
   }

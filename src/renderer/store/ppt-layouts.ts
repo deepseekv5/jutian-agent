@@ -1,4 +1,4 @@
-import type { Block, Box, BulletsBlock, ChartBlock, ChartKind, ChartSeries, DividerBlock, GraphicBlock, GraphicKind, ImageBlock, LayoutId, QuoteBlock, Slide, SlideSpec, StatsBlock, StepsBlock, TableBlock, TextBlock } from '../types/ppt';
+import type { Block, BlockStyle, Box, BulletsBlock, ChartBlock, ChartKind, ChartSeries, DividerBlock, GraphicBlock, GraphicKind, ImageBlock, LayoutId, QuoteBlock, Slide, SlideSpec, StatsBlock, StepsBlock, TableBlock, TextBlock } from '../types/ppt';
 
 export const LAYOUT_LABELS: Record<LayoutId, string> = {
   cover: '封面', agenda: '目录', bullets: '要点列表', twoColumn: '双栏对比',
@@ -7,7 +7,7 @@ export const LAYOUT_LABELS: Record<LayoutId, string> = {
   table: '数据表格', chart: '图表分析', gallery: '多图展示',
 };
 
-const S: Record<string, any> = {
+const S: Record<string, BlockStyle> = {
   eyebrow: { fontSize: 18, color: 'accent', bold: true, upper: true, letterSpacing: 2.4 },
   h1: { fontSize: 46, bold: true, color: 'text' },
   h2: { fontSize: 26, bold: true, color: 'text' },
@@ -20,13 +20,13 @@ const S: Record<string, any> = {
 function uid(p: string): string { return p + Math.random().toString(36).slice(2, 10); }
 function mkBox(x: number, y: number, w: number, h: number): Box { return { x, y, w, h }; }
 
-function text(type: 'title' | 'subtitle' | 'paragraph' | 'eyebrow', box: Box, value: string, style: any): TextBlock {
+function text(type: 'title' | 'subtitle' | 'paragraph' | 'eyebrow', box: Box, value: string, style: BlockStyle): TextBlock {
   return { id: uid(type[0]), type, box, text: value, style: { ...style } };
 }
 
 function divider(box: Box): DividerBlock { return { id: uid('d'), type: 'divider', box, style: { fill: 'accent', radius: 3 } }; }
 
-function bullets(box: Box, items: string[], style: any, icon: BulletsBlock['icon'] = 'dot'): BulletsBlock {
+function bullets(box: Box, items: string[], style: BlockStyle, icon: BulletsBlock['icon'] = 'dot'): BulletsBlock {
   return { id: uid('u'), type: 'bullets', box, items, icon, style: { ...style } };
 }
 
@@ -198,7 +198,7 @@ export function extractSpec(slide: Slide): SlideSpec {
       case 'subtitle': spec.subtitle = (b as TextBlock).text; break;
       case 'paragraph': spec.paragraph = (b as TextBlock).text; break;
       case 'eyebrow': spec.eyebrow = (b as TextBlock).text; break;
-      case 'quote': spec.quote = { text: (b as any).text, author: (b as any).author }; break;
+      case 'quote': spec.quote = { text: b.text, author: b.author }; break;
       case 'bullets': columns.push({ title: `第 ${columns.length + 1} 组`, items: (b as BulletsBlock).items }); break;
       case 'stats': spec.stats = (b as StatsBlock).items; break;
       case 'steps': spec.steps = (b as StepsBlock).items; break;

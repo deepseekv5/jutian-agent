@@ -1,5 +1,5 @@
 // 存储层 — SQLite 后端 + localStorage 降级
-import type { Session, Message, Settings, PermissionLevel } from '../types'
+import type { Session, Message, Settings, PermissionLevel, ToolCall } from '../types'
 
 const API = ''  // 同源 API
 
@@ -19,7 +19,7 @@ async function apiGet<T>(path: string): Promise<T | null> {
   } catch { return null }
 }
 
-async function apiPost<T>(path: string, body: any): Promise<T | null> {
+async function apiPost<T>(path: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(API + path, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -30,7 +30,7 @@ async function apiPost<T>(path: string, body: any): Promise<T | null> {
   } catch { return null }
 }
 
-async function apiPut<T>(path: string, body: any): Promise<T | null> {
+async function apiPut<T>(path: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(API + path, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -186,10 +186,13 @@ export async function hasAnySettings(): Promise<boolean> {
 }
 
 // --- 会话 ---
+/** SQLite 会话行（字段可能缺失，读取时统一兜底） */
+type SessionRow = Record<string, unknown>
+
 export async function listSessions(): Promise<Session[]> {
-  const result = await apiGet<any[]>('/api/sessions')
+  const result = await apiGet<unknown[]>('/api/sessions')
   if (result && Array.isArray(result)) {
-    return result.map((s: any) => ({
+    return (result as SessionRow[]).map((s) => ({
       id: String(s.id || ''),
       title: typeof s.title === 'string' ? s.title : '新对话',
       created_at: String(s.created_at || ''),
@@ -207,7 +210,7 @@ export async function listSessions(): Promise<Session[]> {
 export async function createSession(title?: string, project?: string): Promise<Session> {
   const id = uid()
   const session: Session = { id, title: String(title || '新对话').slice(0, 200), project: project || '', created_at: now(), updated_at: now() }
-  const result = await apiPost<any>('/api/sessions', { id, title: session.title, project: session.project })
+  const result = await apiPost<unknown>('/api/sessions', { id, title: session.title, project: session.project })
   if (!result) {
     const raw = localStorage.getItem('lyclaw_sessions')
     const sessions = raw ? JSON.parse(raw) : []
@@ -222,7 +225,7 @@ export async function setSessionProject(id: string, project: string): Promise<vo
   try {
     const raw = localStorage.getItem('lyclaw_sessions')
     if (raw) {
-      const sessions = JSON.parse(raw).map((s: any) => (s.id === id ? { ...s, project: project || '' } : s))
+      const sessions = (JSON.parse(raw) as Session[]).map((s) => (s.id === id ? { ...s, project: project || '' } : s))
       localStorage.setItem('lyclaw_sessions', JSON.stringify(sessions))
     }
   } catch {}
@@ -233,7 +236,7 @@ export async function deleteSession(id: string): Promise<void> {
   try {
     const raw = localStorage.getItem('lyclaw_sessions')
     if (raw) {
-      const sessions = JSON.parse(raw).filter((s: any) => s.id !== id)
+      const sessions = (JSON.parse(raw) as Session[]).filter((s) => s.id !== id)
       localStorage.setItem('lyclaw_sessions', JSON.stringify(sessions))
     }
   } catch {}
@@ -244,11 +247,25 @@ export async function updateSessionTitle(id: string, title: string): Promise<voi
 }
 
 // --- 消息 ---
+/** SQLite 消息行（JSON 列可能是字符串也可能是已解析值） */
+interface MessageRow {
+  id: string
+  session_id: string
+  role: Message['role']
+  content?: string
+  thinking?: string
+  tool_calls?: string | unknown[]
+  swarm?: string | unknown
+  variants?: string | unknown[]
+  created_at?: string
+  tool_call_id?: string
+}
+
 export async function listMessages(sessionId: string): Promise<Message[]> {
-  const result = await apiGet<any[]>(`/api/sessions/${sessionId}/messages`)
+  const result = await apiGet<unknown[]>(`/api/sessions/${sessionId}/messages`)
   let apiMsgs: Message[] = []
   if (result && Array.isArray(result)) {
-    apiMsgs = result.map((m: any) => ({
+    apiMsgs = (result as MessageRow[]).map((m) => ({
       id: m.id,
       session_id: m.session_id,
       role: m.role,
@@ -274,7 +291,7 @@ export async function listMessages(sessionId: string): Promise<Message[]> {
   return merged
 }
 
-export async function createMessage(msg: { session_id: string; role: string; content: string; tool_calls?: any[] }): Promise<Message> {
+export async function createMessage(msg: { session_id: string; role: string; content: string; tool_calls?: ToolCall[] }): Promise<Message> {
   const message: Message = {
     id: uid(),
     session_id: msg.session_id,
@@ -307,11 +324,11 @@ export async function updateMessageThinking(id: string, sessionId: string, think
   await apiPut(`/api/messages/${id}`, { thinking })
 }
 
-export async function updateMessageToolCalls(id: string, sessionId: string, toolCalls: any[]): Promise<void> {
+export async function updateMessageToolCalls(id: string, sessionId: string, toolCalls: ToolCall[]): Promise<void> {
   await apiPut(`/api/messages/${id}`, { tool_calls: JSON.stringify(toolCalls) })
 }
 
-export async function updateMessageSwarm(id: string, sessionId: string, swarm: any): Promise<void> {
+export async function updateMessageSwarm(id: string, sessionId: string, swarm: unknown): Promise<void> {
   await apiPut(`/api/messages/${id}`, { swarm: JSON.stringify(swarm) })
 }
 
@@ -344,14 +361,15 @@ export interface MemoryEntry {
 }
 
 export async function getAllMemories(): Promise<Record<string, string>> {
-  const data = await apiGet<any>('/api/memories')
+  const data = await apiGet<unknown>('/api/memories')
   if (!data) return {}
   // 后端 API 返回 [{key, value}, ...]，转为 Record
   if (Array.isArray(data)) {
     const record: Record<string, string> = {}
-    data.forEach((item: any) => {
-      if (item && typeof item.key === 'string') {
-        record[item.key] = item.value || ''
+    data.forEach((item) => {
+      const entry = item as { key?: unknown; value?: unknown }
+      if (entry && typeof entry.key === 'string') {
+        record[entry.key] = String(entry.value || '')
       }
     })
     return record

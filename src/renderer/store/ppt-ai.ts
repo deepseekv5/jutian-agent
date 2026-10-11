@@ -1,4 +1,4 @@
-import type { GenerateOptions, SlideSpec } from '../types/ppt'
+import type { GenerateOptions, SlideSpec, LayoutId, ChartKind } from '../types/ppt'
 import { getSettingsSync, effectiveApiKey } from './storage'
 
 /**
@@ -39,50 +39,76 @@ ${LAYOUT_RULES}
  {"layout":"bullets","title":"...","bullets":["...","...","..."]}]`
 }
 
-function sanitizeSpecs(raw: any, opts: GenerateOptions): SlideSpec[] | null {
+/** 模型返回的原始 slide JSON：字段全部可选且类型不定，逐字段校验后收敛为 SlideSpec */
+interface RawSlide {
+  layout?: unknown
+  title?: unknown
+  subtitle?: unknown
+  eyebrow?: unknown
+  bullets?: unknown
+  stats?: unknown
+  columns?: unknown
+  steps?: unknown
+  table?: unknown
+  chart?: unknown
+  images?: unknown
+  quote?: unknown
+}
+
+function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null {
   if (!Array.isArray(raw) || raw.length < 3) return null
   const VALID = new Set(['cover', 'agenda', 'bullets', 'stats', 'compare', 'timeline', 'twoColumn', 'imageText', 'quote', 'closing', 'table', 'chart', 'gallery'])
   const specs: SlideSpec[] = []
-  for (const item of raw) {
+  for (const item of raw as RawSlide[]) {
     if (!item || typeof item !== 'object') continue
     const layout = String(item.layout || '')
     if (!VALID.has(layout)) continue
-    const spec: any = { layout }
+    const spec: SlideSpec = { layout: layout as LayoutId }
     if (typeof item.title === 'string' && item.title.trim()) spec.title = item.title.trim().slice(0, 40)
     if (typeof item.subtitle === 'string') spec.subtitle = item.subtitle.trim().slice(0, 60)
     if (typeof item.eyebrow === 'string') spec.eyebrow = item.eyebrow.trim().slice(0, 20)
-    if (Array.isArray(item.bullets)) spec.bullets = item.bullets.filter((b: any) => typeof b === 'string').slice(0, 6).map((b: string) => b.trim().slice(0, 60))
-    if (Array.isArray(item.stats)) spec.stats = item.stats.filter((s: any) => s && typeof s.value === 'string' && typeof s.label === 'string').slice(0, 4).map((s: any) => ({ value: s.value.trim().slice(0, 12), label: s.label.trim().slice(0, 16) }))
-    if (Array.isArray(item.columns)) spec.columns = item.columns.filter((cc: any) => cc && typeof cc.title === 'string' && Array.isArray(cc.items)).slice(0, 2).map((cc: any) => ({ title: cc.title.trim().slice(0, 20), items: cc.items.filter((x: any) => typeof x === 'string').slice(0, 4).map((x: string) => x.trim().slice(0, 40)) }))
-    if (Array.isArray(item.steps)) spec.steps = item.steps.filter((st: any) => st && typeof st.title === 'string').slice(0, 5).map((st: any) => ({ title: st.title.trim().slice(0, 20), desc: typeof st.desc === 'string' ? st.desc.trim().slice(0, 40) : undefined }))
+    if (Array.isArray(item.bullets)) spec.bullets = (item.bullets as unknown[]).filter((b): b is string => typeof b === 'string').slice(0, 6).map(b => b.trim().slice(0, 60))
+    if (Array.isArray(item.stats)) spec.stats = (item.stats as unknown[])
+      .filter((s): s is { value: string; label: string } => !!s && typeof (s as { value?: unknown }).value === 'string' && typeof (s as { label?: unknown }).label === 'string')
+      .slice(0, 4).map(s => ({ value: s.value.trim().slice(0, 12), label: s.label.trim().slice(0, 16) }))
+    if (Array.isArray(item.columns)) spec.columns = (item.columns as unknown[])
+      .filter((cc): cc is { title: string; items: unknown[] } => !!cc && typeof (cc as { title?: unknown }).title === 'string' && Array.isArray((cc as { items?: unknown }).items))
+      .slice(0, 2).map(cc => ({ title: cc.title.trim().slice(0, 20), items: cc.items.filter((x): x is string => typeof x === 'string').slice(0, 4).map(x => x.trim().slice(0, 40)) }))
+    if (Array.isArray(item.steps)) spec.steps = (item.steps as unknown[])
+      .filter((st): st is { title: string; desc?: unknown } => !!st && typeof (st as { title?: unknown }).title === 'string')
+      .slice(0, 5).map(st => ({ title: st.title.trim().slice(0, 20), desc: typeof st.desc === 'string' ? st.desc.trim().slice(0, 40) : undefined }))
     // 表格
-    if (item.table && Array.isArray(item.table.headers) && Array.isArray(item.table.rows)) {
-      const headers = item.table.headers.filter((h: any) => typeof h === 'string').slice(0, 6).map((h: string) => h.trim().slice(0, 20))
-      const rows = item.table.rows.filter((r: any) => Array.isArray(r)).slice(0, 8)
-        .map((r: any[]) => r.slice(0, 6).map((cell: any) => String(cell ?? '').trim().slice(0, 30)))
+    const table = item.table as { headers?: unknown; rows?: unknown } | null
+    if (table && Array.isArray(table.headers) && Array.isArray(table.rows)) {
+      const headers = (table.headers as unknown[]).filter((h): h is string => typeof h === 'string').slice(0, 6).map(h => h.trim().slice(0, 20))
+      const rows = (table.rows as unknown[]).filter((r): r is unknown[] => Array.isArray(r)).slice(0, 8)
+        .map(r => r.slice(0, 6).map(cell => String(cell ?? '').trim().slice(0, 30)))
       if (headers.length && rows.length) spec.table = { headers, rows }
     }
     // 图表
-    if (item.chart && Array.isArray(item.chart.categories) && Array.isArray(item.chart.series)) {
+    const chart = item.chart as { kind?: unknown; categories?: unknown; series?: unknown } | null
+    if (chart && Array.isArray(chart.categories) && Array.isArray(chart.series)) {
       const KINDS = new Set(['bar', 'line', 'pie', 'doughnut', 'area', 'radar'])
-      const rawKind = String(item.chart.kind || 'bar')
-      const kind = KINDS.has(rawKind) ? rawKind : 'bar'
-      const categories = item.chart.categories.filter((c: any) => typeof c === 'string').slice(0, 8).map((c: string) => c.trim().slice(0, 16))
-      const series = item.chart.series
-        .filter((s: any) => s && Array.isArray(s.values))
+      const rawKind = String(chart.kind || 'bar')
+      const kind = (KINDS.has(rawKind) ? rawKind : 'bar') as ChartKind
+      const categories = (chart.categories as unknown[]).filter((c): c is string => typeof c === 'string').slice(0, 8).map(c => c.trim().slice(0, 16))
+      const series = (chart.series as unknown[])
+        .filter((s): s is { name?: unknown; values: unknown[] } => { const o = s as { values?: unknown } | null; return !!o && Array.isArray(o.values) })
         .slice(0, 4)
-        .map((s: any) => ({
+        .map(s => ({
           name: String(s.name || '数值').trim().slice(0, 16),
-          values: s.values.slice(0, 8).map((v: any) => (typeof v === 'number' && isFinite(v) ? v : parseFloat(String(v).replace(/[^\d.-]/g, '')) || 0)),
+          values: s.values.slice(0, 8).map(v => (typeof v === 'number' && isFinite(v) ? v : parseFloat(String(v).replace(/[^\d.-]/g, '')) || 0)),
         }))
-      if (categories.length && series.length) spec.chart = { kind: kind as any, categories, series }
+      if (categories.length && series.length) spec.chart = { kind, categories, series }
     }
     // 多图
     if (Array.isArray(item.images)) {
-      const imgs = item.images.slice(0, 3).map((im: any) => ({ caption: typeof im?.caption === 'string' ? im.caption.trim().slice(0, 24) : undefined }))
+      const imgs = (item.images as Array<{ caption?: unknown } | null>).slice(0, 3)
+        .map(im => ({ caption: typeof im?.caption === 'string' ? im.caption.trim().slice(0, 24) : undefined }))
       if (imgs.length) spec.images = imgs
     }
-    if (item.quote && typeof item.quote.text === 'string') spec.quote = { text: item.quote.text.trim().slice(0, 60), author: typeof item.quote.author === 'string' ? item.quote.author.trim().slice(0, 16) : 'AI' }
+    const quote = item.quote as { text?: unknown; author?: unknown } | null
+    if (quote && typeof quote.text === 'string') spec.quote = { text: quote.text.trim().slice(0, 60), author: typeof quote.author === 'string' ? quote.author.trim().slice(0, 16) : 'AI' }
     if (layout === 'cover') { spec.background = 'gradient'; if (!spec.subtitle) spec.subtitle = new Date().toLocaleDateString('zh-CN') }
     if (layout === 'closing') { spec.background = 'deep' }
     // 基本校验：每个版式的必需字段
@@ -97,7 +123,7 @@ function sanitizeSpecs(raw: any, opts: GenerateOptions): SlideSpec[] | null {
     if (required === 'table' && !spec.table) continue
     if (required === 'chart' && !spec.chart) continue
     if (required === 'images' && (!spec.images || spec.images.length === 0)) continue
-    specs.push(spec as SlideSpec)
+    specs.push(spec)
   }
   // cover/closing 兜底补齐
   if (specs.length < 3) return null

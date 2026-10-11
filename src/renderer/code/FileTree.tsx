@@ -95,6 +95,8 @@ function TreeNode({ node, depth, onSelectFile, searchQuery, selectedPath, onCont
       setExpanded(false)
       autoExpandedRef.current = false
     }
+    // expanded 由本 effect 在搜索时自动维护：纳入依赖会在用户手动折叠后被立刻重新展开；node.path 为本节点固有属性
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, isDir])
 
   const isAncestorOfSelected = useMemo(() => {
@@ -115,7 +117,7 @@ function TreeNode({ node, depth, onSelectFile, searchQuery, selectedPath, onCont
           .finally(() => setLoadingChildren(false))
       }
     }
-  }, [isAncestorOfSelected, expanded])
+  }, [isAncestorOfSelected, expanded, node.path])
 
   const handleClick = useCallback(async () => {
     if (isDir) {

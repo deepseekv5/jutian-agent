@@ -22,7 +22,7 @@ import GitPanel from '../chat/GitPanel'
 import WelcomePage from './WelcomePage'
 import { useCodeProject } from '../hooks/useCodeProject'
 import { useTheme } from '../hooks/useTheme'
-import type { CodeProject, AICompletionEvent, FollowTarget, ChangedLine, FileChangeInfo, GitStatusData, SearchResult } from '../types/code'
+import type { CodeProject, AICompletionEvent, FollowTarget, ChangedLine, FileChangeInfo, GitStatusData } from '../types/code'
 import * as CS from '../store/codeStorage'
 import type { Settings } from '../types'
 
@@ -69,6 +69,9 @@ const TBtn = ({ icon, label, title, active, onClick, c, dirty }: { icon?: string
 export default function CodeView({ settings, onBack }: Props) {
   const { c } = useTheme()
   const code = useCodeProject()
+  // 解构出 hook 返回对象的具体成员：身份与 code.xxx 一致（state / useCallback），
+  // 但可直接进依赖数组，避免把每次渲染都新建的 code 对象本身当成依赖
+  const { setActiveProjectId, openFile, tabs, closeTab } = code
   const [showNewProject, setShowNewProject] = useState(false)
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false)
   // 运行
@@ -100,7 +103,6 @@ export default function CodeView({ settings, onBack }: Props) {
   const [gitCommitting, setGitCommitting] = useState(false)
   const [gitCommitResult, setGitCommitResult] = useState('')
   const [fontPx, setFontPx] = useState(() => parseInt(localStorage.getItem('lyclaw_editor_font') || '13', 10) || 13)
-  const [showStats, setShowStats] = useState(false)
   const [codeStats, setCodeStats] = useState<any>(null)
   const [codeStatsLoading, setCodeStatsLoading] = useState(false)
 
@@ -108,9 +110,9 @@ export default function CodeView({ settings, onBack }: Props) {
   useEffect(() => {
     const activeId = CS.getActiveProjectId()
     if (activeId && code.projects.find(p => p.id === activeId)) {
-      code.setActiveProjectId(activeId)
+      setActiveProjectId(activeId)
     }
-  }, [code.projects])
+  }, [code.projects, setActiveProjectId])
 
   const handleBack = useCallback(() => { onBack() }, [onBack])
   const handleFollowTarget = useCallback((target: FollowTarget) => { setFollowTarget(target) }, [])
@@ -120,7 +122,7 @@ export default function CodeView({ settings, onBack }: Props) {
     if (!followTarget || !followMode) return
     if (highlightTimerRef.current) { clearTimeout(highlightTimerRef.current); highlightTimerRef.current = null }
     const fileName = followTarget.filePath.split('/').pop() || followTarget.filePath
-    code.openFile(followTarget.filePath, fileName)
+    openFile(followTarget.filePath, fileName)
     if (followTarget.line) {
       setScrollTargetLine(followTarget.line)
       setHighlightLines(followTarget.highlightLines || [followTarget.line])
@@ -129,7 +131,7 @@ export default function CodeView({ settings, onBack }: Props) {
       }, 3500)
     } else { setScrollTargetLine(undefined); setHighlightLines([]) }
     setFollowTarget(null)
-  }, [followTarget, followMode, code.openFile])
+  }, [followTarget, followMode, openFile])
 
   const handleFileChanged = useCallback((info: FileChangeInfo) => {
     setChangedLinesMap(prev => ({ ...prev, [info.filePath]: info.lines }))
@@ -188,16 +190,16 @@ export default function CodeView({ settings, onBack }: Props) {
 
   // ====== Tab management ======
   const handleCloseOtherTabs = useCallback((path: string) => {
-    code.tabs.filter(t => t.path !== path).map(t => t.path).forEach(p => code.closeTab(p))
-  }, [code.tabs, code.closeTab])
+    tabs.filter(t => t.path !== path).map(t => t.path).forEach(p => closeTab(p))
+  }, [tabs, closeTab])
   const handleCloseRightTabs = useCallback((path: string) => {
-    const idx = code.tabs.findIndex(t => t.path === path)
+    const idx = tabs.findIndex(t => t.path === path)
     if (idx === -1) return
-    code.tabs.slice(idx + 1).map(t => t.path).forEach(p => code.closeTab(p))
-  }, [code.tabs, code.closeTab])
+    tabs.slice(idx + 1).map(t => t.path).forEach(p => closeTab(p))
+  }, [tabs, closeTab])
   const handleCloseAllTabs = useCallback(() => {
-    code.tabs.map(t => t.path).forEach(p => code.closeTab(p))
-  }, [code.tabs, code.closeTab])
+    tabs.map(t => t.path).forEach(p => closeTab(p))
+  }, [tabs, closeTab])
 
   const handleToggleMarkdownPreview = useCallback(() => { setMarkdownPreview(v => !v) }, [])
 

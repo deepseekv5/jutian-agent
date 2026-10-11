@@ -432,7 +432,6 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
 // ─── 浏览器：内置 webview ───
 function BrowserPane() {
   const { c } = useTheme()
-  const [url, setUrl] = useState('')
   const [current, setCurrent] = useState('')
   const [input, setInput] = useState('')
   const webviewRef = useRef<any>(null)

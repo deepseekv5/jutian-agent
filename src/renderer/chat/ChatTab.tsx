@@ -22,7 +22,7 @@ function loadLastCheckpoint(sessionId: string): Checkpoint | null {
   try { return JSON.parse(localStorage.getItem(CP_KEY) || '{}')[sessionId] || null } catch { return null }
 }
 
-export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, onProjectChange, active, incomingScreenshot, onScreenshotConsumed }: {
+export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, onProjectChange, active: _active, incomingScreenshot, onScreenshotConsumed }: {
   sessionId: string
   settings: Settings
   onTitleGenerated: (sessionId: string, firstMsg: string) => void

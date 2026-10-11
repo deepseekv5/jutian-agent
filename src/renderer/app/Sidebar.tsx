@@ -67,7 +67,7 @@ function highlightSnippet(text: string, q: string) {
   )
 }
 
-function groupSessions(list: Session[], lang: 'zh' | 'en'): { label: string; items: Session[] }[] {
+function groupSessions(list: Session[], _lang: 'zh' | 'en'): { label: string; items: Session[] }[] {
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const DAY = 86400000

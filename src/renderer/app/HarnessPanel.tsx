@@ -14,9 +14,6 @@ const DISABLED_KEY = 'harness-disabled-tools'
 function getDisabled(): string[] {
   try { const a = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
 }
-function setDisabled(list: string[]) {
-  try { localStorage.setItem(DISABLED_KEY, JSON.stringify(list)) } catch { /* ignore */ }
-}
 
 export default function HarnessPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()

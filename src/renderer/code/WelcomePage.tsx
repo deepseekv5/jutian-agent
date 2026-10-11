@@ -92,7 +92,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
         const filePath = file?.path || entry.fullPath
         if (filePath) {
           const parts = filePath.split('/')
-          const fileName = parts.pop() || '未命名文件'
+          parts.pop()
           const dirPath = parts.join('/') || '/'
           const projectName = dirPath.split('/').filter(Boolean).pop() || '未命名项目'
           onCreateProject(projectName, dirPath, filePath)
@@ -142,7 +142,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
       const data = await res.json()
       if (data.path) {
         const parts = data.path.split('/')
-        const fileName = parts.pop() || '未命名文件'
+        parts.pop()
         const dirPath = parts.join('/') || '/'
         const projectName = dirPath.split('/').filter(Boolean).pop() || 'Untitled Project'
         onCreateProject(projectName, dirPath, data.path)
