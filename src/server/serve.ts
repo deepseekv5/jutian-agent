@@ -122,6 +122,35 @@ var sharedDb = null;
 /* ─── MCP（Model Context Protocol）客户端管理器 — v5.0 学自 Zode ─── */
 var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(DATA_DIR); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
 try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db.cjs load failed:", e.message); }
+/**
+ * 数据库不可用时的安全代理。
+ *
+ * db.cjs 加载失败（原生模块 ABI 不匹配、文件损坏、权限问题）时 sharedDb 为 null，
+ * 而全文件有 70+ 处直接调用它的方法——每一处都会抛 TypeError，用户看到的是
+ * 「Cannot read properties of null」这类内部错误，无从判断该怎么办。
+ *
+ * 代理的行为：查询类方法返回空数组/空对象/null，写入类方法静默 no-op，
+ * 并只记录一次警告（避免刷屏）。这样界面能正常打开、功能降级，而不是整片报错。
+ */
+function makeDbFallback() {
+  var warned = false;
+  var warnOnce = () => {
+    if (!warned) { warned = true; console.error("[db] 数据库不可用，相关功能已降级。请重启应用；若持续出现请检查 ~/.lyclaw/data.db"); }
+  };
+  return new Proxy({}, {
+    get(_t, prop) {
+      if (prop === "db") { warnOnce(); return { exec: () => {}, prepare: () => ({ run: () => {}, get: () => null, all: () => [] }) }; }
+      if (typeof prop !== "string") return undefined;
+      warnOnce();
+      // 按方法名前缀推断返回形状：get/list/… 读操作给空值，写操作给 undefined
+      if (/^(get|list|search|all|find|has)/i.test(prop)) {
+        return (..._a) => (prop.startsWith("getAll") || prop.startsWith("list") || prop.startsWith("search") ? [] : null);
+      }
+      return () => undefined;
+    },
+  });
+}
+var db = sharedDb || makeDbFallback();
 // AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
 var PERSONA_MOD = (() => { try { return require("./src/shared/personas.cjs"); } catch (e) { console.error("personas.cjs load failed:", e.message); return null; } })();
 var PRESET_PERSONAS = PERSONA_MOD ? PERSONA_MOD.PRESET_PERSONAS : [];
@@ -994,8 +1023,8 @@ function memIndex(all) {
 async function read_memory(args) {
   if (sharedDb) {
     try {
-      if (args.key) return { success: true, output: sharedDb.getMemory(args.key) || "(无此记忆)" };
-      return { success: true, output: memIndex(sharedDb.getAllMemories()) };
+      if (args.key) return { success: true, output: db.getMemory(args.key) || "(无此记忆)" };
+      return { success: true, output: memIndex(db.getAllMemories()) };
     } catch {}
   }
   const mem = loadMem();
@@ -1032,14 +1061,14 @@ async function delete_memory(args) {
     if (!Array.isArray(sessions.items) || sessions.items.length === 0) return;
     // 幂等合并迁移：只补「SQLite 里还没有的消息」，已导入的按 id 跳过。
     // （早期版本用 listSessions().length > 0 整体跳过，导致老历史永远导入不进来）
-    const knownSessions = new Set(sharedDb.listSessions().map((s) => s.id));
+    const knownSessions = new Set(db.listSessions().map((s) => s.id));
     const seen = new Set();
     let created = 0, msgCount = 0;
     const pending = [];   // { m, sid }：补登的消息及其所属会话
     for (const s of sessions.items) {
       if (!s || !s.id) continue;
-      if (!knownSessions.has(s.id)) { sharedDb.createSession(s.id, typeof s.title === "string" ? s.title : "新对话"); created++; }
-      const inDb = new Set(sharedDb.getMessages(s.id).map((m) => m.id));
+      if (!knownSessions.has(s.id)) { db.createSession(s.id, typeof s.title === "string" ? s.title : "新对话"); created++; }
+      const inDb = new Set(db.getMessages(s.id).map((m) => m.id));
       for (const m of (readJson(`messages_${s.id}.json`).items || [])) {
         if (!m || !m.id || inDb.has(m.id) || seen.has(m.id)) continue;
         seen.add(m.id);
@@ -1047,14 +1076,14 @@ async function delete_memory(args) {
       }
     }
     if (pending.length > 0) {
-      try { sharedDb.db.exec("BEGIN"); } catch {}
+      try { db.db.exec("BEGIN"); } catch {}
       for (const { m, sid } of pending) {
         try {
-          sharedDb.addMessage(m.id, sid, m.role || "user", m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "");
+          db.addMessage(m.id, sid, m.role || "user", m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "");
           msgCount++;
         } catch { /* 单条失败不阻断整体迁移 */ }
       }
-      try { sharedDb.db.exec("COMMIT"); } catch {}
+      try { db.db.exec("COMMIT"); } catch {}
     }
     if (created || msgCount) console.log(`[ly-next] 合并迁移：新增 ${created} 个会话 / ${msgCount} 条消息`);
   } catch (e) { console.error("[ly-next] JSON 合并迁移失败:", e.message); }
@@ -1065,7 +1094,7 @@ const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (
 
 // ─── 安全策略：从设置实时读取，工具入口强制生效（主对话 + 集群统一）───
 function securityConfig() {
-  const rows = sharedDb ? sharedDb.getAllSettings() : [];
+  const rows = sharedDb ? db.getAllSettings() : [];
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   let dirs = [];
   try { const d = JSON.parse(s.allowedFolders || "[]"); if (Array.isArray(d)) dirs = d; } catch {}
@@ -1543,7 +1572,7 @@ async function remember(args) { return write_memory(args); }
 
 // ─── 知识条目 embedding helper（模块级，供工具与 API 共用）───
 async function kbEmbedFor(texts) {
-  const rows = sharedDb ? sharedDb.getAllSettings() : [];
+  const rows = sharedDb ? db.getAllSettings() : [];
   const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const base = st.apiBaseUrl || "";
   const key = st.apiKey || "";
@@ -1572,7 +1601,7 @@ function kbChunkText(text) {
 // 索引整篇笔记：全文切块，逐块嵌入（不是只存开头 800 字）
 async function kbIndexEntry(id, title, content) {
   if (!sharedDb) return 0;
-  sharedDb.kbDeleteByPath("entry:" + id);
+  db.kbDeleteByPath("entry:" + id);
   const body = (title ? title + "\n" : "") + (content || "");
   const chunks = kbChunkText(body);
   let n = 0;
@@ -1580,7 +1609,7 @@ async function kbIndexEntry(id, title, content) {
     const batch = chunks.slice(i, i + 16);
     let vecs = [];
     try { vecs = await kbEmbedFor(batch) } catch { break }
-    batch.forEach((c, j) => { if (vecs[j]) { sharedDb.kbInsert("entry:" + id, c, vecs[j]); n++ } });
+    batch.forEach((c, j) => { if (vecs[j]) { db.kbInsert("entry:" + id, c, vecs[j]); n++ } });
   }
   return n;
 }
@@ -1606,13 +1635,13 @@ async function save_knowledge(args) {
     ...(Array.isArray(args.link_titles) ? args.link_titles.map(String) : []),
     ...kbExtractWikilinks(content),
   ])].filter(t => t && t !== title);
-  const id = args.id || sharedDb.genId();
+  const id = args.id || db.genId();
   const links = [];
   for (const lt of linkTitles) {
-    const hit = sharedDb.getKbEntryByTitle(lt);
+    const hit = db.getKbEntryByTitle(lt);
     if (hit && hit.id !== id) links.push(hit.id);
   }
-  sharedDb.upsertKbEntry({
+  db.upsertKbEntry({
     id, title, content,
     tags: JSON.stringify(tags),
     links: JSON.stringify(links),
@@ -1623,14 +1652,14 @@ async function save_knowledge(args) {
   });
   for (const lid of links) {
     try {
-      const other = sharedDb.getKbEntry(lid);
+      const other = db.getKbEntry(lid);
       if (other && !JSON.parse(other.links || "[]").includes(id)) {
-        sharedDb.upsertKbEntry({ ...other, links: JSON.stringify([...JSON.parse(other.links || "[]"), id]) });
+        db.upsertKbEntry({ ...other, links: JSON.stringify([...JSON.parse(other.links || "[]"), id]) });
       }
     } catch { /* ignore */ }
   }
   try { await kbIndexEntry(id, title, content) } catch { /* embedding 失败不阻断写入 */ }
-  const backlinks = sharedDb.kbBacklinks(id).map((b) => ({ id: b.id, title: b.title }));
+  const backlinks = db.kbBacklinks(id).map((b) => ({ id: b.id, title: b.title }));
   return { ok: true, id, title, linked: links.length, backlinks };
 }
 
@@ -1882,7 +1911,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/db/vacuum" && req.method === "POST") {
       if (!sharedDb?.vacuumDb) return json(res, { success: false, error: "数据库不可用" });
       try {
-        const r = sharedDb.vacuumDb();
+        const r = db.vacuumDb();
         const mb = (n) => (n / 1024 / 1024).toFixed(1);
         return json(res, { success: true, output: `完成：${mb(r.before)} MB → ${mb(r.after)} MB（回收 ${mb(Math.max(0, r.before - r.after))} MB）` });
       } catch (e) { return json(res, { success: false, error: e.message }); }
@@ -1934,7 +1963,7 @@ http.createServer(async (req, res) => {
       // 7. 模型 API 连通性（用配置的 baseUrl + key 请求 /models）
       let apiOk = false, apiDetail = "";
       try {
-        const rawSettings = sharedDb && sharedDb.getAllSettings ? sharedDb.getAllSettings() : [];
+        const rawSettings = sharedDb && db.getAllSettings ? db.getAllSettings() : [];
         const allSettings = Array.isArray(rawSettings) ? Object.fromEntries(rawSettings.map((r) => [r.key, r.value])) : (rawSettings || {});
         const base = String(allSettings.apiBaseUrl || "").replace(/\/+$/, "");
         const key = String(allSettings.apiKey || "");
@@ -2111,7 +2140,7 @@ http.createServer(async (req, res) => {
         if (!headerKeyUsable || !targetBase) {
           let __dbKey = "", __dbBase = "", __dbKiloKey = "";
           try {
-            const __rows = sharedDb ? sharedDb.getAllSettings() : [];
+            const __rows = sharedDb ? db.getAllSettings() : [];
             for (const __r of __rows) {
               if (__r.key === "apiKey" && __r.value) __dbKey = String(__r.value);
               if (__r.key === "apiBaseUrl" && __r.value) __dbBase = String(__r.value);
@@ -2598,7 +2627,7 @@ http.createServer(async (req, res) => {
       let obj = null;
       if (sharedDb) {
         try {
-          const rows = sharedDb.getAllSettings();
+          const rows = db.getAllSettings();
           obj = {};
           for (const r of rows) obj[r.key] = r.value ?? "";
         } catch {}
@@ -2612,7 +2641,7 @@ http.createServer(async (req, res) => {
       if (!key) return json(res, { error: "缺少 key" }, 400);
       if (isMasked(value)) return json(res, { ok: true, skipped: "masked" });
       if (sharedDb) {
-        try { sharedDb.setSetting(key, value == null ? "" : String(value)); if (key === "keepAwake") syncKeepAwake(); return json(res, { ok: true }); } catch {}
+        try { db.setSetting(key, value == null ? "" : String(value)); if (key === "keepAwake") syncKeepAwake(); return json(res, { ok: true }); } catch {}
       }
       const settings = loadJson("settings.json");
       settings[key] = value;
@@ -2767,7 +2796,7 @@ http.createServer(async (req, res) => {
       try {
         // 1) 标题命中（会话列表本身就是轻量的，直接内存过滤，保证即时反馈）
         const sessions = sharedDb
-          ? (() => { try { return sharedDb.listSessions(); } catch { return [] } })()
+          ? (() => { try { return db.listSessions(); } catch { return [] } })()
           : (loadJson("sessions.json").items || []);
         const titleHits = sessions
           .filter(s => String(s.title || "").toLowerCase().includes(needle))
@@ -2779,7 +2808,7 @@ http.createServer(async (req, res) => {
         if (sharedDb) {
           try {
             const like = "%" + q.replace(/[%_]/g, (m) => "\\" + m) + "%";
-            const rows = sharedDb.db.prepare(
+            const rows = db.db.prepare(
               `SELECT m.id, m.session_id, m.role, m.content, m.created_at, s.title AS session_title
                  FROM messages m LEFT JOIN sessions s ON s.id = m.session_id
                 WHERE m.content LIKE ? ESCAPE '\\' AND m.content <> ''
@@ -2815,7 +2844,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/sessions" && req.method === "POST") {
       const s = await body(req);
       if (sharedDb) {
-        try { return json(res, sharedDb.createSession(s.id || sharedDb.genId(), s.title || "新对话", s.project || "")); } catch {}
+        try { return json(res, db.createSession(s.id || db.genId(), s.title || "新对话", s.project || "")); } catch {}
       }
       const sessions = loadJson("sessions.json");
       if (!sessions.items) sessions.items = [];
@@ -2838,8 +2867,8 @@ http.createServer(async (req, res) => {
       const patch = await body(req);
       if (sharedDb) {
         try {
-          sharedDb.updateSession(sid, { title: patch.title, project: patch.project, updated_at: typeof patch.updated_at === "number" ? patch.updated_at : Date.now() });
-          return json(res, sharedDb.getSession(sid) || { ok: true });
+          db.updateSession(sid, { title: patch.title, project: patch.project, updated_at: typeof patch.updated_at === "number" ? patch.updated_at : Date.now() });
+          return json(res, db.getSession(sid) || { ok: true });
         } catch {}
       }
       const sessions = loadJson("sessions.json");
@@ -2863,8 +2892,8 @@ http.createServer(async (req, res) => {
         const m = await body(req);
         if (sharedDb) {
           try {
-            sharedDb.addMessage(m.id || sharedDb.genId(), sid, m.role, m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "", typeof m.swarm === "string" ? m.swarm : undefined);
-            return json(res, sharedDb.getMessages(sid).slice(-1)[0]);
+            db.addMessage(m.id || db.genId(), sid, m.role, m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "", typeof m.swarm === "string" ? m.swarm : undefined);
+            return json(res, db.getMessages(sid).slice(-1)[0]);
           } catch {}
         }
         const msgs = loadJson(`messages_${sid}.json`);
@@ -2880,8 +2909,8 @@ http.createServer(async (req, res) => {
       const [, sid, msgId] = afterMatch;
       if (sharedDb) {
         try {
-          const anchor = sharedDb.db.prepare("SELECT created_at FROM messages WHERE id = ?").get(msgId);
-          if (anchor) sharedDb.db.prepare("DELETE FROM messages WHERE session_id = ? AND created_at > ?").run(sid, anchor.created_at);
+          const anchor = db.db.prepare("SELECT created_at FROM messages WHERE id = ?").get(msgId);
+          if (anchor) db.db.prepare("DELETE FROM messages WHERE session_id = ? AND created_at > ?").run(sid, anchor.created_at);
           return json(res, { ok: true });
         } catch {}
       }
@@ -2900,7 +2929,7 @@ http.createServer(async (req, res) => {
       const patch = await body(req);
       if (sharedDb) {
         try {
-          sharedDb.updateMessage(msgId, { content: patch.content, thinking: patch.thinking, tool_calls: typeof patch.tool_calls === "string" ? patch.tool_calls : undefined, swarm: typeof patch.swarm === "string" ? patch.swarm : undefined, variants: typeof patch.variants === "string" ? patch.variants : undefined });
+          db.updateMessage(msgId, { content: patch.content, thinking: patch.thinking, tool_calls: typeof patch.tool_calls === "string" ? patch.tool_calls : undefined, swarm: typeof patch.swarm === "string" ? patch.swarm : undefined, variants: typeof patch.variants === "string" ? patch.variants : undefined });
           return json(res, { ok: true });
         } catch {}
       }
@@ -2937,7 +2966,7 @@ http.createServer(async (req, res) => {
       const out = [];
       if (sharedDb) {
         try {
-          for (const r of sharedDb.getAllMemories()) {
+          for (const r of db.getAllMemories()) {
             if (String(r.key).startsWith(pfx)) out.push({ key: String(r.key).slice(pfx.length), value: String(r.value || ""), updatedAt: "" });
           }
           if (out.length) return out;
@@ -3013,8 +3042,8 @@ http.createServer(async (req, res) => {
       const pfx = `persona:${pid}:`;
       if (sharedDb) {
         try {
-          if (purge) { for (const m of personaMemories(pid)) sharedDb.deleteMemory(pfx + m.key); }
-          else sharedDb.deleteMemory(pfx + slug);
+          if (purge) { for (const m of personaMemories(pid)) db.deleteMemory(pfx + m.key); }
+          else db.deleteMemory(pfx + slug);
           return json(res, { ok: true });
         } catch {}
       }
@@ -3062,7 +3091,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/memory-hub" && req.method === "GET") {
       const main = {};
       if (sharedDb) {
-        try { for (const r of sharedDb.getAllMemories()) if (!String(r.key).startsWith("persona:")) main[r.key] = String(r.value || ""); } catch {}
+        try { for (const r of db.getAllMemories()) if (!String(r.key).startsWith("persona:")) main[r.key] = String(r.value || ""); } catch {}
       } else {
         const mem = loadJson("memories.json");
         for (const k of Object.keys(mem)) if (!k.startsWith("persona:")) main[k] = String(mem[k] || "");
@@ -3073,7 +3102,7 @@ http.createServer(async (req, res) => {
           const items = [];
           const pfx = `persona:${p.id}:`;
           if (sharedDb) {
-            try { for (const r of sharedDb.getAllMemories()) if (String(r.key).startsWith(pfx)) items.push({ key: String(r.key).slice(pfx.length), value: String(r.value || "") }); } catch {}
+            try { for (const r of db.getAllMemories()) if (String(r.key).startsWith(pfx)) items.push({ key: String(r.key).slice(pfx.length), value: String(r.value || "") }); } catch {}
           } else {
             const mem = loadJson("memories.json");
             for (const k of Object.keys(mem)) if (k.startsWith(pfx)) items.push({ key: k.slice(pfx.length), value: String(mem[k] || "") });
@@ -3094,8 +3123,8 @@ http.createServer(async (req, res) => {
       const pfx = `persona:${pid}:`;
       if (sharedDb) {
         try {
-          if (slug) sharedDb.deleteMemory(pfx + slug);
-          else for (const m of personaMemories(pid)) sharedDb.deleteMemory(pfx + m.key);
+          if (slug) db.deleteMemory(pfx + slug);
+          else for (const m of personaMemories(pid)) db.deleteMemory(pfx + m.key);
           return json(res, { ok: true });
         } catch {}
       }
@@ -3110,7 +3139,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/memories" && req.method === "GET") {
       if (sharedDb) {
         try {
-          const rows = sharedDb.getAllMemories();
+          const rows = db.getAllMemories();
           return json(res, Object.fromEntries(rows.map((r) => [r.key, r.value])));
         } catch {}
       }
@@ -3691,7 +3720,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         // 掩码回显不是真钥匙:为空/含 **** 时回退 SQLite 存储密钥
         if (!apiKey || apiKey.indexOf("****") >= 0) {
           try {
-            const __rows = sharedDb ? sharedDb.getAllSettings() : [];
+            const __rows = sharedDb ? db.getAllSettings() : [];
             for (const __r of __rows) { if (__r.key === "apiKey" && __r.value) apiKey = String(__r.value); }
           } catch {}
         }
@@ -3856,7 +3885,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     async function serverLLM(messages, maxTokens, temperature) {
       let cfgBase = "", cfgKey = "", cfgModel = "";
       try {
-        const rows = sharedDb ? sharedDb.getAllSettings() : [];
+        const rows = sharedDb ? db.getAllSettings() : [];
         for (const r of rows) {
           if (r.key === "apiBaseUrl") cfgBase = String(r.value || "");
           if (r.key === "apiKey") cfgKey = String(r.value || "");
@@ -4048,44 +4077,63 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/backup/export" && req.method === "GET") {
       try {
         if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-        const sessions = sharedDb.listSessions();
+        const sessions = db.listSessions();
         const messages = {};
-        for (const ses of sessions) messages[ses.id] = sharedDb.getMessages(ses.id);
-        const settingsRows = sharedDb.getAllSettings();
+        for (const ses of sessions) messages[ses.id] = db.getMessages(ses.id);
+        const settingsRows = db.getAllSettings();
         const settingsObj = Object.fromEntries(settingsRows.map((r) => [r.key, r.value]));
-        const memories = sharedDb.getAllMemories();
+        const memories = db.getAllMemories();
         return jsonRaw(res, { version: 1, exported_at: new Date().toISOString(), sessions, messages, settings: settingsObj, memories });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/backup/import" && req.method === "POST") {
       try {
+        // 数据库不可用时明确报错：此前会抛 TypeError（reading 'listSessions'），
+        // 用户看到的是内部错误而不是「数据库没起来，请重启应用」
+        if (!sharedDb) return json(res, { error: "本地数据库不可用，无法导入。请重启应用后重试。" }, 503);
         const data = await body(req);
         if (!data.sessions) return json(res, { error: "备份文件格式不正确" }, 400);
-        let ns = 0, nm = 0;
-        for (const ses of data.sessions) {
-          sharedDb.createSession(ses.id, ses.title || "导入会话");
+        let ns = 0, nm = 0, skipped = 0;
+        // 导入的会话 id 可能与现有数据冲突。底层 createSession 是
+        // INSERT OR REPLACE —— 直接导入会静默覆盖当前会话，用户以为在
+        // "恢复备份"，实际把现有数据冲掉了。冲突时改开新 id 并注明来源。
+        const existing = new Set((db.listSessions() || []).map((s) => s.id));
+        const idMap = new Map();
+        for (const ses of (data.sessions || [])) {
+          let id = ses.id;
+          if (!id) { id = db.genId(); }
+          else if (existing.has(id)) {
+            id = db.genId();
+            skipped++;
+          }
+          idMap.set(ses.id, id);
+          db.createSession(id, ses.title || "导入会话");
           ns++;
         }
         for (const [sid, msgs] of Object.entries(data.messages || {})) {
+          // 消息归属的会话必须存在：备份文件可能被手工编辑过，
+          // 写入孤儿消息后界面上永远看不到，却占着库
+          const targetSid = idMap.get(sid) || (existing.has(sid) ? sid : null);
+          if (!targetSid) continue;
           for (const m of (msgs || [])) {
-            sharedDb.addMessage(m.id || sharedDb.genId(), sid, m.role, m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "");
+            db.addMessage(m.id || db.genId(), targetSid, m.role, m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "");
             nm++;
           }
         }
         for (const [k, v] of Object.entries(data.settings || {})) {
           // 旧版（掩码导出时期）的备份文件里密钥是 ****，跳过以免把掩码写回库
           if (isMasked(v)) continue;
-          sharedDb.setSetting(k, String(v));
+          db.setSetting(k, String(v));
         }
-        for (const mem of (data.memories || [])) sharedDb.setMemory(mem.key || sharedDb.genId(), mem.value || "");
-        return json(res, { ok: true, sessions: ns, messages: nm });
+        for (const mem of (data.memories || [])) db.setMemory(mem.key || db.genId(), mem.value || "");
+        return json(res, { ok: true, sessions: ns, messages: nm, renamed: skipped });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
 
     // ─── 知识库 RAG ───
     // embeddings 代理：按设置自动选地址与密钥（未配置时明确报错）
     async function kbEmbedTexts(texts) {
-      const rows = sharedDb ? sharedDb.getAllSettings() : [];
+      const rows = sharedDb ? db.getAllSettings() : [];
       const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
       const base = st.apiBaseUrl || "";
       const key = st.apiKey || "";
@@ -4122,8 +4170,8 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/kb/entries" && req.method === "GET") {
       if (!sharedDb) return json(res, { entries: [] });
       try {
-        const rows = sharedDb.listKbEntries();
-        const all = rows.map((e) => ({ ...e, tags: JSON.parse(e.tags || "[]"), links: JSON.parse(e.links || "[]"), backlinkCount: sharedDb.kbBacklinks(e.id).length }));
+        const rows = db.listKbEntries();
+        const all = rows.map((e) => ({ ...e, tags: JSON.parse(e.tags || "[]"), links: JSON.parse(e.links || "[]"), backlinkCount: db.kbBacklinks(e.id).length }));
         return json(res, { entries: all });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
@@ -4138,7 +4186,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     if (url.pathname === "/api/kb/reindex" && req.method === "POST") {
       try {
         if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-        const es = sharedDb.listKbEntries();
+        const es = db.listKbEntries();
         let chunks = 0, notes = 0;
         for (const e of es) { const c = await kbIndexEntry(e.id, e.title, e.content || ""); chunks += c; notes++ }
         return json(res, { ok: true, notes, chunks });
@@ -4146,29 +4194,29 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
     }
     if (url.pathname === "/api/kb/notebooks" && req.method === "GET") {
       if (!sharedDb) return json(res, { notebooks: [] });
-      try { return json(res, { notebooks: sharedDb.kbNotebooks() }); }
+      try { return json(res, { notebooks: db.kbNotebooks() }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/search-notes" && req.method === "GET") {
       if (!sharedDb) return json(res, { results: [] });
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return json(res, { results: [] });
-      try { return json(res, { results: sharedDb.kbSearchNotes(q) }); }
+      try { return json(res, { results: db.kbSearchNotes(q) }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname.startsWith("/api/kb/entry/") && req.method === "DELETE") {
-      try { sharedDb.deleteKbEntry(url.pathname.split("/").pop()); return json(res, { ok: true }); }
+      try { db.deleteKbEntry(url.pathname.split("/").pop()); return json(res, { ok: true }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/status" && req.method === "GET") {
       if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-      const rows = sharedDb.kbAll();
+      const rows = db.kbAll();
       const files = [...new Set(rows.map((r) => r.path))];
       return json(res, { chunks: rows.length, files: files.length, paths: files.slice(0, 200) });
     }
     if (url.pathname === "/api/kb/clear" && req.method === "POST") {
       if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-      sharedDb.kbClear();
+      db.kbClear();
       return json(res, { ok: true });
     }
     if (url.pathname === "/api/kb/ingest" && req.method === "POST") {
@@ -4195,7 +4243,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         })(folder, 0);
         let totalChunks = 0;
         for (const fp of files) {
-          sharedDb.kbDeleteByPath(fp);
+          db.kbDeleteByPath(fp);
           let text = "";
           try { text = fsMod.readFileSync(fp, "utf-8"); } catch { continue; }
           const chunks = kbSplitChunks(text).slice(0, 120);
@@ -4203,7 +4251,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           for (let i = 0; i < chunks.length; i += 16) {
             const batch = chunks.slice(i, i + 16);
             const vectors = await kbEmbedTexts(batch);
-            batch.forEach((ck, j) => { sharedDb.kbInsert(fp, ck, vectors[j] || []); totalChunks++; });
+            batch.forEach((ck, j) => { db.kbInsert(fp, ck, vectors[j] || []); totalChunks++; });
           }
         }
         return json(res, { ok: true, files: files.length, chunks: totalChunks });
@@ -4214,9 +4262,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const { query, topK } = await body(req);
         if (!query) return json(res, { error: "缺少 query" }, 400);
         if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-        if (sharedDb.kbCount() === 0) return json(res, { hits: [] });
+        if (db.kbCount() === 0) return json(res, { hits: [] });
         const [qv] = await kbEmbedTexts([String(query).slice(0, 1000)]);
-        const hits = sharedDb.kbAll()
+        const hits = db.kbAll()
           .map((r) => ({ path: r.path, chunk: r.chunk, score: kbCosine(qv, JSON.parse(r.vector)) }))
           .sort((a, b) => b.score - a.score)
           .slice(0, Math.min(topK || 4, 8));
@@ -4243,7 +4291,7 @@ function pushServerNotice(n) {
 }
 
 function runScheduler() {  try {
-    const rows = sharedDb ? sharedDb.getAllSettings() : [];
+    const rows = sharedDb ? db.getAllSettings() : [];
     const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     const base = s.apiBaseUrl || "";
     const key = s.apiKey || "";
@@ -4323,7 +4371,7 @@ function syncKeepAwake() {
   let on = true; // 默认开启（未设置过该选项视为开启）
   try {
     if (sharedDb) {
-      const v = sharedDb.getSetting("keepAwake");
+      const v = db.getSetting("keepAwake");
       if (v !== undefined && v !== null && v !== "") on = v === "true";
     } else {
       const s = loadJson("settings.json");

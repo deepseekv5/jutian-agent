@@ -908,7 +908,12 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       const r = await fetch('/api/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text })
                       const d = await r.json()
                       if (d.error || !r.ok) reportError('导入失败: ' + (d.error || `服务端返回 ${r.status}`))
-                      else alert(`导入完成：${d.sessions} 个会话 / ${d.messages} 条消息`)
+                      else {
+                        // renamed > 0 说明有会话 id 与现有数据冲突、已改开新 id。
+                        // 必须告知用户——否则他会以为备份覆盖了原数据，找不到变化而困惑
+                        const extra = d.renamed > 0 ? `\n\n其中 ${d.renamed} 个会话与现有数据 id 冲突，已作为新会话导入（原数据未改动）。` : ''
+                        alert(`导入完成：${d.sessions} 个会话 / ${d.messages} 条消息${extra}`)
+                      }
                     } catch (e: any) { reportError('导入失败: ' + e.message) }
                     e.target.value = ''
                   }} />
