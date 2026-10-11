@@ -3,6 +3,12 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [11.0.6] - 2026-10-11
+
+### 项目可见性(仓库元数据)
+- homepage 指向已上线官网(此前指向 README);description 更新至 v11 功能面;keywords 补 ai-persona/privacy/chatgpt-alternative
+- README 首屏修复:版本徽章 8.0.0→11.0.5、下载链接旧锚点→latest、新增官网/协议入口、技术提示降级到免费模型章节(首屏让位给产品定位)
+
 ## [11.0.5] - 2026-10-11
 
 ### 工程清理(审计驱动)

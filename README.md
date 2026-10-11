@@ -1,7 +1,6 @@
 <div align="center">
 
 # 巨天agent
-# ⚠️建议使用OpenRouter Free Models Router作为主力免费模型,仍可使用自己的模型⚠️
 
 **桌面 AI 工作台 — 对话 · 代码 · 集群 · 免费模型**
 
@@ -10,12 +9,12 @@
 [English](README_EN.md) | **简体中文**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v8.0.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Version](https://img.shields.io/badge/v11.0.5-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Platform](https://img.shields.io/badge/macOS%20·%20Windows-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Docs](https://img.shields.io/badge/docs-12%20篇-8b5cf6?style=for-the-badge&labelColor=0a0a0b)](#docs)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
 
-[下载](https://github.com/deepseekv5/jutian-agent/releases) · [文档](#docs) · [快速开始](#quick-start) · [架构](#architecture) · [FAQ](#faq)
+[官网](https://deepseekv5.github.io/jutian-agent/) · [下载](https://github.com/deepseekv5/jutian-agent/releases) · [文档](#docs) · [快速开始](#quick-start) · [架构](#architecture) · [协议](docs/legal.html) · [FAQ](#faq)
 
 </div>
 
@@ -28,7 +27,7 @@
 > 科技不是高高在上,而是服务于人民。
 >
 > 浏览器里的 AI 要你迁就它。装在桌面上的 AI,直接住进你的文件、终端和工作流。
-> 下载地址:https://github.com/deepseekv5/jutian-agent/releases#release-v8.1.0
+> 下载地址:https://github.com/deepseekv5/jutian-agent/releases/latest
 
 <br>
 

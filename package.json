@@ -1,18 +1,24 @@
 {
   "name": "jutian-agent",
-  "version": "11.0.5",
+  "version": "11.0.6",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
-  "description": "巨天agent - 桌面 AI 智能体（终端 / 文件 / PPT / 代码）",
+  "description": "巨天agent — 开源本地优先的 AI 桌面工作台:39 工具直连终端文件、免费模型零门槛、AI 角色(记忆/朗读/画画)、深度调研、目标模式",
   "keywords": [
     "electron",
     "ai-agent",
     "desktop",
     "local-first",
-    "mcp",
+    "llm",
     "free-models",
-    "openai-compatible"
+    "openai-compatible",
+    "ai-persona",
+    "mcp",
+    "react",
+    "typescript",
+    "chatgpt-alternative",
+    "privacy"
   ],
   "engines": {
     "node": ">=18"
@@ -24,7 +30,7 @@
   "bugs": {
     "url": "https://github.com/deepseekv5/jutian-agent/issues"
   },
-  "homepage": "https://github.com/deepseekv5/jutian-agent#readme",
+  "homepage": "https://deepseekv5.github.io/jutian-agent/",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build:server && vite build",
