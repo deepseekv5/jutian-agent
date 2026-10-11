@@ -188,6 +188,42 @@ describe('跨站与异常请求', () => {
   }, 30000)
 })
 
+describe('技能安装路径穿越', () => {
+  // 最危险的一条：install-from-github 会先 rm -rf 目标目录再 clone。
+  // 修复前 "https://github.com/x/../../.." 得到 repoName=".."，
+  // 目标变成 ~/.lyclaw 本身 —— 一次调用删掉用户全部数据。
+  it('install-from-github 拒绝 ../ 型仓库名', async () => {
+    const r = await fetch(`${BASE}/api/skills/install-from-github`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ githubUrl: 'https://github.com/x/../../..' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+    expect(r.error).toMatch(/仓库名/)
+  })
+
+  it('install-from-github 拒绝 URL 解析失败的输入', async () => {
+    const r = await fetch(`${BASE}/api/skills/install-from-github`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ githubUrl: 'not a url at all' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+  })
+
+  it('install-from-market 拒绝非法 skillId', async () => {
+    const r = await fetch(`${BASE}/api/skills/install-from-market`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ skillId: '../../../evil' }),
+    }).then(r => r.json())
+    expect(r.success).toBe(false)
+  })
+
+  it('load_skill 拒绝穿越名称（否则可读任意目录的 skill.json）', async () => {
+    const r = await execTool('load_skill', { name: '../../../etc' })
+    expect(r.success).toBe(false)
+    expect(r.error).toContain('非法技能名称')
+  })
+})
+
 describe('调研历史 API', () => {
   it('列表返回 items 数组', async () => {
     const d = await fetch(`${BASE}/api/research/history`, { headers: ORIGIN }).then(r => r.json())

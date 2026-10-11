@@ -954,7 +954,10 @@ async function list_skills() {
 }
 async function load_skill(a) {
   try {
-    const dir = path.join(SKILL_DIR, a.name);
+    // 名称必须清洗：此前直接 path.join(SKILL_DIR, a.name)，传 "../../.." 可读
+    // 任意目录下的 skill.json / SKILL.md（信息泄露，与 uninstall 同类问题）
+    const dir = resolveWithin(SKILL_DIR, a.name);
+    if (!dir) return { success: false, error: "非法技能名称" };
     const out = {};
     const jsonPath = path.join(dir, "skill.json");
     const mdPath = path.join(dir, "SKILL.md");
@@ -2528,7 +2531,10 @@ http.createServer(async (req, res) => {
       const skill = market.find((s) => s.id === skillId);
       if (!skill) return json(res, { success: false, error: "Skill 不存在" });
       try {
-        const dir = path.join(SKILL_DIR, skillId);
+        // 市场条目理论上受控，但 skill_market.json 可被手工编辑或被污染的
+        // 导入覆盖 —— 仍走同一道白名单校验，不给"读到的 id 一定安全"留假设
+        const dir = resolveWithin(SKILL_DIR, skillId);
+        if (!dir) return json(res, { success: false, error: "非法技能名称" });
         await fsp.mkdir(dir, { recursive: true });
         await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({
           name: skillId, display_name: skill.name, version: skill.version,
@@ -2552,8 +2558,20 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/skills/install-from-github" && req.method === "POST") {
       const { githubUrl } = await body(req);
       if (!githubUrl || !githubUrl.includes("github.com")) return json(res, { success: false, error: "无效的 GitHub 链接" });
-      const repoName = githubUrl.split("/").slice(-1)[0].replace(/\.git$/, "");
-      const destDir = path.join(SKILL_DIR, repoName);
+      // 仓库名必须校验：此前直接取 URL 最后一段拼路径，传
+      // "https://github.com/x/../../.." 会得到 repoName=".."，
+      // destDir 变成 ~/.lyclaw 本身 —— 下一行的 rm -rf 会删掉用户全部数据。
+      // 这里用 URL 解析取 pathname 段，并强制白名单字符集。
+      let repoName = "";
+      try {
+        const segs = new URL(githubUrl).pathname.split("/").filter(Boolean);
+        repoName = (segs[segs.length - 1] || "").replace(/\.git$/, "");
+      } catch { return json(res, { success: false, error: "无效的 GitHub 链接" }); }
+      if (!/^[\w.-]+$/.test(repoName) || repoName === "." || repoName === ".." || repoName.startsWith(".")) {
+        return json(res, { success: false, error: "无法从该链接确定合法的仓库名" });
+      }
+      const destDir = resolveWithin(SKILL_DIR, repoName);
+      if (!destDir) return json(res, { success: false, error: "非法仓库名" });
       try {
         // 重装/更新：先清空旧目录，否则 git clone 报 "already exists and is not an empty directory"
         await fsp.rm(destDir, { recursive: true, force: true });
