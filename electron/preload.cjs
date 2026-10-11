@@ -8,7 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateCheck: () => ipcRenderer.invoke('update-check'),
   updateApply: (asarUrl) => ipcRenderer.invoke('update-apply', asarUrl),
   updateCancel: () => ipcRenderer.invoke('update-cancel'),
+  updateRestart: () => ipcRenderer.invoke('update-restart'),
   quitApp: () => ipcRenderer.invoke('app-quit'),
+  onUpdateReady: (callback) => ipcRenderer.on('update-ready', () => callback()),
   onUpdateProgress: (callback) => {
     ipcRenderer.on('update-progress', (_event, p) => callback(p))
   },

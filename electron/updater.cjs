@@ -2,7 +2,9 @@
  * updater.cjs — 应用内自更新(v8.2:全屏更新覆盖层 + 实时进度)
  *
  * 机制:Release 资产里放打包好的 app.asar(含全部代码 ~60MB)。
- * 更新 = 下载(实时进度)→ 校验 → 备份 → 原子替换 → 倒计时重启。
+ * v11.0.4:自动更新 —— 开机/周期检查发现新版即静默下载,下载完成只提示
+ * (不自动重启,用户点「重启即用」或下次自行重启时生效);GitHub 连不通
+ * 自动切换镜像站;更新 = 下载(实时进度)→ 校验 → 备份 → 原子替换 → 提示。
  * 零新依赖;未签名 mac 上 electron-updater 不可用,故自研原子替换。
  *
  * IPC:
@@ -17,6 +19,24 @@ const path = require('path')
 const os = require('os')
 
 const REPO = 'deepseekv5/jutian-agent'
+// GitHub 镜像站(国内访问失败时依次切换;全部失败则如实报错)
+const GH_MIRRORS = [
+  'https://ghfast.top/',
+  'https://gh-proxy.com/',
+  'https://ghproxy.net/',
+  'https://hub.gitmirror.com/',
+]
+function withMirror(url, mirror) {
+  return mirror + url.replace(/^https?:\/\//, '')
+}
+/** 带镜像回落地 fetch:先直连,失败依次换镜像 */
+async function fetchWithMirror(url, opts) {
+  try { return await fetch(url, opts) } catch {}
+  for (const m of GH_MIRRORS) {
+    try { const r = await fetch(withMirror(url, m), opts); if (r.ok) return r } catch {}
+  }
+  return null
+}
 const UA = 'jutian-agent-updater'
 const DATA_DIR = path.join(os.homedir(), '.lyclaw', 'data')
 const NOTICE_FILE = () => path.join(DATA_DIR, 'notices.json')
@@ -40,6 +60,16 @@ function pushUpdateNotice(title, body) {
   } catch {}
 }
 
+/** 广播「更新已就绪,重启即用」 */
+function sendReady() {
+  try {
+    for (const w of BrowserWindow.getAllWindows()) {
+      try { w.webContents.send('update-ready') } catch {}
+    }
+  } catch {}
+  pushUpdateNotice('新版本已就绪', '更新已下载完成 — 重启应用后生效(设置 → 关于 → 重启即用)')
+}
+
 function asarPath() {
   const p = app.getAppPath()
   return p.endsWith('.asar') ? p : null
@@ -56,10 +86,11 @@ function cmpVer(a, b) {
 }
 
 async function checkLatest() {
-  const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+  const r = await fetchWithMirror(`https://api.github.com/repos/${REPO}/releases/latest`, {
     headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': UA },
     signal: AbortSignal.timeout(15000),
   })
+  if (!r) throw new Error('无法连接 GitHub(已尝试镜像站),请检查网络')
   if (!r.ok) throw new Error(`GitHub API ${r.status}`)
   const rel = await r.json()
   if (!rel || !rel.tag_name) throw new Error('无发布信息')
@@ -87,7 +118,8 @@ async function applyUpdate(asarUrl) {
   const abortCtl = new AbortController()
   _currentAbort = abortCtl
   try {
-    const r = await fetch(asarUrl, { headers: { 'User-Agent': UA }, signal: abortCtl.signal })
+    const r = await fetchWithMirror(asarUrl, { headers: { 'User-Agent': UA }, signal: abortCtl.signal })
+    if (!r) throw new Error('下载失败(已尝试镜像站),请检查网络')
     if (!r.ok) throw new Error(`下载失败 HTTP ${r.status}`)
     // 流式接收,逐块广播进度
     const total = Number(r.headers.get('content-length') || 0)
@@ -115,15 +147,8 @@ async function applyUpdate(asarUrl) {
     try { fs.copyFileSync(target, bak) } catch {}
     fs.renameSync(tmp, target)
     sendProgress({ stage: 'done', pct: 100 })
-    // 3 秒倒计时后优雅重启
-    let left = 3
-    const tick = () => {
-      sendProgress({ stage: 'restarting', left })
-      if (left <= 0) { try { app.relaunch(); app.exit(0) } catch {}; return }
-      left -= 1
-      setTimeout(tick, 1000)
-    }
-    setTimeout(tick, 300)
+    // v11.0.4:下载替换完成只提示「重启即用」,不自动重启
+    sendReady()
   } catch (e) {
     const cancelled = _currentAbort && _currentAbort.signal.aborted
     sendProgress({ stage: 'error', error: cancelled ? '已取消' : String(e.message || e) })
@@ -156,24 +181,25 @@ function register() {
     return { ok: true }
   })
 
-  // 开机静默自检(延迟 12s):有新版 → 通知中心提醒
+  ipcMain.handle('update-restart', async () => {
+    try { app.relaunch(); app.exit(0) } catch {}
+    return { ok: true }
+  })
+
+  // v11.0.4 开机静默自检(延迟 12s):有新版 → 自动静默下载
   setTimeout(async () => {
     try {
       const info = await checkLatest()
-      if (info.available) {
-        pushUpdateNotice(`巨天agent v${info.latest} 已发布`, `当前 v${info.current} — 到 设置 → 关于 一键更新`)
-      }
+      if (info.available && info.asarUrl) applyUpdate(info.asarUrl).catch(() => {})
     } catch { /* 离线/限流,静默 */ }
   }, 12000)
 
-  // v10.8:使用中持续检查 —— 每 30 分钟静默自检一次,发现新版即推送提醒
+  // v11.0.4:使用中持续检查 —— 每 30 分钟自检,有新版自动静默下载
   const PERIODIC_MS = 30 * 60 * 1000
   setInterval(async () => {
     try {
       const info = await checkLatest()
-      if (info.available) {
-        pushUpdateNotice(`巨天agent v${info.latest} 已发布`, `当前 v${info.current} — 到 设置 → 关于 一键更新`)
-      }
+      if (info.available && info.asarUrl) applyUpdate(info.asarUrl).catch(() => {})
     } catch { /* 离线/限流,静默 */ }
   }, PERIODIC_MS)
 }
