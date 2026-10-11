@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey } from '../hooks/useTheme';
+import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
 import CliInstallModal from '../app/CliInstallModal';
 import { useLanguage } from '../hooks/useLanguage';
 import { APP_VERSION } from '../brand'
@@ -987,6 +987,15 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   })}
                 </div>
                 <p className="text-[10.5px] mt-1.5" style={{ color: c.textTertiary }}>{t('影响新建对话、链接与选中态等强调元素。', 'Affects primary buttons, links and active states.')}</p>
+                {/* v11 自定义种子色：任意颜色，暗色变体自动派生 */}
+                <div className="flex items-center gap-2 mt-2">
+                  <input type="color" defaultValue="#10a37f"
+                    onChange={e => { setCustomAccent(e.target.value); setAccentTick(x => x + 1) }}
+                    className="w-8 h-8 rounded-lg cursor-pointer bg-transparent"
+                    style={{ border: `1px solid ${c.border}` }}
+                    title={t('自定义种子色', 'Custom seed color')} aria-label={t('自定义种子色', 'Custom seed color')} />
+                  <span className="text-[11.5px]" style={{ color: c.textTertiary }}>{t('自定义种子色（暗色变体自动派生）', 'Custom seed color — dark variant auto-derived')}</span>
+                </div>
               </Sub>
 
               {/* 窗口置顶（27） */}

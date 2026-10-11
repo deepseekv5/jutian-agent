@@ -170,8 +170,56 @@ export const ACCENT_PRESETS: Record<string, { label: string; light: string; dark
   amber: { label: '琥珀', light: '#b45309', dark: '#f59e0b' },
   rose: { label: '玫红', light: '#be123c', dark: '#fb7185' },
   blue: { label: '蓝', light: '#1d4ed8', dark: '#60a5fa' },
+  violet: { label: '紫', light: '#7c3aed', dark: '#a78bfa' },
+  green: { label: '绿', light: '#15803d', dark: '#4ade80' },
+  orange: { label: '橙', light: '#ea580c', dark: '#fb923c' },
+  cyan: { label: '青', light: '#0e7490', dark: '#22d3ee' },
+  pink: { label: '粉', light: '#db2777', dark: '#f472b6' },
 }
 const ACCENT_KEY = 'lyclaw_accent'
+const ACCENT_CUSTOM_KEY = 'lyclaw_accent_custom'
+
+/** hex → {h,s,l} */
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const m = hex.replace('#', '')
+  const r = parseInt(m.slice(0, 2), 16) / 255, g = parseInt(m.slice(2, 4), 16) / 255, b = parseInt(m.slice(4, 6), 16) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  if (max === min) return { h: 0, s: 0, l: l * 100 }
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h = 0
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+  else if (max === g) h = ((b - r) / d + 2) / 6
+  else h = ((r - g) / d + 4) / 6
+  return { h: h * 360, s: s * 100, l: l * 100 }
+}
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100; l /= 100
+  const k = (n: number) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  const to = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return '#' + to(f(0)) + to(f(8)) + to(f(4))
+}
+
+/** v11 自定义种子色：亮色原样，暗色派生为同色相提亮变体（MD3 思路简化版） */
+export function setCustomAccent(lightHex: string) {
+  try {
+    const { h, s, l } = hexToHsl(lightHex)
+    const dark = hslToHex(h, Math.min(100, s + 8), Math.min(82, Math.max(62, l + 26)))
+    localStorage.setItem(ACCENT_CUSTOM_KEY, JSON.stringify({ light: lightHex, dark }))
+    localStorage.setItem(ACCENT_KEY, 'custom')
+  } catch {}
+  window.dispatchEvent(new CustomEvent('accent-changed'))
+}
+export function getCustomAccent() {
+  try {
+    const raw = localStorage.getItem(ACCENT_CUSTOM_KEY)
+    if (raw) { const v = JSON.parse(raw); if (v && v.light && v.dark) return v }
+  } catch {}
+  return null
+}
 
 export function getAccentKey(): string {
   try { return localStorage.getItem(ACCENT_KEY) || 'graphite' } catch { return 'graphite' }
@@ -213,6 +261,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [])
   const cRaw = theme === 'dark' ? dark : light
   const c = useMemo(() => {
+    if (accentKey === 'custom') {
+      const cu = getCustomAccent()
+      if (cu) return { ...cRaw, accent: theme === 'dark' ? cu.dark : cu.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }
+      return cRaw
+    }
     const preset = ACCENT_PRESETS[accentKey]
     if (!preset || accentKey === 'graphite') return cRaw
     return { ...cRaw, accent: theme === 'dark' ? preset.dark : preset.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }

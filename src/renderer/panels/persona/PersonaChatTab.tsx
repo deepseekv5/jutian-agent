@@ -80,13 +80,16 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
   const [speakingId, setSpeakingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const updateTTS = (cfg: Partial<PersonaTTSConfig>) => { const n = { ...tts, ...cfg }; setTTS(n); saveTTSConfig(n) }
+  const speakingIdRef = useRef<string | null>(null)
   const speakMsg = useCallback(async (id: string, content: string) => {
-    // 再点一次 = 停止
+    // 再点一次 = 停止（合成等待中点击也立即取消）
     if (speakingId === id) {
+      speakingIdRef.current = null
       audioRef.current?.pause(); audioRef.current = null
       try { window.speechSynthesis?.cancel() } catch {}
       setSpeakingId(null); return
     }
+    // v11.0.1:点击立即进入「合成中」状态 —— 合成需要几秒,期间按钮显示进度,不再无声无息
     // 朗读多端适配：TTS 服务失败时降级到浏览器/系统内置语音（Win/macOS/手机端均有）
     const browserFallback = () => {
       try {
@@ -106,14 +109,18 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
     }
     try {
       audioRef.current?.pause()
+      speakingIdRef.current = id
+      setSpeakingId(id)
       const url = await speakText(content, tts)
+      // 等待期间用户已点停止 → 丢弃结果
+      if (speakingIdRef.current !== id) { URL.revokeObjectURL(url); return }
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; setSpeakingId(null) }
-      audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; setSpeakingId(null) }
-      setSpeakingId(id)
+      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; speakingIdRef.current = null; setSpeakingId(null) }
+      audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; speakingIdRef.current = null; setSpeakingId(null) }
       await audio.play()
     } catch {
+      speakingIdRef.current = null
       if (!browserFallback()) setSpeakingId(null)
     }
   }, [speakingId, tts])

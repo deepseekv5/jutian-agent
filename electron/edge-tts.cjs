@@ -52,9 +52,27 @@ function edgeTimestamp() {
  * @param {number} speed 语速倍率（1.0 = +0%）
  * @returns {Promise<Buffer>}
  */
-function synthesize(text, voice, speed) {
+function splitText(text, max) {
+  // 按句末标点切段（每段 ≤ max 字），保证语气自然断点
+  const out = [];
+  let rest = String(text || '').trim();
+  while (rest.length > max) {
+    let cut = -1;
+    for (let i = max; i >= Math.floor(max * 0.6); i--) {
+      if ('。！？；.!?;，,'.includes(rest[i - 1])) { cut = i; break; }
+    }
+    if (cut <= 0) cut = max;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest) out.push(rest);
+  return out.length ? out : [text];
+}
+
+/** 单段合成（一条 WebSocket 连接） */
+function synthOne(spokenRaw, voice, speed) {
   return new Promise((resolve, reject) => {
-    const spoken = String(text || "").trim().slice(0, 1800);
+    const spoken = String(spokenRaw || "").trim();
     if (!spoken) { reject(new Error("缺少文本")); return; }
     const v = voice || "zh-CN-XiaoxiaoNeural";
     const ratePct = Math.round(((Number(speed) || 1) - 1) * 100);
@@ -158,6 +176,19 @@ async function listVoices() {
   cachedVoices = await res.json();
   cachedVoicesAt = Date.now();
   return cachedVoices;
+}
+
+/**
+ * 合成入口：长文按句切段并行合成（多连接同时跑），Buffer.concat 拼接。
+ * mp3 帧独立，顺序拼接可直接播放。
+ */
+async function synthesize(text, voice, speed) {
+  const clean = String(text || '').trim().slice(0, 6000);
+  if (!clean) throw new Error('缺少文本');
+  const segs = splitText(clean, 300);
+  if (segs.length === 1) return synthOne(segs[0], voice, speed);
+  const bufs = await Promise.all(segs.map((seg) => synthOne(seg, voice, speed)));
+  return Buffer.concat(bufs);
 }
 
 module.exports = { synthesize, listVoices, secMsGec };

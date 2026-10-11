@@ -3643,11 +3643,22 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const { text, input, voice, speed } = await body(req);
         const spoken = text || input;
         if (!spoken) return json(res, { error: "缺少 text" }, 400);
+        // v11.0.1:TTS 磁盘缓存 —— 相同文本+音色+语速第二次朗读零等待
+        const ttsCacheKey = crypto.createHash("sha1").update(`${spoken}|${voice || ""}|${Number(speed) || 1}`).digest("hex");
+        const ttsCacheFile = path.join(DATA_DIR, "tts-cache", ttsCacheKey + ".mp3");
+        try {
+          if (fs.existsSync(ttsCacheFile)) {
+            res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg", "X-TTS-Cache": "hit" });
+            res.end(fs.readFileSync(ttsCacheFile));
+            return;
+          }
+        } catch {}
         // v10.8：Node 原生 Edge TTS 优先（零 python 依赖，mac-x64/Win 全平台可用，
         // 引擎随 app.asar 分发）；失败回落打包的 python edge-tts 服务（5050）。
         try {
           const nodeTTS = require("./electron/edge-tts.cjs");
           const mp3 = await nodeTTS.synthesize(spoken, voice || "zh-CN-XiaoxiaoNeural", Number(speed) || 1.0);
+          try { fs.mkdirSync(path.join(DATA_DIR, "tts-cache"), { recursive: true }); fs.writeFileSync(ttsCacheFile, mp3); } catch {}
           res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg" });
           res.end(mp3);
           return;
