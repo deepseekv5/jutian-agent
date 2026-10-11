@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
+import { APP_VERSION } from '../brand'
 
 export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona'
 
@@ -58,6 +59,13 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+  // 氛围模式状态（App.tsx 渲染光晕层，此处只维护开关）
+  const [ambient, setAmbient] = useState(() => localStorage.getItem('lyclaw_ambient') === '1')
+  useEffect(() => {
+    const h = () => setAmbient(localStorage.getItem('lyclaw_ambient') === '1')
+    window.addEventListener('ambient-changed', h)
+    return () => window.removeEventListener('ambient-changed', h)
+  }, [])
   return (
     <div className="h-10 flex items-center shrink-0 border-b px-2 gap-1 glass titlebar-drag" style={{ borderColor: c.border, paddingLeft: isMac ? 14 : 8 }}>
       {/* 标签条 */}
@@ -122,6 +130,28 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
 
       {/* 右侧状态区 */}
       <div className="flex items-center gap-1 shrink-0 titlebar-nodrag">
+
+        {/* 版本芯片 */}
+        <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded-md select-none" style={{ background: c.bgInput, color: c.textMuted }} title={`巨天agent v${APP_VERSION}`}>
+          v{APP_VERSION}
+        </span>
+        {/* 氛围模式：全屏氛围光晕（再点一次关闭，Esc 也可退出） */}
+        <button
+          onClick={() => {
+            const next = localStorage.getItem('lyclaw_ambient') !== '1'
+            try { localStorage.setItem('lyclaw_ambient', next ? '1' : '0') } catch {}
+            window.dispatchEvent(new Event('ambient-changed'))
+          }}
+          className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-medium transition-colors"
+          style={{ color: ambient ? c.accent : c.textTertiary, background: ambient ? `${c.accent}14` : 'transparent' }}
+          onMouseEnter={e => { if (!ambient) e.currentTarget.style.background = c.surfaceHover }}
+          onMouseLeave={e => { if (!ambient) e.currentTarget.style.background = 'transparent' }}
+          title="氛围模式：全屏氛围光晕">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+          </svg>
+          氛围
+        </button>
 
         {onOpenWorkDir && (
           <button onClick={onOpenWorkDir} className="btn-icon" title="打开工作目录" aria-label="打开工作目录">

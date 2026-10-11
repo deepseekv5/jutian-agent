@@ -777,6 +777,34 @@
 html[data-wallpaper="off"] .global-veil {
   display: none;
 }
+
+/* ─── 氛围模式：全屏氛围光晕（顶栏「氛围」按钮 / Esc 退出）─── */
+.ambient-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 55% at 18% 22%, rgba(16, 163, 127, 0.16), transparent 70%),
+    radial-gradient(48% 60% at 82% 18%, rgba(99, 102, 241, 0.13), transparent 70%),
+    radial-gradient(55% 65% at 50% 88%, rgba(236, 72, 153, 0.10), transparent 72%);
+  animation: ambient-drift 26s ease-in-out infinite alternate;
+  transition: opacity 0.6s ease;
+}
+[data-theme="dark"] .ambient-veil {
+  background:
+    radial-gradient(42% 55% at 18% 22%, rgba(52, 211, 153, 0.13), transparent 70%),
+    radial-gradient(48% 60% at 82% 18%, rgba(129, 140, 248, 0.14), transparent 70%),
+    radial-gradient(55% 65% at 50% 88%, rgba(244, 114, 182, 0.10), transparent 72%);
+}
+@keyframes ambient-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-2.5%, 1.5%, 0) scale(1.06); }
+  100% { transform: translate3d(2%, -2%, 0) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-veil { animation: none; }
+}
 /* 无壁纸时毛玻璃自动退化为纯净底色，视觉不突兀 */
 html[data-wallpaper="off"] .glass,
 html[data-wallpaper="off"] .glass-strong {
@@ -816,3 +844,17 @@ html[data-wallpaper="off"] .glass-strong {
 [data-low-power="1"] .glass-strong { backdrop-filter: none; -webkit-backdrop-filter: none; }
 [data-low-power="1"] .aurora-orb { animation: none; }
 [data-low-power="1"] .codex-halo { display: none; }
+
+/* ─── AI 角色头像光环（渐变圈 + 微投影）─── */
+.persona-ring {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.65),
+    0 0 0 3.5px rgba(16, 163, 127, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.10);
+}
+[data-theme="dark"] .persona-ring {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.14),
+    0 0 0 3.5px rgba(52, 211, 153, 0.22),
+    0 4px 14px rgba(0, 0, 0, 0.35);
+}

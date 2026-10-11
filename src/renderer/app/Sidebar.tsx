@@ -164,6 +164,9 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const [manageMode, setManageMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [webuiCopied, setWebuiCopied] = useState(false)
+  // 定时任务启用数（侧栏按钮角标）
+  const [taskCount, setTaskCount] = useState(0)
+  useEffect(() => { fetch('/api/scheduled-tasks').then(r => r.json()).then(d => { const list = Array.isArray(d?.tasks) ? d.tasks : []; setTaskCount(list.filter((t: any) => t.enabled !== false).length) }).catch(() => {}) }, [])
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
   const batchDelete = async (id: string) => { onDeleteRef.current(id); setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n }) }
@@ -422,8 +425,6 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               { tab: 'code', label: 'Code', title: t('代码模式','Code mode'), icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z', fill: false },
             ],
             [
-              { tab: 'plugins', label: t('市场','Apps'), title: t('LY HARNESS 插件市场','LY HARNESS plugin market'), icon: 'M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z', fill: false },
-              { tab: 'tasks', label: t('任务','Tasks'), title: t('定时任务：按计划自动执行','Scheduled tasks'), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', fill: false },
               { tab: 'kb', label: t('知识库','KB'), title: t('知识库：文档索引 / 知识图谱','Knowledge base'), icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', fill: false },
               { tab: 'freemodels', label: t('免费AI','Free'), title: t('免费模型：Kilo 网关免 key 全量目录，一键切换','Free models: Kilo keyless catalog, one-click switch'), icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', fill: false },
             ],
@@ -444,6 +445,34 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               ))}
             </div>
           ))}
+        </div>
+
+        {/* 次级大按钮：插件市场 / 定时任务（学 ClerkBox 顶部的堆叠按钮组） */}
+        <div className="mt-2 space-y-1.5">
+          <button onClick={() => onOpenTab('plugins')}
+            className="w-full h-10 rounded-xl flex items-center gap-2.5 px-3 text-[13px] font-medium transition-colors"
+            style={{ color: c.text, background: 'transparent', border: `1px solid ${c.border}` }}
+            onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007z" />
+            </svg>
+            <span className="flex-1 text-left">{t('插件市场', 'Plugin Market')}</span>
+          </button>
+          <button onClick={() => onOpenTab('tasks')}
+            className="w-full h-10 rounded-xl flex items-center gap-2.5 px-3 text-[13px] font-medium transition-colors relative"
+            style={{ color: c.text, background: 'transparent', border: `1px solid ${c.border}` }}
+            onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="flex-1 text-left">{t('定时任务', 'Scheduled Tasks')}</span>
+            {taskCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                style={{ background: c.accent, color: c.accentText }}>{taskCount}</span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -517,8 +546,16 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
         </div>
       )}
 
-      {/* ── 会话列表（按日期分组）── */}
+      {/* ── 会话列表（按项目/日期分组）── */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
+        <div className="flex items-center gap-1.5 px-2 pt-2 pb-1">
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ color: c.textTertiary }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+          </svg>
+          <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('任务列表', 'Task List')}</span>
+          <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>{filtered.length}</span>
+          <div className="flex-1 h-px" style={{ background: c.borderLight }} />
+        </div>
         {groups.length === 0 && (
           <div className="px-3 py-10 text-center text-[12.5px]" style={{ color: c.textTertiary }}>
             {search ? '未找到匹配的对话' : '还没有对话'}

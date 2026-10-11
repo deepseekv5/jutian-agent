@@ -368,6 +368,16 @@ function MainApp() {
     ? ((visualSettings as any).bgOpacityDark ?? 0.6)
     : ((visualSettings as any).bgOpacityLight ?? 0.5)))
 
+  // 氛围模式（顶栏「氛围」按钮开关；Esc 退出）
+  const [ambient, setAmbient] = useState(() => localStorage.getItem('lyclaw_ambient') === '1')
+  useEffect(() => {
+    const h = () => setAmbient(localStorage.getItem('lyclaw_ambient') === '1')
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && localStorage.getItem('lyclaw_ambient') === '1') { try { localStorage.setItem('lyclaw_ambient', '0') } catch {} ; h() } }
+    window.addEventListener('ambient-changed', h)
+    window.addEventListener('keydown', esc)
+    return () => { window.removeEventListener('ambient-changed', h); window.removeEventListener('keydown', esc) }
+  }, [])
+
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   activeTabRef.current = activeTab?.id || '';
 
@@ -432,6 +442,8 @@ function MainApp() {
     <div className="h-screen overflow-hidden flex relative" style={{ background: bgImage ? "transparent" : "transparent" }}>
       <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
       {bgImage && <div className="global-veil" aria-hidden />}
+      {/* 氛围模式：全屏氛围光晕（顶栏「氛围」按钮开关，Esc 退出） */}
+      {ambient && <div className="ambient-veil" aria-hidden />}
 
       {/* Sidebar */}
       <div className="transition-all duration-300 overflow-hidden shrink-0" style={{ width: sidebarCollapsed ? 0 : 280, minWidth: sidebarCollapsed ? 0 : 280, position: 'relative', zIndex: 1 }}>

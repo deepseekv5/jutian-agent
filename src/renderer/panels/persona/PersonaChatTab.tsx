@@ -35,6 +35,22 @@ type View = 'chat' | 'memory' | 'disclaimer' | 'create' | 'edit'
 
 const PERSONA_ICON = 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z'
 
+/** 按 id 稳定取一对渐变色（角色卡头像圈 / 引言色） */
+const PERSONA_HUES: [string, string][] = [
+  ['#10b981', '#0ea5e9'],
+  ['#8b5cf6', '#ec4899'],
+  ['#f59e0b', '#ef4444'],
+  ['#3b82f6', '#8b5cf6'],
+  ['#14b8a6', '#84cc16'],
+  ['#f97316', '#eab308'],
+]
+function personaHue(id: string, i: 0 | 1): string {
+  let h = 0
+  for (let k = 0; k < id.length; k++) h = (h * 31 + id.charCodeAt(k)) >>> 0
+  const pair = PERSONA_HUES[h % PERSONA_HUES.length]
+  return pair[i]
+}
+
 export default function PersonaChatTab({ settings, onClose }: { settings: Settings; onClose: () => void }) {
   const { c } = useTheme()
   const [identity, setIdentity] = useState(() => loadIdentity())
@@ -215,34 +231,54 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
             </button>
 
             {personas.map(p => (
-              <div key={p.id} className="group relative flex items-start gap-3 p-4 rounded-xl transition-colors glass"
+              <div key={p.id} className="group relative flex flex-col p-4 rounded-2xl transition-all glass cursor-pointer"
                 style={{ border: `1px solid ${c.borderLight}` }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = c.border }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = c.borderLight }}>
-                <button onClick={() => openPersona(p)} className="flex items-start gap-3 flex-1 min-w-0 text-left">
-                  <span className="w-11 h-11 rounded-xl flex items-center justify-center text-[20px] shrink-0"
-                    style={{ background: c.bgInput }}>{p.avatar}</span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2">
-                      <span className="text-[13.5px] font-semibold" style={{ color: c.textHead }}>{p.name}</span>
-                      {p.isPreset ? <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textMuted }}>预置</span>
-                        : <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textMuted }}>自建</span>}
-                    </span>
-                    <span className="block text-[11.5px] mt-0.5" style={{ color: c.textSecondary }}>{p.tagline}</span>
-                  </span>
-                </button>
+                onClick={() => openPersona(p)}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = c.borderFocus; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.07)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = c.borderLight; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
                 {/* hover 操作：编辑 / 删除 */}
-                <div className="absolute top-2.5 right-2.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setActive(p); setView('edit') }} title="编辑"
+                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button onClick={e => { e.stopPropagation(); setActive(p); setView('edit') }} title="编辑"
                     className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: c.bg, border: `1px solid ${c.borderLight}`, color: c.textTertiary }}>
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487z" /></svg>
                   </button>
                   {!p.isPreset && (
-                    <button onClick={() => doDeletePersona(p)} title="删除"
+                    <button onClick={e => { e.stopPropagation(); doDeletePersona(p) }} title="删除"
                       className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: c.bg, border: `1px solid ${c.borderLight}`, color: c.toolErr }}>
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                     </button>
                   )}
+                </div>
+                {/* 头像 + 名字 + 标签 */}
+                <div className="flex items-center gap-3">
+                  <span className="w-12 h-12 rounded-full flex items-center justify-center text-[22px] shrink-0 persona-ring"
+                    style={{ background: `linear-gradient(135deg, ${personaHue(p.id, 0)}, ${personaHue(p.id, 1)})` }}>
+                    {p.avatar}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[14px] font-semibold" style={{ color: c.textHead }}>{p.name}</span>
+                      <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: c.bgInput, color: c.textMuted }}>
+                        {p.isPreset ? '预置' : '自建'}
+                      </span>
+                    </div>
+                    <div className="text-[11.5px] mt-0.5 truncate" style={{ color: c.textSecondary }}>{p.tagline}</div>
+                  </div>
+                </div>
+                {/* 开场白引言 */}
+                {p.opening && (
+                  <div className="mt-3 text-[11.5px] leading-relaxed line-clamp-2" style={{ color: c.textTertiary, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <span style={{ color: personaHue(p.id, 0) }}>「</span>{p.opening}<span style={{ color: personaHue(p.id, 0) }}>」</span>
+                  </div>
+                )}
+                {/* 底部行 */}
+                <div className="mt-3 pt-2.5 flex items-center" style={{ borderTop: `1px solid ${c.borderLight}` }}>
+                  <span className="text-[11px] font-medium" style={{ color: personaHue(p.id, 0) }}>开始对话</span>
+                  <svg className="w-3 h-3 ml-1 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} style={{ color: personaHue(p.id, 0) }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12l-7.5 7.5M21 12H3" />
+                  </svg>
+                  <span className="flex-1" />
+                  <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>免费 · 记忆</span>
                 </div>
               </div>
             ))}
@@ -320,11 +356,17 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
 
             <div className="max-w-2xl mx-auto space-y-3">
               {msgs.length === 0 && !busy && (
-                <div className="py-16 text-center">
-                  <div className="text-[40px] mb-3">{active.avatar}</div>
-                  <p className="text-[13px] leading-relaxed" style={{ color: c.textSecondary }}>
+                <div className="py-14 flex flex-col items-center">
+                  <span className="w-16 h-16 rounded-full flex items-center justify-center text-[30px] mb-3 persona-ring"
+                    style={{ background: `linear-gradient(135deg, ${personaHue(active.id, 0)}, ${personaHue(active.id, 1)})` }}>
+                    {active.avatar}
+                  </span>
+                  <div className="text-[15px] font-semibold" style={{ color: c.textHead }}>{active.name}</div>
+                  <div className="text-[11.5px] mt-0.5" style={{ color: c.textTertiary }}>{active.tagline}</div>
+                  <div className="mt-5 max-w-[320px] px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed"
+                    style={{ background: c.bgInput, color: c.text, borderRadius: '18px 18px 18px 6px' }}>
                     {active.opening || '你好，想聊点什么？'}
-                  </p>
+                  </div>
                 </div>
               )}
               {msgs.map((m, i) => (

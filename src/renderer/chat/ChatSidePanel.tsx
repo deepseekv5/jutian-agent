@@ -163,7 +163,6 @@ function FilesPane({ workDir }: { workDir: string }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [children, setChildren] = useState<Record<string, DirEntry[] | null>>({})
   const [preview, setPreview] = useState<{ path: string; name: string; content: string } | null>(null)
-  const [loadingFile, setLoadingFile] = useState(false)
 
   const root = workDir || ''
   useEffect(() => {
@@ -192,14 +191,12 @@ function FilesPane({ workDir }: { workDir: string }) {
   }, [expanded, children])
 
   const openFile = useCallback(async (path: string, name: string) => {
-    setLoadingFile(true)
     try {
       const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(path))
       const data = await res.json()
       if (data?.success) setPreview({ path, name, content: String(data.content || '').slice(0, 200000) })
       else setPreview({ path, name, content: `（无法预览：${data?.error || '读取失败'}）` })
     } catch { setPreview({ path, name, content: '（读取失败）' }) }
-    setLoadingFile(false)
   }, [])
 
   const renderLevel = (list: DirEntry[], depth: number): React.ReactNode => list.map(e => (
@@ -236,28 +233,39 @@ function FilesPane({ workDir }: { workDir: string }) {
     </div>
   ))
 
-  if (preview) {
-    return (
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="h-8 flex items-center gap-2 px-2 border-b shrink-0" style={{ borderColor: c.borderLight }}>
-          <button onClick={() => setPreview(null)} className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: c.textTertiary }} title="返回文件树">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <span className="text-[11.5px] font-medium truncate" style={{ color: c.textHead }} title={preview.path}>{preview.name}</span>
-          {loadingFile && <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>加载中…</span>}
-          <span className="flex-1" />
-          <button onClick={() => navigator.clipboard?.writeText(preview.content)} className="text-[10.5px] px-1.5 py-0.5 rounded shrink-0" style={{ color: c.textTertiary }} title="复制文件内容">复制</button>
-        </div>
-        <pre className="flex-1 overflow-auto scrollbar-thin px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: c.textSecondary, fontFamily: 'var(--font-mono)' }}>
-          {preview.content}
-        </pre>
-      </div>
-    )
-  }
-
   if (error) return <div className="flex-1 flex items-center justify-center px-6 text-center text-[11.5px]" style={{ color: c.textMuted }}>{error}</div>
   if (!entries) return <div className="flex-1 flex items-center justify-center text-[11px]" style={{ color: c.textMuted }}>加载中…</div>
-  return <div className="flex-1 overflow-y-auto scrollbar-thin py-1 px-1">{entries.length === 0 ? <div className="text-center text-[11px] py-6" style={{ color: c.textMuted }}>（空目录）</div> : renderLevel(entries, 0)}</div>
+  // 双栏：树左 + 预览右（学 ClerkBox 右侧 文件树 / 代码预览 布局）
+  return (
+    <div className="flex-1 flex min-h-0">
+      <div className="w-[46%] min-w-[130px] max-w-[220px] overflow-y-auto scrollbar-thin py-1 px-1 border-r shrink-0" style={{ borderColor: c.borderLight }}>
+        {entries.length === 0 ? <div className="text-center text-[11px] py-6" style={{ color: c.textMuted }}>（空目录）</div> : renderLevel(entries, 0)}
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        {preview ? (
+          <>
+            <div className="h-8 flex items-center gap-1.5 px-2 border-b shrink-0" style={{ borderColor: c.borderLight }}>
+              <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} style={{ color: c.textTertiary }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span className="text-[11px] font-medium truncate flex-1" style={{ color: c.textHead }} title={preview.path}>{preview.name}</span>
+              <button onClick={() => navigator.clipboard?.writeText(preview.content)} className="text-[10px] px-1 py-0.5 rounded shrink-0" style={{ color: c.textTertiary }} title="复制内容">复制</button>
+              <button onClick={() => setPreview(null)} className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ color: c.textMuted }} title="关闭预览">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <pre className="flex-1 overflow-auto scrollbar-thin px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: c.textSecondary, fontFamily: 'var(--font-mono)' }}>
+              {preview.content}
+            </pre>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center px-4 text-center text-[11px] leading-relaxed" style={{ color: c.textMuted }}>
+            点击左侧文件<br />在此预览内容
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── 辅助对话：轻量独立小助手（不走主对话，不写库）───

@@ -15,11 +15,38 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const isError = tool.status === 'error'
   const isDone = tool.status === 'done'
 
-  let argsPreview = ''
-  try {
-    const args = JSON.parse(tool.arguments || '{}')
-    argsPreview = Object.entries(args).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 60) : JSON.stringify(v).slice(0, 60)}`).join(' · ')
-  } catch { argsPreview = (tool.arguments || '').slice(0, 100) }
+  let args: Record<string, unknown> = {}
+  try { args = JSON.parse(tool.arguments || '{}') } catch { /* 解析失败按空参处理 */ }
+
+  // 按工具类型生成紧凑摘要（学 ClerkBox「写入 96 行 index.html +96」形态）
+  const lineCount = (v: unknown) => typeof v === 'string' ? v.split('\n').length : 0
+  const fileName = (p: unknown) => typeof p === 'string' ? (p.split(/[\\/]/).pop() || p) : ''
+  let summary = ''
+  let diffCount: number | null = null
+  let diffPath = ''
+  switch (tool.name) {
+    case 'write_file': {
+      const n = lineCount(args.content); const p = fileName(args.path)
+      summary = `写入 ${n} 行`; diffCount = n; diffPath = p; break
+    }
+    case 'edit_file':
+      summary = '编辑文件'; diffPath = fileName(args.path); break
+    case 'read_file':
+      summary = fileName(args.path); break
+    case 'list_dir':
+      summary = typeof args.path === 'string' ? args.path : ''; break
+    case 'shell':
+      summary = typeof args.command === 'string' ? args.command.replace(/\s+/g, ' ').slice(0, 80) : ''; break
+    case 'web_search':
+    case 'search_content':
+      summary = typeof args.query === 'string' ? args.query.slice(0, 60) : ''; break
+    case 'web_fetch':
+      summary = typeof args.url === 'string' ? args.url.slice(0, 80) : ''; break
+    default:
+      try {
+        summary = Object.entries(args).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 60) : JSON.stringify(v).slice(0, 60)}`).join(' · ')
+      } catch { summary = (tool.arguments || '').slice(0, 100) }
+  }
 
   const toolNames: Record<string, string> = {
     shell: '终端', read_file: '读取文件', write_file: '写入文件', list_dir: '列目录',
@@ -49,10 +76,18 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
               : <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />}
           </svg>
         )}
-        <span className="text-[12.5px] font-medium flex-1" style={{ color: c.textSecondary }}>
+        <span className="text-[12.5px] font-medium shrink-0" style={{ color: c.textSecondary }}>
           {displayName}{isRunning ? '…' : ''}
         </span>
-        {argsPreview && <span className="text-[11px] truncate max-w-[40%] hidden sm:block" style={{ color: c.textTertiary }}>{argsPreview}</span>}
+        {summary && <span className="text-[11.5px] truncate flex-1 min-w-0 font-mono" style={{ color: c.textTertiary }} title={summary}>{summary}</span>}
+        {diffPath && (
+          <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded shrink-0 max-w-[30%] truncate" style={{ background: c.bgInput, color: c.textSecondary }} title={diffPath}>
+            {diffPath}
+          </span>
+        )}
+        {diffCount !== null && (
+          <span className="text-[11px] font-mono shrink-0" style={{ color: c.toolOk }}>+{diffCount}</span>
+        )}
         <svg className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
