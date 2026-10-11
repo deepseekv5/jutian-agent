@@ -14,6 +14,7 @@ import * as crypto from 'crypto'
 import * as cp from 'child_process'
 import * as util from 'util'
 import * as os from 'os'
+import * as dns from 'dns'
 
 var execAsync = util.promisify(cp.execFile);
 
@@ -165,6 +166,79 @@ function resolveWithin(baseDir, name) {
   const base = path.resolve(baseDir);
   const full = path.resolve(base, clean);
   return full === base || full.startsWith(base + path.sep) ? full : null;
+}
+// ─── SSRF 防护（web_fetch / http_request 共用）───
+// 这两个工具的 URL 来自模型输出，而模型输出可能被网页内容里的指令污染。
+// 不设防时可以被诱导去打：
+//   · 169.254.169.254 云元数据接口（偷临时凭证）
+//   · 127.0.0.1:3211 本应用自己的管理接口（本地请求不带 Origin 门卫限制，
+//     能读到 /api/settings 里的 API Key）
+//   · 内网其他主机（扫端口、打内部服务）
+var isIpLiteral = (s) => /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || s.includes(":");
+var isPrivateIp = (ip) => {
+  var s = String(ip || "").toLowerCase().replace(/^::ffff:/, "").replace(/^\[|\]$/g, "");
+  if (s.includes(":")) {
+    if (s === "::1" || s === "::") return true;
+    var head = s.split(":")[0] || "0";
+    var h = parseInt(head, 16);
+    if (isNaN(h)) return true; // 解析不了按私有处理，宁枉勿纵
+    if ((h & 0xfe00) === 0xfc00) return true; // fc00::/7 唯一本地
+    if ((h & 0xffc0) === 0xfe80) return true; // fe80::/10 链路本地
+    if ((h & 0xff00) === 0xff00) return true; // 组播
+    return false;
+  }
+  var p = s.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  var a = p[0], b = p[1];
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true; // 链路本地 / 云元数据
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a >= 224) return true; // 组播与保留段
+  // 有意不拦 198.18.0.0/15 等基准/文档段：Clash、Surge 等代理工具的
+  // fake-IP 模式正是用 198.18.x.x 承载被劫持的域名，拦了会让这类用户的
+  // web_fetch 全部失效；而这些段里也没有 SSRF 真正想要的目标
+  return false;
+};
+// 返回规范化后的 URL；不合法则抛错（调用方统一转成 {success:false, error}）
+async function assertFetchableUrl(rawUrl) {
+  var u;
+  try { u = new URL(String(rawUrl || "")); } catch { throw new Error("URL 不合法"); }
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error("仅支持 http/https 链接");
+  var host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host) throw new Error("缺少主机名");
+  var port = u.port ? parseInt(u.port, 10) : (u.protocol === "https:" ? 443 : 80);
+  // 本应用自己的管理接口：域名解析到哪儿都拦（端口即身份）
+  var isLocalName = host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".localhost");
+  if (isLocalName && port === PORT) throw new Error("不允许访问本应用自身的管理接口");
+  if (isIpLiteral(host)) {
+    if (isPrivateIp(host)) throw new Error("不允许访问内网或本机地址");
+    return u;
+  }
+  var addrs = await dns.promises.lookup(host, { all: true }).catch(() => []);
+  if (!addrs.length) throw new Error("域名无法解析");
+  for (var one of addrs) if (isPrivateIp(one.address)) throw new Error("目标主机解析到内网或本机地址，已阻止（防 SSRF）");
+  // 已知边界：解析后到真正发起请求之间存在 DNS 重绑定窗口（TOCTOU）。
+  // 彻底封死需要把连接钉到已校验的 IP 上，本地工具场景先以这道屏障为主
+  return u;
+}
+// 带 SSRF 校验的有界重定向跟随：仍然自动跟随跳转（否则大量站点直接不可用），
+// 但每一跳都重新过一遍 assertFetchableUrl——否则一个公网 URL 302 到
+// 169.254.169.254 就把前面的防护全部绕过了
+async function fetchGuarded(startUrl, opts) {
+  var cur = new URL(startUrl);
+  for (var hop = 0; hop < 6; hop++) {
+    await assertFetchableUrl(cur.toString());
+    var r = await fetch(cur, { ...opts, redirect: "manual" });
+    var loc = r.headers.get("location");
+    if (r.status >= 300 && r.status < 400 && loc) {
+      cur = new URL(loc, cur);
+      continue;
+    }
+    return r;
+  }
+  throw new Error("重定向次数过多");
 }
 // ─── 工作区（设置中指定，实时生效）───
 var globalWorkDir = "";
@@ -472,7 +546,8 @@ async function delete_file(a) {
 }
 async function web_fetch(a) {
   try {
-    const r = await fetch(a.url, { headers: { "User-Agent": "LaoyouAgent/1.0" }, signal: AbortSignal.timeout(2e4) });
+    await assertFetchableUrl(a.url);
+    const r = await fetchGuarded(a.url, { headers: { "User-Agent": "LaoyouAgent/1.0" }, signal: AbortSignal.timeout(2e4) });
     let t = await r.text();
     t = t.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n").trim();
     return { success: true, output: `[${r.status}]
@@ -484,7 +559,8 @@ ${t.slice(0, MAX_OUT)}` };
 }
 async function http_request(a) {
   try {
-    const r = await fetch(a.url, { method: a.method || "GET", headers: { "Content-Type": "application/json" }, body: a.body, signal: AbortSignal.timeout(2e4) });
+    await assertFetchableUrl(a.url);
+    const r = await fetchGuarded(a.url, { method: a.method || "GET", headers: { "Content-Type": "application/json" }, body: a.body, signal: AbortSignal.timeout(2e4) });
     return { success: true, output: JSON.stringify({ status: r.status, body: (await r.text()).slice(0, MAX_OUT) }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1066,6 +1142,9 @@ async function searxngSearch(q) {
   const unique = [...new Set(candidates)].slice(0, 12);
   const probe = async (inst) => {
     try {
+      // 实例清单来自第三方(searx.space 社区维护)，被污染就可能指向内网，
+      // 与 web_fetch 同等对待
+      await assertFetchableUrl(inst);
       const r = await fetch(`${inst}/search?q=${encodeURIComponent(q)}&format=json&language=zh-CN&safesearch=0`, {
         headers: { "User-Agent": UA, "Accept": "application/json", "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" },
         signal: AbortSignal.timeout(7000),
