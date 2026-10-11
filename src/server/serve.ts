@@ -441,7 +441,17 @@ async function edit_file(a) {
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     let c = await fsp.readFile(p, "utf-8");
-    if (!c.includes(a.oldText)) return { success: false, error: "\u672A\u627E\u5230\u8981\u66FF\u6362\u7684\u6587\u672C" };
+    if (!c.includes(a.oldText)) {
+      // 精确匹配失败通常有三种原因：文件被外部改动、oldText 抄写有出入
+      // （缩进/换行/全角空格）、或需要替换的区域已被前一次编辑改掉。
+      // 只回「未找到」模型会反复重试同一参数，这里给出可操作的下一步。
+      const firstLine = String(a.oldText || "").split("\n")[0].slice(0, 60);
+      return {
+        success: false,
+        error: `未找到要替换的文本。可能原因：文件已被外部修改、oldText 与原文有细微差异（缩进/换行/空格），或该处已被之前的编辑改掉。`
+          + `建议先 read_file 重新确认当前内容。匹配串首行：「${firstLine}」`,
+      };
+    }
     const __oldFull = c;
     // replaceAll：模型常期望替换所有匹配（重命名变量、统一改一处写法）。
     // 默认仍只替换第一处，避免意外改动；需要全局时显式传 replaceAll
