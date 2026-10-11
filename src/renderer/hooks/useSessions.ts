@@ -14,7 +14,11 @@ export function useSessions() {
     }
   }, [activeId])
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    refresh()
+    // refresh 依赖 activeId：纳入依赖会在每次切换会话时重复拉取列表，保持仅首屏加载一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const create = useCallback(async (title?: string, project?: string) => {
     const s = await storage.createSession(title, project)

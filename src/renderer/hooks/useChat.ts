@@ -151,7 +151,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   // AI 自动生成对话标题（轻量请求，失败时静默保留截断标题；设置中可关闭）
   const generateAiTitle = useCallback(async (sid: string, userContent: string, assistantExcerpt: string) => {
     try {
-      if ((settings as any)?.autoTitle === false) return
+      if (settings.autoTitle === false) return
       const res = await fetch('/api/llm-proxy', {
         method: 'POST',
         headers: {
@@ -186,7 +186,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
       title = title.replace(/^["'「『《]+|["'」』》。.\s]+$/g, '').split('\n')[0].slice(0, 20)
       if (title) onAiTitleRef.current?.(sid, title)
     } catch { /* 标题生成失败不影响主流程 */ }
-  }, [settings.apiBaseUrl, settings.apiKey, settings.model])
+  }, [settings.apiBaseUrl, settings.apiKey, settings.model, settings.autoTitle])
 
   const loadMessages = useCallback(async () => {
     if (!sessionId) return
@@ -198,7 +198,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
     setMessages(msgs)
   }, [sessionId])
 
-  useEffect(() => { loadMessages() }, [sessionId])
+  useEffect(() => { loadMessages() }, [sessionId, loadMessages])
 
   // 切换会话即中止在途请求：否则旧会话的流式/调研结果会继续写进新会话的消息列表
   useEffect(() => {
@@ -222,7 +222,6 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
 
     // 单个 agent：带工具循环（最多 5 轮），知道工作区
     const runAgent = async (ag: any, priorOutputs: string, task: string): Promise<string> => {
-      let didWork = false
       let calledAnyTool = false
       const roster = (swarm.plan || swarm.agents || []).map((p: any) => p.name + (p.role ? `(${p.role})` : '')).join('、')
       const msgs: any[] = [
@@ -281,7 +280,6 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
               content = `【安全拦截】该操作（${blocked}）在集群模式下被拦截，请改用非破坏性方案。`
             } else {
               const r = await executeTool({ name: tc.function?.name, args }, workDir || undefined)
-              if (r.success) didWork = true
               content = (r.success ? r.output : `错误: ${r.error}`).slice(0, 3000)
             }
             msgs.push({ role: 'tool', tool_call_id: tc.id, content })
@@ -291,7 +289,6 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           patchSwarm(swarm)
           continue
         }
-        if (msg.content) didWork = true
         // 还没有实际调用过任何工具 → 推一把，让它真正动手，而不是只输出文字宣称完成
         if (!calledAnyTool && round < 3) {
           msgs.push({
@@ -1009,7 +1006,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       streamingRef.current = null
       await send(`（目标模式 · 自动续跑 ${g.rounds}/${MAX_GOAL_ROUNDS}）评估器判断目标尚未达成：${verdict.note || '请继续'}。请接着完成目标：「${g.text}」`, lastSkillIdsRef.current, undefined, { ...sendOpts, goal: undefined, goalContinue: true })
     }
-  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal])
+  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal, flushPendingVariants])
 
   const rollbackTo = useCallback(async (messageIndex: number) => {
     if (!sessionId) return

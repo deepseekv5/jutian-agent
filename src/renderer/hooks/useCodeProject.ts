@@ -34,6 +34,32 @@ export function useCodeProject() {
 
   const activeProject = projects.find(p => p.id === activeProjectId) || null
 
+  // 通过 API 加载文件树（空依赖的稳定回调，必须先于下方使用它的 effect 声明——
+  // 放在后面会让 effect 的依赖数组在求值时撞上 const 的 TDZ，直接抛 ReferenceError）
+  const loadFileTree = useCallback(async (rootPath: string) => {
+    setTreeLoading(true)
+    try {
+      const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(rootPath))
+      if (!res.ok) throw new Error('Failed to read directory')
+      const nodes: FileNode[] = await res.json()
+      setFileTree(nodes)
+      // 检查是否有待打开的文件
+      if (pendingOpenFile.current) {
+        const filePath = pendingOpenFile.current
+        pendingOpenFile.current = null
+        const fileName = filePath.split('/').pop() || ''
+        // 延迟一帧，确保文件树状态已更新
+        requestAnimationFrame(() => {
+          openFileRef.current?.(filePath, fileName)
+        })
+      }
+    } catch {
+      setFileTree([])
+    } finally {
+      setTreeLoading(false)
+    }
+  }, [])
+
   // 当激活项目变化时，加载文件树和之前打开的 Tab
   useEffect(() => {
     if (!activeProjectId) {
@@ -63,32 +89,7 @@ export function useCodeProject() {
       setTabs(editorTabs)
       setActiveTabPath(savedTabs[0].path)
     }
-  }, [activeProjectId, projects])
-
-  // 通过 API 加载文件树
-  const loadFileTree = useCallback(async (rootPath: string) => {
-    setTreeLoading(true)
-    try {
-      const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(rootPath))
-      if (!res.ok) throw new Error('Failed to read directory')
-      const nodes: FileNode[] = await res.json()
-      setFileTree(nodes)
-      // 检查是否有待打开的文件
-      if (pendingOpenFile.current) {
-        const filePath = pendingOpenFile.current
-        pendingOpenFile.current = null
-        const fileName = filePath.split('/').pop() || filePath
-        // 延迟一帧，确保文件树状态已更新
-        requestAnimationFrame(() => {
-          openFileRef.current?.(filePath, fileName)
-        })
-      }
-    } catch {
-      setFileTree([])
-    } finally {
-      setTreeLoading(false)
-    }
-  }, [])
+  }, [activeProjectId, projects, loadFileTree])
 
   // 创建项目
   const createProject = useCallback((name: string, rootPath: string, openFilePath?: string) => {

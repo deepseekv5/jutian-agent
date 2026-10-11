@@ -650,7 +650,6 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   }
 
   // ─── 上下文占用估算 ───
-  const msgsSig = messages ? `${messages.length}:${messages[messages.length - 1]?.id || ''}:${Math.floor(((messages[messages.length - 1]?.content || '').length || 0) / 500)}` : '0'
   const contextParts: ContextPart[] = useMemo(() => {
     const parts: ContextPart[] = []
     if (settings) {
@@ -669,7 +668,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
     }
     parts.push({ label: '当前输入', tokens: estimateTokens(value), color: '#f59e0b' })
     return parts
-  }, [settings, msgsSig, value, messages, c.accent, c.textTertiary])
+  }, [settings, value, messages, c.accent, c.textTertiary])
 
   const canSend = !!value.trim()
 

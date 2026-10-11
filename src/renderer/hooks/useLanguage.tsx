@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 type Language = 'zh' | 'en';
 
@@ -8,7 +8,7 @@ interface LanguageCtx {
   t: (zh: string, en?: string) => string;
 }
 
-const LanguageContext = createContext<LanguageCtx>({ lang: 'zh', setLang: () => {}, t: (zh, en) => zh });
+const LanguageContext = createContext<LanguageCtx>({ lang: 'zh', setLang: () => {}, t: (zh) => zh });
 
 export function useLanguage() {
   return useContext(LanguageContext);

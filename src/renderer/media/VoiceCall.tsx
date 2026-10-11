@@ -4,7 +4,6 @@
  * 支持语音与手动打字（打断当前播报）。能执行任务：走 streamChat 完整工具链。
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useTheme } from '../hooks/useTheme'
 import { streamChat } from '../engine/stream'
 import { BUILTIN_TOOLS } from '../types'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
@@ -38,13 +37,9 @@ const PHASE_HUE: Record<Phase, string> = {
 const RING_BARS = 56
 const RING_RADIUS = 108
 
-// 静默检测参数
-const SILENCE_MS = 1300
-const MIN_SPEECH_MS = 350
 const VOLUME_GATE = 0.045
 
 export default function VoiceCall({ settings, onClose }: Props) {
-  const { c } = useTheme()
   const [phase, setPhase] = useState<Phase>('idle')
   const [muted, setMuted] = useState(false)
   const [duration, setDuration] = useState(0)
@@ -191,7 +186,6 @@ export default function VoiceCall({ settings, onClose }: Props) {
     }
     rafRef.current = requestAnimationFrame(loop)
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ─── 麦克风 ───

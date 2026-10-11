@@ -95,7 +95,6 @@ interface PlanStep { title: string; status: 'pending' | 'in_progress' | 'complet
  * Code 控制台配色：固定深色（不随主题切换），近似 Codex 终端风格。
  * 定义在模块作用域，供主组件与 ToolLine / RenderContent 共用。
  */
-const CONSOLE_BG = '#111113'
 const CONSOLE_BORDER = '#232326'
 const CONSOLE_TEXT = '#e2e2e6'
 const CONSOLE_TEXT_SECONDARY = '#a1a1aa'
@@ -201,9 +200,9 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
     try { setMessages(JSON.parse(localStorage.getItem(chatStorageKey) || '[]') || []) } catch { setMessages([]) }
   }, [projectRoot, chatStorageKey])
   // chatStorageKey 不纳入保存 effect 依赖：切项目时先用旧 messages 写一次新 key 会造成串写，保持仅由 messages 触发
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     try { if (messages.length > 0) localStorage.setItem(chatStorageKey, JSON.stringify(messages.slice(-100))); else localStorage.removeItem(chatStorageKey) } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
 
   const scrollToBottom = (smooth = false) => {
@@ -493,7 +492,7 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
     } finally {
       if (controller.signal.aborted) { setStreaming(false); streamingRef.current = false }
     }
-  }, [input, streaming, messages, attachedFiles, settings, projectName, projectRoot, thinking, approvalMode, agentsMd, handleSlashCommand, compactHistory, applyPlan])
+  }, [input, messages, attachedFiles, settings, projectName, projectRoot, thinking, approvalMode, agentsMd, handleSlashCommand, compactHistory, applyPlan])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (slashOpen && slashItems.length > 0) {
