@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 type Language = 'zh' | 'en';
 
@@ -22,15 +22,19 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } catch { return 'zh'; }
   });
 
-  const setLang = (l: Language) => {
+  // 回调与 context value 全部稳定：否则每次 Provider 渲染都产生新对象，
+  // 所有用 useLanguage 的组件会被无条件重渲染
+  const setLang = useCallback((l: Language) => {
     setLangState(l);
     localStorage.setItem('app-language', l);
-  };
+  }, []);
 
-  const t = (zh: string, en?: string) => lang === 'zh' ? zh : (en ?? zh);
+  const t = useCallback((zh: string, en?: string) => lang === 'zh' ? zh : (en ?? zh), [lang]);
+
+  const ctxValue = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={ctxValue}>
       {children}
     </LanguageContext.Provider>
   );

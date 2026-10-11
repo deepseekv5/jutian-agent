@@ -88,6 +88,9 @@ export { ctxSummaries }
 
 export function useChat(sessionId: string | null, settings: Settings, onFirstMessageDone?: (userContent: string) => void, onAiTitle?: (sid: string, title: string) => void) {
   const [messages, setMessages] = useState<Message[]>([])
+  // 始终持有当前 sessionId：异步回调里用它判断「我这条结果还属于当前会话吗」
+  const sessionIdRef = useRef<string | null>(sessionId)
+  sessionIdRef.current = sessionId
   const [streamingId, setStreamingId] = useState<StreamingId>(null)
   const streamingRef = useRef<StreamingId>(null)  // ref avoids stale closure in send
   streamingRef.current = streamingId
@@ -187,11 +190,20 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
 
   const loadMessages = useCallback(async () => {
     if (!sessionId) return
-    const msgs = await listMessages(sessionId)
+    // 竞态防护：快速切换会话时，先发的慢响应回来后不能覆盖新会话的消息。
+    // 捕获本次请求的 sessionId，写回前校验它仍是当前会话
+    const reqId = sessionId
+    const msgs = await listMessages(reqId)
+    if (sessionIdRef.current !== reqId) return
     setMessages(msgs)
   }, [sessionId])
 
   useEffect(() => { loadMessages() }, [sessionId])
+
+  // 切换会话即中止在途请求：否则旧会话的流式/调研结果会继续写进新会话的消息列表
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [sessionId])
 
   // ─── Agent 集群：分解 → 顺次执行（带工具）→ 主 Agent 汇报 ───
   const runAgentSwarm = useCallback(async (mid: string, task: string, apiMessages: any[], signal?: AbortSignal, team?: SwarmTeam): Promise<string> => {
@@ -524,6 +536,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     if (sendOpts?.research) {
       const researchMsg = await createMessage({ session_id: sessionId, role: 'assistant', content: '🔬 深度调研启动…', tool_calls: [] })
       setMessages(await listMessages(sessionId))
+      // 会话已切换则放弃后续所有写回（闭包里的 sessionId 仍是旧会话）
+      if (sessionIdRef.current !== sessionId) { setStreamingId(null); return }
       try {
         const res = await fetch('/api/deep-research', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -568,12 +582,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         }
         const srcList = sources.length > 0 ? `\n\n---\n**来源（${sources.length}）**\n${sources.map((u, i) => `${i + 1}. ${u}`).join('\n')}` : ''
         await updateMessageContent(researchMsg.id, sessionId, report + srcList)
-        setMessages(await listMessages(sessionId))
+        if (sessionIdRef.current === sessionId) setMessages(await listMessages(sessionId))
         setStreamingId(null)
         return
       } catch (e: unknown) {
         await updateMessageContent(researchMsg.id, sessionId, `深度调研失败：${e instanceof Error ? e.message : String(e)}`)
-        setMessages(await listMessages(sessionId))
+        if (sessionIdRef.current === sessionId) setMessages(await listMessages(sessionId))
         setStreamingId(null)
         return
       }
@@ -590,7 +604,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       } catch { /* ignore */ }
     }
     const updated = await listMessages(sessionId)
-    setMessages(updated)
+    if (sessionIdRef.current === sessionId) setMessages(updated)
     // 自动标题：仅首条消息时立即生成（避免后续消息不断改写标题）
     if (!titleDoneRef.current) {
       titleDoneRef.current = true

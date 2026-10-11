@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
+import { reportError } from '../app/ErrorToast';
 import CliInstallModal from '../app/CliInstallModal';
 import { useLanguage } from '../hooks/useLanguage';
 import { APP_VERSION } from '../brand'
@@ -237,7 +238,16 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
   async function handleBgUpload() {
     const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif,image/bmp';
-    input.onchange = async () => { const file = input.files?.[0]; if (!file) return; const formData = new FormData(); formData.append('bg', file); try { const res = await fetch('/api/code/upload-bg', { method: 'POST', body: formData }); const data = await res.json(); if (data.success) saveVisual({ ...visual, bgImage: data.path }); } catch (e) { console.error('Upload failed', e); } };
+    input.onchange = async () => {
+      const file = input.files?.[0]; if (!file) return;
+      const formData = new FormData(); formData.append('bg', file);
+      try {
+        const res = await fetch('/api/code/upload-bg', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.success) saveVisual({ ...visual, bgImage: data.path });
+        else reportError(`壁纸上传失败：${data.error || `服务端返回 ${res.status}`}`);
+      } catch (e) { reportError(`壁纸上传失败：${e instanceof Error ? e.message : String(e)}`); }
+    };
     input.click();
   }
 
@@ -870,13 +880,14 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     try {
                       const r = await fetch('/api/backup/export')
                       const d = await r.json()
+                      if (!r.ok || d.error) { reportError(`导出失败：${d.error || `服务端返回 ${r.status}`}`); return }
                       const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
                       const a2 = document.createElement('a')
                       a2.href = URL.createObjectURL(blob)
                       a2.download = `巨天备份-${new Date().toISOString().slice(0, 10)}.json`
                       a2.click()
                       URL.revokeObjectURL(a2.href)
-                    } catch (e: any) { alert('导出失败: ' + e.message) }
+                    } catch (e: any) { reportError('导出失败: ' + e.message) }
                   }} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium" style={{ background: c.accent, color: c.accentText }}>
                     {t('导出全部数据', 'Export all data')}
                   </button>
@@ -892,9 +903,9 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       const text = await f.text()
                       const r = await fetch('/api/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text })
                       const d = await r.json()
-                      if (d.error) alert('导入失败: ' + d.error)
+                      if (d.error || !r.ok) reportError('导入失败: ' + (d.error || `服务端返回 ${r.status}`))
                       else alert(`导入完成：${d.sessions} 个会话 / ${d.messages} 条消息`)
-                    } catch (e: any) { alert('导入失败: ' + e.message) }
+                    } catch (e: any) { reportError('导入失败: ' + e.message) }
                     e.target.value = ''
                   }} />
                 </div>

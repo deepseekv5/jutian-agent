@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import ErrorBoundary from './ErrorBoundary'
 
 interface Props {
   onClose: () => void
@@ -51,18 +51,24 @@ export default function PageShell({ onClose, title, description, actions, childr
         </div>
       </div>
 
-      {/* 内容区 */}
+      {/* 内容区：每个面板独立错误边界——单个面板崩溃只坏自己，
+          侧栏、标签栏和其他标签页照常可用，不会整 App 白屏 */}
       {fill ? (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {children}
+          <ErrorBoundary inline resetKey={title} label={`「${title || '面板'}」加载出错了`}>
+            {children}
+          </ErrorBoundary>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <div className={wide ? 'px-5 py-4' : 'max-w-4xl mx-auto px-6 py-5'}>
-            {children}
+            <ErrorBoundary inline resetKey={title} label={`「${title || '面板'}」加载出错了`}>
+              {children}
+            </ErrorBoundary>
           </div>
         </div>
       )}
     </div>
   )
 }
+

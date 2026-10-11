@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import { getSettingsSync, saveSettings } from '../store/storage'
 import type { Settings } from '../types'
 
@@ -289,12 +289,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mq.removeEventListener?.('change', h)
   }, [themePref])
 
-  const setTheme = (t: Theme) => {
+  // 回调与 context value 全部稳定：否则每次 ThemeProvider 渲染都产生新对象，
+  // 靠 useContext 拿主题的几十个组件会被无条件重渲染
+  const setTheme = useCallback((t: Theme) => {
     setThemePref(t)
     localStorage.setItem(THEME_KEY, t)
     const s = getSettingsSync()
     saveSettings({ ...s, theme: t } as Settings)
-  }
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -313,10 +315,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty('--border-focus', a)
   }, [accentKey, theme])
 
-  const toggle = () => setTheme(theme === 'light' ? 'dark' : 'light')
+  const toggle = useCallback(() => setTheme(theme === 'light' ? 'dark' : 'light'), [setTheme, theme])
+
+  const ctxValue = useMemo(() => ({ theme, c, toggle, setTheme }), [theme, c, toggle, setTheme])
 
   return (
-    <ThemeContext.Provider value={{ theme, c, toggle, setTheme }}>
+    <ThemeContext.Provider value={ctxValue}>
       {children}
     </ThemeContext.Provider>
   )

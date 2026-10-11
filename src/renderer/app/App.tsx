@@ -11,10 +11,10 @@ import CommandPalette from './CommandPalette';
 import WelcomeSplash from './WelcomeSplash';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
+import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
 import TerminalPanel from '../code/TerminalPanel';
 import NewTabPage from './NewTabPage';
 import { refreshSkillManifest } from '../engine/skillManifest';
-import type { Settings } from '../types';
 
 /* ─── 重功能按需加载：首屏只保留对话核心，PPT / 代码 / 通话 / 集群等首次打开时才拉取 ─── */
 const FilesTab = lazy(() => import('../panels/FilesTab'));
@@ -117,6 +117,8 @@ function MainApp() {
     setEverMounted(prev => (prev.has(activeTabId) ? prev : new Set(prev).add(activeTabId)));
   }, [activeTabId]);
 
+  // 首帧引导：loaded 落定且尚无任何标签时建一个默认对话（仅此一次，之后靠用户操作增删标签）
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab
   useEffect(() => {
     if (!loaded || tabs.length > 0) return;
     (async () => {
@@ -127,7 +129,7 @@ function MainApp() {
     })();
   }, [loaded]);
 
-  // 安全设置即时生效：设置页改动直接刷新全局 settings 状态
+  // 安全设置即时生效：设置页改动直接刷新全局 settings 状态（saveSettings 为 useCallback([]) 稳定引用）
   useEffect(() => {
     const onSettingsUpdated = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -135,7 +137,7 @@ function MainApp() {
     };
     window.addEventListener('settings-updated', onSettingsUpdated);
     return () => window.removeEventListener('settings-updated', onSettingsUpdated);
-  }, []);
+  }, [saveSettings]);
 
   // 聊天字号 → CSS 变量（消息气泡/正文读取 --chat-font）
   useEffect(() => {
@@ -508,7 +510,12 @@ function MainApp() {
           if (!isActive && !everMounted.has(tab.id)) return null;
           return (
             <div key={tab.id} className={`flex-1 flex flex-col min-h-0 overflow-hidden ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
-              <Suspense fallback={<TabFallback />}>{renderTabBody(tab)}</Suspense>
+              {/* 每个标签页独立错误边界：单个面板崩溃只坏这个标签，
+                  侧栏、标签栏和其他标签页照常可用，不会整 App 白屏。
+                  resetKey 带上 sessionId/refId：在同一标签内换对话也能自动恢复 */}
+              <ErrorBoundary inline resetKey={`${tab.id}:${tab.sessionId || tab.refId || ''}`} label="这个标签页加载出错了">
+                <Suspense fallback={<TabFallback />}>{renderTabBody(tab)}</Suspense>
+              </ErrorBoundary>
             </div>
           );
         })}
@@ -549,10 +556,14 @@ function MainApp() {
 }
 
 export default function App() {
+  // 漏网的异步异常（未处理的 Promise 拒绝、运行时错误）接到全局提示，
+  // 不再只静静地出现在控制台里
+  useGlobalErrorListener()
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <MainApp />
+        <ErrorToastHost />
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -1,41 +1,104 @@
 /**
  * ErrorBoundary —— 渲染错误兜底：任何组件崩溃不再白屏
+ *
+ * 两种用法：
+ *  - 根级（App 外壳）：inline=false，占满视口，提供「重新加载」整页恢复
+ *  - tab 级（PageShell 面板体）：inline=true，只占面板区域，
+ *    提供「重试」局部恢复，单个面板崩掉不影响侧栏与其他标签页
+ * 颜色全部走 index.css 的主题变量，暗色主题下不会变成刺眼的白屏。
  */
 import React from 'react'
 
 interface State { error: Error | null; stack?: string; componentStack?: string }
 
-export default class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
+interface Props {
+  children: React.ReactNode
+  /** 面板内嵌模式：占满父容器而非整个视口 */
+  inline?: boolean
+  /** 变化时自动清除错误状态（例如切换标签页后重进同一面板应恢复） */
+  resetKey?: string
+  /** 局部兜底说明，缺省用通用文案 */
+  label?: string
+}
+
+export default class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null }
 
   static getDerivedStateFromError(error: Error): State {
     return { error }
   }
 
-  state2: State = { error: null, stack: '', componentStack: '' }
+  componentDidUpdate(prev: Props) {
+    // resetKey 变化（典型：切换到别的标签页）时清掉错误，让面板恢复正常渲染
+    if (this.props.resetKey !== prev.resetKey && this.state.error) {
+      this.setState({ error: null, stack: '', componentStack: '' })
+    }
+  }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack)
     this.setState({ stack: (error && error.stack) || '', componentStack: info.componentStack || '' })
   }
 
+  private retry = () => {
+    // 局部重试：只清错误状态，不动页面其他部分
+    this.setState({ error: null, stack: '', componentStack: '' })
+  }
+
   render() {
     if (this.state.error) {
+      const { inline, label } = this.props
       return (
-        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, background: '#ffffff', color: '#0d0d0d', fontFamily: '-apple-system, sans-serif' }}>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>界面出现了一点问题</div>
-          <div style={{ fontSize: 12, color: '#8e8e93', maxWidth: 420, textAlign: 'center', lineHeight: 1.6, wordBreak: 'break-all' }}>
+        <div style={{
+          height: inline ? '100%' : '100vh',
+          minHeight: inline ? 200 : undefined,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 14, padding: inline ? 24 : 0,
+          background: 'var(--surface-alt, #f9f9f9)', color: 'var(--text, #0d0d0d)',
+          fontFamily: '-apple-system, sans-serif',
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-head, #0d0d0d)' }}>
+            {label || '这个面板出现了一点问题'}
+          </div>
+          <div style={{
+            fontSize: 12, color: 'var(--text-secondary, #5d5d5d)', maxWidth: 420, textAlign: 'center',
+            lineHeight: 1.6, wordBreak: 'break-all',
+          }}>
             {this.state.error.message || String(this.state.error)}
           </div>
           <details style={{ maxWidth: 560, width: '90%' }}>
-            <summary style={{ fontSize: 11, color: '#b0b0b6', cursor: 'pointer', textAlign: 'center', padding: '4px 0' }}>堆栈详情（请复制给开发者）</summary>
-            <pre style={{ fontSize: 10, color: '#8e8e93', background: '#f5f5f7', borderRadius: 8, padding: 10, maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', textAlign: 'left' }}>{this.state.stack || '(无堆栈)'}</pre>
-            {this.state.componentStack && <pre style={{ fontSize: 9, color: '#b0b0b6', background: '#fafafa', borderRadius: 8, padding: 8, maxHeight: 100, overflow: 'auto', whiteSpace: 'pre-wrap', textAlign: 'left' }}>{this.state.componentStack}</pre>}
+            <summary style={{
+              fontSize: 11, color: 'var(--text-muted, #b4b4b4)', cursor: 'pointer',
+              textAlign: 'center', padding: '4px 0',
+            }}>堆栈详情（请复制给开发者）</summary>
+            <pre style={{
+              fontSize: 10, color: 'var(--text-secondary, #5d5d5d)', background: 'var(--surface-input, #f4f4f4)',
+              borderRadius: 8, padding: 10, maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all', textAlign: 'left',
+            }}>{this.state.stack || '(无堆栈)'}</pre>
+            {this.state.componentStack && (
+              <pre style={{
+                fontSize: 9, color: 'var(--text-muted, #b4b4b4)', background: 'var(--surface-input, #f4f4f4)',
+                borderRadius: 8, padding: 8, maxHeight: 100, overflow: 'auto', whiteSpace: 'pre-wrap', textAlign: 'left',
+              }}>{this.state.componentStack}</pre>
+            )}
           </details>
-          <button onClick={() => { this.setState({ error: null }); window.location.reload() }}
-            style={{ padding: '8px 24px', borderRadius: 10, border: '1px solid #e5e5e5', background: '#0d0d0d', color: '#fff', fontSize: 13, cursor: 'pointer' }}>
-            重新加载
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={this.retry}
+              style={{
+                padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border, #e5e5e5)',
+                background: 'var(--surface, #ffffff)', color: 'var(--text, #0d0d0d)', fontSize: 13, cursor: 'pointer',
+              }}>
+              重试
+            </button>
+            <button onClick={() => window.location.reload()}
+              style={{
+                padding: '8px 20px', borderRadius: 10, border: 'none',
+                background: 'var(--text, #0d0d0d)', color: 'var(--surface, #ffffff)', fontSize: 13, cursor: 'pointer',
+              }}>
+              重新加载
+            </button>
+          </div>
         </div>
       )
     }
