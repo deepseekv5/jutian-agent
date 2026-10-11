@@ -20,6 +20,7 @@ import {
   adoptNonStreamToolCalls, toolCallsToArray,
   type ToolCallAccum,
 } from './toolCallStream'
+import { buildHttpErrorMessage } from './httpErrors'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -159,16 +160,8 @@ export async function streamChat(
 
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
-        // v7.0：llm-proxy 已透传上游真实状态码与原因，优先展示上游 message
-        let detail = ''
-        try { const j = JSON.parse(errText); detail = j.error || j.hint || j.detail || '' } catch { detail = errText.slice(0, 200) }
-        let friendly = ''
-        if (res.status === 429) friendly = '⚠️ 请求过于频繁或额度/限流'
-        else if (res.status === 401) friendly = '🔑 API 密钥无效或已过期'
-        else if (res.status === 404) friendly = '🔍 模型或地址不存在'
-        else if (res.status === 400) friendly = '请求格式错误'
-        const head = friendly || `请求失败 (${res.status})`
-        throw new Error(detail ? `${head}：${detail}` : head)
+        // 状态码 → 可操作中文提示（映射表在 httpErrors，含 402/403/5xx 等）
+        throw new Error(buildHttpErrorMessage(res.status, errText))
       }
 
       if (!res.body) throw new Error('No response body')
