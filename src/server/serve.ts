@@ -1993,45 +1993,30 @@ http.createServer(async (req, res) => {
         const keyless = apiKey === "free" || apiKey === "keyless" || apiKey === "";
         const proxyHeaders: Record<string, string> = { "Content-Type": "application/json" };
         if (!keyless) proxyHeaders["Authorization"] = `Bearer ${apiKey}`;
-        const proxyRes = await fetch(upstreamUrl, {
-          method: "POST",
-          headers: proxyHeaders,
-          body: JSON.stringify(bodyData),
-          signal: AbortSignal.timeout(120000),
-        });
-        if (!proxyRes.ok) {
-          // v7.0：透传上游真实状态码，不再统一包成 502；错误体尽量透出上游原始 message
-          const detail = await proxyRes.text().catch(() => "");
-          console.error(`llm-proxy upstream ${proxyRes.status} \u2190 ${upstreamUrl}`);
-          let upstreamMsg = "";
-          try { upstreamMsg = JSON.parse(detail)?.error?.message || JSON.parse(detail)?.message || ""; } catch { upstreamMsg = String(detail).slice(0, 300); }
-          const hint = proxyRes.status === 404
-            ? "API 地址可能不正确（应指向 /v1 结尾的服务根路径）"
-            : proxyRes.status === 401 || proxyRes.status === 403
-              ? "API Key 无效或无权限"
-              : proxyRes.status === 429
-                ? "请求过于频繁 / 余额或限流"
-                : "请检查模型名、余额或服务状态";
-          res.writeHead(proxyRes.status, {
-            ...(corsHeaders(req) || {}),
-            "Content-Type": "application/json",
+        // v11:主上游连接失败不再抛出 —— 置 null 落入下方接力链（免费链兜底）
+        let proxyRes = null;
+        try {
+          proxyRes = await fetch(upstreamUrl, {
+            method: "POST",
+            headers: proxyHeaders,
+            body: JSON.stringify(bodyData),
+            signal: AbortSignal.timeout(120000),
           });
-          res.end(JSON.stringify({
-            error: upstreamMsg || `上游模型服务返回 ${proxyRes.status}`,
-            upstreamStatus: proxyRes.status,
-            upstream: upstreamUrl,
-            hint,
-            detail: String(detail).slice(0, 500),
-          }));
-          return;
+        } catch (e) {
+          console.error(`llm-proxy 主上游连接失败: ${e.message}（将尝试免费接力链）`);
         }
-        // ─── 空响应自动重试(v8.1:免费模型高发 — reasoning 吃满 max_tokens 时 content 为空)───
+        if (proxyRes && !proxyRes.ok) {
+          // v11:主上游 HTTP 错误不再直接透传终止 —— 记录原始错误后落入下方接力链
+          // (免费链兜底,永远有回应);若免费链也全部失败,最终错误体会带 upstreamStatus。
+          const detail = await proxyRes.text().catch(() => "");
+          console.error(`llm-proxy 主上游 ${proxyRes.status} ← ${upstreamUrl}(将尝试免费接力链)`);
+          try { (proxyRes as any)._detail = String(detail).slice(0, 500); } catch {}
+        }
+        // ─── v11 模型自动接力:主上游失败/空响应耗尽后,自动换免费链（Kilo → Pollinations）,
+        //     永远有回应。用户配置的主上游永远是第一顺位,成功即停,不静默改写成功请求。───
         const isStreamReq = bodyData.stream === true;
         const basePayload = (() => { const p = { ...bodyData }; delete p.targetBase; delete p.apiKey; return p; })();
         const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-        const callUpstream = (payload) => fetch(upstreamUrl, {
-          method: "POST", headers: proxyHeaders, body: JSON.stringify(payload), signal: AbortSignal.timeout(120000),
-        });
         const escalate = (payload, fr: string) =>
           (fr === "length" ? { ...payload, max_tokens: Math.min(8192, Math.max(1024, (Number(payload.max_tokens) || 256) * 4)) } : payload);
         const sseHeaders = {
@@ -2044,58 +2029,88 @@ http.createServer(async (req, res) => {
           const msg = j?.choices?.[0]?.message;
           return !msg || typeof msg.content !== "string" || msg.content.trim() === "";
         };
+        // 免费接力链:主上游不是它们时才追加（去重）
+        const RELAY_CHAIN = [
+          { base: "https://api.kilo.ai/api/gateway/v1", key: "free", model: "openrouter/free", name: "kilo" },
+          { base: "https://text.pollinations.ai/openai", key: "free", model: "openai-fast", name: "pollinations" },
+        ].filter((u) => u.base !== targetBase);
+        const callOne = (u, payload) => {
+          const url = /\/openai$/.test(u.base) ? u.base : `${u.base}/chat/completions`;
+          const headers = { "Content-Type": "application/json" };
+          if (u.key !== "free" && u.key !== "keyless" && u.key) headers["Authorization"] = `Bearer ${u.key}`;
+          return fetch(url, { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(120000) });
+        };
+
         if (!isStreamReq) {
-          // 非流式:整体缓冲,空内容自动重试(最多 3 次)
+          // 非流式:逐上游尝试,每个上游内保留空响应重试(最多 3 次),耗尽换下一家
           let payload = basePayload;
-          let text = await proxyRes.text();
-          let j = null; try { j = JSON.parse(text); } catch {}
-          for (let att = 1; att <= 3 && bodyEmpty(j); att++) {
-            console.log(`llm-proxy 空响应(attempt ${att}${j?.choices?.[0]?.finish_reason ? ", finish=" + j.choices[0].finish_reason : ""})${att < 3 ? ",重试" : ",放弃"}`);
-            if (att < 3) {
-              await sleep(400 * att);
-              payload = escalate(payload, j?.choices?.[0]?.finish_reason || "");
-              const r2 = await callUpstream(payload);
-              if (r2.ok) { text = await r2.text(); try { j = JSON.parse(text); } catch { j = null; } }
-              else break;
+          for (let ci = 0; ci <= RELAY_CHAIN.length; ci++) {
+            const u = ci === 0 ? { base: targetBase, key: apiKey, name: "primary" } : RELAY_CHAIN[ci - 1];
+            if (ci > 0) { payload = { ...payload, model: u.model }; console.log(`llm-proxy 接力 → ${u.name}`); }
+            // 首响复用:ci=0 且主上游首响正常时直接用 proxyRes（连接失败/!ok 均走接力）
+            const first = ci === 0 ? (proxyRes && proxyRes.ok ? proxyRes : null) : await callOne(u, payload).catch(() => null);
+            if (!first || !first.ok) { console.error(`llm-proxy ${u.name} HTTP ${first ? first.status : "?"}`); continue; }
+            let j = null;
+            try { j = JSON.parse(await first.text()); } catch {}
+            for (let att = 1; att <= 3 && bodyEmpty(j); att++) {
+              console.log(`llm-proxy 空响应(${u.name} attempt ${att}${j?.choices?.[0]?.finish_reason ? ", finish=" + j.choices[0].finish_reason : ""})${att < 3 ? ",重试" : ",换上游"}`);
+              if (att < 3) {
+                await sleep(400 * att);
+                payload = escalate(payload, j?.choices?.[0]?.finish_reason || "");
+                let r2 = null;
+                try { r2 = await callOne(u, payload); } catch { break; }
+                if (r2.ok) { try { j = JSON.parse(await r2.text()); } catch { j = null; } }
+                else break;
+              }
+            }
+            if (!bodyEmpty(j)) {
+              res.writeHead(200, { ...sseHeaders, "X-Relay-Used": u.name });
+              res.end(JSON.stringify(j));
+              return;
             }
           }
-          res.writeHead(200, sseHeaders);
-          res.end(text);
+          res.writeHead(502, { ...(corsHeaders(req) || {}), "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "所有模型上游均不可用（含免费接力链）", relayTried: ["primary", ...RELAY_CHAIN.map(u => u.name)] }));
           return;
         }
-        // 流式:实时透传;押后 [DONE],整条流没有任何正文内容则自动重试
+        // 流式:实时透传;押后 [DONE],空流自动重试,单上游耗尽后接力下一家
         res.writeHead(200, sseHeaders);
         let payload = basePayload;
-        for (let att = 1; att <= 3; att++) {
-          const r = att === 1 ? proxyRes : await callUpstream(payload);
-          if (!r.ok) { const t = await r.text().catch(() => ""); res.end(t || JSON.stringify({ error: `上游 ${r.status}`, upstreamStatus: r.status })); return; }
-          const reader = r.body.getReader();
-          const decoder = new TextDecoder();
-          let sawContent = false, finishFr = "", tail = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            tail += decoder.decode(value, { stream: true });
-            let idx;
-            while ((idx = tail.indexOf("\n")) >= 0) {
-              const line = tail.slice(0, idx); tail = tail.slice(idx + 1);
-              if (line.trim() === "data: [DONE]") continue; // 押后:空了要换一发
-              const m = line.match(/^data:\s*(.+)$/);
-              if (m) {
-                try {
-                  const j = JSON.parse(m[1]);
-                  const delta = j?.choices?.[0]?.delta?.content;
-                  if (typeof delta === "string" && delta.length > 0) sawContent = true;
-                  if (j?.choices?.[0]?.finish_reason) finishFr = j.choices[0].finish_reason;
-                } catch {}
+        for (let ci = 0; ci <= RELAY_CHAIN.length; ci++) {
+          const u = ci === 0 ? { base: targetBase, key: apiKey, name: "primary" } : RELAY_CHAIN[ci - 1];
+          if (ci > 0) { payload = { ...payload, model: u.model }; console.log(`llm-proxy 流式接力 → ${u.name}`); res.write(`: relay ${u.name}\n\n`); }
+          for (let att = 1; att <= (ci === 0 ? 3 : 2); att++) {
+            let r = null;
+            try { r = att === 1 && ci === 0 ? proxyRes : await callOne(u, payload); } catch (e) { break; }
+            if (!r || !r.ok) break;
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder();
+            let sawContent = false, finishFr = "", tail = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              tail += decoder.decode(value, { stream: true });
+              let idx;
+              while ((idx = tail.indexOf("\n")) >= 0) {
+                const line = tail.slice(0, idx); tail = tail.slice(idx + 1);
+                if (line.trim() === "data: [DONE]") continue; // 押后:空了要换一发
+                const m = line.match(/^data:\s*(.+)$/);
+                if (m) {
+                  try {
+                    const j = JSON.parse(m[1]);
+                    const delta = j?.choices?.[0]?.delta?.content;
+                    if (typeof delta === "string" && delta.length > 0) sawContent = true;
+                    if (j?.choices?.[0]?.finish_reason) finishFr = j.choices[0].finish_reason;
+                  } catch {}
+                }
+                res.write(line + "\n");
               }
-              res.write(line + "\n");
             }
+            if (tail && tail.trim() !== "data: [DONE]") res.write(tail);
+            if (sawContent) { res.write("data: [DONE]\n\n"); res.end(); return; }
+            console.log(`llm-proxy 流式空响应(${u.name} attempt ${att}${finishFr ? ", finish=" + finishFr : ""})${att < 3 ? ",重试" : ",换上游"}`);
+            if (att < (ci === 0 ? 3 : 2)) { await sleep(400 * att); payload = escalate(payload, finishFr); }
           }
-          if (tail && tail.trim() !== "data: [DONE]") res.write(tail);
-          if (sawContent) break;
-          console.log(`llm-proxy 流式空响应(attempt ${att}${finishFr ? ", finish=" + finishFr : ""})${att < 3 ? ",重试" : ",放弃"}`);
-          if (att < 3) { await sleep(400 * att); payload = escalate(payload, finishFr); }
         }
         res.write("data: [DONE]\n\n");
         res.end();
@@ -2883,6 +2898,54 @@ http.createServer(async (req, res) => {
       return json(res, { ok: true, ...PERSONA_DISCLAIMER });
     }
 
+    // ─── v11 记忆中枢:主对话记忆 + 全部角色记忆聚合（PIPL 查阅/删除权的统一入口）───
+    if (url.pathname === "/api/memory-hub" && req.method === "GET") {
+      const main = {};
+      if (sharedDb) {
+        try { for (const r of sharedDb.getAllMemories()) if (!String(r.key).startsWith("persona:")) main[r.key] = String(r.value || ""); } catch {}
+      } else {
+        const mem = loadJson("memories.json");
+        for (const k of Object.keys(mem)) if (!k.startsWith("persona:")) main[k] = String(mem[k] || "");
+      }
+      const personas = [];
+      try {
+        for (const p of personaAll()) {
+          const items = [];
+          const pfx = `persona:${p.id}:`;
+          if (sharedDb) {
+            try { for (const r of sharedDb.getAllMemories()) if (String(r.key).startsWith(pfx)) items.push({ key: String(r.key).slice(pfx.length), value: String(r.value || "") }); } catch {}
+          } else {
+            const mem = loadJson("memories.json");
+            for (const k of Object.keys(mem)) if (k.startsWith(pfx)) items.push({ key: k.slice(pfx.length), value: String(mem[k] || "") });
+          }
+          if (items.length > 0) personas.push({ id: p.id, name: p.name, avatar: p.avatar, items });
+        }
+      } catch {}
+      const mainCount = Object.keys(main).length;
+      const personaCount = personas.reduce((s, p) => s + p.items.length, 0);
+      return json(res, { ok: true, main, personas, stats: { main: mainCount, persona: personaCount, total: mainCount + personaCount } });
+    }
+    // 记忆中枢：删除主对话记忆单条（复用 /api/memories/:key DELETE 已有），此处补角色记忆删除与全清
+    if (url.pathname.startsWith("/api/memory-hub/persona/") && req.method === "DELETE") {
+      const rest = decodeURIComponent(url.pathname.split("/api/memory-hub/persona/")[1] || "");
+      const slash = rest.indexOf("/");
+      const pid = slash > 0 ? rest.slice(0, slash) : rest;
+      const slug = slash > 0 ? rest.slice(slash + 1) : "";
+      const pfx = `persona:${pid}:`;
+      if (sharedDb) {
+        try {
+          if (slug) sharedDb.deleteMemory(pfx + slug);
+          else for (const m of personaMemories(pid)) sharedDb.deleteMemory(pfx + m.key);
+          return json(res, { ok: true });
+        } catch {}
+      }
+      const mem = loadJson("memories.json");
+      if (slug) delete mem[pfx + slug];
+      else for (const k of Object.keys(mem)) if (k.startsWith(pfx)) delete mem[k];
+      saveJson("memories.json", mem);
+      return json(res, { ok: true });
+    }
+
     // --- 长期记忆 API（统一 SQLite）---
     if (url.pathname === "/api/memories" && req.method === "GET") {
       if (sharedDb) {
@@ -2911,8 +2974,8 @@ http.createServer(async (req, res) => {
       if (!key) return json(res, { error: "缺少 key" }, 400);
       if (sharedDb) { try { sharedDb.setMemory(key, value == null ? "" : String(value)); return json(res, { ok: true }); } catch {} }
       // 分家守卫：知识库条目(kb_/knowledge)与会话摘要(ctx_summary_)不得写入长期记忆
-      if (argKey) {
-        const k = String(argKey)
+      if (key) {
+        const k = String(key)
         if (/^(kb_|kb:|knowledge|ctx_summary_)/i.test(k)) return json(res, { error: "该键不属于长期记忆（知识库/会话摘要请走各自存储）" }, 400);
       }
       const mem = loadJson("memories.json");
@@ -3615,6 +3678,139 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         res.end(audioBuf);
         return;
       } catch (e) { return json(res, { error: e.message }, 502); }
+    }
+
+    // ─── v11 深度调研:服务端编排（拆检索词 → 多轮搜索 → 抓取正文 → 交叉引用报告）───
+    // 服务端 LLM 调用:配置的模型优先,失败自动落免费链（与 llm-proxy 接力同一批上游）
+    async function serverLLM(messages, maxTokens, temperature) {
+      let cfgBase = "", cfgKey = "", cfgModel = "";
+      try {
+        const rows = sharedDb ? sharedDb.getAllSettings() : [];
+        for (const r of rows) {
+          if (r.key === "apiBaseUrl") cfgBase = String(r.value || "");
+          if (r.key === "apiKey") cfgKey = String(r.value || "");
+          if (r.key === "model") cfgModel = String(r.value || "");
+        }
+      } catch {}
+      const chain = [];
+      if (cfgBase && cfgModel && cfgKey && cfgKey.indexOf("****") < 0 && cfgKey !== "free" && cfgKey !== "keyless") {
+        chain.push({ base: cfgBase, key: cfgKey, model: cfgModel });
+      }
+      chain.push(
+        { base: "https://api.kilo.ai/api/gateway/v1", key: "free", model: "openrouter/free" },
+        { base: "https://text.pollinations.ai/openai", key: "free", model: "openai-fast" },
+      );
+      for (const u of chain) {
+        try {
+          const url = /\/openai$/.test(u.base) ? u.base : `${u.base}/chat/completions`;
+          const headers = { "Content-Type": "application/json" };
+          if (u.key !== "free" && u.key !== "keyless" && u.key) headers["Authorization"] = `Bearer ${u.key}`;
+          const r = await fetch(url, {
+            method: "POST", headers,
+            body: JSON.stringify({ model: u.model, messages, max_tokens: maxTokens, stream: false, temperature: temperature ?? 0.4 }),
+            signal: AbortSignal.timeout(120000),
+          });
+          if (!r.ok) continue;
+          const d = await r.json();
+          const content = String(d?.choices?.[0]?.message?.content || "").trim();
+          if (content) return content;
+        } catch { /* 试下一家 */ }
+      }
+      return "";
+    }
+    if (url.pathname === "/api/deep-research" && req.method === "POST") {
+      try {
+        const { query } = await body(req);
+        const q = String(query || "").trim();
+        if (!q) return json(res, { error: "缺少 query" }, 400);
+        res.writeHead(200, {
+          ...(corsHeaders(req) || {}),
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+        const sse = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch {} };
+
+        // 阶段一：拆检索词
+        sse({ phase: "plan", detail: "正在拆解检索策略" });
+        const planRaw = await serverLLM([
+          { role: "system", content: '你是调研检索策划。针对用户问题给出 3-5 个搜索词：第一个必须与用户原问题几乎一致（保证相关性底线），其余从不同角度变换（可含英文视角）。只输出 JSON：{"queries":["...","..."]}，不要输出其他内容。' },
+          { role: "user", content: q },
+        ], 300, 0.3);
+        let queries = [];
+        try { queries = (JSON.parse((planRaw.match(/\{[\s\S]*\}/) || [])[0] || "{}").queries || []).map((s) => String(s).slice(0, 80)).filter(Boolean); } catch {}
+        if (queries.length === 0) queries = [q];
+        queries = queries.slice(0, 5);
+
+        // 阶段二：多轮搜索
+        sse({ phase: "search", total: queries.length, queries });
+        const urlSet = new Map(); // url -> title
+        for (let i = 0; i < queries.length; i++) {
+          const qr = await web_search({ query: queries[i] });
+          let found = 0;
+          if (qr?.success) {
+            const urls = String(qr.output || "").match(/https?:\/\/[^\s)\]"'<>]+/g) || [];
+            for (const u of urls) {
+              const clean = u.replace(/[.,;]+$/, "");
+              if (!urlSet.has(clean) && !/bing\.com|duckduckgo\.com|google\./.test(clean)) { urlSet.set(clean, ""); found++; }
+            }
+          }
+          sse({ phase: "search", index: i + 1, total: queries.length, query: queries[i], found });
+        }
+
+        // 阶段三：抓取正文（最多 5 篇，并行）+ 相关性过滤（查询 2 字滑窗 gram 命中判定，滤 SERP 垃圾站）
+        const sources = [...urlSet.keys()].slice(0, 5);
+        sse({ phase: "fetch", total: sources.length, sources });
+        const qClean = q.replace(/[^\u4e00-\u9fff\w]/g, "");
+        const qGrams = new Set();
+        for (let i = 0; i < qClean.length - 1; i++) qGrams.add(qClean.slice(i, i + 2));
+        const excerpts = [];
+        await Promise.all(sources.map(async (u, i) => {
+          const fr = await web_fetch({ url: u }).catch(() => null);
+          let text = fr?.success ? String(fr.output || "").replace(/\n{2,}/g, "\n").slice(0, 6000) : "";
+          let relevant = false;
+          if (text) {
+            let hits = 0;
+            for (const g of qGrams) if (text.includes(g)) hits++;
+            // 至少命中 2 个不同 gram 且覆盖率不过低,才算与问题相关
+            relevant = hits >= Math.max(2, Math.ceil(qGrams.size * 0.08));
+          }
+          if (relevant) excerpts.push({ url: u, ok: true, text });
+          sse({ phase: "fetch", index: i + 1, total: sources.length, url: u, ok: !!fr?.success, relevant });
+        }));
+
+        // 阶段四：交叉引用报告
+        sse({ phase: "write", detail: "正在撰写带引用的报告" });
+        const excerptBlock = excerpts
+          .filter((e) => e.ok && e.text.length > 200)
+          .map((e, i) => `【来源 ${i + 1}】${e.url}\n${e.text}`)
+          .join("\n\n---\n\n");
+        let report = "";
+        if (excerptBlock) {
+          report = await serverLLM([
+            { role: "system", content: "你是深度调研员。基于给定的网络来源撰写一份结构化中文调研报告（markdown）：\n# 结论先行\n# 关键发现（分点，每个事实标注来源编号如 [1]）\n# 分歧与不确定性\n# 参考来源（列 URL）\n要求：只依据给定来源，不编造；来源之间有出入时明确指出；语言精炼。" },
+            { role: "user", content: `调研问题：${q}\n\n来源与正文：\n\n${excerptBlock.slice(0, 40000)}` },
+          ], 3000, 0.4);
+        }
+        if (!report) {
+          // 兜底：模型不可用时给出来源清单
+          report = `# 调研原始结果：${q}\n\n（报告生成服务暂不可用，以下为检索到的来源列表）\n\n${sources.map((u, i) => `${i + 1}. ${u}`).join("\n")}`;
+        }
+        // 落盘
+        let file = "";
+        try {
+          const dir = path.join(DATA_DIR, "research");
+          fs.mkdirSync(dir, { recursive: true });
+          file = path.join(dir, `${Date.now()}.md`);
+          fs.writeFileSync(file, `# 深度调研：${q}\n\n${report}\n`, "utf-8");
+        } catch {}
+        sse({ done: true, report, sources, file: path.basename(file || "") });
+        res.end();
+      } catch (e) {
+        try { res.write(`data: ${JSON.stringify({ error: String(e?.message || e) })}\n\n`); } catch {}
+        res.end();
+      }
+      return;
     }
 
     // ─── 全会话内容搜索（企业级：跨会话找消息）───

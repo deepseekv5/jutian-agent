@@ -12,7 +12,7 @@ import { ASSISTANT_NAME } from '../brand'
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
 interface Props {
-  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string }) => void
+  onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; research?: boolean }) => void
   disabled?: boolean
   /** 消息队列长度：流式中发送会排队 */
   queueCount?: number
@@ -158,6 +158,8 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   const [kbOn, setKbOn] = useState<boolean>(() => { try { return localStorage.getItem('lyclaw_kb_on') === '1' } catch { return false } })
   // 目标模式开关：开启后下一条消息作为「目标」，评估器逐轮检查、未达成自动续跑（≤3 轮）
   const [goalOn, setGoalOn] = useState(false)
+  // 深度调研开关：本轮输入作为调研问题，服务端编排检索→抓取→带引用报告
+  const [researchOn, setResearchOn] = useState(false)
   // 本次权限档位（粘性）：ask=需确认 / edit=可编辑 / full=完全访问；useChat 据此注入权限提示
   const [access, setAccess] = useState<string>(() => { try { return localStorage.getItem('lyclaw_access_level') || 'edit' } catch { return 'edit' } })
   const pickAccess = (v: string) => { setAccess(v); try { localStorage.setItem('lyclaw_access_level', v) } catch {} }
@@ -571,7 +573,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
       content,
       selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
       attachedFiles.length > 0 ? attachedFiles : undefined,
-      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined, accessLevel: access },
+      { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? trimmed : undefined, accessLevel: access, research: researchOn },
     )
     // 输入历史（↑ 回溯最近 20 条）
     try {
@@ -582,7 +584,7 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
     setValue(''); setAttachedFiles([]); setSelectedSkillIds([])
     if (sessionId) { try { localStorage.removeItem(`lyclaw_draft_${sessionId}`) } catch { /* ignore */ } }
     setModes(MODES_OFF)   // 模式为单次生效，发送后复位，避免误触发
-    setGoalOn(false)      // 目标模式单次生效
+    setGoalOn(false); setResearchOn(false)   // 单次模式发送后复位
   }
 
   // ─── 输入历史导航：空输入按 ↑ 逐条回溯，↓ 返回 ───
@@ -1038,6 +1040,21 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
                 <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" />
               </svg>
               <span className="text-[12px] font-medium">目标</span>
+            </button>
+
+            {/* 深度调研开关 */}
+            <button onClick={() => setResearchOn(v => !v)} aria-pressed={researchOn}
+              title="深度调研：这轮输入作为调研问题，自动拆检索词→多轮搜索→阅读来源→产出带引用的报告"
+              className="h-8 pl-2.5 pr-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+              style={{
+                background: researchOn ? '#2563eb1a' : 'transparent',
+                border: `1px solid ${researchOn ? '#2563eb66' : c.border}`,
+                color: researchOn ? '#2563eb' : c.textSecondary,
+              }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
+              </svg>
+              <span className="text-[12px] font-medium">调研</span>
             </button>
 
             {/* 本次权限档位：需确认 / 可编辑 / 完全访问 */}

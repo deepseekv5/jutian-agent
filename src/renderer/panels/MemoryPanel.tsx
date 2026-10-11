@@ -15,6 +15,9 @@ export default function MemoryPanel({ onClose }: Props) {
   const [showAdd, setShowAdd] = useState(false)
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
+  // v11 记忆中枢：角色记忆聚合
+  const [personaGroups, setPersonaGroups] = useState<{ id: string; name: string; avatar: string; items: { key: string; value: string }[] }[]>([])
+  const [expandedPersona, setExpandedPersona] = useState<string | null>(null)
 
   const loadMemories = useCallback(async () => {
     setLoading(true)
@@ -23,6 +26,16 @@ export default function MemoryPanel({ onClose }: Props) {
   }, [])
 
   useEffect(() => { loadMemories() }, [loadMemories])
+
+  // v11 记忆中枢：拉取角色记忆聚合
+  const loadPersonaMemories = useCallback(async () => {
+    try {
+      const r = await fetch('/api/memory-hub')
+      const d = await r.json()
+      if (d?.ok) setPersonaGroups(Array.isArray(d.personas) ? d.personas : [])
+    } catch { /* 服务不可用则隐藏分区 */ }
+  }, [])
+  useEffect(() => { loadPersonaMemories() }, [loadPersonaMemories])
 
   const handleSave = async (key: string, value: string) => {
     await setMemory(key, value)
@@ -127,6 +140,48 @@ export default function MemoryPanel({ onClose }: Props) {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ─── v11 记忆中枢：角色记忆（跨角色聚合视图，只读浏览 + 删除）─── */}
+        {personaGroups.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="text-[12px] font-semibold" style={{ color: c.textHead }}>角色记忆</span>
+              <span className="text-[10.5px] font-mono" style={{ color: c.textMuted }}>{personaGroups.reduce((s, p) => s + p.items.length, 0)} 条 · {personaGroups.length} 个角色</span>
+              <div className="flex-1 h-px" style={{ background: c.borderLight }} />
+            </div>
+            <div className="space-y-2">
+              {personaGroups
+                .filter(p => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.items.some(it => it.key.toLowerCase().includes(search.toLowerCase()) || it.value.toLowerCase().includes(search.toLowerCase())))
+                .map(p => (
+                <div key={p.id} className="rounded-xl glass overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
+                  <button onClick={() => setExpandedPersona(expandedPersona === p.id ? null : p.id)}
+                    className="w-full flex items-center gap-2.5 px-4 py-3 text-left">
+                    <span className="w-8 h-8 rounded-full flex items-center justify-center text-[15px] shrink-0" style={{ background: c.bgInput }}>{p.avatar}</span>
+                    <span className="text-[13px] font-medium" style={{ color: c.textHead }}>{p.name}</span>
+                    <span className="text-[10.5px] font-mono ml-auto" style={{ color: c.textMuted }}>{p.items.length} 条</span>
+                    <svg className={`w-3.5 h-3.5 transition-transform ${expandedPersona === p.id ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  {expandedPersona === p.id && (
+                    <div className="px-4 pb-3 space-y-1.5">
+                      {p.items.map(it => (
+                        <div key={it.key} className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: c.bgInput }}>
+                          <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ color: c.textSecondary, background: c.bg }}>{it.key}</span>
+                          <span className="text-[12px] flex-1 min-w-0 whitespace-pre-wrap" style={{ color: c.textSecondary }}>{it.value}</span>
+                          <button onClick={async () => { if (!confirm(`删除角色「${p.name}」的记忆 "${it.key}"?`)) return; await fetch(`/api/memory-hub/persona/${encodeURIComponent(p.id)}/${encodeURIComponent(it.key)}`, { method: 'DELETE' }); setPersonaGroups(prev => prev.map(g => g.id === p.id ? { ...g, items: g.items.filter(x => x.key !== it.key) } : g)) }}
+                            className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: c.toolErr }} title="删除">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
