@@ -834,7 +834,7 @@ function KnowledgeGraph({ entries, theme, onSelect }: { entries: KbEntry[]; them
     }
     tick()
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-  }, [bgCol, lineCol, textCol])
+  }, [bgCol, lineCol, textCol, DARK, aiCol, userCol])
 
   // 屏幕 → 图谱世界坐标（含缩放/平移）
   const toWorld = useCallback((clientX: number, clientY: number): [number, number] => {
@@ -878,15 +878,13 @@ function KnowledgeGraph({ entries, theme, onSelect }: { entries: KbEntry[]; them
 }
 
 function LinkGlyph() {
-  const { c } = useTheme()
   return (
     <svg className="w-3.5 h-3.5" style={{ color: '#0f766e' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010 5.656l3-3a4 4 0 01 5.656 5.656l-1.5-1.5" />
     </svg>
   )
 }
 function PinGlyph() {
-  const { c } = useTheme()
   return (
     <svg className="w-3 h-3 shrink-0" style={{ color: '#b45309' }} fill="currentColor" viewBox="0 0 24 24">
       <path d="M16 3l5 5-5.5 1.5L13 14l-6 6-1.5-1.5 4-4-2.5-2.5L14 6.5 12 4l4-1zM6.5 14.5" />

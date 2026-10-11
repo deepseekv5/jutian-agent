@@ -68,7 +68,24 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
+  // 同理给消息操作用 ref 包一层：下面传给 ChatView 的回调因此是全稳定引用，
+  // MessageBubble 的 memo 才能在流式期间真正挡住重渲染
+  const regenerateRef = useRef(regenerateMessage)
+  regenerateRef.current = regenerateMessage
+  const rollbackRef = useRef(rollbackTo)
+  rollbackRef.current = rollbackTo
+  const editMessageRef = useRef(editMessage)
+  editMessageRef.current = editMessage
   const lastSendRef = useRef<{ content: string; skillIds?: string[] }>({ content: '' })
+
+  const handleRegenerate = useCallback(() => {
+    const { content, skillIds } = lastSendRef.current
+    if (content) sendRef.current(content, skillIds)
+  }, [])
+  const handleRegenerateAt = useCallback((idx: number) => regenerateRef.current(idx), [])
+  const handleRollback = useCallback((idx: number) => rollbackRef.current(idx), [])
+  const handleEditMessage = useCallback((idx: number, text: string) => editMessageRef.current(idx, text), [])
+  const handleQuickSend = useCallback((text: string) => { setTimeout(() => sendRef.current(text), 100) }, [])
 
   // ─── Git 检查点：每次对话发送前自动快照工作目录，对话后可一键撤销本轮文件更改 ───
   const [lastCheckpoint, setLastCheckpoint] = useState<Checkpoint | null>(() => loadLastCheckpoint(sessionId))
@@ -353,12 +370,12 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 messages={messages}
                 streamingId={streamingId}
                 onAbort={abort}
-                onQuickSend={(text: string) => { setTimeout(() => sendRef.current(text), 100) }}
-                onRegenerate={() => { const { content, skillIds } = lastSendRef.current; if (content) send(content, skillIds) }}
-                onRegenerateAt={(idx) => regenerateMessage(idx)}
+                onQuickSend={handleQuickSend}
+                onRegenerate={handleRegenerate}
+                onRegenerateAt={handleRegenerateAt}
                 onOpenBrowser={onOpenBrowser}
-                onRollback={(idx) => rollbackTo(idx)}
-                onEditMessage={(idx, text) => editMessage(idx, text)}
+                onRollback={handleRollback}
+                onEditMessage={handleEditMessage}
               />
               {goal && goalDismissed !== goal.text + goal.status && (
                 <div className="px-6 pt-1 pb-2 shrink-0">

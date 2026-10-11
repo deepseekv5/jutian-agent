@@ -248,11 +248,15 @@ function IconAction({ icon, label, onClick, active }: { icon: string; label: str
   )
 }
 
-const MessageBubble = memo(function MessageBubble({ content, thinking, role, isStreaming, toolCalls, isLast, onRegenerate, onOpenBrowser, onRollback, onEdit, createdAt, variants, msgId, swarm: swarmProp }: {
+// 回调签名统一带 index：父层因此可以传稳定函数引用（不必为每条消息
+// 新建闭包），memo 才能真正生效——否则流式每 50ms 一次的全量重渲染
+// 会让每条气泡连 ReactMarkdown 都重新解析一遍
+const MessageBubble = memo(function MessageBubble({ content, thinking, role, isStreaming, toolCalls, isLast, index, onRegenerate, onOpenBrowser, onRollback, onEdit, createdAt, variants, msgId, swarm: swarmProp }: {
   content: string; thinking?: string; role: 'user' | 'assistant'; isStreaming?: boolean;
-  toolCalls?: ToolCall[]; isLast?: boolean; onRegenerate?: () => void;
-  onOpenBrowser?: (url: string) => void; onRollback?: () => void;
-  onEdit?: (newContent: string) => void;
+  toolCalls?: ToolCall[]; isLast?: boolean; index: number;
+  onRegenerate?: (index: number) => void;
+  onOpenBrowser?: (url: string) => void; onRollback?: (index: number) => void;
+  onEdit?: (index: number, newContent: string) => void;
   createdAt?: string;
   /** 消息分支：旧回答版本（重新生成时归档），0 号即主内容 */
   variants?: string[];
@@ -371,7 +375,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
                 className="w-full bg-transparent outline-none resize-none text-[15px] leading-7" style={{ color: c.text }} />
               <div className="flex justify-end gap-2 mt-1">
                 <button onClick={() => setEditing(false)} className="px-3 py-1.5 rounded-lg text-xs" style={{ color: c.textSecondary }}>取消</button>
-                <button onClick={() => { setEditing(false); if (editText.trim() && onEdit) onEdit(editText.trim()) }}
+                <button onClick={() => { setEditing(false); if (editText.trim() && onEdit) onEdit(index, editText.trim()) }}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: c.textHead, color: c.bg }}>发送</button>
               </div>
             </div>
@@ -392,7 +396,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               {showRollbackConfirm ? (
                 <div className="flex items-center gap-1.5 text-[11.5px]">
                   <span style={{ color: c.textTertiary }}>回滚到这里？</span>
-                  <button onClick={() => { setShowRollbackConfirm(false); onRollback() }}
+                  <button onClick={() => { setShowRollbackConfirm(false); onRollback(index) }}
                     className="px-2.5 py-1 rounded-lg text-xs font-medium" style={{ background: c.toolErr, color: '#fff' }}>确定</button>
                   <button onClick={() => setShowRollbackConfirm(false)}
                     className="px-2.5 py-1 rounded-lg text-xs" style={{ color: c.textTertiary, background: c.surfaceInput }}>取消</button>
@@ -663,7 +667,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               } catch { /* ignore */ }
             }} active={savedKb} />
             {onRegenerate && isLast && (
-              <IconAction label="重新生成" icon="M4 4v5h5M4.05 13A9 9 0 106 5.3L4 8" onClick={onRegenerate} />
+              <IconAction label="重新生成" icon="M4 4v5h5M4.05 13A9 9 0 106 5.3L4 8" onClick={() => onRegenerate(index)} />
             )}
             {/* 消息分支切换器：‹ 2/3 › */}
             {!isUser && versionCount > 1 && (

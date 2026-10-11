@@ -248,12 +248,6 @@ var jsonRaw = (res, d, s = 200) => {
 // 掩码值（如 sk-6****9Ylc）一律不得写回存储：客户端整表回传设置时会带着
 // GET 拿到的掩码，原样落库会把真密钥冲成掩码垃圾。
 var isMasked = (v) => typeof v === "string" && v.indexOf("****") >= 0;
-// 需要按请求 Origin 决定 CORS 的响应（如流式/代理响应，绕过了 json()）
-var jsonAs = (req, res, d, s = 200) => {
-  var c = corsHeaders(req) || {};
-  res.writeHead(s, { ...c, "Content-Type": "application/json", "Cache-Control": "no-store" });
-  res.end(JSON.stringify(maskSecrets(d)));
-};
 // 请求体读取带 32MB 上限：防止畸形/恶意请求把主进程内存打满(主进程 OOM 会连带整个应用崩溃)
 var BODY_LIMIT = 32 * 1024 * 1024;
 var body = async (req) => {
@@ -374,7 +368,7 @@ ${l.length} \u9879` };
   }
 }
 /** 截屏工具（v5.6）：主进程内直接用 desktopCapturer，存盘并返回可访问的 URL */
-async function screenshot(a) {
+async function screenshot(_a) {
   try {
     const electron = require("electron");
     const { desktopCapturer, screen, BrowserWindow } = electron;
@@ -2303,7 +2297,6 @@ http.createServer(async (req, res) => {
       }
     }
     if (url.pathname === "/api/open-terminal" && req.method === "GET") {
-      const p = url.searchParams.get("path") || process.env.HOME;
       try {
         await execAsync("osascript", ["-e", `tell application "Terminal" to activate`], { timeout: 5e3 });
         return json(res, { ok: true });
@@ -2377,11 +2370,13 @@ http.createServer(async (req, res) => {
       try {
         // 重装/更新：先清空旧目录，否则 git clone 报 "already exists and is not an empty directory"
         await fsp.rm(destDir, { recursive: true, force: true });
-        const r = await execAsync("git", ["clone", "--depth", "1", githubUrl, destDir], { timeout: 6e4, maxBuffer: 524288 });
+        await execAsync("git", ["clone", "--depth", "1", githubUrl, destDir], { timeout: 6e4, maxBuffer: 524288 });
         // 清掉 .git，技能目录保持干净
         await fsp.rm(path.join(destDir, ".git"), { recursive: true, force: true });
         // 统计真实安装的文件
         const files = [];
+        // 参数名必须是 p：此前写成 _p 而函数体引用 p，触发的 ReferenceError
+        // 被下面的 catch 吞掉，安装后的文件数永远统计成 0
         (function walk(p) {
           try {
             for (const e of fs.readdirSync(p, { withFileTypes: true })) {
@@ -3097,7 +3092,7 @@ http.createServer(async (req, res) => {
         if (!stOut.trim()) return json(res, { success: true, skipped: true, reason: "无改动，跳过检查点" });
         await gitRun(d, ["add", "-A"]);
         const msg = label || `检查点 ${new Date().toLocaleString("zh-CN", { hour12: false })}`;
-        const { stdout: cOut } = await gitRun(d, ["commit", "-m", msg]);
+        await gitRun(d, ["commit", "-m", msg]);
         // 检查点治理：定期 gc 防仓库膨胀（每 10 个检查点触发一次）
         try {
           const { stdout: cnt } = await gitRun(d, ["rev-list", "--count", "HEAD"]);
@@ -4022,7 +4017,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
             if (files.length >= 120) return;
           }
         })(folder, 0);
-        let totalChunks = 0, embedded = 0;
+        let totalChunks = 0;
         for (const fp of files) {
           sharedDb.kbDeleteByPath(fp);
           let text = "";
@@ -4033,7 +4028,6 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
             const batch = chunks.slice(i, i + 16);
             const vectors = await kbEmbedTexts(batch);
             batch.forEach((ck, j) => { sharedDb.kbInsert(fp, ck, vectors[j] || []); totalChunks++; });
-            embedded += batch.length;
           }
         }
         return json(res, { ok: true, files: files.length, chunks: totalChunks });

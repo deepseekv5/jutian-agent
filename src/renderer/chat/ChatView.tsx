@@ -36,6 +36,18 @@ export default function ChatView({ messages, streamingId, onAbort, onRegenerate,
   const isStreaming = streamingId !== null
   const { c } = useTheme()
 
+  // 三个操作回调提成稳定引用：MessageBubble 是 memo 组件，若每条消息都传
+  // 新建的闭包，memo 永远命中不了——流式期间每 50ms 一次 setMessages 就会
+  // 让全部气泡重渲染、连 ReactMarkdown 都重新解析。
+  // 依赖里只有 messages.length 这类流式期间不变的量；onOpenBrowser 由父层
+  // 直接透传，本身已是稳定引用
+  const handleRegenerateAt = useCallback((idx: number) => {
+    if (idx === messages.length - 1 && onRegenerate) onRegenerate()
+    else onRegenerateAt?.(idx)
+  }, [messages.length, onRegenerate, onRegenerateAt])
+  const handleRollback = useCallback((idx: number) => onRollback?.(idx), [onRollback])
+  const handleEdit = useCallback((idx: number, text: string) => onEditMessage?.(idx, text), [onEditMessage])
+
   // 消息内搜索（Cmd/Ctrl+F）
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQ, setSearchQ] = useState('')
@@ -197,14 +209,13 @@ export default function ChatView({ messages, streamingId, onAbort, onRegenerate,
                 isStreaming={msg.id === streamingId}
                 toolCalls={msg.tool_calls || []}
                 isLast={idx === messages.length - 1}
+                index={idx}
                 msgId={msg.id}
                 variants={(msg as any).variants}
-                onRegenerate={msg.role === 'assistant' && !isStreaming
-                  ? () => { if (idx === messages.length - 1 && onRegenerate) onRegenerate(); else onRegenerateAt?.(idx) }
-                  : undefined}
+                onRegenerate={msg.role === 'assistant' && !isStreaming ? handleRegenerateAt : undefined}
                 onOpenBrowser={onOpenBrowser}
-                onRollback={msg.role === 'user' && !isStreaming ? () => onRollback?.(idx) : undefined}
-                onEdit={msg.role === 'user' && !isStreaming && onEditMessage ? (text: string) => onEditMessage(idx, text) : undefined}
+                onRollback={msg.role === 'user' && !isStreaming ? handleRollback : undefined}
+                onEdit={msg.role === 'user' && !isStreaming && onEditMessage ? handleEdit : undefined}
                 createdAt={(msg as any).created_at}
               />
             </div>

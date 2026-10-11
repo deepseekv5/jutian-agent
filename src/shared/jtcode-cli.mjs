@@ -118,7 +118,7 @@ async function execTool(port, name, args, cwd) {
 }
 
 /** 调 /api/llm-proxy 流式对话，返回完整回复 */
-async function chatStream(port, settings, messages, onDelta, tools, workDir) {
+async function chatStream(port, settings, messages, onDelta, tools, _workDir) {
   const isLocal = settings.provider === 'local'
   const targetBase = isLocal ? 'http://localhost:1234/v1' : (settings.apiBaseUrl || 'https://openrouter.ai/api/v1')
   const apiKey = isLocal ? 'lm-studio' : (settings.apiKey || '')

@@ -143,7 +143,6 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   }, [searchQuery]);
   const [form, setForm] = useState<Settings>({ ...settings });
   const [savedFlash, setSavedFlash] = useState('');
-  const [saving, setSaving] = useState(false);
   const [lmModels, setLmModels] = useState<{ id: string }[]>([]);
   const [lmScanning, setLmScanning] = useState(false);
   const [lmError, setLmError] = useState('');
@@ -253,7 +252,11 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
   async function scanLmModels() { setLmScanning(true); setLmError(''); try { const res = await fetch('/api/lm-models'); const data = await res.json(); if (!data.data?.length) setLmError(t('LM Studio 已连接，但没有加载模型', 'LM Studio connected but no models loaded')); setLmModels(data.data || []); } catch (err: any) { setLmError(err.message || t('无法连接 LM Studio', 'Cannot connect to LM Studio')); setLmModels([]); } finally { setLmScanning(false); } }
 
-  useEffect(() => { if (form.provider === 'local') scanLmModels(); }, [form.provider]);
+  useEffect(() => {
+    if (form.provider === 'local') scanLmModels()
+    // scanLmModels 是每次渲染新建的函数声明：纳入依赖会导致每次渲染都重新扫描 LM Studio
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.provider]);
 
 
 
@@ -448,8 +451,6 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     setForm(next);
     persistAll(next);
   }
-
-  const canSave = form.provider === 'local' || (form.apiBaseUrl.trim() && form.model.trim() && form.apiKey.trim());
 
   const inputCls = "w-full px-3 py-2 rounded-lg text-[13px] outline-none transition-colors"
   const inputStyle = { background: c.bgInput, border: `1px solid ${c.border}`, color: c.text }
@@ -1245,7 +1246,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
 /** 置顶宣传横幅:包装 CliEntry,可关闭并记忆(单一实例,所有页签顶部) */
 function CliBanner() {
-  const { c, t } = { ...useTheme(), t: (a: string, b?: string) => a }
+  const { c, t } = { ...useTheme(), t: (a: string, _b?: string) => a }
   const [hidden, setHidden] = useState<boolean>(() => { try { return localStorage.getItem('settings-cli-banner') === '0' } catch { return false } })
   if (hidden) return null
   return (
@@ -1263,7 +1264,7 @@ function CliBanner() {
 }
 
 function CliEntry() {
-  const { c, t } = { ...useTheme(), t: (a: string, b?: string) => a }
+  const { c } = useTheme()
   const [installed, setInstalled] = useState<boolean | null>(null)
   const [show, setShow] = useState(false)
   const [cliPath, setCliPath] = useState('')

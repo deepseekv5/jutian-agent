@@ -5,7 +5,7 @@
  * 一键切换 = 写入对应网关地址 + free 占位密钥 + 模型。
  * 主张:科技不是高高而上,而是服务于人民。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Settings } from '../types'

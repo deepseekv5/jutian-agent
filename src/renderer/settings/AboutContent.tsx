@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
@@ -56,6 +56,8 @@ export default function AboutContent() {
       doCheck()
       api().onUpdateProgress((p: Prog) => setProg(p))
     }
+    // doCheck 是每次渲染新建的普通函数：纳入依赖会让本 effect 每渲染重跑，重复注册 onUpdateProgress 监听
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const apply = () => {

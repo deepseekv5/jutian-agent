@@ -49,7 +49,7 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
     setSaving(true)
     try {
       const saved = await fetch('/api/diary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) }).then(r => r.json())
-      const list = await load()
+      await load()
       setActiveId(saved.id)
       setDraft(prev => prev ? { ...prev, id: saved.id, createdAt: saved.createdAt, updatedAt: saved.updatedAt } : prev)
       setSavedTip('已保存'); setTimeout(() => setSavedTip(''), 1800)

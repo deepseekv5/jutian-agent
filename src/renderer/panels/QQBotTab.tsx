@@ -81,7 +81,6 @@ export default function QQBotTab() {
       if (d.qq_auto !== undefined) setAutoReply(d.qq_auto === '1')
       if (d.qq_reply_mode) setReplyMode(d.qq_reply_mode as 'chat' | 'task')
     }).catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
@@ -89,7 +88,7 @@ export default function QQBotTab() {
   const [msgs, setMsgs] = useState<ChatMsg[]>([])
   const [manualText, setManualText] = useState('')
   const [replyTarget, setReplyTarget] = useState('')   // 手动回复目标 chatKey，空则回复最近会话
-  const [replying, setReplying] = useState(false)
+  const [_replying, setReplying] = useState(false)   // 仅用于触发重渲染的哨兵状态，当前无读取方
   const wsRef = useRef<WebSocket | null>(null)
   const hbTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

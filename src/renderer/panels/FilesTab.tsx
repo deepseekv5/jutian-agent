@@ -68,14 +68,14 @@ export default function FilesTab({ settings }: { settings: Settings }) {
     }
   }, [showHidden, settings.workDir])
 
-  useEffect(() => { if (defaultDir) load(defaultDir) }, [defaultDir])
+  useEffect(() => {
+    if (defaultDir) load(defaultDir)
+    // load 随 showHidden/workDir 换引用：纳入依赖会在切换这些设置时重复读目录，保持仅 defaultDir 触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultDir])
 
   const openFile = async (p: string) => {
     try { await fetch('/api/open-file?path=' + encodeURIComponent(p)) } catch {}
-  }
-  const revealInFinder = async (p: string) => {
-    const dir = p.replace(/[/\\][^/\\]+$/, '')
-    try { await fetch('/api/open-finder?path=' + encodeURIComponent(dir)) } catch {}
   }
   const trashFile = async (p: string) => {
     try {
