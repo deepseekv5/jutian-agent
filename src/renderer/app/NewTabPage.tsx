@@ -18,8 +18,9 @@ interface Card {
 }
 
 const CARDS: Card[] = [
-  { type: 'chat', desc: '和 AI 直接对话，一句话让它把活干完', descEn: 'Talk to the agent — it finishes the work, not just answers', chips: ['39 个工具', '目标模式', '深度调研'], chipsEn: ['39 tools', 'Goal mode', 'Deep research'] },
+  { type: 'chat', desc: '和 AI 直接对话，一句话让它把活干完', descEn: 'Talk to the agent — it finishes the work, not just answers', chips: ['39 个工具', '目标模式'], chipsEn: ['39 tools', 'Goal mode'] },
   { type: 'persona', desc: '有长期记忆的 AI 角色，免费直接聊', descEn: 'AI personas with long-term memory — free', chips: ['记忆', '朗读', '画画'], chipsEn: ['Memory', 'Voice', 'Paint'] },
+  { type: 'research', desc: '多路检索·交叉验证·带引用报告，历史可查', descEn: 'Multi-query search, cross-checked, cited report', chips: ['实时进度', '来源清单', '历史归档'], chipsEn: ['Live progress', 'Sources', 'Archive'] },
   { type: 'call', desc: '全屏语音通话，边说边执行任务', descEn: 'Full-screen voice call that executes as you talk', chips: ['实时对话'], chipsEn: ['Realtime'] },
   { type: 'code', desc: 'AI 编程工作台，文件 · 终端 · diff 一体', descEn: 'Agentic coding: files · terminal · diff in one', chips: ['Git 检查点', '多标签', '语法高亮'], chipsEn: ['Git checkpoints', 'Tabs', 'Highlight'] },
   { type: 'terminal', desc: '在本机终端执行命令，危险操作先问你', descEn: 'Run shell commands locally, ask before danger', chips: ['PowerShell / zsh'], chipsEn: ['PowerShell / zsh'] },
@@ -40,8 +41,9 @@ const CARDS: Card[] = [
 
 const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
   { label: '对话与角色', labelEn: 'Chat & Personas', items: ['chat', 'persona', 'call'] },
-  { label: '核心工作区', labelEn: 'Workspace', items: ['code', 'terminal', 'files', 'ppt'] },
-  { label: '扩展能力', labelEn: 'Extended', items: ['kb', 'skills', 'memory', 'tasks', 'outputs', 'diary', 'employees', 'freemodels'] },
+  { label: '研究与产出', labelEn: 'Research & Output', items: ['research', 'ppt', 'outputs'] },
+  { label: '核心工作区', labelEn: 'Workspace', items: ['code', 'terminal', 'files'] },
+  { label: '扩展能力', labelEn: 'Extended', items: ['kb', 'skills', 'memory', 'tasks', 'diary', 'employees', 'freemodels'] },
   { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about'] },
 ]
 

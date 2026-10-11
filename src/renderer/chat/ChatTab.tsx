@@ -22,12 +22,14 @@ function loadLastCheckpoint(sessionId: string): Checkpoint | null {
   try { return JSON.parse(localStorage.getItem(CP_KEY) || '{}')[sessionId] || null } catch { return null }
 }
 
-export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onStreamingChange, onModelChange, onProjectChange, active: _active, incomingScreenshot, onScreenshotConsumed }: {
+export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrowser, onOpenResearch, onStreamingChange, onModelChange, onProjectChange, active: _active, incomingScreenshot, onScreenshotConsumed }: {
   sessionId: string
   settings: Settings
   onTitleGenerated: (sessionId: string, firstMsg: string) => void
   onAiTitle?: (sessionId: string, title: string) => void
   onOpenBrowser: (url: string) => void
+  /** 打开深度调研专属工作台 */
+  onOpenResearch?: (seed?: string) => void
   onStreamingChange?: (sessionId: string, streaming: boolean) => void
   onModelChange?: (model: string) => void
   /** 有效工作目录变化 → 会话项目分组标签同步 */
@@ -356,6 +358,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                   incomingScreenshot={incomingScreenshot}
                   onScreenshotConsumed={onScreenshotConsumed}
                   onSend={handleSendQueued}
+                  onOpenResearch={onOpenResearch}
                   queueCount={queue.length}
                   currentModel={chatSettings.model}
                   onModelChange={onModelChange}
@@ -387,6 +390,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 incomingScreenshot={incomingScreenshot}
                 onScreenshotConsumed={onScreenshotConsumed}
                 onSend={handleSendQueued}
+                  onOpenResearch={onOpenResearch}
                 queueCount={queue.length}
                 queueItems={queue}
                 onRemoveQueued={removeQueued}

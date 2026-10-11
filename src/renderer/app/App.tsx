@@ -12,6 +12,7 @@ import WelcomeSplash from './WelcomeSplash';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
 import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
+import { sendResearchSeed } from '../engine/researchBridge';
 import { loadVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
 import TerminalPanel from '../code/TerminalPanel';
 import NewTabPage from './NewTabPage';
@@ -33,6 +34,7 @@ const AboutPage = lazy(() => import('../settings/AboutPage'));
 const PPTView = lazy(() => import('../media/PPTView'));
 const QQBotTab = lazy(() => import('../panels/QQBotTab'));
 const DiaryPanel = lazy(() => import('../panels/DiaryPanel'));
+const ResearchPanel = lazy(() => import('../panels/ResearchPanel'));
 const EmployeesPanel = lazy(() => import('../agents/EmployeesPanel'));
 const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
@@ -397,7 +399,7 @@ function MainApp() {
     switch (tab.type) {
       case 'chat':
         return tab.sessionId ? (
-          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} onProjectChange={setProject} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
+          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onOpenResearch={seed => { if (seed) sendResearchSeed(seed); openTab('research') }} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} onProjectChange={setProject} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
         ) : null;
       case 'call':
         return <VoiceCall settings={settings} onClose={() => closeTab(tab.id)} />;
@@ -445,6 +447,8 @@ function MainApp() {
         return <SettingsModal embedded settings={settings} onSave={s => saveSettings({ ...s })} onClose={() => closeTab(tab.id)} onOpenFreeModels={() => openTab('freemodels')} />;
       case 'legal':
         return <LegalPage onClose={() => closeTab(tab.id)} />;
+      case 'research':
+        return <ResearchPanel onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:

@@ -187,3 +187,25 @@ describe('跨站与异常请求', () => {
     expect(h.status).toBe('ok')
   }, 30000)
 })
+
+describe('调研历史 API', () => {
+  it('列表返回 items 数组', async () => {
+    const d = await fetch(`${BASE}/api/research/history`, { headers: ORIGIN }).then(r => r.json())
+    expect(Array.isArray(d.items)).toBe(true)
+  })
+
+  it('路径穿越文件名被拒', async () => {
+    const r = await fetch(`${BASE}/api/research/history/${encodeURIComponent('../../etc/passwd')}`, { headers: ORIGIN })
+    expect(r.status).toBe(400)
+  })
+
+  it('非 .md 扩展名被拒', async () => {
+    const r = await fetch(`${BASE}/api/research/history/data.db`, { headers: ORIGIN })
+    expect(r.status).toBe(400)
+  })
+
+  it('不存在的合法文件名返回 404', async () => {
+    const r = await fetch(`${BASE}/api/research/history/nope-1234.md`, { headers: ORIGIN })
+    expect(r.status).toBe(404)
+  })
+})

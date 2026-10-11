@@ -3947,6 +3947,66 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
       return;
     }
 
+    // ─── 深度调研历史：列表 / 读取 / 删除 ───
+    // 报告由 /api/deep-research 落盘到 DATA_DIR/research/<时间戳>.md，
+    // 这里只做受控的列举与读取：文件名一律走 resolveWithin 风格的白名单校验，
+    // 不允许带路径分隔符，杜绝 ../../ 越权读文件
+    var RESEARCH_DIR = path.join(DATA_DIR, "research");
+    if (url.pathname === "/api/research/history" && req.method === "GET") {
+      try {
+        var items = [];
+        if (fs.existsSync(RESEARCH_DIR)) {
+          var entries = fs.readdirSync(RESEARCH_DIR).filter((f) => f.endsWith(".md"));
+          for (var f of entries) {
+            var st = fs.statSync(path.join(RESEARCH_DIR, f));
+            var title = "";
+            try {
+              // 只取首行：报告正文第一行可能就是模型的思考过程残文，
+              // 多读几行会把正文吞进标题
+              var first = fs.readFileSync(path.join(RESEARCH_DIR, f), "utf-8").split("\n")[0] || "";
+              var m = first.match(/深度调研[：:]\s*(.{1,120})/);
+              if (m) title = m[1].trim();
+            } catch {}
+            items.push({
+              file: f,
+              at: st.mtime.toISOString(),
+              ts: parseInt(f.replace(/\.md$/, ""), 10) || st.mtimeMs,
+              title: title || "未命名调研",
+              size: st.size,
+            });
+          }
+          items.sort((a, b) => b.ts - a.ts);
+        }
+        return json(res, { items: items.slice(0, 100) });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname.startsWith("/api/research/history/") && req.method === "GET") {
+      var want = decodeURIComponent(url.pathname.slice("/api/research/history/".length));
+      // 只接受纯文件名：拒绝任何带分隔符或 .. 的输入
+      if (!/^[\w.-]+\.md$/.test(want) || want.includes("..")) {
+        return json(res, { error: "非法文件名" }, 400);
+      }
+      var full = path.resolve(RESEARCH_DIR, want);
+      if (!full.startsWith(path.resolve(RESEARCH_DIR) + path.sep)) return json(res, { error: "非法文件名" }, 400);
+      if (!fs.existsSync(full)) return json(res, { error: "报告不存在" }, 404);
+      try {
+        var text = fs.readFileSync(full, "utf-8");
+        return json(res, { file: want, content: text });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname.startsWith("/api/research/history/") && req.method === "DELETE") {
+      var del = decodeURIComponent(url.pathname.slice("/api/research/history/".length));
+      if (!/^[\w.-]+\.md$/.test(del) || del.includes("..")) {
+        return json(res, { error: "非法文件名" }, 400);
+      }
+      var dpath = path.resolve(RESEARCH_DIR, del);
+      if (!dpath.startsWith(path.resolve(RESEARCH_DIR) + path.sep)) return json(res, { error: "非法文件名" }, 400);
+      try {
+        if (fs.existsSync(dpath)) await fsp.unlink(dpath);
+        return json(res, { success: true });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+
     // ─── 一键备份导出 / 导入 ───
     if (url.pathname === "/api/backup/export" && req.method === "GET") {
       try {
