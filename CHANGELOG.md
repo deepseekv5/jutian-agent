@@ -3,6 +3,13 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [11.0.5] - 2026-10-11
+
+### 工程清理(审计驱动)
+- **删除 WebLLM 死代码**:local-llm.ts + web-llm.d.ts(145 行,零引用,@mlc-ai/web-llm 已不在依赖);旧安装包里残留的 13MB @mlc-ai 资源不再进入新构建
+- 全量审计结论:src/electron/scripts 无孤儿文件;打包白名单 21 个依赖全部有引用(better-sqlite3 为运行时 require,审计 grep 属误报);无跨文件重复定义
+- serve.ts(4164 行)等巨石文件经评估暂不拆分(单文件后端,拆分风险高于收益)
+
 ## [11.0.4] - 2026-10-11
 
 ### 自动更新 + 镜像通道
