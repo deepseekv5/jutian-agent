@@ -271,3 +271,112 @@ export async function deleteMemory(personaId: string, key: string): Promise<void
 export async function purgeMemories(personaId: string): Promise<void> {
   try { await fetch(`/api/persona-memories/${encodeURIComponent(personaId)}/delete?purge=1`, { method: 'DELETE' }) } catch { /* 清理失败可忽略 */ void 0 }
 }
+
+// ─────────────────────────── 朗读（TTS）：内置 Edge / 外接 OpenAI 兼容厂商 ───────────────────────────
+
+export interface PersonaTTSConfig {
+  provider: 'edge' | 'custom'
+  /** Edge 内置音色 */
+  voice: string
+  speed: number
+  /** 外接厂商（OpenAI /audio/speech 兼容形状：OpenAI / 硅基流动 / 各类兼容网关） */
+  customBase: string
+  customKey: string
+  customModel: string
+  customVoice: string
+}
+
+export const PERSONA_TTS_KEY = 'lyclaw_persona_tts'
+
+export function loadTTSConfig(): PersonaTTSConfig {
+  try {
+    const raw = localStorage.getItem(PERSONA_TTS_KEY)
+    if (raw) return { ...DEFAULT_TTS, ...JSON.parse(raw) }
+  } catch { /* 读取失败用默认 */ }
+  return { ...DEFAULT_TTS }
+}
+
+export function saveTTSConfig(cfg: PersonaTTSConfig) {
+  try { localStorage.setItem(PERSONA_TTS_KEY, JSON.stringify(cfg)) } catch { /* 忽略 */ }
+}
+
+export const DEFAULT_TTS: PersonaTTSConfig = {
+  provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', speed: 1.0,
+  customBase: '', customKey: '', customModel: 'tts-1', customVoice: 'alloy',
+}
+
+/** Edge 内置常用中文音色（免费，本机合成） */
+export const EDGE_VOICES = [
+  { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓（温柔女声）' },
+  { id: 'zh-CN-XiaoyiNeural', name: '晓伊（活泼女声）' },
+  { id: 'zh-CN-YunxiNeural', name: '云希（青年男声）' },
+  { id: 'zh-CN-YunyangNeural', name: '云扬（新闻男声）' },
+  { id: 'zh-CN-liaoning-XiaobeiNeural', name: '小北（东北女声）' },
+  { id: 'zh-HK-HiuMaanNeural', name: '曉曼（粤语女声）' },
+  { id: 'zh-TW-HsiaoChenNeural', name: '曉臻（台湾女声）' },
+]
+
+/** 合成语音，返回可播放的 objectURL。文本先剥离 markdown。 */
+export async function speakText(text: string, cfg: PersonaTTSConfig, signal?: AbortSignal): Promise<string> {
+  const clean = String(text || '')
+    .replace(/```[\s\S]*?```/g, '（代码已省略）')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '（图片已省略）')
+    .replace(/[*_#>`|]/g, '')
+    .trim()
+    .slice(0, 1500)
+  if (!clean) throw new Error('没有可朗读的内容')
+  if (cfg.provider === 'custom' && cfg.customBase.trim()) {
+    const base = cfg.customBase.trim().replace(/\/+$/, '')
+    const res = await fetch(`${base}/audio/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cfg.customKey.trim() ? { Authorization: `Bearer ${cfg.customKey.trim()}` } : {}) },
+      body: JSON.stringify({ model: cfg.customModel || 'tts-1', input: clean, voice: cfg.customVoice || 'alloy', speed: cfg.speed || 1 }),
+      signal,
+    })
+    if (!res.ok) throw new Error(`TTS 服务返回 ${res.status}`)
+    return URL.createObjectURL(await res.blob())
+  }
+  // 内置 Edge（免费，本机合成，服务端惰性拉起）
+  const res = await fetch('/api/edge-tts', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: clean, voice: cfg.voice, speed: cfg.speed || 1 }), signal,
+  })
+  if (!res.ok) throw new Error(`TTS 服务返回 ${res.status}`)
+  return URL.createObjectURL(await res.blob())
+}
+
+// ─────────────────────────── 生图（Pollinations，与 image_generate 工具同源）───────────────────────────
+
+/** 生成图片 URL（带随机种子保证可复现；markdown 直接渲染） */
+export function personaImageUrl(prompt: string, seed?: number): string {
+  const s = seed ?? Math.floor(Math.random() * 1e9)
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${s}&nologo=true`
+}
+
+/** 角色对刚生成作品的一句话回应（轻量请求，让生图不只是贴图） */
+export async function personaImageComment(
+  persona: Persona, memories: PersonaMemory[], history: PersonaMsg[],
+  prompt: string, identity: PersonaIdentity, cfg: PersonaChatConfig,
+): Promise<string> {
+  const ep = cfg.apiBaseUrl && cfg.model
+    ? { base: cfg.apiBaseUrl, key: cfg.apiKey || 'free', model: cfg.model }
+    : { base: 'https://api.kilo.ai/api/gateway/v1', key: 'free', model: 'openrouter/free' }
+  try {
+    const { system } = buildRequestMessages(persona, memories, history, identity)
+    const res = await fetch('/api/llm-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Target-Base': ep.base, 'X-Api-Key': ep.key },
+      body: JSON.stringify({
+        model: ep.model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: `用户刚才请你画了一幅画，主题：「${prompt}」。图片已经生成并展示给用户了。请以「${persona.name}」的身份用一两句话自然地回应这幅作品（可以对画面发挥想象，也可以问用户要不要调整）。不要提到"系统""指令"或"生成图片的技术细节"。` },
+        ],
+        max_tokens: 150, stream: false, temperature: 0.9,
+      }),
+    })
+    if (!res.ok) return ''
+    const data = await res.json().catch(() => null) as UpstreamReply | null
+    return String(data?.choices?.[0]?.message?.content || '').trim().slice(0, 400)
+  } catch { return '' }
+}

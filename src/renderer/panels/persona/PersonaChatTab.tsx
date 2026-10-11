@@ -26,6 +26,8 @@ import {
 import {
   sendPersonaTurn, loadSession, saveMessage, clearSession,
   loadMemories, fetchPersonas, deletePersona, type PersonaMsg,
+  speakText, loadTTSConfig, saveTTSConfig, EDGE_VOICES, type PersonaTTSConfig,
+  personaImageUrl, personaImageComment,
 } from '../../../shared/personaChat'
 import PersonaConsent, { loadIdentity, saveIdentity } from './PersonaConsent'
 import PersonaMemoryPanel from './PersonaMemoryPanel'
@@ -70,6 +72,28 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
   const scrollRef = useRef<HTMLDivElement>(null)
   const startedAt = useRef<number>(Date.now())
   const remindedAt = useRef<number>(0)
+  // 生图 / 朗读
+  const [imageOn, setImageOn] = useState(false)
+  const [genImage, setGenImage] = useState(false)   // 正在作画
+  const [tts, setTTS] = useState<PersonaTTSConfig>(() => loadTTSConfig())
+  const [showTTS, setShowTTS] = useState(false)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const updateTTS = (cfg: Partial<PersonaTTSConfig>) => { const n = { ...tts, ...cfg }; setTTS(n); saveTTSConfig(n) }
+  const speakMsg = useCallback(async (id: string, content: string) => {
+    // 再点一次 = 停止
+    if (speakingId === id) { audioRef.current?.pause(); audioRef.current = null; setSpeakingId(null); return }
+    try {
+      audioRef.current?.pause()
+      const url = await speakText(content, tts)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; setSpeakingId(null) }
+      audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; setSpeakingId(null) }
+      setSpeakingId(id)
+      await audio.play()
+    } catch { setSpeakingId(null) }
+  }, [speakingId, tts])
 
   const needConsent = !identity.consentedAt || !identity.age
 
@@ -104,12 +128,37 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
     const text = input.trim()
     if (!text || !active || busy) return
     setInput(''); setBusy(true); setThinkingMs(null); setStreamText('')
-    const userMsg: PersonaMsg = { role: 'user', content: text, ts: Date.now() }
+    const userMsg: PersonaMsg = { role: 'user', content: imageOn ? `🎨 画一幅：${text}` : text, ts: Date.now() }
     const base = [...msgs, userMsg]
     setMsgs(base)
     saveMessage(active.id, userMsg)
     const ctrl = new AbortController()
     abortRef.current = ctrl
+
+    // ── 生图路径：Pollinations 出图 + 角色一句话点评 ──
+    if (imageOn) {
+      setImageOn(false)
+      setGenImage(true)
+      try {
+        const url = personaImageUrl(text)
+        const comment = await personaImageComment(active, memories, base, text, identity, {
+          apiBaseUrl: settings.apiBaseUrl, apiKey: settings.apiKey, model: settings.model,
+        }).catch(() => '')
+        const reply: PersonaMsg = {
+          role: 'assistant',
+          content: `![${text}](${url})${comment ? `\n\n${comment}` : ''}`,
+          ts: Date.now(),
+        }
+        setMsgs([...base, reply])
+        saveMessage(active.id, reply)
+      } finally {
+        setGenImage(false)
+        setBusy(false)
+        abortRef.current = null
+      }
+      return
+    }
+
     try {
       const res = await sendPersonaTurn(active, memories, base, text, identity, {
         apiBaseUrl: settings.apiBaseUrl, apiKey: settings.apiKey, model: settings.model,
@@ -127,7 +176,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
       setBusy(false)
       abortRef.current = null
     }
-  }, [active, busy, identity, input, memories, msgs, settings])
+  }, [active, busy, identity, imageOn, input, memories, msgs, settings])
 
   const doExport = () => {
     if (!active || msgs.length === 0) return
@@ -326,6 +375,14 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
             style={{ background: view === 'memory' ? c.bgInput : 'transparent', color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>
             记忆 {memories.length > 0 ? `(${memories.length})` : ''}
           </button>
+          <button onClick={() => setShowTTS(v => !v)} className="h-8 px-3 rounded-lg text-[12px] flex items-center gap-1"
+            style={{ background: showTTS ? c.bgInput : 'transparent', color: c.textSecondary, border: `1px solid ${c.borderLight}` }}
+            title="朗读设置：内置 Edge（免费）或外接 TTS 厂商">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+            </svg>
+            朗读
+          </button>
           <button onClick={doExport} disabled={msgs.length === 0} className="h-8 px-3 rounded-lg text-[12px] disabled:opacity-30"
             style={{ border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>导出</button>
           <button onClick={doClear} disabled={msgs.length === 0} className="h-8 px-3 rounded-lg text-[12px] disabled:opacity-30"
@@ -345,6 +402,56 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
               style={{ background: c.bgInput, color: c.textTertiary }}>
               你正在与 AI 虚构角色「{active.name}」互动，非真人 · 内容由 AI 生成
             </div>
+
+            {/* 朗读设置：内置 Edge（免费）/ 外接 OpenAI 兼容厂商 */}
+            {showTTS && (
+              <div className="max-w-2xl mx-auto mb-4 p-3.5 rounded-xl space-y-3" style={{ background: c.bgCard, border: `1px solid ${c.border}` }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12.5px] font-semibold" style={{ color: c.textHead }}>朗读设置</span>
+                  <span className="flex-1" />
+                  <button onClick={() => setShowTTS(false)} className="w-6 h-6 rounded-md flex items-center justify-center" style={{ color: c.textMuted }}>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                {/* 厂商 */}
+                <div className="flex gap-1.5">
+                  {([['edge', '内置 Edge（免费）'], ['custom', '外接厂商（OpenAI 兼容）']] as const).map(([id, label]) => (
+                    <button key={id} onClick={() => updateTTS({ provider: id })}
+                      className="h-8 px-3 rounded-lg text-[11.5px] font-medium"
+                      style={{ background: tts.provider === id ? `${c.accent}14` : c.bgInput, color: tts.provider === id ? c.accent : c.textTertiary, border: `1px solid ${tts.provider === id ? `${c.accent}59` : c.borderLight}` }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {tts.provider === 'edge' ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select value={tts.voice} onChange={e => updateTTS({ voice: e.target.value })} aria-label="音色"
+                      className="h-8 px-2 rounded-lg text-[12px] outline-none" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }}>
+                      {EDGE_VOICES.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    <span className="text-[11px]" style={{ color: c.textTertiary }}>语速</span>
+                    <input type="range" min={0.5} max={2} step={0.1} value={tts.speed} onChange={e => updateTTS({ speed: Number(e.target.value) })} className="w-24" />
+                    <span className="text-[11px] font-mono" style={{ color: c.textSecondary }}>{tts.speed.toFixed(1)}x</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={tts.customBase} onChange={e => updateTTS({ customBase: e.target.value })} placeholder="API 地址（…/v1）"
+                      className="px-2.5 h-8 rounded-lg text-[12px] outline-none col-span-2" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+                    <input value={tts.customKey} onChange={e => updateTTS({ customKey: e.target.value })} placeholder="API Key" type="password"
+                      className="px-2.5 h-8 rounded-lg text-[12px] outline-none" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+                    <input value={tts.customModel} onChange={e => updateTTS({ customModel: e.target.value })} placeholder="模型（如 tts-1）"
+                      className="px-2.5 h-8 rounded-lg text-[12px] outline-none" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+                    <input value={tts.customVoice} onChange={e => updateTTS({ customVoice: e.target.value })} placeholder="音色（如 alloy / 不填走默认）"
+                      className="px-2.5 h-8 rounded-lg text-[12px] outline-none col-span-2" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+                    <div className="col-span-2 text-[10.5px]" style={{ color: c.textMuted }}>兼容 OpenAI /audio/speech 形状的服务（OpenAI、硅基流动、各类兼容网关等）；密钥只存本机。</div>
+                  </div>
+                )}
+                <button onClick={() => speakMsg('tts-test', '你好，这是当前朗读音色的试听效果。')}
+                  className="h-8 px-3 rounded-lg text-[11.5px] font-medium" style={{ background: c.textHead, color: c.bg }}>
+                  {speakingId === 'tts-test' ? '停止试听' : '试听音色'}
+                </button>
+              </div>
+            )}
 
             {usageTip && (
               <div className="max-w-2xl mx-auto mb-3 px-3 py-2 rounded-lg text-[11.5px] flex items-start gap-2"
@@ -388,6 +495,20 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
                       <div className="mt-1 flex items-center gap-1.5">
                         <span className="text-[9.5px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textMuted }}>{AI_LABEL}</span>
                         {m.crisis && <span className="text-[9.5px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>安全提醒</span>}
+                        {/* 朗读：内置 Edge / 外接 TTS 厂商，再点一次停止 */}
+                        <button onClick={() => speakMsg(String(m.ts), m.content)}
+                          className="text-[9.5px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
+                          style={{
+                            background: speakingId === String(m.ts) ? `${c.accent}18` : 'transparent',
+                            border: `1px solid ${speakingId === String(m.ts) ? `${c.accent}59` : c.borderLight}`,
+                            color: speakingId === String(m.ts) ? c.accent : c.textMuted,
+                          }}
+                          title={speakingId === String(m.ts) ? '停止朗读' : '朗读这条回复'}>
+                          <svg className={`w-2.5 h-2.5 ${speakingId === String(m.ts) ? 'animate-pulse' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d={speakingId === String(m.ts) ? 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z' : 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14'} />
+                          </svg>
+                          {speakingId === String(m.ts) ? '停止' : '朗读'}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -404,7 +525,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
                         <span className="flex gap-1">
                           {[0, 1, 2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: c.textMuted, animationDelay: `${i * 0.15}s` }} />)}
                         </span>
-                        {active.name} 正在思考…
+                        {genImage ? '正在作画…' : `${active.name} 正在思考…`}
                       </div>
                     )}
                     {streamText && (
@@ -444,6 +565,18 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
               </div>
 
               {notice && <div className="mb-2 text-[10.5px]" style={{ color: c.textMuted }}>{notice}</div>}
+
+              {/* 生图开关 */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <button onClick={() => setImageOn(v => !v)} aria-pressed={imageOn}
+                  title="画画模式：这轮输入作为画面描述，AI 出图并以角色身份点评"
+                  className="h-7 px-2.5 rounded-full flex items-center gap-1 text-[11.5px] font-medium transition-colors"
+                  style={{ background: imageOn ? '#0ea5e91a' : 'transparent', border: `1px solid ${imageOn ? '#0ea5e966' : c.borderLight}`, color: imageOn ? '#0ea5e9' : c.textTertiary }}>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A1.5 1.5 0 0021.75 19.5V4.5A1.5 1.5 0 0020.25 3H3.75A1.5 1.5 0 002.25 4.5v15A1.5 1.5 0 003.75 21zM10.5 8.25a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" /></svg>
+                  {imageOn ? '画画中 · 输入画面描述' : '画画'}
+                </button>
+                {imageOn && <span className="text-[10.5px]" style={{ color: c.textMuted }}>发送后出图，角色会点评</span>}
+              </div>
 
               <div className="flex items-end gap-2">
                 <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
