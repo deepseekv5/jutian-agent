@@ -165,6 +165,17 @@ function register() {
       }
     } catch { /* 离线/限流,静默 */ }
   }, 12000)
+
+  // v10.8:使用中持续检查 —— 每 30 分钟静默自检一次,发现新版即推送提醒
+  const PERIODIC_MS = 30 * 60 * 1000
+  setInterval(async () => {
+    try {
+      const info = await checkLatest()
+      if (info.available) {
+        pushUpdateNotice(`巨天agent v${info.latest} 已发布`, `当前 v${info.current} — 到 设置 → 关于 一键更新`)
+      }
+    } catch { /* 离线/限流,静默 */ }
+  }, PERIODIC_MS)
 }
 
 module.exports = { register }

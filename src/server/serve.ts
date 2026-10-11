@@ -3580,6 +3580,17 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const { text, input, voice, speed } = await body(req);
         const spoken = text || input;
         if (!spoken) return json(res, { error: "缺少 text" }, 400);
+        // v10.8：Node 原生 Edge TTS 优先（零 python 依赖，mac-x64/Win 全平台可用，
+        // 引擎随 app.asar 分发）；失败回落打包的 python edge-tts 服务（5050）。
+        try {
+          const nodeTTS = require("./electron/edge-tts.cjs");
+          const mp3 = await nodeTTS.synthesize(spoken, voice || "zh-CN-XiaoxiaoNeural", Number(speed) || 1.0);
+          res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg" });
+          res.end(mp3);
+          return;
+        } catch (nodeErr) {
+          console.error("[TTS] node-native 失败,回落 python:", nodeErr.message);
+        }
         // 惰性启动：首次语音请求时才拉起 Edge TTS python 进程
         try { if (globalThis.ensureEdgeTTS) await Promise.race([globalThis.ensureEdgeTTS(), new Promise((rr) => setTimeout(rr, 12000))]); } catch {}
         // TTS 进程冷启动（python 导入依赖）需数秒：带重试

@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "10.7.0",
+  "version": "10.8.0",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -222,6 +222,7 @@
     "react-markdown": "^9.0.1",
     "rehype-highlight": "^7.0.1",
     "remark-gfm": "^4.0.0",
+    "ws": "^8.22.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
