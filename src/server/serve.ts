@@ -125,6 +125,9 @@ try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db
 var PERSONA_MOD = (() => { try { return require("./src/shared/personas.cjs"); } catch (e) { console.error("personas.cjs load failed:", e.message); return null; } })();
 var PRESET_PERSONAS = PERSONA_MOD ? PERSONA_MOD.PRESET_PERSONAS : [];
 var PERSONA_DISCLAIMER = PERSONA_MOD ? PERSONA_MOD.DISCLAIMER : { disclaimer: [], privacy: [] };
+// QQ 官方机器人 AccessToken 缓存（2 小时有效）：必须活在模块级，
+// 放在请求 handler 里等于每次请求都重新换取，缓存永不命中
+var qqTokenCache = { key: "", token: "", expiresAt: 0 };
 var PORT = parseInt(process.env.PORT || "3211");
 var MAX_OUT = 512 * 1024;
 var DIST = path.join(__dirname, "dist");
@@ -142,7 +145,27 @@ var MIME = {
 var IS_WIN = process.platform === "win32";
 var USER_HOME = process.env.HOME || process.env.USERPROFILE || (IS_WIN ? "C:\\Users" : os.homedir());
 var ALLOWED = [USER_HOME, "/tmp", "/Users", "/opt", "/usr/local"];
-var ok = (p) => ALLOWED.some((b) => path.resolve(p).startsWith(path.resolve(b)));
+// 目录包含判断必须带路径分隔符，否则 /Users/evilx 会被 /Users 前缀放行
+var ok = (p) => {
+  const rp = path.resolve(p);
+  return ALLOWED.some((b) => {
+    const rb = path.resolve(b);
+    return rp === rb || rp.startsWith(rb + path.sep);
+  });
+};
+// 技能/记忆等以名称作为目录名的场景，统一白名单清洗，杜绝 ../ 穿越
+var sanitizeName = (n) => String(n || "").replace(/[^a-z0-9_-]/gi, "_").replace(/^_+|_+$/g, "").slice(0, 64);
+// 解析后强制校验目标仍在基准目录内（防御 symlink/编码组合）。
+// 名称被清洗即说明含非法字符（../、/、中文等），直接拒绝而非静默改写——
+// 静默改写会让「删除 ../../x」返回成功却什么都没删，调用方无法感知
+function resolveWithin(baseDir, name) {
+  const raw = String(name || "");
+  const clean = sanitizeName(raw);
+  if (!clean || clean !== raw) return null;
+  const base = path.resolve(baseDir);
+  const full = path.resolve(base, clean);
+  return full === base || full.startsWith(base + path.sep) ? full : null;
+}
 // ─── 工作区（设置中指定，实时生效）───
 var globalWorkDir = "";
 function setWorkDir(dir) {
@@ -231,9 +254,21 @@ var jsonAs = (req, res, d, s = 200) => {
   res.writeHead(s, { ...c, "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(maskSecrets(d)));
 };
+// 请求体读取带 32MB 上限：防止畸形/恶意请求把主进程内存打满(主进程 OOM 会连带整个应用崩溃)
+var BODY_LIMIT = 32 * 1024 * 1024;
 var body = async (req) => {
   const b = [];
-  for await (const c of req) b.push(c);
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > BODY_LIMIT) {
+      req.destroy(); // 立即断连，停止继续读入内存
+      const err = new Error("请求体过大");
+      err.statusCode = 413;
+      throw err;
+    }
+    b.push(c);
+  }
   return JSON.parse(Buffer.concat(b).toString() || "{}");
 };
 // Windows 黑名单补 PowerShell 形态(cmd 形态对 PS 无效,之前的列表漏了整个 PS 面)
@@ -412,7 +447,9 @@ async function search_content(a) {
 }
 async function get_file_info(a) {
   try {
-    const s = await fsp.stat(path.resolve(a.path));
+    const p = path.resolve(a.path);
+    if (!ok(p)) return { success: false, error: "路径不允许" };
+    const s = await fsp.stat(p);
     return { success: true, output: JSON.stringify({ size: s.size, type: s.isFile() ? "file" : "directory", modified: s.mtime.toISOString() }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
@@ -542,7 +579,14 @@ async function port_check(a) {
 }
 async function json_process(a) {
   try {
-    let d = a.data.startsWith("file:") ? JSON.parse(await fsp.readFile(path.resolve(a.data.slice(5)), "utf-8")) : JSON.parse(a.data);
+    let d;
+    if (a.data.startsWith("file:")) {
+      const fp = path.resolve(a.data.slice(5));
+      if (!ok(fp)) return { success: false, error: "路径不允许" };
+      d = JSON.parse(await fsp.readFile(fp, "utf-8"));
+    } else {
+      d = JSON.parse(a.data);
+    }
     if (a.query === "keys") return { success: true, output: Object.keys(d).join("\n") };
     return { success: true, output: JSON.stringify(d, null, 2) };
   } catch (e) {
@@ -784,20 +828,23 @@ async function load_skill(a) {
 }
 async function install_skill(a) {
   try {
-    const dir = path.join(SKILL_DIR, a.name);
+    const rawName = a.name || a.skill_name || "";
+    const dir = resolveWithin(SKILL_DIR, rawName);
+    if (!dir) return { success: false, error: "非法技能名称" };
+    const name = sanitizeName(rawName);
     await fsp.mkdir(dir, { recursive: true });
     // v10.0：优先按市场条目的完整数据安装(元数据/指令/工具全落地)，
     // 市场里没有时才走通用兜底——不再写什么都不干的空壳
     const market = loadMarket();
-    const hit = market.find((s) => s.id === a.name || s.name === a.name);
+    const hit = market.find((s) => s.id === name || s.name === a.name);
     if (hit) {
       await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({
-        name: a.name, display_name: hit.name, version: hit.version,
+        name, display_name: hit.name, version: hit.version,
         author: hit.author, description: hit.description, tags: hit.tags,
         tools: hit.tools, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
       }, null, 2));
       writeSkillMd(dir, {
-        name: a.name, display_name: hit.name, version: hit.version,
+        name, display_name: hit.name, version: hit.version,
         author: hit.author, description: hit.description,
         instructions: hit.instructions, hasTools: !!(hit.tools && hit.tools.length),
       });
@@ -806,8 +853,8 @@ async function install_skill(a) {
       }
       return { success: true, output: `已安装「${hit.name}」(含完整指令与工具定义)` };
     }
-    await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({ name: a.name, display_name: a.name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
-    writeSkillMd(dir, { name: a.name, description: a.description || "", hasTools: false });
+    await fsp.writeFile(path.join(dir, "skill.json"), JSON.stringify({ name, display_name: name, version: "0.1.0", installed_at: (/* @__PURE__ */ new Date()).toISOString() }, null, 2));
+    writeSkillMd(dir, { name, description: a.description || "", hasTools: false });
     return { success: true, output: "已安装（含 SKILL.md）" };
   } catch (e) {
     return { success: false, error: e.message };
@@ -2120,8 +2167,7 @@ http.createServer(async (req, res) => {
       return;
     }
 
-    // --- QQ 官方机器人 AccessToken 换取 (AppID+AppSecret → QQBot token，2小时有效，本地缓存) ---
-    let qqTokenCache = { key: '', token: '', expiresAt: 0 };
+    // --- QQ 官方机器人 AccessToken 换取 (AppID+AppSecret → QQBot token，2小时有效，模块级缓存) ---
     if (url.pathname === "/api/qq/token" && req.method === "POST") {
       try {
         const rawChunks = [];
@@ -2189,17 +2235,20 @@ http.createServer(async (req, res) => {
         if (kind !== "group" && kind !== "c2c") return json(res, { error: "kind 必须为 group 或 c2c" }, 400);
         const stats = await fsp.stat(filePath).catch(() => null);
         if (!stats || !stats.isFile()) return json(res, { error: `文件不存在或不是文件: ${filePath}` }, 400);
-        // 安全：仅允许发送用户目录 / tmp 内的文件
+        // 安全：仅允许发送用户目录 / tmp 内的文件。
+        // 必须先 resolve 再判断，否则 /Users/x/../etc/passwd 这类带 .. 的路径能绕过前缀检查
+        const realPath = path.resolve(filePath);
         const home = process.env.HOME || "/Users/zeroneil";
-        if (!filePath.startsWith(home + "/") && !filePath.startsWith("/tmp/") && !filePath.startsWith("/private/tmp/")) {
+        if (!ok(realPath) || !(realPath === home || realPath.startsWith(home + path.sep))) {
           return json(res, { error: "仅允许发送用户目录内的文件" }, 403);
         }
+        const sendPath = realPath;
         const apiBase = sandbox ? "https://sandbox.api.sgroup.qq.com" : "https://api.sgroup.qq.com";
         const tokenHeader = { Authorization: `QQBot ${token}` };
         // 1. 上传文件 → file_info
-        const buf = await fsp.readFile(filePath);
+        const buf = await fsp.readFile(sendPath);
         const fd = new FormData();
-        fd.append("file", new Blob([buf], { type: "application/octet-stream" }), path.basename(filePath));
+        fd.append("file", new Blob([buf], { type: "application/octet-stream" }), path.basename(sendPath));
         const uploadUrl = kind === "group" ? `${apiBase}/v2/groups/${openid}/files` : `${apiBase}/v2/users/${openid}/files`;
         const upRes = await fetch(uploadUrl, { method: "POST", headers: tokenHeader, body: fd, signal: AbortSignal.timeout(60000) });
         const upData = await upRes.json().catch(() => ({}));
@@ -2369,13 +2418,14 @@ http.createServer(async (req, res) => {
       const { skillName } = await body(req);
       if (!skillName) return json(res, { success: false, error: "\u7F3A\u5C11 skillName" });
       try {
-        const skillPath = path.join(SKILL_DIR, skillName);
+        const skillPath = resolveWithin(SKILL_DIR, skillName);
+        if (!skillPath) return json(res, { success: false, error: "非法技能名称" });
         if (fs.existsSync(skillPath)) {
           await fsp.rm(skillPath, { recursive: true, force: true });
         }
         // 从市场中移除
         const market = loadMarket();
-        const updated = market.filter((s) => s.id !== skillName);
+        const updated = market.filter((s) => s.id !== skillName && s.id !== sanitizeName(skillName));
         saveMarket(updated);
         return json(res, { success: true });
       } catch (e) {
@@ -3821,35 +3871,6 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         res.end();
       }
       return;
-    }
-
-    // ─── 全会话内容搜索（企业级：跨会话找消息）───
-    if (url.pathname === "/api/search" && req.method === "GET") {
-      const q = (url.searchParams.get("q") || "").trim();
-      if (!q) return json(res, { hits: [] });
-      if (!sharedDb) return json(res, { hits: [] });
-      try {
-        const rows = sharedDb.db.prepare(
-          `SELECT m.session_id, m.content, m.created_at, s.title
-           FROM messages m JOIN sessions s ON s.id = m.session_id
-           WHERE m.content LIKE ? ORDER BY m.created_at DESC LIMIT 30`
-        ).all(`%${q}%`);
-        const seen = new Set();
-        const hits = [];
-        for (const r of rows) {
-          if (seen.has(r.session_id)) continue;
-          seen.add(r.session_id);
-          const idx = r.content.indexOf(q);
-          hits.push({
-            sessionId: r.session_id,
-            title: r.title || "未命名",
-            snippet: r.content.slice(Math.max(0, idx - 30), idx + 80).replace(/\n/g, " "),
-            at: r.created_at,
-          });
-          if (hits.length >= 12) break;
-        }
-        return json(res, { hits });
-      } catch (e) { return json(res, { error: e.message }, 500); }
     }
 
     // ─── 一键备份导出 / 导入 ───
