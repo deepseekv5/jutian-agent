@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import BrandMark from './BrandMark'
+import { useModalBehavior } from '../hooks/useModalBehavior'
 
 const FLAG = 'lyclaw_jtcode_prompt'
 
@@ -14,6 +15,8 @@ export function shouldShowCliPrompt(): boolean {
 
 export default function CliInstallModal({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
+  // Esc 关闭 + 焦点圈定
+  const modalRef = useModalBehavior(onClose)
   const [state, setState] = useState<'idle' | 'installing' | 'done' | 'error'>('idle')
   const [result, setResult] = useState<{ path: string; needsPathNote?: boolean; binDir?: string } | null>(null)
   const [errMsg, setErrMsg] = useState('')
@@ -33,7 +36,7 @@ export default function CliInstallModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-6" style={{ background: c.modalOverlay, backdropFilter: 'blur(6px)' }}
+    <div ref={modalRef} role="dialog" aria-modal="true" aria-label="安装命令行工具" className="fixed inset-0 z-[120] flex items-center justify-center p-6" style={{ background: c.modalOverlay, backdropFilter: 'blur(6px)' }}
       onClick={state === 'installing' ? undefined : onClose}>
       <div className="w-[460px] max-w-full rounded-2xl border overflow-hidden shadow-2xl animate-scale-in glass-strong"
         style={{ borderColor: c.border }} onClick={(e) => e.stopPropagation()}>

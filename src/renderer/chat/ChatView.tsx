@@ -187,16 +187,19 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
             {searchQ.trim() ? (searchHits.length ? `${hitCursor + 1}/${searchHits.length}` : '无结果') : ''}
           </span>
           <button onClick={() => { if (searchHits.length) { const n = (hitCursor - 1 + searchHits.length) % searchHits.length; setHitCursor(n); scrollToMessage(searchHits[n]) } }}
-            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="上一个">↑</button>
+            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="上一个" aria-label="上一个匹配">↑</button>
           <button onClick={() => { if (searchHits.length) { const n = (hitCursor + 1) % searchHits.length; setHitCursor(n); scrollToMessage(searchHits[n]) } }}
-            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="下一个">↓</button>
+            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="下一个" aria-label="下一个匹配">↓</button>
           <button onClick={() => { setSearchOpen(false); setSearchQ('') }}
-            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="关闭">✕</button>
+            className="w-5 h-5 flex items-center justify-center text-[12px]" style={{ color: c.textTertiary }} title="关闭" aria-label="关闭搜索">✕</button>
         </div>
       )}
 
       <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
-        <div className="mx-auto px-6 pt-8 pb-4" style={{ maxWidth: contentWidth }}>
+        {/* aria-live=polite：流式回复增长时让屏幕阅读器跟上；
+            aria-busy 标记生成中，避免逐字播报打断用户 */}
+        <div className="mx-auto px-6 pt-8 pb-4" style={{ maxWidth: contentWidth }}
+          role="log" aria-live="polite" aria-relevant="additions text" aria-busy={isStreaming}>
           {messages.map((msg, idx) => (
             <div key={msg.id} data-msg-idx={idx} data-msg-id={msg.id}
               style={{

@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { CMPrimaryBtn, CMInput } from './ui'
+import { useModalBehavior } from '../hooks/useModalBehavior'
 
 interface Props {
   onClose: () => void
@@ -12,6 +13,8 @@ interface Props {
 
 export default function NewProjectDialog({ onClose, onCreateProject }: Props) {
   const { c } = useTheme()
+  // Esc 关闭 + 焦点圈定（此前 Tab 会跑到弹窗背后的编辑器上）
+  const modalRef = useModalBehavior(onClose)
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
   const [busy, setBusy] = useState(false)
@@ -35,7 +38,7 @@ export default function NewProjectDialog({ onClose, onCreateProject }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ background: c.modalOverlay }} onClick={onClose}>
+    <div ref={modalRef} role="dialog" aria-modal="true" aria-label="新建项目" className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in" style={{ background: c.modalOverlay }} onClick={onClose}>
       <div className="w-[420px] rounded-2xl border glass-strong shadow-2xl animate-scale-in" style={{ borderColor: c.border }} onClick={e => e.stopPropagation()}>
         {/* 头部 */}
         <div className="h-12 flex items-center gap-2.5 px-5 border-b" style={{ borderColor: c.borderLight }}>

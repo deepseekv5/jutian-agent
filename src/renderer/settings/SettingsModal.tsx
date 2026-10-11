@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
+import { useModalBehavior } from '../hooks/useModalBehavior';
 import { reportError } from '../app/ErrorToast';
 import { loadVisualSettings, saveVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
 import CliInstallModal from '../app/CliInstallModal';
@@ -124,6 +125,8 @@ const Field = ({ label, children, c }: { label: string; children: React.ReactNod
 
 export default function SettingsModal({ settings, onSave, onClose, embedded = false, onOpenFreeModels }: Props) {
   const { c, theme, setTheme } = useTheme();
+  // Esc 关闭 + 焦点圈定；内嵌为标签页时只保留焦点圈定（Esc 留给关闭标签页）
+  const modalRef = useModalBehavior(onClose, { disableEsc: embedded });
   // 强调色面板重渲染标记
   const [, setAccentTick] = useState(0);
   // 环境诊断状态
@@ -456,7 +459,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const inputStyle = { background: c.bgInput, border: `1px solid ${c.border}`, color: c.text }
 
   return (
-    <div className={embedded ? 'h-full w-full overflow-hidden p-4' : 'fixed inset-0 z-50 flex items-center justify-center p-4'} style={embedded ? {} : { background: c.modalOverlay }}>
+    <div ref={modalRef} role="dialog" aria-modal={embedded ? undefined : true} aria-label="设置" className={embedded ? 'h-full w-full overflow-hidden p-4' : 'fixed inset-0 z-50 flex items-center justify-center p-4'} style={embedded ? {} : { background: c.modalOverlay }}>
       {/* 定高弹窗:左侧分区栏固定不动,仅右侧内容滚动 */}
       <div className="flex flex-col rounded-2xl border glass overflow-hidden" style={{ border: `1px solid ${c.border}`, height: embedded ? '100%' : 'min(760px, calc(100vh - 88px))', boxShadow: '0 12px 48px rgba(0,0,0,0.14)' }}>
         {/* 头部 */}

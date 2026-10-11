@@ -282,7 +282,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         <button onClick={() => setShowGit(v => !v)}
           className="h-6 px-2 rounded-full flex items-center gap-1 text-[10.5px] font-medium shrink-0 transition-colors"
           style={{ background: showGit ? `${c.accent}12` : c.bgInput, color: showGit ? c.accent : c.textTertiary }}
-          title="Git 检查点：状态 / 历史 / 差异 / 回滚">
+          title="Git 检查点：状态 / 历史 / 差异 / 回滚" aria-label="Git 检查点">
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m-7-9h14" />
           </svg>
@@ -296,7 +296,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         </button>
         {ownWorkDir && (
           <button onClick={() => setSessionWorkDir('')} className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0"
-            style={{ color: c.textMuted }} title="恢复跟随全局">
+            style={{ color: c.textMuted }} title="恢复跟随全局" aria-label="恢复跟随全局工作目录">
             重置
           </button>
         )}
@@ -308,7 +308,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         }}
           className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0"
           style={{ color: localStorage.getItem('lyclaw_chat_wide') === '1' ? c.accent : c.textTertiary }}
-          title="宽屏 / 标准 正文宽度切换">
+          title="宽屏 / 标准 正文宽度切换" aria-label="切换正文宽度">
           宽屏
         </button>
         {/* 大纲导航：列出全部用户消息，点击滚动定位 */}
@@ -316,7 +316,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
           <div className="relative">
             <button onClick={() => setShowOutline(v => !v)}
               className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0"
-              style={{ color: showOutline ? c.accent : c.textTertiary }} title="对话大纲：快速跳转任意提问">
+              style={{ color: showOutline ? c.accent : c.textTertiary }} title="对话大纲：快速跳转任意提问" aria-label="对话大纲">
               大纲
             </button>
             {showOutline && (
@@ -339,7 +339,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         )}
         <button onClick={() => setShowExportMenu(v => !v)} disabled={messages.length === 0}
           className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0 disabled:opacity-30"
-          style={{ color: c.textTertiary }} title="导出对话（Markdown / 纯文本 / JSON）">
+          style={{ color: c.textTertiary }} title="导出对话（Markdown / 纯文本 / JSON）" aria-label="导出对话">
           导出
         </button>
         </div>
