@@ -5,6 +5,8 @@ node_modules/
 dist/
 release/
 *.node
+# vite 偶发把 chunk 吐到仓库根目录（历史遗留误提交过 index-*.js）
+index-*.js
 
 # 运行时数据（密钥/会话不入库）
 *.db

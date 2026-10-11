@@ -1,0 +1,42 @@
+# 统一换行符：脚本与配置文件一律 LF，避免 Windows 克隆后 CRLF 让
+# run.sh / rebuild-for-electron.sh 报 "bad interpreter"、plist 解析失败
+* text=auto eol=lf
+
+# 明确的文本文件
+*.sh text eol=lf
+*.cjs text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.plist text eol=lf
+*.entitlements text eol=lf
+
+# 二进制资源：不做任何换行转换，也不做 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.pdf binary
+*.zip binary
+*.dmg binary
+*.asar binary
+*.node binary
+
+# 生成的 lock 文件不参与合并冲突标记（改动全量重写，逐行 diff 无意义）
+package-lock.json text eol=lf -diff

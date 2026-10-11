@@ -3,6 +3,37 @@
 所有显著变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [11.0.8] - 2026-10-11
+
+### 安全加固(后端)
+- **修复路径穿越类漏洞**:`/api/skills/uninstall` 与 `install_skill` 不再信任调用方传入的技能名,
+  此前传 `../../` 可删除任意目录;新增 `sanitizeName`/`resolveWithin` 统一白名单清洗,
+  名称含非法字符(../、/、空格)直接拒绝而非静默改写
+- **`ok()` 目录判断补路径分隔符边界**:`/UsersX` 这类同前缀路径不再被 `/Users` 放行
+- **`get_file_info` / `json_process` 补目录校验**:此前两个工具完全绕过目录白名单
+- **`/api/qq/send-file` 先 resolve 再判断**:修复 `/Users/x/../etc/passwd` 这类带 `..` 的绕过
+- **请求体加 32MB 上限**:超限立即断连,防畸形请求打满主进程内存导致整个应用崩溃
+- 删除第二处永不到达的 `/api/search` 重复定义;`qqTokenCache` 从请求 handler 内提升到模块级
+  (此前每次请求都重新换取 token,缓存形同虚设)
+
+### 健壮性(前端)
+- **修复会话串台**:快速切换会话时旧会话的慢响应会覆盖新会话消息;`loadMessages` 增加
+  sessionId 比对,切换会话即中止在途请求,深度调研流与发送收尾的写回全部加守卫
+- **每标签页独立错误边界**:单个面板崩溃只坏自己,侧栏与其他标签页照常可用;
+  ErrorBoundary 重写为支持 inline 模式与 resetKey,颜色改走主题变量(此前暗色下白屏)
+- **全局错误提示**:新增 ErrorToast,监听 unhandledrejection/error,漏网的异步异常不再只出现在控制台;
+  壁纸上传、数据导出/导入改为可见提示,导出补 `r.ok` 校验(此前服务端 500 会下载一个内容为错误信息的备份文件)
+- ThemeProvider / LanguageProvider 的 context value 与回调稳定化,
+  此前每次渲染都产生新对象,靠 context 拿主题/语言的几十个组件被无条件重渲染
+
+### 仓库工程
+- 移除误提交的 280KB 构建产物 `index-BEzLaBfT.js`,并在 .gitignore 补 `index-*.js`
+- 新增 .gitattributes:脚本与配置统一 LF(Windows 克隆不再让 .sh 报 bad interpreter)、二进制资源不参与转换
+- CI 加固:令牌最小权限(contents: read)、同分支取消旧流程、20 分钟超时、
+  high/critical 依赖漏洞门禁(registry 不支持 audit 端点时只警告不拦)、
+  构建后冒烟启动 serve.cjs 校验 /api/health
+- 版本元数据校正:README 徽章 11.0.5→11.0.8、SECURITY.md 支持矩阵 7.0.x→11.x、package-lock 版本字段同步
+
 ## [11.0.7] - 2026-10-11
 
 ### 界面
