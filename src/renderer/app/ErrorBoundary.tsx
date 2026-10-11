@@ -38,6 +38,19 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack)
     this.setState({ stack: (error && error.stack) || '', componentStack: info.componentStack || '' })
+    // 上报到服务端（诊断页可见）：用户报障时只写 console 等于没有线索
+    try {
+      fetch('/api/client-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: error?.message || String(error),
+          stack: error?.stack || '',
+          componentStack: info.componentStack || '',
+          url: location.href,
+        }),
+      }).catch(() => { /* 上报失败不影响兜底 UI */ })
+    } catch { /* ignore */ }
   }
 
   private retry = () => {

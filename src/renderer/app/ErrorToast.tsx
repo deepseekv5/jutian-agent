@@ -51,9 +51,28 @@ export function dismissError(id: number) {
 /** 挂在 App 根部：监听漏网的异步异常 */
 export function useGlobalErrorListener() {
   useEffect(() => {
+    // 上报到服务端（诊断页可见）。节流：同一消息 10 秒内只报一次，
+    // 避免轮询/流式重试把上报打满
+    const reported = new Map<string, number>()
+    const report = (message: string, stack?: string) => {
+      const key = message.slice(0, 120)
+      const now = Date.now()
+      if (now - (reported.get(key) || 0) < 10_000) return
+      reported.set(key, now)
+      if (reported.size > 50) reported.clear()
+      try {
+        fetch('/api/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, stack: stack || '', url: location.href }),
+        }).catch(() => { /* 上报失败不影响提示 */ })
+      } catch { /* ignore */ }
+    }
     const onRej = (e: PromiseRejectionEvent) => {
       const r = e.reason
-      reportError(r instanceof Error ? r.message : (typeof r === 'string' ? r : '异步操作失败'))
+      const msg = r instanceof Error ? r.message : (typeof r === 'string' ? r : '异步操作失败')
+      reportError(msg)
+      report(msg, r instanceof Error ? r.stack : undefined)
     }
     const onErr = (e: ErrorEvent) => {
       // 资源加载失败（img/script/link 404）噪音大，跳过——它们的 target 不是 window
@@ -62,7 +81,7 @@ export function useGlobalErrorListener() {
         const tag = (t as HTMLElement).tagName
         if (tag === 'IMG' || tag === 'SCRIPT' || tag === 'LINK') return
       }
-      if (e.message) reportError(e.message)
+      if (e.message) { reportError(e.message); report(e.message, e.error?.stack) }
     }
     window.addEventListener('unhandledrejection', onRej)
     window.addEventListener('error', onErr)

@@ -1845,6 +1845,11 @@ function promisifyGzip(buf) {
     } catch { resolve(null); }
   });
 }
+// ─── 前端错误收集（供诊断页展示）───
+// 渲染层崩溃原先只写 console，用户看不到、报障时也拿不到线索。
+// 这里保留最近 50 条（内存，重启即清），诊断页一并返回。
+var CLIENT_ERRORS = [];
+
 http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     const c = corsHeaders(req);
@@ -1939,8 +1944,23 @@ http.createServer(async (req, res) => {
       } catch (e) { return json(res, { success: false, error: e.message }); }
     }
     // 环境诊断：一键体检各子系统可用性（设置 → 关于 → 环境诊断）
-    if (url.pathname === "/api/diagnostics") {
-      const check = [];
+    // 前端错误上报（渲染层崩溃时由 ErrorBoundary / 全局监听调用）
+    if (url.pathname === "/api/client-error" && req.method === "POST") {
+      try {
+        const d = await body(req);
+        CLIENT_ERRORS.unshift({
+          ts: new Date().toISOString(),
+          message: String(d.message || "").slice(0, 500),
+          stack: String(d.stack || "").slice(0, 2000),
+          componentStack: String(d.componentStack || "").slice(0, 1000),
+          url: String(d.url || "").slice(0, 300),
+        });
+        if (CLIENT_ERRORS.length > 50) CLIENT_ERRORS.length = 50;
+        return json(res, { ok: true });
+      } catch { return json(res, { ok: false }, 400); }
+    }
+
+    if (url.pathname === "/api/diagnostics") {      const check = [];
       const httpGet = (u, timeout = 2500) => new Promise((resolve) => {
         try {
           const mod = u.startsWith("https:") ? https : http;
@@ -2017,7 +2037,7 @@ http.createServer(async (req, res) => {
         } else { apiDetail = "未配置 API 地址或密钥" }
       } catch { apiDetail = "读取配置失败" }
       check.push({ name: "模型 API 连通", ok: apiOk, detail: apiDetail });
-      return json(res, { success: true, checks: check, allOk: check.every((c) => c.ok) });
+      return json(res, { success: true, checks: check, allOk: check.every((c) => c.ok), clientErrors: CLIENT_ERRORS.slice(0, 20) });
     }
     if (url.pathname === "/api/tools") return json(res, { tools: Object.keys(TOOLS).map((k) => ({ name: k })) });
     if (url.pathname === "/api/tools/execute" && req.method === "POST") {

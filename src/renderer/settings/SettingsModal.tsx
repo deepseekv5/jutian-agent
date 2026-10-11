@@ -14,6 +14,7 @@ import { summarizeUsage } from '../store/usage';
 import { effectiveApiKey } from '../store/storage';
 import AboutContent from './AboutContent';
 import { fmtTokens } from '../utils/tokens';
+import { dateTimeCN } from '../utils/datetime';
 
 interface Props {
   settings: Settings;
@@ -1226,13 +1227,31 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                           {diagResult.allOk ? '所有子系统正常' : '部分子系统不可用（语音相关在部分环境为预期行为）'}
                         </span>
                         <button onClick={() => {
+                          // 复制报告时带上前端错误：界面崩溃/异常是排障的第一手线索
                           const text = diagResult.checks.map((c2: any) => `${c2.ok ? '[OK]' : '[FAIL]'} ${c2.name}: ${c2.detail}`).join('\n')
-                          navigator.clipboard.writeText(`巨天agent 环境诊断 ${new Date().toLocaleString()}\n${text}`).catch(() => {})
+                          const ce = (diagResult.clientErrors || []) as { ts: string; message: string; url?: string }[]
+                          const errBlock = ce.length
+                            ? `\n\n--- 前端错误（最近 ${ce.length} 条）---\n` + ce.map(e => `${e.ts} ${e.message}${e.url ? ` @ ${e.url}` : ''}`).join('\n')
+                            : ''
+                          navigator.clipboard.writeText(`巨天agent 环境诊断 ${dateTimeCN()}\n${text}${errBlock}`).catch(() => {})
                           setDiagCopied(true); setTimeout(() => setDiagCopied(false), 1800)
                         }} className="text-[10.5px] px-2 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
                           {diagCopied ? '已复制' : '复制报告'}
                         </button>
                       </div>
+                      {/* 前端错误区：让界面崩溃可被看到，而不是只在控制台里 */}
+                      {(diagResult.clientErrors || []).length > 0 && (
+                        <div className="px-3 py-2 border-t" style={{ borderColor: c.borderLight, background: 'rgba(217,119,6,.06)' }}>
+                          <div className="text-[10.5px] font-medium mb-1" style={{ color: c.toolWarn }}>
+                            前端错误 {diagResult.clientErrors.length} 条（最近一条：{diagResult.clientErrors[0].message.slice(0, 80)}）
+                          </div>
+                          <div className="text-[10px] leading-relaxed max-h-[80px] overflow-y-auto scrollbar-thin" style={{ color: c.textMuted }}>
+                            {diagResult.clientErrors.slice(0, 5).map((e: any, i: number) => (
+                              <div key={i} className="truncate">{e.ts.slice(11, 19)} · {e.message}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
