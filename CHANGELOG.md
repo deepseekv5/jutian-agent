@@ -12,6 +12,12 @@
 - **`ok()` 目录判断补路径分隔符边界**:`/UsersX` 这类同前缀路径不再被 `/Users` 放行
 - **`get_file_info` / `json_process` 补目录校验**:此前两个工具完全绕过目录白名单
 - **`/api/qq/send-file` 先 resolve 再判断**:修复 `/Users/x/../etc/passwd` 这类带 `..` 的绕过
+- **`web_fetch` / `http_request` 增加 SSRF 防护**:仅放行 http/https,主机名为字面量 IP 直接判段、
+  域名解析后对所有 A/AAAA 记录判段,覆盖 0/8、10/8、127/8、169.254/16(云元数据)、172.16/12、
+  192.168/16、100.64/10、组播保留段与 IPv6 回环/ULA/链路本地;明确拒绝本应用自身管理端口。
+  重定向改为逐跳校验的有界跟随——否则公网 URL 302 到元数据地址就把防护全部绕过。
+  searx 实例探测(清单来自第三方)同样过校验。有意不拦 198.18.0.0/15:
+  Clash/Surge 的 fake-IP 模式正是用这个段承载被劫持的域名
 - **请求体加 32MB 上限**:超限立即断连,防畸形请求打满主进程内存导致整个应用崩溃
 - 删除第二处永不到达的 `/api/search` 重复定义;`qqTokenCache` 从请求 handler 内提升到模块级
   (此前每次请求都重新换取 token,缓存形同虚设)
@@ -31,8 +37,25 @@
 - 新增 .gitattributes:脚本与配置统一 LF(Windows 克隆不再让 .sh 报 bad interpreter)、二进制资源不参与转换
 - CI 加固:令牌最小权限(contents: read)、同分支取消旧流程、20 分钟超时、
   high/critical 依赖漏洞门禁(registry 不支持 audit 端点时只警告不拦)、
-  构建后冒烟启动 serve.cjs 校验 /api/health
+  构建后冒烟启动 serve.cjs 校验 /api/health、build:server 之后插入安全回归测试
+- **引入 vitest,仓库从零测试到 21 个用例**:起真实服务打端点,覆盖技能名路径穿越、
+  工具层目录白名单、ok() 前缀边界、SSRF 各段、跨站 Origin 403、超大请求体后服务存活。
+  选集成测试而非单测,是因为 serve.ts 是从打包产物反推重建的单文件后端,
+  拆函数出来测要先动这个 4000 行的文件,风险远高于收益
 - 版本元数据校正:README 徽章 11.0.5→11.0.8、SECURITY.md 支持矩阵 7.0.x→11.x、package-lock 版本字段同步
+
+### 质量清理
+- eslint 告警从 178 清零:79 处 `any` 全部换成精确类型或 `unknown` + 类型谓词收窄
+  (未用任何 `as any`、未用 eslint-disable 掩盖),65 处未使用变量/导入/死代码清除,
+  34 处 exhaustive-deps 逐个人工判断(该补的补,补了会改变执行频率的 12 处保留现状并注明原因)
+- 修复 lint 清理过程中引入的两处缺陷:`useCodeProject` 补依赖时 `loadFileTree` 声明在 effect
+  之后会撞 TDZ(已上移);SettingsModal 的 `t()` shim 被收紧成单参数导致两参数调用类型报错
+- 修复 `install-from-github` 的文件统计 bug:walk IIFE 参数写成 `_p` 而函数体引用 `p`,
+  ReferenceError 被内层 catch 吞掉,从 GitHub 安装技能后文件数永远统计成 0
+- MessageBubble 的 memo 真正生效:回调签名改为带 index,父层传稳定引用。
+  此前每条消息都传新建闭包,流式期间每 50ms 一次 setMessages 会让全部气泡重渲染
+- 视觉设置单一来源:`store/visual.ts` 此前是死代码,App.tsx 与设置页各自内联复制
+  同一份壁纸默认值(共三处硬编码),改一处忘一处就漂移
 
 ## [11.0.7] - 2026-10-11
 
