@@ -15,6 +15,11 @@ import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
 import { ssePayloads } from '../../shared/sse'
+import {
+  parseToolCallsFromDelta, accumulateToolCallDelta,
+  adoptNonStreamToolCalls, toolCallsToArray,
+  type ToolCallAccum,
+} from './toolCallStream'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -36,47 +41,6 @@ interface WireToolCall {
   type: 'function'
   function: { name: string; arguments: string }
   index?: number
-}
-
-/** SSE delta 里解析出的原始 tool_call 片段（不同模型字段不全） */
-interface RawToolCallDelta {
-  index?: number
-  id?: string
-  function?: { name?: string; arguments?: string }
-}
-
-/**
- * 解析 SSE chunk 中的 delta，兼容不同模型的 tool_calls 格式。
- *
- * OpenAI 格式：delta.tool_calls[{index, id, function: {name, arguments}}]
- * 某些模型可能用 delta.function_call 或其他格式
- */
-function parseToolCallsFromDelta(delta: unknown): Array<{index: number; id?: string; name?: string; args?: string}> | null {
-  const d = delta as {
-    tool_calls?: unknown
-    function_call?: { id?: string; name?: string; arguments?: string }
-  } | null | undefined
-  // 标准 OpenAI 格式
-  if (d?.tool_calls && Array.isArray(d.tool_calls)) {
-    return (d.tool_calls as RawToolCallDelta[]).map((tc) => ({
-      index: tc.index ?? 0,
-      id: tc.id || undefined,
-      name: tc.function?.name || undefined,
-      args: tc.function?.arguments || undefined,
-    }))
-  }
-  // 兼容：某些模型用 function_call（单函数）
-  if (d?.function_call) {
-    return [{
-      index: 0,
-      id: d.function_call.id || undefined,
-      name: d.function_call.name || undefined,
-      args: d.function_call.arguments || undefined,
-    }]
-  }
-
-  // 兼容：有些模型在 choices 层直接返回 tool_calls
-  return null
 }
 
 /**
@@ -212,7 +176,7 @@ export async function streamChat(
       let fullContent = ''
 
       // 累积式 tool call 收集器
-      const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>()
+      const toolCallMap = new Map<number, ToolCallAccum>()
 
       for await (const data of ssePayloads(res.body)) {
         if (data === '[DONE]') break
@@ -230,47 +194,24 @@ export async function streamChat(
             callbacks.onChunk(delta.content)
           }
 
-          // 工具调用流式累积 — 使用兼容性解析函数
+          // 工具调用流式累积（解析/合并细节见 toolCallStream，含 id 重发防护）
           const parsedTcs = parseToolCallsFromDelta(delta)
           if (parsedTcs) {
-            for (const tc of parsedTcs) {
-              const idx = tc.index ?? 0
-              if (!toolCallMap.has(idx)) {
-                toolCallMap.set(idx, { id: '', name: '', arguments: '' })
-              }
-              const existing = toolCallMap.get(idx)!
-              if (tc.id) existing.id += tc.id
-              if (tc.name) existing.name += tc.name
-              if (tc.args) existing.arguments += tc.args
-            }
+            for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
           }
 
           // 兼容：检查 finish_reason 是否为 tool_calls（非流式模式）
-          if (choice.finish_reason === 'tool_calls' && toolCallMap.size === 0) {
+          if (choice.finish_reason === 'tool_calls') {
             // 有些模型在完整响应中返回 tool_calls 而非 delta 中
-            const msg = choice.message
-            if (msg?.tool_calls) {
-              for (const tc of msg.tool_calls) {
-                const idx = tc.index ?? 0
-                toolCallMap.set(idx, {
-                  id: tc.id || '',
-                  name: tc.function?.name || '',
-                  arguments: tc.function?.arguments || '',
-                })
-              }
-            }
+            adoptNonStreamToolCalls(toolCallMap, choice.message?.tool_calls)
           }
         } catch {
           // 忽略格式错误的 SSE 行
         }
       }
 
-      // 将累积的 tool calls 转为数组
-      const toolCalls = Array.from(toolCallMap.values()).map(tc => ({
-        id: tc.id,
-        name: tc.name,
-        arguments: tc.arguments,
-      }))
+      // 将累积的 tool calls 转为数组（按 index 升序，与模型给出的调用顺序一致）
+      const toolCalls = toolCallsToArray(toolCallMap)
 
       // 没有 tool_calls → 完成，返回最终文本
       if (toolCalls.length === 0) {
