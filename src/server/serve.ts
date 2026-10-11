@@ -372,6 +372,123 @@ var body = async (req) => {
 var BLOCKED = IS_WIN ? ["format c:", "del /f /s /q c:\\", "rd /s /q c:\\", "diskpart", "shutdown /s", "shutdown /r",
   "remove-item -path c:\\ -recurse", "remove-item c:\\windows", "rmdir /s", "cipher /w",
   "stop-process -id 0", "remove-item $env:systemroot"] : ["rm -rf /", "mkfs", "dd if=", ":(){:|:&};:", "chmod -R 777 /", "> /dev/sda", "format", "shutdown"];
+/** execFile 的超时选项：SIGTERM 后若进程不理会，5 秒后升级 SIGKILL */
+function shellExecOpts(timeoutSec) {
+  return {
+    timeout: timeoutSec * 1e3,
+    maxBuffer: MAX_OUT,
+    killSignal: "SIGTERM",
+  }
+}
+
+/* ─── 后台 shell（长驻进程：dev server / watch / 构建）───
+ * 前台 shell 有超时上限，长驻进程不该阻塞对话。这里维护一组受管子进程：
+ * 输出累积在环形缓冲（防内存无限增长），由 shell_output 增量读取、
+ * shell_kill 终止。进程退出后保留一段时间供最后读取，再自动清理。
+ */
+var BG_SHELLS = new Map();
+var BG_MAX = 12                 // 同时最多 12 个后台任务，超了拒绝（防泄漏）
+var BG_OUTPUT_CAP = 200000      // 每个任务保留最近 200KB 输出
+var BG_EXIT_TTL = 10 * 60 * 1000 // 退出后保留 10 分钟
+
+function startBackgroundShell(command, cwd, label) {
+  if (BG_SHELLS.size >= BG_MAX) {
+    const oldest = [...BG_SHELLS.entries()].filter(([, s]) => s.exited).sort((a, b) => a[1].exitedAt - b[1].exitedAt)[0]
+    if (oldest) BG_SHELLS.delete(oldest[0])
+    else return { success: false, error: `后台任务已达上限（${BG_MAX} 个），请先用 shell_kill 结束不需要的任务` }
+  }
+  const id = `sh_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  const [bin, args] = IS_WIN
+    ? ["powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${command}`]]
+    : ["zsh", ["-c", command]]
+  let child
+  try {
+    child = cp.spawn(bin, args, { cwd, env: { ...process.env, TERM: "dumb" } })
+  } catch (e) {
+    return { success: false, error: `启动失败: ${e.message}` }
+  }
+  const state: {
+    id: string; command: string; label: string; cwd: string; startedAt: number;
+    exited: boolean; exitCode: number | null; exitSignal: string | null; exitedAt: number;
+    chunks: Buffer[]; totalBytes: number; readAt: number; child: ReturnType<typeof cp.spawn>;
+  } = {
+    id, command, label: String(label || "").slice(0, 80), cwd,
+    startedAt: Date.now(), exited: false, exitCode: null, exitSignal: null, exitedAt: 0,
+    chunks: [], totalBytes: 0, readAt: 0, child,
+  }
+  const push = (buf) => {
+    state.chunks.push(buf)
+    state.totalBytes += buf.length
+    // 环形裁剪：保留最近 BG_OUTPUT_CAP，丢弃最旧
+    let over = state.totalBytes - BG_OUTPUT_CAP
+    while (over > 0 && state.chunks.length > 1) {
+      const dropped = state.chunks.shift()
+      state.totalBytes -= dropped.length
+      over -= dropped.length
+    }
+  }
+  child.stdout?.on("data", push)
+  child.stderr?.on("data", push)
+  child.on("error", (e) => push(Buffer.from(`\n[spawn error] ${e.message}\n`)))
+  child.on("close", (code, signal) => {
+    state.exited = true
+    // 被信号杀死时 code 为 null，只报 null 会让人以为异常退出；记下信号名
+    state.exitCode = code
+    state.exitSignal = signal || null
+    state.exitedAt = Date.now()
+    setTimeout(() => { BG_SHELLS.delete(id) }, BG_EXIT_TTL)
+  })
+  BG_SHELLS.set(id, state)
+  return {
+    success: true,
+    output: `已在后台启动（id: ${id}）。用 shell_output 查看输出、shell_kill 终止。命令：${command.slice(0, 120)}`,
+  }
+}
+
+function shell_output(a) {
+  const s = BG_SHELLS.get(String(a.id || ""))
+  if (!s) return { success: false, error: `后台任务不存在（${a.id}）：可能已结束并被清理` }
+  const text = Buffer.concat(s.chunks).toString("utf-8")
+  // 增量读取：只返回上次读取之后的新内容，避免模型反复拉全量
+  const from = Math.max(0, Number(a.from) || s.readAt || 0)
+  const tail = text.slice(from)
+  s.readAt = text.length
+  const status = s.exited
+    ? (s.exitSignal ? `已被信号终止（${s.exitSignal}）` : `已退出（code ${s.exitCode}）`)
+    : "运行中"
+  return {
+    success: true,
+    output: JSON.stringify({
+      status, id: s.id, command: s.command.slice(0, 120),
+      running_ms: (s.exited ? s.exitedAt : Date.now()) - s.startedAt,
+      total_chars: text.length, next_from: text.length,
+      output: tail.slice(0, MAX_OUT),
+      truncated: tail.length > MAX_OUT,
+    }, null, 2),
+  }
+}
+
+function shell_kill(a) {
+  const s = BG_SHELLS.get(String(a.id || ""))
+  if (!s) return { success: false, error: `后台任务不存在（${a.id}）` }
+  if (s.exited) { BG_SHELLS.delete(s.id); return { success: true, output: s.exitSignal ? `任务已被信号终止（${s.exitSignal}），记录已清理` : `任务已退出（code ${s.exitCode}），记录已清理` } }
+  try {
+    s.child.kill("SIGTERM")
+    // 不理会 SIGTERM 的（npm/docker 会自己收尾），3 秒后强杀
+    setTimeout(() => { try { if (!s.exited) s.child.kill("SIGKILL") } catch {} }, 3000)
+  } catch (e) { return { success: false, error: e.message } }
+  return { success: true, output: `已发送终止信号给 ${s.id}` }
+}
+
+function shell_list() {
+  const rows = [...BG_SHELLS.values()].map((s) => ({
+    id: s.id, command: s.command.slice(0, 80),
+    status: s.exited ? (s.exitSignal ? `killed(${s.exitSignal})` : `exited(${s.exitCode})`) : "running",
+    running_ms: (s.exited ? s.exitedAt : Date.now()) - s.startedAt,
+  }))
+  return { success: true, output: JSON.stringify({ count: rows.length, shells: rows }, null, 2) }
+}
+
 async function shell(a) {
   if (!a.command) return { success: false, error: "无命令" };
   const n = a.command.toLowerCase();
@@ -380,13 +497,13 @@ async function shell(a) {
   // 超时上限：模型偶尔会传超大 timeout（如 99999 秒）把对话挂住；
   // 上限 10 分钟，同时下限 1 秒防止 0 被当成"无超时"
   const timeoutSec = Math.min(Math.max(Number(a.timeout) || 30, 1), 600);
-  const opts = {
-    timeout: timeoutSec * 1e3,
-    maxBuffer: MAX_OUT,
-    // 超时后先 SIGTERM；若进程不理会（npm/docker 等会自己收尾），
-    // killSignal 不足以终止，需要 escalation —— 见下方 catch 处理
-    killSignal: "SIGTERM",
-  };
+
+  // 后台模式：长驻进程（dev server、watch、构建）不该阻塞对话。
+  // 返回 shellId，由 shell_output / shell_kill 后续查看与终止。
+  if (a.background) {
+    return startBackgroundShell(a.command, cwd, a.name)
+  }
+
   try {
     let r;
     if (IS_WIN) {
@@ -396,9 +513,9 @@ async function shell(a) {
       // 2) -NoProfile 避免用户 profile 拖慢/污染输出。
       const wrapped = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${a.command}`;
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wrapped],
-        { ...opts, env: process.env, cwd, encoding: "utf8" });
+        { ...shellExecOpts(timeoutSec), env: process.env, cwd, encoding: "utf8" });
     } else {
-      r = await execAsync("zsh", ["-c", a.command], { ...opts, env: { ...process.env, TERM: "dumb" }, cwd });
+      r = await execAsync("zsh", ["-c", a.command], { ...shellExecOpts(timeoutSec), env: { ...process.env, TERM: "dumb" }, cwd });
     }
     return { success: true, output: (r.stdout || "").trim() + ((r.stderr || "").trim() ? `\n[stderr]\n${r.stderr.trim()}` : "") };
   } catch (e) {
@@ -1747,7 +1864,7 @@ async function consultGuidance(a) {
 var TOOLS = {
   read_file, write_file, edit_file, list_dir, search_files, search_content,
   get_file_info, move_file, delete_file,
-  shell, system_info, process_list, port_check,
+  shell, shell_output, shell_kill, shell_list, system_info, process_list, port_check,
   code_analysis, npm_run, git_operation,
   web_fetch, http_request, web_search,
   json_process, text_tools, screenshot,

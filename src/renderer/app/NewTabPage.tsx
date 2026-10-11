@@ -1,6 +1,11 @@
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
+import { BUILTIN_TOOLS } from '../types'
+
+// 工具数从 schema 派生：新增工具时这里不用跟着改
+// （此前硬编码 "39 个工具"，加工具就得记得改文案，必然漂移）
+const TOOL_COUNT = BUILTIN_TOOLS.length
 
 // 新建标签页：点 Tab 栏 + 后打开的页面，列出全部工作区入口。
 // 学 clerkbox 官网的展示结构：定位语 hero → 徽章亮点 → 分组能力卡；
@@ -18,7 +23,7 @@ interface Card {
 }
 
 const CARDS: Card[] = [
-  { type: 'chat', desc: '和 AI 直接对话，一句话让它把活干完', descEn: 'Talk to the agent — it finishes the work, not just answers', chips: ['39 个工具', '目标模式'], chipsEn: ['39 tools', 'Goal mode'] },
+  { type: 'chat', desc: '和 AI 直接对话，一句话让它把活干完', descEn: 'Talk to the agent — it finishes the work, not just answers', chips: [`${TOOL_COUNT} 个工具`, '目标模式'], chipsEn: [`${TOOL_COUNT} tools`, 'Goal mode'] },
   { type: 'persona', desc: '有长期记忆的 AI 角色，免费直接聊', descEn: 'AI personas with long-term memory — free', chips: ['记忆', '朗读', '画画'], chipsEn: ['Memory', 'Voice', 'Paint'] },
   { type: 'research', desc: '多路检索·交叉验证·带引用报告，历史可查', descEn: 'Multi-query search, cross-checked, cited report', chips: ['实时进度', '来源清单', '历史归档'], chipsEn: ['Live progress', 'Sources', 'Archive'] },
   { type: 'call', desc: '全屏语音通话，边说边执行任务', descEn: 'Full-screen voice call that executes as you talk', chips: ['实时对话'], chipsEn: ['Realtime'] },

@@ -3,7 +3,7 @@
  * verify.mjs — 契约与完整性校验(CI 与本地跑,零依赖)
  *
  * 守护四件事:
- *   1. builtin-tools.json — 39 个工具 schema 单一来源的结构合法
+ *   1. builtin-tools.json — 工具 schema 单一来源的结构合法（并与后端注册表一致）
  *   2. guidance/rules.json — 约束知识库结构合法,无重复 id
  *   3. 品牌/版本单一来源 — package.json 与关键引用一致
  *   4. 免 key 源常量 — llm-proxy 的哨兵与网关地址未被误改
@@ -35,8 +35,52 @@ try {
   for (const need of ['shell', 'write_file', 'consult_guidance', 'dispatch_subagents', 'web_search']) {
     if (!ids.has(need)) bad(`缺少关键工具: ${need}`)
   }
+  for (const need of ['shell_output', 'shell_kill', 'shell_list']) {
+    if (!ids.has(need)) bad(`后台 shell 工具缺失: ${need}`)
+  }
   if (!ids.has('consult_guidance')) bad('约束知识库工具 consult_guidance 缺失')
   else ok('consult_guidance 在列')
+
+  // schema 声明的工具必须在后端可调 —— 否则「模型看得到但一调就报未知工具」，
+  // 表现为反复失败且用户看不出原因。反向差异（后端有但 schema 未声明）是
+  // 设计选择，列在白名单里说明理由，新增此类差异会被拦下要求补说明。
+  //
+  // 后端注册表分两处：var TOOLS = {...} 与紧随其后的显式键值行
+  try {
+    const serve = fs.readFileSync(path.join(ROOT, 'src/server/serve.ts'), 'utf-8')
+    const blocks = [...serve.matchAll(/var TOOLS = \{([\s\S]*?)\n\}/g)].map(m => m[1])
+    if (!blocks.length) bad('找不到 TOOLS 注册表（结构变更需同步本校验）')
+    else {
+      const registered = new Set()
+      for (const b of blocks) {
+        for (const tok of b.split(/[,\n]/)) {
+          const t = tok.replace(/\/\/.*/, '').trim()
+          const kv = t.match(/^([a-z_][a-z0-9_]*)\s*:/)   // 形如 save_knowledge: toolSaveKnowledge
+          if (kv) registered.add(kv[1])
+          else if (/^[a-z_][a-z0-9_]*$/.test(t)) registered.add(t)  // 简写形式
+        }
+      }
+      const notCallable = [...ids].filter(n => !registered.has(n))
+      // 客户端工具由前端处理（如 dispatch_subagents 派子代理），本就不该在
+      // 后端注册。清单从 stream.ts 的 CLIENT_TOOLS 解析，避免在这里再抄一份
+      let clientTools = new Set()
+      try {
+        const streamSrc = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/stream.ts'), 'utf-8')
+        const cm = streamSrc.match(/const CLIENT_TOOLS = new Set\(\[([\s\S]*?)\]\)/)
+        if (cm) clientTools = new Set([...cm[1].matchAll(/'([^']+)'|"([^"]+)"/g)].map(m => m[1] || m[2]))
+      } catch { /* 解析不到时按空集处理，下面的检查仍会拦住真正的遗漏 */ }
+      const trulyMissing = notCallable.filter(n => !clientTools.has(n))
+      if (trulyMissing.length) bad(`schema 声明但后端未注册（模型调不动）: ${trulyMissing.join(', ')}`)
+      else ok(`schema 的 ${ids.size} 个工具均可调（后端 ${ids.size - clientTools.size} + 客户端 ${clientTools.size}）`)
+      // 后端有、schema 未声明：需在此登记理由，否则视为遗漏
+      const INTENTIONALLY_HIDDEN = {
+        screenshot: '主对话靠全局截图快捷键取屏，不让模型自主截屏（隐私边界）；手机远程端点仍可调',
+      }
+      const undeclared = [...registered].filter(n => !ids.has(n) && !(n in INTENTIONALLY_HIDDEN))
+      if (undeclared.length) bad(`后端已注册但 schema 未声明且无说明: ${undeclared.join(', ')}`)
+      else ok(`未暴露给模型的工具均有说明（${Object.keys(INTENTIONALLY_HIDDEN).length} 个）`)
+    }
+  } catch (e) { bad(`TOOLS 注册表比对失败: ${e.message}`) }
 } catch (e) { bad(`解析失败: ${e.message}`) }
 
 // ─── 2. guidance/rules.json ───

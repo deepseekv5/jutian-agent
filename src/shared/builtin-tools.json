@@ -228,7 +228,7 @@
  },
  {
   "name": "shell",
-  "description": "在用户电脑上执行命令:macOS/Linux 用 bash/zsh(ls/cat/grep/find/python/node/npm/git 等);Windows 用 PowerShell(Get-ChildItem/Get-Content/Select-String/node/npm/git 等;不要用 ls/cat/grep/del、路径用反斜杠或正斜杠均可)。用于探索文件系统、运行脚本、管理项目、安装包、查看系统信息等。命令超时30秒。",
+  "description": "执行 Shell 命令并返回输出。默认前台执行（30 秒超时，上限 600 秒）。长驻进程（开发服务器、watch、大型构建）必须传 background:true 后台启动，否则会超时。",
   "parameters": {
    "type": "object",
    "properties": {
@@ -243,11 +243,60 @@
     "timeout": {
      "type": "number",
      "description": "超时秒数（可选，默认30）"
+    },
+    "background": {
+     "type": "boolean",
+     "description": "设为 true 则后台启动长驻进程（dev server/watch/构建），立即返回 shell id，不等待完成。随后用 shell_output 增量读输出、shell_kill 终止"
     }
    },
    "required": [
     "command"
    ]
+  }
+ },
+ {
+  "name": "shell_output",
+  "description": "读取后台 shell 的输出（增量）。传 from 指定从第几个字符开始读；不传则从上次读取位置继续。用于查看 dev server 日志、构建进度。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "shell(background:true) 返回的任务 id"
+    },
+    "from": {
+     "type": "number",
+     "description": "起始字符偏移（可选，默认续读）"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "shell_kill",
+  "description": "终止后台 shell 任务。先 SIGTERM，3 秒未退出自动升级 SIGKILL。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "要终止的任务 id"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  }
+ },
+ {
+  "name": "shell_list",
+  "description": "列出所有后台 shell 任务及其状态（运行中/已退出、运行时长）。",
+  "parameters": {
+   "type": "object",
+   "properties": {},
+   "required": []
   }
  },
  {
