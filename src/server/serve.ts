@@ -2006,11 +2006,10 @@ http.createServer(async (req, res) => {
           console.error(`llm-proxy 主上游连接失败: ${e.message}（将尝试免费接力链）`);
         }
         if (proxyRes && !proxyRes.ok) {
-          // v11:主上游 HTTP 错误不再直接透传终止 —— 记录原始错误后落入下方接力链
+          // v11:主上游 HTTP 错误不再直接透传终止 —— 记录后落入下方接力链
           // (免费链兜底,永远有回应);若免费链也全部失败,最终错误体会带 upstreamStatus。
           const detail = await proxyRes.text().catch(() => "");
-          console.error(`llm-proxy 主上游 ${proxyRes.status} ← ${upstreamUrl}(将尝试免费接力链)`);
-          try { (proxyRes as any)._detail = String(detail).slice(0, 500); } catch {}
+          console.error(`llm-proxy 主上游 ${proxyRes.status} ← ${upstreamUrl}(将尝试免费接力链): ${String(detail).slice(0, 200)}`);
         }
         // ─── v11 模型自动接力:主上游失败/空响应耗尽后,自动换免费链（Kilo → Pollinations）,
         //     永远有回应。用户配置的主上游永远是第一顺位,成功即停,不静默改写成功请求。───
