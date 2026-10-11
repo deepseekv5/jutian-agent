@@ -3,6 +3,7 @@ import type { Message, Settings, ToolCall, ToolDef, AttachedFile } from '../type
 import { BUILTIN_TOOLS } from '../types'
 import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter, effectiveApiKey } from '../store/storage'
 import { streamChat, type StreamCallbacks } from '../engine/stream'
+import { planCompression, mergeSummary, buildCompressedMessages, type ApiMsgLike } from '../engine/contextCompress'
 import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
@@ -60,9 +61,6 @@ import { checkSensitiveTool } from '../../shared/sensitiveOps'
 // ─── 上下文自动压缩 ───
 // 每个会话的历史摘要（内存缓存 + /api/memories 持久化，跨重启有效）
 const ctxSummaries = new Map<string, string>()
-const COMPRESS_TOKEN_THRESHOLD = 40000  // 估算超过 40K tokens 触发压缩
-const COMPRESS_MSG_THRESHOLD = 40       // 或消息数超过 40 条
-const KEEP_RECENT = 10                  // 压缩时保留最近 10 条原文
 
 async function loadCtxSummary(sid: string): Promise<string> {
   if (ctxSummaries.has(sid)) return ctxSummaries.get(sid)!
@@ -670,48 +668,41 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       } catch { /* 图片加载失败则按纯文本发送 */ }
     }
 
-    // ─── 上下文自动压缩：超过阈值时，把较早的历史折叠成 AI 摘要 ───
+    // ─── 上下文自动压缩：超过阈值时把较早历史折叠成 AI 摘要 ───
+    // 策略（保留区按 token 反推、摘要长度封顶、失败不丢历史）见 engine/contextCompress
     {
-      const estTokens = apiMessages.reduce((s, m) => s + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')) + estimateTokens(m.tool_calls ? JSON.stringify(m.tool_calls) : ''), 0)
-      const historyCount = apiMessages.length - 1
-      if (estTokens > COMPRESS_TOKEN_THRESHOLD || historyCount > COMPRESS_MSG_THRESHOLD) {
-        const oldChunk = apiMessages.slice(1, Math.max(1, apiMessages.length - KEEP_RECENT))
-        const recent = apiMessages.slice(-KEEP_RECENT)
+      const plan = planCompression(apiMessages as ApiMsgLike[], estimateTokens)
+      if (plan.shouldCompress && plan.oldChunk.length > 0) {
         let summary = await loadCtxSummary(sessionId)
-        if (oldChunk.length > 0) {
-          try {
-            const res = await fetch('/api/llm-proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
-              body: JSON.stringify({
-                model: settings.model,
-                messages: [
-                  { role: 'system', content: '你是对话压缩器。把提供的历史对话压缩成一份要点式摘要（400字以内），保留：用户的核心需求与偏好、已完成的操作与结果、重要文件路径/命令/数据、未完成的事项。直接输出摘要本身。' },
-                  { role: 'user', content: oldChunk.map(m => `${m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '工具'}: ${typeof m.content === 'string' ? m.content.slice(0, 500) : JSON.stringify(m).slice(0, 400)}`).join('\n') },
-                ],
-                max_tokens: 3000,
-                stream: false,
-              }),
-            })
-            if (res.ok) {
-              const data = await res.json()
-              const cm = data.choices?.[0]?.message || {}
-              const extra = ((cm.content || '') || String(cm.reasoning_content || '').split('\n').slice(-1)[0] || '').trim()
-              if (extra) {
-                summary = summary ? `${summary}\n${extra}` : extra
-                ctxSummaries.set(sessionId, summary)
-                fetch('/api/ctx-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: sessionId, value: summary }) }).catch(() => {})
-              }
+        try {
+          const res = await fetch('/api/llm-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
+            body: JSON.stringify({
+              model: settings.model,
+              messages: [
+                { role: 'system', content: '你是对话压缩器。把提供的历史对话压缩成一份要点式摘要（400字以内），保留：用户的核心需求与偏好、已完成的操作与结果、重要文件路径/命令/数据、未完成的事项。直接输出摘要本身。' },
+                { role: 'user', content: plan.oldChunk.map(m => `${m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '工具'}: ${typeof m.content === 'string' ? m.content.slice(0, 500) : JSON.stringify(m).slice(0, 400)}`).join('\n') },
+              ],
+              max_tokens: 3000,
+              stream: false,
+            }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            const cm = data.choices?.[0]?.message || {}
+            const extra = ((cm.content || '') || String(cm.reasoning_content || '').split('\n').slice(-1)[0] || '').trim()
+            if (extra) {
+              // mergeSummary 对总长度封顶：否则长对话里摘要自身会膨胀成新的超长上下文
+              summary = mergeSummary(summary, extra)
+              ctxSummaries.set(sessionId, summary)
+              fetch('/api/ctx-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: sessionId, value: summary }) }).catch(() => {})
             }
-          } catch { /* 压缩失败则不压缩，照常发送 */ }
-        }
-        if (summary) {
-          apiMessages = [
-            { role: 'system', content: finalSystemPrompt },
-            { role: 'system', content: `【历史对话摘要 — 早前 ${oldChunk.length} 条消息已压缩】\n${summary}` },
-            ...recent,
-          ]
-        }
+          }
+        } catch { /* 压缩失败则照常发送原消息，绝不因为摘要生成失败丢掉历史 */ }
+
+        const compressed = buildCompressedMessages(finalSystemPrompt, summary, plan.recent as ApiMsgLike[], plan.oldChunk.length)
+        if (compressed) apiMessages = compressed as typeof apiMessages
       }
     }
 
