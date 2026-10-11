@@ -23,6 +23,8 @@ interface Props {
 
 export default class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null }
+  /** 同一挂载周期内的重试次数：崩溃原因未消失时重试会立刻再崩，需要引导用户换出路 */
+  private retryCount = 0
 
   static getDerivedStateFromError(error: Error): State {
     return { error }
@@ -31,6 +33,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   componentDidUpdate(prev: Props) {
     // resetKey 变化（典型：切换到别的标签页）时清掉错误，让面板恢复正常渲染
     if (this.props.resetKey !== prev.resetKey && this.state.error) {
+      this.retryCount = 0
       this.setState({ error: null, stack: '', componentStack: '' })
     }
   }
@@ -54,7 +57,10 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   private retry = () => {
-    // 局部重试：只清错误状态，不动页面其他部分
+    // 局部重试：只清错误状态，不动页面其他部分。
+    // 若崩溃原因未消失（如某条消息数据损坏），重试会立刻再崩——
+    // 界面看起来"点了没反应"。计数到 2 次后提示改用重新加载。
+    this.retryCount++
     this.setState({ error: null, stack: '', componentStack: '' })
   }
 
@@ -96,6 +102,12 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               }}>{this.state.componentStack}</pre>
             )}
           </details>
+          {this.retryCount >= 2 && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-secondary, #5d5d5d)', maxWidth: 420, textAlign: 'center', lineHeight: 1.6 }}>
+              重试后仍出现同样问题，说明不是临时故障。建议「重新加载」；
+              若仍无法恢复，可在设置 → 关于 → 环境诊断中复制报告反馈。
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={this.retry}
               style={{
