@@ -8,6 +8,7 @@ import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { refreshSkillManifest } from '../engine/skillManifest'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
+import { MODE_ACCENT } from '../../shared/chatModes'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -88,6 +89,7 @@ const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: 
 // ─── composer 状态条：模式 · 模型 · 工作目录 · git 分支（学 ClerkBox 输入框上方的状态行）───
 function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMode: 'general' | 'coding'; modelLabel: string; workDir: string; disabled?: boolean }) {
   const { c } = useTheme()
+  const { lang } = useLanguage()
   const [git, setGit] = useState<{ branch: string; changes: number } | null>(null)
   useEffect(() => {
     let alive = true
@@ -102,11 +104,14 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMo
     return () => { alive = false; clearTimeout(t) }
   }, [workDir, disabled])
   const base = workDir ? workDir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''
+  // 模式色与空态/切换器同源（shared/chatModes）：办公绿 / 编程蓝，一眼可辨
+  const mode = MODE_ACCENT[chatMode]
   return (
     <div className="flex items-center gap-2 px-1 pb-1.5 text-[10.5px] min-w-0" style={{ color: c.textMuted }}>
-      <span className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
-        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m15 0h1.5M6 6l1.06 1.06m11.88-1.06-1.06 1.06M12 8.25a3 3 0 100 6 3 3 0 000-6z" /></svg>
-        {chatMode === 'coding' ? '编程模式' : '通用模式'}
+      <span className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded"
+        style={{ background: `${mode.color}12`, color: mode.color }}>
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: mode.color }} />
+        {lang === 'en' ? mode.en : mode.zh}
       </span>
       <span className="font-mono truncate max-w-[180px]" title={modelLabel}>{modelLabel || '未配置模型'}</span>
       {base && (

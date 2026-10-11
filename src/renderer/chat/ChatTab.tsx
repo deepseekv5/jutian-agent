@@ -48,6 +48,17 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     [settings, ownWorkDir]
   )
 
+  // 办公/编程双模式：跟随侧栏切换器与 composer（两者写 localStorage 后广播事件），
+  // 空态引导按模式给对应行话，让"两种工作方式"在第一条消息前就有体感
+  const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
+    try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
+  })
+  useEffect(() => {
+    const h = () => { try { setChatMode(localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch {} }
+    window.addEventListener('chat-mode-changed', h)
+    return () => window.removeEventListener('chat-mode-changed', h)
+  }, [])
+
   // 工作目录（本会话优先，否则全局）变化时同步项目分组标签 —— 见下方 effectiveWorkDir 的 effect
 
   const setSessionWorkDir = useCallback((dir: string) => {
@@ -372,6 +383,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
               <ChatView
                 messages={messages}
                 streamingId={streamingId}
+                chatMode={chatMode}
                 onAbort={abort}
                 onQuickSend={handleQuickSend}
                 onRegenerate={handleRegenerate}

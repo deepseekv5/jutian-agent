@@ -382,13 +382,16 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           }}
             className="h-7 pl-2 pr-2.5 rounded-full flex items-center gap-1 text-[11px] font-medium transition-colors"
             style={{
-              background: headerChatMode === 'coding' ? `${c.accent}14` : c.bgInput,
-              border: `1px solid ${headerChatMode === 'coding' ? `${c.accent}59` : c.border}`,
-              color: headerChatMode === 'coding' ? c.accent : c.textTertiary,
+              // 与空态/状态条同源的模式色（办公绿 / 编程蓝），切换时整个应用的「身份感」一起变
+              background: headerChatMode === 'coding' ? 'rgba(37,99,235,.09)' : 'rgba(16,163,127,.09)',
+              border: `1px solid ${headerChatMode === 'coding' ? 'rgba(37,99,235,.35)' : 'rgba(16,163,127,.35)'}`,
+              color: headerChatMode === 'coding' ? '#2563eb' : '#10a37f',
             }}
             title={headerChatMode === 'coding' ? '编程模式（点击切到办公）' : '办公模式（点击切到编程）'}>
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+              {headerChatMode === 'coding'
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.073a2 2 0 01-2 2H5.75a2 2 0 01-2-2V14.15M16.5 10.5V6.375A2.625 2.625 0 0013.875 3.75h-3.75A2.625 2.625 0 007.5 6.375V10.5m9 0h1.5a1.5 1.5 0 011.5 1.5v.75a1.5 1.5 0 01-1.5 1.5h-12a1.5 1.5 0 01-1.5-1.5V12a1.5 1.5 0 011.5-1.5h1.5" />}
             </svg>
             {headerChatMode === 'coding' ? t('编程', 'Code') : t('办公', 'Office')}
           </button>

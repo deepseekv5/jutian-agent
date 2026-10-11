@@ -5,6 +5,7 @@ import { listMessages, createMessage, updateMessageContent, updateMessageThinkin
 import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
+import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
 import { runSubagents } from '../engine/subagent'
 import { pushNotice } from '../notify'
@@ -577,14 +578,17 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       } catch { /* ignore */ }
     }
 
-    // 构建 API 消息历史（系统提示词：通用 / Coding 双模式，随输入框开关切换）
+    // 构建 API 消息历史 —— 系统提示词按模式彻底分家（人格/规则均不同，见 shared/chatModes）
     const chatMode = sendOpts?.chatMode === 'coding' ? 'coding' : 'general'
     const workDir = settings.workDir || ''
     // AGENTS.md 项目指令：send 前刷新缓存（跨工具标准，CLAUDE.md 回退）
     try { await refreshAgentsMd(workDir) } catch {}
+    const agentsBlock = getAgentsMd(workDir) ? `\n\n【项目指令 AGENTS.md — 来自工作目录根，优先遵守】\n${getAgentsMd(workDir)}` : ''
     const systemPrompt = chatMode === 'coding'
-      ? `你是一个专业的编程助手，正在用户的本机环境中工作。\n\n【工作目录边界 — 最高优先级】\n- 用户项目目录（你的合法工作区）：${workDir || '未指定（使用系统默认）'}\n- 所有文件操作与命令执行限制在该目录内，禁止越界。\n\n你拥有完整工具能力：读/写/改文件、列目录、搜索、执行命令、联网搜索等。\n\n规则：\n1. 先读代码再改代码：修改前用 read_file 确认上下文，不确定就 list_dir/search\n2. 修改用 edit_file 精准替换，新文件用 write_file，并简要说明改动理由\n3. 回答简洁、直击要点，代码块标注语言；避免长篇大论\n4. 命令执行优先 shell 工具；破坏性操作（删除/覆盖）先说明风险\n5. 报错排查：先分析根因再给修复，不要猜测性乱改`
-      : (buildChatSystemPrompt(settings) + (getAgentsMd(workDir) ? `\n\n【项目指令 AGENTS.md — 来自工作目录根，优先遵守】\n${getAgentsMd(workDir)}` : ''))
+      // 编程形态：工程 Agent 人格（动手改文件为先）+ 运行环境一行
+      ? buildCodingPersona(workDir) + `\n\n【运行环境】${/Win/i.test(navigator.platform || '') ? 'Windows（PowerShell 语法，路径用反斜杠）' : 'macOS/Linux（zsh/bash 语法，路径用正斜杠）'}${agentsBlock}`
+      // 办公形态：通用桌面助手人格 + 办公聚焦段（文档产出为先，代码操作克制）
+      : buildChatSystemPrompt(settings) + '\n\n' + OFFICE_MODE_SUFFIX + agentsBlock
 
     // 本条消息的权限等级 / 思考程度（随时切换，仅影响当前请求）
     const accessText: Record<string, string> = {

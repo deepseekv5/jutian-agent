@@ -5,10 +5,13 @@ import BrandMark from '../app/BrandMark'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { ASSISTANT_NAME } from '../brand'
+import { WELCOME, MODE_ACCENT, type ChatMode } from '../../shared/chatModes'
 
 interface Props {
   messages: Message[]
   streamingId: string | null
+  /** 办公/编程双模式：空态标题、副标题、快捷提示都跟着模式走（见 shared/chatModes） */
+  chatMode?: ChatMode
   onAbort?: () => void
   onRegenerate?: () => void
   /** 对任意 assistant 消息就地重新生成（消息分支） */
@@ -19,16 +22,7 @@ interface Props {
   onEditMessage?: (messageIndex: number, newContent: string) => void
 }
 
-const QUICK_PROMPTS = [
-  { label: '解释代码', labelEn: 'Explain code', text: '帮我解释一下这段代码的作用', textEn: 'Explain what this piece of code does' },
-  { label: 'Python 脚本', labelEn: 'Python script', text: '用 Python 写一个快速排序算法，并解释每一步', textEn: 'Write a quicksort in Python and explain each step' },
-  { label: '总结文档', labelEn: 'Summarize', text: '总结以下文档的核心要点', textEn: 'Summarize the key points of the following document' },
-  { label: '生成 PPT', labelEn: 'Make slides', text: '帮我生成一份关于 AI 发展趋势的 PPT 大纲', textEn: 'Draft a slide outline about AI trends' },
-  { label: '代码审查', labelEn: 'Code review', text: '请帮我审查这段代码，找出潜在问题并给出改进建议', textEn: 'Review this code for issues and improvements' },
-  { label: '写测试', labelEn: 'Write tests', text: '为这段代码编写单元测试，覆盖主要分支', textEn: 'Write unit tests for this code covering the main branches' },
-]
-
-export default function ChatView({ messages, streamingId, onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage }: Props) {
+export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage }: Props) {
   const { lang } = useLanguage()
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -140,23 +134,31 @@ export default function ChatView({ messages, streamingId, onAbort, onRegenerate,
     return () => window.removeEventListener('keydown', h)
   }, [searchOpen])
 
-  // ─── 空状态 —— ChatGPT 风格欢迎页 ───
+  // ─── 空状态 —— 办公/编程两套引导（文案集中定义在 shared/chatModes）───
   if (messages.length === 0) {
+    const w = WELCOME[chatMode]
+    const accent = MODE_ACCENT[chatMode]
     return (
       <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto px-6">
         <div className="flex flex-col items-center text-center -mt-8">
           <BrandMark size={56} color={c.textHead} className="mb-6" title="巨天agent" />
 
-          <h2 className="welcome-title">有什么可以帮忙的？</h2>
+          <span className="mb-3 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10.5px] font-medium"
+            style={{ background: `${accent.color}14`, color: accent.color, border: `1px solid ${accent.color}33` }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: accent.color }} />
+            {lang === 'en' ? accent.en : accent.zh}
+          </span>
+
+          <h2 className="welcome-title">{lang === 'en' ? w.titleEn : w.title}</h2>
 
           <p className="welcome-subtitle">
-            我可以回答问题、编写代码、分析文档、生成 PPT、操作终端、管理文件。
+            {lang === 'en' ? w.subtitleEn : w.subtitle}
             <br />
             {ASSISTANT_NAME} 可能会犯错，请核查重要信息。
           </p>
 
           <div className="welcome-prompts">
-            {QUICK_PROMPTS.map(hint => (
+            {w.prompts.map(hint => (
               <button key={hint.label} onClick={() => onQuickSend?.(lang === 'en' ? hint.textEn : hint.text)}
                 className="welcome-prompt" title={lang === 'en' ? hint.textEn : hint.text}>
                 {lang === 'en' ? hint.labelEn : hint.label}
