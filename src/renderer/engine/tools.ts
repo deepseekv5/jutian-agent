@@ -29,7 +29,7 @@ const API_BASE = '/api'
  * The backend (server.ts) handles actual command execution with safety limits.
  * workDir: 用户设置的工作区目录，作为后端执行命令/文件操作的默认目录（实时生效）。
  */
-export async function executeTool(req: ToolRequest, workDir?: string): Promise<ToolResult> {
+export async function executeTool(req: ToolRequest, workDir?: string, signal?: AbortSignal): Promise<ToolResult> {
   const start = Date.now()
 
   try {
@@ -41,6 +41,9 @@ export async function executeTool(req: ToolRequest, workDir?: string): Promise<T
         ...(workDir ? { 'X-Work-Dir': encodeURIComponent(workDir) } : {}),
       },
       body: JSON.stringify(req),
+      // 传中止信号：用户点停止时，正在等待的长命令（npm install 等）
+      // 立即断开，而不是等它自己跑完
+      ...(signal ? { signal } : {}),
     })
 
     if (!res.ok) {

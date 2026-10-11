@@ -250,8 +250,8 @@ export async function streamChat(
           toolCallObj.status = 'done'
           toolCallObj.result = toolResult
         } else {
-          // 通过后端代理执行工具（工作区实时生效）
-          const result = await executeTool({ name: tc.name, args }, settings.workDir || undefined)
+          // 通过后端代理执行工具（工作区实时生效）；传 signal 让长命令可被用户中止
+          const result = await executeTool({ name: tc.name, args }, settings.workDir || undefined, signal)
           toolResult = result.success ? result.output : `❌ 错误: ${result.error}`
           toolCallObj.status = result.success ? 'done' : 'error'
           toolCallObj.result = toolResult

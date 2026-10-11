@@ -1020,6 +1020,20 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       abortRef.current?.abort()
       // 中止即退出目标模式（用户点停止 = 不再自动续跑）
       if (goalRef.current) { goalRef.current.active = false; setGoal(g => (g ? { ...g, status: 'stopped' } : g)) }
+      // 把仍在 running 的工具标记为已中止：流式循环在下一个工具前才检查
+      // signal，当前正在执行的那个不会再回调 onToolEnd，若不处理，
+      // 界面上的工具卡会永远停在"运行中"转圈状态
+      setMessages(prev => prev.map(m => {
+        if (!m.tool_calls?.length) return m
+        const hasRunning = m.tool_calls.some(tc => tc.status === 'running')
+        if (!hasRunning) return m
+        return {
+          ...m,
+          tool_calls: m.tool_calls.map(tc => tc.status === 'running'
+            ? { ...tc, status: 'error' as const, result: tc.result || '已中止（用户停止）', finished_at: new Date().toISOString() }
+            : tc),
+        }
+      }))
       // 集群/流式被暂停后立即解锁输入（集群会自行检测信号收尾）
       setStreamingId(null)
     },
