@@ -139,6 +139,12 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
   // 对话模式：通用 / Coding（全局记忆，随时切换）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
   const switchChatMode = (m: 'general' | 'coding') => { setChatMode(m); try { localStorage.setItem('lyclaw_chat_mode', m) } catch {} }
+  // 侧栏顶部的 编程/办公 切换 → 同步到本 composer
+  useEffect(() => {
+    const h = () => setChatMode((localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
+    window.addEventListener('chat-mode-changed', h)
+    return () => window.removeEventListener('chat-mode-changed', h)
+  }, [])
   const [thinking, setThinking] = useState<string>(() => {
     try {
       const v = localStorage.getItem('lyclaw_thinking')
@@ -1076,19 +1082,44 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
                 </svg>
               </button>
             )}
-            {thinking !== THINK_DEFAULT && (
-              <button onClick={() => setThinking(THINK_DEFAULT)} title="恢复默认思考程度"
-                className="h-8 pl-2.5 pr-2 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
-                style={{ background: `${THINK_COLORS[thinking]}14`, border: `1px solid ${THINK_COLORS[thinking]}59`, color: THINK_COLORS[thinking] }}>
-                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2L4.5 13.5H11l-1 8.5L18.5 10H12l1-8z" />
-                </svg>
-                <span className="text-[12px] font-medium">思考:{curThink.label}</span>
-                <svg className="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+            {/* 思考程度：常驻下拉（对应参考 UI 的 "High ▾" 芯片） */}
+            <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 transition-colors"
+              style={{ background: `${THINK_COLORS[thinking]}14`, border: `1px solid ${THINK_COLORS[thinking]}59` }}
+              title="思考程度：档位越深推理越充分">
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: THINK_COLORS[thinking] }}>
+                <path d="M13 2L4.5 13.5H11l-1 8.5L18.5 10H12l1-8z" />
+              </svg>
+              <select value={thinking} onChange={e => setThinking(e.target.value)} aria-label="思考程度"
+                className="bg-transparent outline-none cursor-pointer text-[12px] font-medium appearance-none pr-0.5"
+                style={{ color: THINK_COLORS[thinking] }}>
+                {THINK_LEVELS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+              </select>
+              <svg className="w-3 h-3 opacity-60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} style={{ color: THINK_COLORS[thinking] }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+
+            {/* 模型：常驻下拉（对应参考 UI 的 "gpt-5.6-sol ▾" 芯片） */}
+            {(() => {
+              const modelChoices = [...new Set([...((settings as any)?.models || []), settings?.model].filter(Boolean))] as string[]
+              const cur = currentModel || settings?.model || ''
+              if (modelChoices.length === 0) {
+                return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title="未配置模型（设置 → 推理）">{cur || '未配置模型'}</span>
+              }
+              return (
+                <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 max-w-[190px]" style={{ background: c.surfaceInput, border: `1px solid ${c.border}` }} title="切换模型">
+                  <select value={cur} onChange={e => onModelChange?.(e.target.value)} aria-label="切换模型"
+                    className="bg-transparent outline-none cursor-pointer text-[12px] font-mono appearance-none max-w-[150px] truncate"
+                    style={{ color: c.textSecondary }}>
+                    {modelChoices.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <svg className="w-3 h-3 opacity-60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} style={{ color: c.textTertiary }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              )
+            })()}
+
             {modes.swarm && (
               <select value={swarmTeam} onChange={e => setSwarmTeam(e.target.value)}
                 className="h-8 px-2 rounded-full text-[12px] outline-none cursor-pointer shrink-0"
@@ -1152,8 +1183,8 @@ export default function MessageInput({ onSend, disabled, currentModel, onModelCh
                 cursor: canSend ? 'pointer' : 'not-allowed',
               }}
               title={t('发送', 'Send')} aria-label={t('发送', 'Send')}>
-              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m-7 7l7-7 7 7" />
+              <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
               </svg>
             </button>
           </div>

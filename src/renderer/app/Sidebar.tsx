@@ -166,6 +166,13 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const [webuiCopied, setWebuiCopied] = useState(false)
   // 定时任务启用数（侧栏按钮角标）
   const [taskCount, setTaskCount] = useState(0)
+  // 编程/办公模式（侧栏头部切换，与 composer chatMode 双向同步）
+  const [headerChatMode, setHeaderChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
+  useEffect(() => {
+    const h = () => setHeaderChatMode((localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
+    window.addEventListener('chat-mode-changed', h)
+    return () => window.removeEventListener('chat-mode-changed', h)
+  }, [])
   useEffect(() => { fetch('/api/scheduled-tasks').then(r => r.json()).then(d => { const list = Array.isArray(d?.tasks) ? d.tasks : []; setTaskCount(list.filter((t: any) => t.enabled !== false).length) }).catch(() => {}) }, [])
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
@@ -366,13 +373,33 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           <BrandMark size={20} color={c.textHead} />
           <span className="text-[14px] font-semibold tracking-tight truncate" style={{ color: c.textHead }}>{APP_NAME}</span>
         </div>
-        {onCollapse && (
-          <button onClick={onCollapse} className="btn-icon shrink-0 titlebar-nodrag" title="收起侧边栏" aria-label="收起侧边栏">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+        <div className="flex items-center gap-1 shrink-0 titlebar-nodrag">
+          {/* 编程 / 办公模式切换（同步到 composer 的 chatMode） */}
+          <button onClick={() => {
+            const next = (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'general' : 'coding')
+            try { localStorage.setItem('lyclaw_chat_mode', next) } catch {}
+            window.dispatchEvent(new Event('chat-mode-changed'))
+          }}
+            className="h-7 pl-2 pr-2.5 rounded-full flex items-center gap-1 text-[11px] font-medium transition-colors"
+            style={{
+              background: headerChatMode === 'coding' ? `${c.accent}14` : c.bgInput,
+              border: `1px solid ${headerChatMode === 'coding' ? `${c.accent}59` : c.border}`,
+              color: headerChatMode === 'coding' ? c.accent : c.textTertiary,
+            }}
+            title={headerChatMode === 'coding' ? '编程模式（点击切到办公）' : '办公模式（点击切到编程）'}>
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
             </svg>
+            {headerChatMode === 'coding' ? t('编程', 'Code') : t('办公', 'Office')}
           </button>
-        )}
+          {onCollapse && (
+            <button onClick={onCollapse} className="btn-icon shrink-0 titlebar-nodrag" title="收起侧边栏" aria-label="收起侧边栏">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 新建对话（ChatGPT 风格中性按钮）+ 批量管理 ── */}
@@ -633,6 +660,12 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               </svg>
             </button>
           </div>
+        </div>
+        {/* 本地模式标识（对应参考 UI 底部的账号位；本项目无账号体系，如实显示本地优先） */}
+        <div className="mt-2.5 flex items-center gap-2 px-1">
+          <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+            style={{ background: c.bgInput, color: c.textTertiary, border: `1px solid ${c.borderLight}` }}>本</span>
+          <span className="text-[11.5px]" style={{ color: c.textTertiary }}>{t('本地模式 · 数据不出本机', 'Local · data stays on device')}</span>
         </div>
       </div>
     </div>
