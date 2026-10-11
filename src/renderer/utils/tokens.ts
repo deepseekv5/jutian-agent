@@ -46,7 +46,9 @@ export function guessModelContext(model?: string): number {
 
 /** 格式化 token 数：1234 → 1.2K，1234567 → 1.2M */
 export function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  // 阈值取四舍五入后的量级：999_999 按 K 格式化会得到 "1000.0K"，
+  // 应进位显示 1.0M，否则界面出现无意义的 1000.0K
+  if (n >= 999_950) return (n / 1_000_000).toFixed(1) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
 }
