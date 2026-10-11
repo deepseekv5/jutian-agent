@@ -7,6 +7,9 @@ import { useLanguage } from '../hooks/useLanguage'
 import { ASSISTANT_NAME } from '../brand'
 import { WELCOME, MODE_ACCENT, type ChatMode } from '../../shared/chatModes'
 
+/** 无工具调用的消息共用同一个空数组引用，避免破坏 MessageBubble 的 memo */
+const EMPTY_TOOL_CALLS: NonNullable<Message['tool_calls']> = []
+
 interface Props {
   messages: Message[]
   streamingId: string | null
@@ -212,7 +215,9 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
                 thinking={(msg as any).thinking || ''}
                 role={msg.role as 'user' | 'assistant'}
                 isStreaming={msg.id === streamingId}
-                toolCalls={msg.tool_calls || []}
+                // 空数组用模块级常量：`msg.tool_calls || []` 每次渲染都新建引用，
+                // 会让 MessageBubble 的 memo 在这条消息上永久失效
+                toolCalls={msg.tool_calls || EMPTY_TOOL_CALLS}
                 isLast={idx === messages.length - 1}
                 index={idx}
                 msgId={msg.id}
