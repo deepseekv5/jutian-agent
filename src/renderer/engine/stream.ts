@@ -31,6 +31,12 @@ export interface StreamCallbacks {
   onError: (err: string) => void | Promise<void>
   /** 客户端工具：不走服务端执行，返回值作为 tool result 回传给模型 */
   onClientTool?: (tc: ToolCall) => string | Promise<string>
+  /**
+   * 权限闸门：返回 null 放行；返回字符串则拒绝执行并把该字符串作为 tool result。
+   * 由调用方按当前权限档位决定——「需要我确认」档下敏感操作在这里被真正拦住，
+   * 不依赖模型是否遵守提示词。
+   */
+  beforeTool?: (tc: ToolCall) => Promise<string | null> | string | null
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
@@ -244,6 +250,16 @@ export async function streamChat(
         callbacks.onToolStart(toolCallObj)
 
         let toolResult: string
+        // 权限闸门：先问调用方是否允许（「需要我确认」档在这里真正拦截）
+        const denial = await callbacks.beforeTool?.(toolCallObj)
+        if (denial) {
+          toolCallObj.status = 'error'
+          toolCallObj.result = denial
+          toolCallObj.finished_at = new Date().toISOString()
+          callbacks.onToolEnd(toolCallObj)
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: denial })
+          continue
+        }
         if (CLIENT_TOOLS.has(tc.name)) {
           // 客户端工具：由 UI 层处理（如任务清单），并把确认结果回传给模型
           toolResult = (await callbacks.onClientTool?.(toolCallObj)) || '{"ok":true}'

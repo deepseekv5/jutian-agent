@@ -54,16 +54,8 @@ export const SWARM_TEAMS: Record<Exclude<SwarmTeam, 'auto'>, { name: string; age
   },
 }
 
-// 敏感操作：删除文件 / 高危命令在集群模式下默认拦截
-function isSensitiveTool(name: string | undefined, args: any): string | null {
-  if (name === 'delete_file') return '删除文件'
-  if (name === 'shell') {
-    const cmd = String(args?.command || '').toLowerCase()
-    if (/rm\s+-rf|del\s+\/f|rd\s+\/s|format\s+[a-z]:|shutdown|diskpart|mkfs/.test(cmd)) return '高危命令'
-  }
-  if (name === 'move_file') return null
-  return null
-}
+// 敏感操作判定已收敛到 shared/sensitiveOps（主对话的权限闸门与集群共用同一判据）
+import { checkSensitiveTool } from '../../shared/sensitiveOps'
 
 // ─── 上下文自动压缩 ───
 // 每个会话的历史摘要（内存缓存 + /api/memories 持久化，跨重启有效）
@@ -275,10 +267,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
             let args: any = {}
             try { args = JSON.parse(tc.function?.arguments || '{}') } catch {}
             // 敏感操作拦截（设置可关闭）：删除文件 / 高危命令不允许集群自主执行
-            const blocked = settings.sensitiveBlock !== false ? isSensitiveTool(tc.function?.name, args) : null
+            const blocked = settings.sensitiveBlock !== false ? checkSensitiveTool(tc.function?.name, args) : null
             let content: string
             if (blocked) {
-              content = `【安全拦截】该操作（${blocked}）在集群模式下被拦截，请改用非破坏性方案。`
+              content = `【安全拦截】该操作（${blocked.label}）在集群模式下被拦截，请改用非破坏性方案。`
             } else {
               const r = await executeTool({ name: tc.function?.name, args }, workDir || undefined)
               content = (r.success ? r.output : `错误: ${r.error}`).slice(0, 3000)
@@ -887,6 +879,30 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         } catch (e: any) {
           return JSON.stringify({ ok: false, error: String(e?.message || e) })
         }
+      },
+
+      /**
+       * 权限闸门 —— 代码层强制，不依赖模型遵守提示词。
+       *
+       * ask 档：敏感操作（删除文件/高危命令/清空文件）直接拒绝并让模型
+       * 改用非破坏性方案；普通写操作放行（用户已表达"需要确认"意图时
+       * 逐条弹窗会打断节奏，这里只拦不可逆的）。
+       * edit 档：放行写入，仍拦不可逆操作。
+       * full 档：全部放行。
+       */
+      beforeTool: (tc) => {
+        const level = sendOpts?.accessLevel || 'ask'
+        if (level === 'full') return null
+        let args: unknown = {}
+        try { args = JSON.parse(tc.arguments || '{}') } catch { /* 参数不合法交给工具自身报错 */ }
+        const hit = checkSensitiveTool(tc.name, args)
+        if (!hit) return null
+        if (level === 'edit' && hit.level !== 'high') return null
+        return JSON.stringify({
+          ok: false,
+          error: `【权限拦截】${hit.label}属于${hit.level === 'high' ? '不可逆' : '需留意'}操作，当前权限档位为「${level === 'ask' ? '需要我确认' : '可以编辑'}」。`
+            + `请改用非破坏性方案，或告知用户后由其手动执行。`,
+        })
       },
 
       onError: async (err) => {
