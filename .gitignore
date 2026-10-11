@@ -34,6 +34,12 @@ tools/
 archive/
 *.bak
 
+# 编辑器/智能体工具的工作区配置（个人环境产物，与项目无关）
+.zcodeignore
+.claude/
+.cursor/
+.aider*
+
 # 网站构建
 pages/node_modules/
 

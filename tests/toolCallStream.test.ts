@@ -1,10 +1,9 @@
 /**
  * 工具调用流式累积的回归测试
  *
- * 这段逻辑此前内联在 stream.ts 里、零测试覆盖，而它踩过的坑很隐蔽：
- * 早先实现用 `existing.id += tc.id` 无条件拼接 id，遇到中转网关重复下发
- * 同一个 id 时，会得到 `call_abc123call_abc123` —— tool result 的
- * tool_call_id 匹配不上，模型以为工具没执行过，表现为反复调同一工具。
+ * 重点防的是 id/name 被误当增量拼接：部分兼容网关会在多个 chunk 里
+ * 重复下发同一个 id，拼接后会得到 `call_abc123call_abc123` —— tool result
+ * 的 tool_call_id 匹配不上，模型以为工具没执行过，表现为反复调同一工具。
  */
 import { describe, it, expect } from 'vitest'
 import {

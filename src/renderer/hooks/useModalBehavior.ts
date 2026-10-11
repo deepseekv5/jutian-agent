@@ -1,16 +1,15 @@
 /**
  * 模态行为 —— Esc 关闭 + 焦点圈定 + 打开时聚焦
  *
- * 审计发现：4 个模态里只有 CommandPalette 有 Esc 与焦点管理，
- * SettingsModal（全应用最重的面板）、NewProjectDialog、CliInstallModal
- * 都没有——键盘用户按 Esc 无反应，Tab 会跑到模态背后的界面上。
+ * 供模态容器统一使用：键盘用户按 Esc 关闭，Tab 焦点在模态内循环，
+ * 不逃到背后的界面上；打开时自动聚焦首个可聚焦元素。
  *
  * 用法（挂在外层模态容器上）：
  *   const ref = useModalBehavior(onClose)
  *   <div ref={ref} role="dialog" aria-modal="true">…</div>
  *
- * 只在非 embedded 模式启用 Esc 关闭：设置页作为标签页内嵌时，
- * Esc 不应该把它关掉（那会与"关闭标签页"的语义冲突）。
+ * 内嵌模式（设置页作为标签页）传 disableEsc：此时 Esc 留给"关闭标签页"，
+ * 避免与标签语义冲突。
  */
 import { useEffect, useRef } from 'react'
 

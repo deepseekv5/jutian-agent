@@ -1,12 +1,11 @@
 /**
- * 工具调用的流式累积 —— 从 stream.ts 抽出以便单测
+ * 工具调用的流式累积
  *
  * 上游按 chunk 增量下发 tool_call：首块给 id 与函数名，后续块只补 arguments。
  * 不同 provider 行为有差异，这里统一收敛：
  *
  *  - **id / name 只取首次出现的值**。OpenAI 语义里 id 与 name 是整值而非增量，
- *    但不少兼容网关（中转、自建代理）会在多个 chunk 里重复下发同一个 id。
- *    早先实现用 `existing.id += tc.id` 无条件拼接，遇到重发就会得到
+ *    但部分兼容网关会在多个 chunk 里重复下发同一个 id；若按增量拼接会得到
  *    `call_abc123call_abc123`，后续 tool result 的 tool_call_id 匹配不上，
  *    模型会认为工具没执行过 —— 表现为反复调用同一工具或声称"没有结果"。
  *  - **arguments 是真增量**，必须逐块拼接（这是流式的意义所在）。

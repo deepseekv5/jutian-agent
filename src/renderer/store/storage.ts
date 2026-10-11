@@ -1,6 +1,7 @@
 // 存储层 — SQLite 后端 + localStorage 降级
 import type { Session, Message, Settings, PermissionLevel, ToolCall } from '../types'
 import { uid } from '../utils/uid'
+import { reportError } from '../app/ErrorToast'
 
 const API = ''  // 同源 API
 
@@ -36,6 +37,22 @@ async function apiPut<T>(path: string, body: unknown): Promise<T | null> {
     if (!res.ok) return null
     return await res.json()
   } catch { return null }
+}
+
+/**
+ * 写操作失败上报 —— 让"存不进去"变得可见
+ *
+ * apiPut/apiPost 失败一律返回 null，而调用方（如流式回复的
+ * updateMessageContent）普遍不检查返回值。服务端写库失败时，用户看到
+ * 回复正常显示，切走再回来却没了——数据静默丢失，且无从得知原因。
+ *
+ * 这里不改变既有返回契约（大量调用方依赖 null 判断），而是在写失败时
+ * 额外通过全局提示告知一次。同类消息 2 秒内去重由 reportError 内部处理，
+ * 因此流式期间连续失败不会刷屏。
+ */
+function reportWriteFailure(op: string, path: string): void {
+  console.warn(`[storage] 写入失败 ${op} ${path}`)
+  try { reportError(`保存失败（${op}）：改动可能未写入本地数据库`) } catch { /* 提示失败不影响主流程 */ }
 }
 
 async function apiDelete(path: string): Promise<boolean> {
@@ -313,24 +330,31 @@ export async function createMessage(msg: { session_id: string; role: string; con
   return message
 }
 
+// 消息写回：这些调用方（流式回复、思考过程、工具调用、分支归档）都依赖
+// 返回值被忽略的旧契约，因此在内部检查结果并上报失败，避免数据静默丢失
 export async function updateMessageContent(id: string, sessionId: string, content: string): Promise<void> {
-  await apiPut(`/api/messages/${id}`, { content })
+  const r = await apiPut(`/api/messages/${id}`, { content })
+  if (r === null) reportWriteFailure('回复内容', `/api/messages/${id}`)
 }
 
 export async function updateMessageThinking(id: string, sessionId: string, thinking: string): Promise<void> {
-  await apiPut(`/api/messages/${id}`, { thinking })
+  const r = await apiPut(`/api/messages/${id}`, { thinking })
+  if (r === null) reportWriteFailure('思考过程', `/api/messages/${id}`)
 }
 
 export async function updateMessageToolCalls(id: string, sessionId: string, toolCalls: ToolCall[]): Promise<void> {
-  await apiPut(`/api/messages/${id}`, { tool_calls: JSON.stringify(toolCalls) })
+  const r = await apiPut(`/api/messages/${id}`, { tool_calls: JSON.stringify(toolCalls) })
+  if (r === null) reportWriteFailure('工具调用记录', `/api/messages/${id}`)
 }
 
 export async function updateMessageSwarm(id: string, sessionId: string, swarm: unknown): Promise<void> {
-  await apiPut(`/api/messages/${id}`, { swarm: JSON.stringify(swarm) })
+  const r = await apiPut(`/api/messages/${id}`, { swarm: JSON.stringify(swarm) })
+  if (r === null) reportWriteFailure('集群进度', `/api/messages/${id}`)
 }
 
 export async function updateMessageVariants(id: string, sessionId: string, variants: string[]): Promise<void> {
-  await apiPut(`/api/messages/${id}`, { variants: JSON.stringify(variants) })
+  const r = await apiPut(`/api/messages/${id}`, { variants: JSON.stringify(variants) })
+  if (r === null) reportWriteFailure('消息分支', `/api/messages/${id}`)
 }
 
 export async function deleteMessagesAfter(sessionId: string, lastKeepId: string): Promise<void> {
