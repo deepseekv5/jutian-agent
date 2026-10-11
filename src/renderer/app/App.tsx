@@ -38,6 +38,8 @@ const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
 const HarnessPanel = lazy(() => import('./HarnessPanel'));
 const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
+const LegalPage = lazy(() => import('../legal/LegalPage'));
+import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
 function TabFallback() {
@@ -193,6 +195,13 @@ function MainApp() {
     return () => { window.removeEventListener('open-skills-market', h); window.removeEventListener('open-harness', h) }
   }, [openTab])
 
+  // v11.0.3：打开「用户协议与隐私政策」页（关于页入口派发）
+  useEffect(() => {
+    const h = () => openTab('legal')
+    window.addEventListener('open-legal', h)
+    return () => window.removeEventListener('open-legal', h)
+  }, [openTab])
+
   // v10.0：启动即拉取已安装技能清单（系统提示词据此提示模型按需 load_skill）
   useEffect(() => {
     refreshSkillManifest()
@@ -247,6 +256,8 @@ function MainApp() {
 
   // 内测欢迎页（每次启动）+ jtcode 安装邀请（欢迎页结束后、未安装且未选"不再提醒"时弹出）
   const [splashDone, setSplashDone] = useState(false);
+  // 首次启动强制同意门：同意后置 true 移除 gate（localStorage 版本化，协议更新会重新征求）
+  const [legalOk, setLegalOk] = useState(hasLegalConsent)
   const [cliPrompt, setCliPrompt] = useState(false);
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -431,6 +442,8 @@ function MainApp() {
         return <QQBotTab />;
       case 'settings':
         return <SettingsModal embedded settings={settings} onSave={s => saveSettings({ ...s })} onClose={() => closeTab(tab.id)} onOpenFreeModels={() => openTab('freemodels')} />;
+      case 'legal':
+        return <LegalPage onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:
@@ -517,6 +530,7 @@ function MainApp() {
 
       {/* 内测欢迎页（每次启动） */}
       {!splashDone && <WelcomeSplash />}
+      {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
 
       {/* jtcode CLI 安装邀请 */}
       {cliPrompt && <CliInstallModal onClose={() => setCliPrompt(false)} />}
