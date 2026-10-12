@@ -9,6 +9,7 @@ import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { parsePlanArgs, planAck, planReject, loadPlan, savePlan, clearPlan, type Plan } from '../../shared/planTool'
 import { gatePlanTool, PLAN_MODE_PROMPT, PLAN_MODE_INITIAL, planModeReducer } from '../../shared/planMode'
 import { parsePlanFromText, looksLikePlan } from '../engine/planParse'
+import { sanitizeTitle, fallbackTitle } from '../utils/titleSanitize'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
 import { runSubagents } from '../engine/subagent'
@@ -208,7 +209,10 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
           title = (ls[ls.length - 1] || '').slice(0, 20).trim()
         }
       }
-      title = title.replace(/^["'「『《]+|["'」』》。.\s]+$/g, '').split('\n')[0].slice(0, 20)
+      title = sanitizeTitle(title)
+      // 清洗后为空 = 模型给的并不是标题（客套话/元叙述/空串）。
+      // 这时宁可回退到本地截断的首句，也不要把客套话显示在 tab 和侧栏上
+      if (!title) title = fallbackTitle(userContent)
       if (title) onAiTitleRef.current?.(sid, title)
     } catch { /* 标题生成失败不影响主流程 */ }
   }, [settings.apiBaseUrl, settings.apiKey, settings.model, settings.autoTitle])

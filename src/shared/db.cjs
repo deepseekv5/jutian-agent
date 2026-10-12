@@ -179,6 +179,14 @@ function getMessages(session_id) {
   return db.prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC').all(session_id)
 }
 
+// 每会话消息数（空会话清理用）：一次取全量计数，避免逐会话 N+1 查询
+function messageCounts() {
+  const rows = db.prepare('SELECT session_id, COUNT(*) AS n FROM messages GROUP BY session_id').all()
+  const out = {}
+  for (const r of rows) out[r.session_id] = Number(r.n) || 0
+  return out
+}
+
 function deleteMessages(session_id) {
   db.prepare('DELETE FROM messages WHERE session_id = ?').run(session_id)
 }
@@ -420,7 +428,7 @@ function kbDeleteByPath(path) {
 module.exports = {
   db, genId,
   createSession, getSession, listSessions, updateSession, deleteSession,
-  addMessage, getMessages, deleteMessages, updateMessage, getLastMessage, vacuumDb,
+  addMessage, getMessages, deleteMessages, updateMessage, getLastMessage, vacuumDb, messageCounts,
   setMemory, getMemory, getAllMemories, deleteMemory,
   setSetting, getSetting, getAllSettings,
   createCodeProject, getCodeProject, listCodeProjects, deleteCodeProject,

@@ -151,6 +151,34 @@ function makeDbFallback() {
   });
 }
 var db = sharedDb || makeDbFallback();
+// 空会话清理模块（判据与选集都有测试）—— 与前端共用 src/shared/sessionCleanup.ts
+var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs"); } catch (e) { console.error("sessionCleanup.cjs load failed:", e.message); return null; } })();
+// 空会话清理：应用每次冷启动建一个默认对话，用户没打字就留下"新对话"。
+// 反复启动会让侧栏被几十条空会话淹没，且界面上与真实会话无从分辨。
+// 副作用型一次性初始化：结果不用，只在启动时跑
+var _EMPTY_CLEANUP = (() => {
+  try {
+    if (!CLEANUP_MOD || !sharedDb || typeof sharedDb.listSessions !== "function") return;
+    if (typeof sharedDb.messageCounts !== "function") return;
+    var all = sharedDb.listSessions() || [];
+    // messageCounts() 只返回"有消息"的会话，零消息的会话不在结果里。
+    // 必须按会话列表补齐缺失项为 0，否则它们会被 isEmptySession 的
+    // "缺计数不误删"规则判成非空，清理永远删不到东西。
+    var raw = sharedDb.messageCounts();
+    var counts = new Map();
+    for (var s of all) {
+      var id0 = String(s.id);
+      counts.set(id0, Number(raw[id0] || 0));
+    }
+    var empties = all.filter(function (s) { return counts.get(String(s.id)) === 0; });
+    if (!CLEANUP_MOD.shouldCleanup(empties.length)) return;
+    // 清掉全部空会话：保护集为空——此刻还没有用户打开的 tab，
+    // 且空会话本就没有内容，删掉不丢任何东西
+    var ids = CLEANUP_MOD.pickEmptySessions(all, counts, new Set(), empties.length);
+    for (var id of ids) { try { sharedDb.deleteSession(id); } catch (e) {} }
+    console.log("已清理空会话:", ids.length);
+  } catch (e) { console.error("空会话清理失败:", e.message); }
+})();
 // AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
 var PERSONA_MOD = (() => { try { return require("./src/shared/personas.cjs"); } catch (e) { console.error("personas.cjs load failed:", e.message); return null; } })();
 var PRESET_PERSONAS = PERSONA_MOD ? PERSONA_MOD.PRESET_PERSONAS : [];
