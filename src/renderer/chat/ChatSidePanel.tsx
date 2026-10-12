@@ -12,11 +12,15 @@ import { dateTimeCN } from '../utils/datetime'
 
 type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
-interface Props {
+type Props = {
   workDir: string
   mainMessages: Message[]
   settings: Settings
+  /** 受控 tab：状态在 ChatTab，边栏 Rail 的 文/端/浏/子 快捷点直接切换到对应页 */
+  tab: SideTab
+  onTabChange: (t: SideTab) => void
 }
+export type { SideTab }
 
 
 /** 导出当前会话为 Markdown（纯前端，浏览器下载） */
@@ -46,15 +50,14 @@ function exportSessionMarkdown(messages: Message[]) {
   setTimeout(() => URL.revokeObjectURL(url), 1500)
 }
 
-/** 对话侧边面板：辅助对话 / 审查 / 终端 / 浏览器 */
-export default function ChatSidePanel({ workDir, mainMessages, settings }: Props) {
+/** 对话侧边面板：辅助对话 / 审查 / 文件 / 终端 / 浏览器 / 子Agent */
+export default function ChatSidePanel({ workDir, mainMessages, settings, tab, onTabChange }: Props) {
   const { c } = useTheme()
-  const [tab, setTab] = useState<SideTab>('assistant')
 
   return (
     <div className="h-full flex flex-col min-h-0 border-l glass" style={{ borderColor: c.borderLight }}>
-      {/* 面板标签 */}
-      <div className="h-9 flex items-center gap-0.5 px-2 border-b shrink-0" style={{ borderColor: c.borderLight }}>
+      {/* 面板标签（8 个 tab 在 340px 内放不下 → 横向滚动，不换行） */}
+      <div className="h-9 flex items-center gap-0.5 px-2 border-b shrink-0 overflow-x-auto whitespace-nowrap scrollbar-thin" style={{ borderColor: c.borderLight }}>
         <button
           onClick={() => exportSessionMarkdown(mainMessages)}
           title="导出当前对话为 Markdown"
@@ -75,7 +78,7 @@ export default function ChatSidePanel({ workDir, mainMessages, settings }: Props
           ['git', 'Git'],
           ['stats', '统计'],
         ] as [SideTab, string][]).map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)}
+          <button key={id} onClick={() => onTabChange(id)}
             className="px-2 py-1 rounded-lg text-[11px] font-medium transition-colors"
             style={{ background: tab === id ? `${c.accent}12` : 'transparent', color: tab === id ? c.accent : c.textTertiary }}>
             {label}

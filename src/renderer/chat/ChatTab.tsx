@@ -3,7 +3,7 @@ import { useChat } from '../hooks/useChat'
 import { useTheme } from '../hooks/useTheme'
 import ChatView from './ChatView'
 import MessageInput from './MessageInput'
-import ChatSidePanel from './ChatSidePanel'
+import ChatSidePanel, { type SideTab } from './ChatSidePanel'
 import WelcomeHero from './WelcomeHero'
 import GitPanel from './GitPanel'
 import GoalCard from './GoalCard'
@@ -13,6 +13,10 @@ import { dateTimeCN, hhmmss } from '../utils/datetime'
 
 const WD_KEY = 'lyclaw_session_workdirs'
 const CP_KEY = 'lyclaw_last_checkpoint'
+/** 收起态 Rail 的快捷点（对齐参考布局：文件 / 终端 / 浏览器 / 子Agent） */
+const PANEL_TABS: SideTab[] = ['files', 'terminal', 'browser', 'subagent']
+/** panelTab 的合法取值（localStorage 回读时校验，防止旧值/脏值渲染成空白面板） */
+const ALL_SIDE_TABS: SideTab[] = [...PANEL_TABS, 'assistant', 'review', 'git', 'stats']
 
 function loadSessionWorkDirs(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(WD_KEY) || '{}') } catch { return {} }
@@ -42,8 +46,28 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
 }) {
   const { c } = useTheme()
   const [ownWorkDir, setOwnWorkDir] = useState<string>(() => loadSessionWorkDirs()[sessionId] || '')
-  const [showPanel, setShowPanel] = useState(false)
-  const [panelTab, setPanelTab] = useState<'assistant' | 'review' | 'terminal' | 'browser'>('assistant')
+  // 右栏（文件/终端/浏览器/子Agent）：宽屏默认展开成三栏——参考布局的常态；
+  // 用户手动开合后以选择为准，跨会话保持
+  const [showPanel, setShowPanel] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lyclaw_side_panel')
+      if (saved !== null) return saved === '1'
+    } catch { /* ignore */ }
+    return typeof window !== 'undefined' ? window.innerWidth >= 1200 : false
+  })
+  useEffect(() => { try { localStorage.setItem('lyclaw_side_panel', showPanel ? '1' : '0') } catch { /* ignore */ } }, [showPanel])
+  const [panelTab, setPanelTab] = useState<SideTab>(() => {
+    try {
+      const raw = localStorage.getItem('lyclaw_side_panel_tab') as SideTab | null
+      if (raw && ALL_SIDE_TABS.includes(raw)) return raw
+    } catch { /* ignore */ }
+    return 'files'
+  })
+  const changePanelTab = useCallback((t: SideTab) => {
+    setPanelTab(t)
+    setShowPanel(true)
+    try { localStorage.setItem('lyclaw_side_panel_tab', t) } catch { /* ignore */ }
+  }, [])
 
   const chatSettings = useMemo<Settings>(
     () => ({ ...settings, workDir: ownWorkDir || settings.workDir || '' }),
@@ -444,17 +468,17 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
           onClick={() => setShowPanel(v => !v)}
           className="group/panel w-6 shrink-0 flex flex-col items-center justify-center gap-2 border-l transition-colors"
           style={{ borderColor: c.borderLight, background: showPanel ? `${c.accent}10` : 'transparent' }}
-          title={showPanel ? '收起面板' : '打开辅助面板（对话/审查/终端/浏览器）'}>
+          title={showPanel ? '收起面板' : '打开右侧面板（文件 / 终端 / 浏览器 / 子Agent）'}>
           <svg className="w-3.5 h-3.5 opacity-25 group-hover/panel:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
             style={{ color: showPanel ? c.accent : c.textMuted, transform: showPanel ? 'rotate(180deg)' : 'none', transition: 'transform .2s, opacity .15s' }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l-3 3 3 3m8 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
           </svg>
           {!showPanel && (
             <div className="flex flex-col items-center gap-2 opacity-0 group-hover/panel:opacity-100 transition-opacity">
-              <MiniDot label="辅" active={panelTab === 'assistant'} onClick={(e) => { e.stopPropagation(); setShowPanel(true); setPanelTab('assistant') }} />
-              <MiniDot label="审" active={panelTab === 'review'} onClick={(e) => { e.stopPropagation(); setShowPanel(true); setPanelTab('review') }} />
-              <MiniDot label="端" active={panelTab === 'terminal'} onClick={(e) => { e.stopPropagation(); setShowPanel(true); setPanelTab('terminal') }} />
-              <MiniDot label="浏" active={panelTab === 'browser'} onClick={(e) => { e.stopPropagation(); setShowPanel(true); setPanelTab('browser') }} />
+              <MiniDot label="文" active={panelTab === 'files'} onClick={(e) => { e.stopPropagation(); changePanelTab('files') }} />
+              <MiniDot label="端" active={panelTab === 'terminal'} onClick={(e) => { e.stopPropagation(); changePanelTab('terminal') }} />
+              <MiniDot label="浏" active={panelTab === 'browser'} onClick={(e) => { e.stopPropagation(); changePanelTab('browser') }} />
+              <MiniDot label="子" active={panelTab === 'subagent'} onClick={(e) => { e.stopPropagation(); changePanelTab('subagent') }} />
             </div>
           )}
         </button>
@@ -462,7 +486,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         {/* Side panel */}
         {showPanel && (
           <div className="w-[340px] shrink-0 min-h-0">
-            <ChatSidePanel workDir={effectiveWorkDir} mainMessages={messages} settings={chatSettings} />
+            <ChatSidePanel workDir={effectiveWorkDir} mainMessages={messages} settings={chatSettings}
+              tab={panelTab} onTabChange={changePanelTab} />
           </div>
         )}
 
