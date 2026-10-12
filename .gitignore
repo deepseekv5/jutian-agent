@@ -49,6 +49,7 @@ serve.cjs
 
 # 构建产物：由 build:server 从同名 .ts 生成
 src/shared/personas.cjs
+src/shared/sessionCleanup.cjs
 
 # lint/cache 临时文件
 .eslintcache
