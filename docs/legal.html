@@ -2,29 +2,214 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>用户协议与隐私政策 — 巨天agent</title>
-<meta name="description" content="巨天agent 用户协议与隐私政策(应用级,覆盖全部功能)。本地优先,数据不出本机。">
+<meta name="description" content="巨天agent 用户协议与隐私政策（应用级，覆盖全部功能）。本地优先，数据不出本机。">
+<meta name="theme-color" content="#0a0a0b">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 <link rel="stylesheet" href="assets/css/tokens.css">
 <link rel="stylesheet" href="assets/css/base.css">
 <link rel="stylesheet" href="assets/css/layout.css">
 <link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/motion.css">
 <link rel="stylesheet" href="assets/css/pages.css">
-<style>body{padding:0}.legal{max-width:760px;margin:0 auto;padding:48px 24px 96px}.legal h1{font-size:2rem;margin-bottom:8px}.legal h2{font-size:1.4rem;margin:56px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--c-line)}.legal h3{font-size:1.02rem;margin:24px 0 8px}.legal p{color:var(--c-ink-2);line-height:1.75}.legal ul{padding-left:1.2em}.legal li{color:var(--c-ink-2);line-height:1.75;margin:6px 0}.legal .intro{background:var(--c-surface);border:1px solid var(--c-line);border-radius:12px;padding:16px 18px;margin:20px 0}.legal .meta{color:var(--c-ink-3);font-family:var(--font-mono);font-size:.8rem}</style>
+<style>
+/* legal.html —— 由 scripts/gen-legal-site.mjs 从 src/shared/legal.ts 生成，勿手改 */
+.legal-wrap{max-width:820px;margin:0 auto;padding-block:clamp(48px,8vw,96px)}
+.legal-head{margin-bottom:var(--sp-8)}
+.legal-head h1{font-size:var(--fs-h2);line-height:var(--lh-snug);font-weight:var(--w-semibold);letter-spacing:var(--track-tight)}
+.legal-meta{color:var(--c-ink-3);font-family:var(--font-mono);font-size:var(--fs-xs);margin-top:var(--sp-4);line-height:1.7}
+.legal-toc{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-6);padding-top:var(--sp-6);border-top:1px solid var(--c-line)}
+.legal-toc a{font-size:var(--fs-sm);color:var(--c-ink-2);border:1px solid var(--c-line);border-radius:999px;padding:6px 16px;transition:.2s}
+.legal-toc a:hover{color:var(--c-ink);border-color:var(--c-line-strong)}
+.legal-doc{padding-top:var(--sp-12);scroll-margin-top:96px}
+.legal-doc+.legal-doc{margin-top:var(--sp-8);border-top:1px solid var(--c-line)}
+.legal-doc__title{font-size:var(--fs-h3);font-weight:var(--w-semibold);margin-bottom:var(--sp-4)}
+.legal-doc__intro{color:var(--c-ink-2);line-height:var(--lh-body);background:var(--c-bg-sunken);border-radius:var(--radius-md);padding:var(--sp-5) var(--sp-6);margin-bottom:var(--sp-8);font-size:var(--fs-sm)}
+.legal-doc h3{font-size:1.05rem;font-weight:var(--w-semibold);margin:var(--sp-8) 0 var(--sp-3)}
+.legal-doc ul{padding-left:1.15em;margin:0}
+.legal-doc li{color:var(--c-ink-2);line-height:var(--lh-body);margin:var(--sp-3) 0;font-size:var(--fs-body)}
+.legal-doc li::marker{color:var(--c-accent)}
+@media (prefers-reduced-motion:no-preference){.legal-doc{opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease-out-expo),transform .7s var(--ease-out-expo)}.legal-doc.in{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.legal-doc{opacity:1;transform:none}}</style>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主内容</a>
-<header class="nav"><div class="nav__inner"><a class="brand" href="index.html"><span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></span>巨天agent</a><nav class="nav__links" aria-label="主导航"><a class="nav__link" href="index.html">首页</a><a class="nav__link" href="highlights.html">亮点</a><a class="nav__link" href="features.html">特性</a><a class="nav__link" href="about.html">关于</a></nav></div></header>
-<main id="main" class="legal">
-<h1>用户协议与隐私政策</h1>
-<p class="meta">适用于巨天agent 全部功能 · 版本 2026-10-11 · 与软件内「设置 → 关于 → 用户协议与隐私政策」为同一文本</p>
-<div class="intro">欢迎使用巨天agent。请在使用前阅读并理解本协议。安装、使用本软件即表示你已阅读并同意本协议的全部内容。本软件为本地部署的开源软件（MIT 许可证），主要在用户自己的计算机上运行。</div>
-<h2>用户协议</h2>
-<h3>一、服务性质与运行方式</h3><ul><li>本软件是一个桌面端人工智能工作台，提供对话、编码辅助、AI 角色、知识库、定时任务等功能。</li><li>人工智能输出内容由你自行配置的模型服务生成（自备 API 密钥，或使用第三方免费网关）。巨天agent 作为客户端软件转发你的请求并展示结果，不控制模型服务的具体输出。</li><li>本软件在本地计算机上运行与存储。将软件用于向第三方提供服务的，由使用方自行承担服务提供者义务。</li></ul><h3>二、AI 生成内容与标识</h3><ul><li>本软件对 AI 生成内容添加显式标识（如「AI 生成」角标、导出文件内嵌标识声明）。依据《人工智能生成合成内容标识办法》及《互联网信息服务深度合成管理规定》，你不得删除、篡改或隐匿上述标识。</li><li>AI 生成内容可能存在错误、虚构或偏差，不构成任何专业建议。重要决策请自行核实或咨询专业人士。</li><li>AI 角色等拟人化互动功能为虚构人设：角色不对应任何真实个人，不得用于冒充他人。你正在与 AI 而非真人互动的提示将全程展示。</li></ul><h3>三、用户行为规范</h3><ul><li>不得利用本软件生成、传播法律法规禁止的内容，包括但不限于：危害国家安全、暴力恐怖、淫秽色情、侵犯他人名誉权/肖像权/隐私权/知识产权的内容。</li><li>不得利用 AI 角色功能对未成年人提供虚拟亲属、虚拟伴侣等虚拟亲密关系服务，不得诱导未成年人沉迷。</li><li>不得利用本软件实施诈骗、骚扰、虚假信息传播或其他违法违规活动。</li><li>使用第三方模型服务时，还应遵守该服务商的服务条款。</li></ul><h3>四、未成年人保护</h3><ul><li>不满十四周岁的未成年人使用本软件涉及个人信息处理的，应当取得其父母或其他监护人的同意。</li><li>本软件不向未成年人提供虚拟亲属、虚拟伴侣等虚拟亲密关系服务。</li><li>监护人应当引导未成年人合理使用人工智能工具，防范过度依赖。</li></ul><h3>五、知识产权</h3><ul><li>本软件依据 MIT 许可证开源发布。软件本身的著作权与许可条款见仓库 LICENSE 文件。</li><li>你输入的内容的权利归属由你与相关权利人依法确定。AI 生成内容的使用与商用权利，还受你所用模型服务商条款约束，请自行查阅。</li><li>「巨天agent」名称与标识归巨天工作室所有。</li></ul><h3>六、责任限制</h3><ul><li>本软件按「现状」提供。在法律允许的最大范围内，开发者对因使用或无法使用本软件造成的间接损失不承担责任。</li><li>本条不限制依法不得免除或限制的责任，也不免除本软件依法应承担的内容管理、标识、个人信息保护等法定义务。</li><li>因违反本协议使用本软件（包括用于违法违规用途）造成的后果，由使用者自行承担。</li></ul><h3>七、自动更新与镜像通道</h3><ul><li>本软件默认启用自动更新：启动后与使用过程中会自动检查新版本，发现后自动下载并完成校验与替换。更新过程不会自动重启，完成后将提示你「重启即用」，重启后生效。</li><li>更新检查与下载默认访问 GitHub（api.github.com 与 release 资产地址）。当网络无法连通 GitHub 时，会自动依次切换第三方镜像站完成同样操作；镜像站由公开社区运营，可能收到你的 IP 地址、请求时间与下载内容，其隐私与可用性由相应运营方负责。</li><li>你可以在设置中手动检查更新；卸载或删除本软件不影响已完成更新的运行。</li></ul><h3>八、协议的变更与终止</h3><ul><li>本协议可能随软件版本更新而修订，重大变更将通过应用内公告提示。</li><li>你可以随时停止使用并卸载本软件；卸载前可使用应用内的数据导出与删除功能处理你的数据。</li><li>本协议适用中华人民共和国法律。</li></ul>
-<h2>隐私政策</h2>
-<div class="intro">巨天agent 以本地优先为设计原则。本政策说明本软件处理哪些信息、如何处理、存放在哪里，以及你对自己的信息有哪些控制权。个人信息处理者为你自己（数据全部存储于你的计算机），开发者无法访问你的数据。</div>
-<h3>一、我们处理的信息（全部存于本机 ~/.lyclaw 目录）</h3><ul><li>对话记录：你发送的消息与 AI 的回复，含工具调用记录。</li><li>长期记忆：主对话记忆与你为 AI 角色创建的记忆条目（自定义键值）。</li><li>角色数据：你创建/编辑的 AI 角色设定、会话记录。</li><li>配置信息：API 地址与密钥、模型选择、界面偏好、工作目录。</li><li>知识库：你主动导入的文档与索引。</li><li>统计数据：本机的调用次数与 token 估算（不包含消息内容）。</li></ul><h3>二、信息的使用与不对外提供</h3><ul><li>上述信息仅存储在你的计算机上，用于向你提供软件功能。开发者不收集、不上传、无法访问这些数据。</li><li>你的聊天内容不会用于训练任何模型。</li><li>当你使用在线模型服务时，实现当前对话功能所必需的内容（对话文本、附件）会发送给你所配置的模型服务商，并受其隐私政策约束——请在配置前阅读服务商的条款。</li><li>使用免 key 免费网关（如 Kilo、Pollinations）时，对话内容同样会经过该第三方网关，请知悉。</li></ul><h3>三、自动更新产生的网络通信</h3><ul><li>自动更新时，软件会访问 GitHub 获取版本信息（可能包含：IP 地址、软件版本号、系统平台）。更新包内容为程序代码，不含你的个人数据。</li><li>当 GitHub 不可达时，将依次尝试第三方镜像站；该过程同样会发生上述网络通信。</li><li>你可以选择不更新继续使用旧版本，但可能无法获得安全修复与新功能。</li></ul><h3>四、敏感场景提示</h3><ul><li>对话中主动提供的健康、财务、身份等信息属于敏感个人信息，是否提供由你决定。建议避免在对话中输入不必要的敏感信息。</li><li>AI 角色的长期记忆是你明示创建或确认的，可随时查看与删除。</li></ul><h3>五、你的权利（查阅 / 复制 / 更正 / 删除）</h3><ul><li>查阅与复制：记忆页（含角色记忆分区）可查看全部记忆；对话记录、知识库在对应页面均可导出。</li><li>更正与删除：任何一条记忆、一个角色的会话与记忆、整段对话均可一键删除，删除后不可恢复。</li><li>一键清除：卸载前删除 ~/.lyclaw 目录即可完全清除本软件产生的全部数据。</li><li>撤回同意：关闭相关功能（如角色记忆、自动朗读）即停止对应处理。</li></ul><h3>六、安全措施</h3><ul><li>数据仅写入本机用户目录；远程访问（WebUI）默认关闭，开启后仅限局域网并使用配对令牌。</li><li>API 密钥存储于本机，界面回显为掩码，不会随对话内容发送给第三方。</li><li>本软件为开源软件，数据读写逻辑可公开审计。</li></ul><h3>七、未成年人信息</h3><ul><li>不满十四周岁未成年人的个人信息属于敏感个人信息。监护人为未成年人配置使用前，请知悉本政策全部内容。</li><li>本软件不主动收集年龄信息；未成年人模式下将限制相关功能。</li></ul><h3>八、政策更新</h3><ul><li>本政策随软件功能更新而修订（如新增需要说明的数据处理场景），版本与更新日期将在文档顶部标注。</li><li>重大变更将通过应用内公告提示。</li></ul>
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="巨天agent 首页"><span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></span>巨天agent</a>
+    <nav class="nav__links" aria-label="主导航">
+      <a class="nav__link" href="index.html">首页</a>
+      <a class="nav__link" href="highlights.html">亮点</a>
+      <a class="nav__link" href="features.html">特性</a>
+      <a class="nav__link" href="scenarios.html">场景</a>
+      <a class="nav__link" href="about.html">关于</a>
+    </nav>
+    <div class="nav__actions">
+      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
+      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+  <span class="nav__progress" aria-hidden="true"></span>
+</header>
+<main id="main">
+  <div class="container">
+    <div class="legal-wrap">
+      <div class="legal-head">
+        <h1>用户协议与隐私政策</h1>
+        <p class="legal-meta">适用于巨天agent 全部功能 · 版本 2026-10-11<br>本页与软件内「设置 → 关于 → 用户协议与隐私政策」为同一文本，由同一数据源生成。</p>
+        <nav class="legal-toc" aria-label="文档导航">
+          <a href="#agreement">用户协议</a>
+          <a href="#privacy">隐私政策</a>
+        </nav>
+      </div>
+    <section class="legal-doc" id="agreement">
+      <h2 class="legal-doc__title">用户协议</h2>
+      <p class="legal-doc__intro">欢迎使用巨天agent。请在使用前阅读并理解本协议。安装、使用本软件即表示你已阅读并同意本协议的全部内容。本软件为本地部署的开源软件（MIT 许可证），主要在用户自己的计算机上运行。</p>
+      <h3>一、服务性质与运行方式</h3>
+      <ul>
+        <li>本软件是一个桌面端人工智能工作台，提供对话、编码辅助、AI 角色、知识库、定时任务等功能。</li>
+        <li>人工智能输出内容由你自行配置的模型服务生成（自备 API 密钥，或使用第三方免费网关）。巨天agent 作为客户端软件转发你的请求并展示结果，不控制模型服务的具体输出。</li>
+        <li>本软件在本地计算机上运行与存储。将软件用于向第三方提供服务的，由使用方自行承担服务提供者义务。</li>
+      </ul>
+      <h3>二、AI 生成内容与标识</h3>
+      <ul>
+        <li>本软件对 AI 生成内容添加显式标识（如「AI 生成」角标、导出文件内嵌标识声明）。依据《人工智能生成合成内容标识办法》及《互联网信息服务深度合成管理规定》，你不得删除、篡改或隐匿上述标识。</li>
+        <li>AI 生成内容可能存在错误、虚构或偏差，不构成任何专业建议。重要决策请自行核实或咨询专业人士。</li>
+        <li>AI 角色等拟人化互动功能为虚构人设：角色不对应任何真实个人，不得用于冒充他人。你正在与 AI 而非真人互动的提示将全程展示。</li>
+      </ul>
+      <h3>三、用户行为规范</h3>
+      <ul>
+        <li>不得利用本软件生成、传播法律法规禁止的内容，包括但不限于：危害国家安全、暴力恐怖、淫秽色情、侵犯他人名誉权/肖像权/隐私权/知识产权的内容。</li>
+        <li>不得利用 AI 角色功能对未成年人提供虚拟亲属、虚拟伴侣等虚拟亲密关系服务，不得诱导未成年人沉迷。</li>
+        <li>不得利用本软件实施诈骗、骚扰、虚假信息传播或其他违法违规活动。</li>
+        <li>使用第三方模型服务时，还应遵守该服务商的服务条款。</li>
+      </ul>
+      <h3>四、未成年人保护</h3>
+      <ul>
+        <li>不满十四周岁的未成年人使用本软件涉及个人信息处理的，应当取得其父母或其他监护人的同意。</li>
+        <li>本软件不向未成年人提供虚拟亲属、虚拟伴侣等虚拟亲密关系服务。</li>
+        <li>监护人应当引导未成年人合理使用人工智能工具，防范过度依赖。</li>
+      </ul>
+      <h3>五、知识产权</h3>
+      <ul>
+        <li>本软件依据 MIT 许可证开源发布。软件本身的著作权与许可条款见仓库 LICENSE 文件。</li>
+        <li>你输入的内容的权利归属由你与相关权利人依法确定。AI 生成内容的使用与商用权利，还受你所用模型服务商条款约束，请自行查阅。</li>
+        <li>「巨天agent」名称与标识归巨天工作室所有。</li>
+      </ul>
+      <h3>六、责任限制</h3>
+      <ul>
+        <li>本软件按「现状」提供。在法律允许的最大范围内，开发者对因使用或无法使用本软件造成的间接损失不承担责任。</li>
+        <li>本条不限制依法不得免除或限制的责任，也不免除本软件依法应承担的内容管理、标识、个人信息保护等法定义务。</li>
+        <li>因违反本协议使用本软件（包括用于违法违规用途）造成的后果，由使用者自行承担。</li>
+      </ul>
+      <h3>七、自动更新与镜像通道</h3>
+      <ul>
+        <li>本软件默认启用自动更新：启动后与使用过程中会自动检查新版本，发现后自动下载并完成校验与替换。更新过程不会自动重启，完成后将提示你「重启即用」，重启后生效。</li>
+        <li>更新检查与下载默认访问 GitHub（api.github.com 与 release 资产地址）。当网络无法连通 GitHub 时，会自动依次切换第三方镜像站完成同样操作；镜像站由公开社区运营，可能收到你的 IP 地址、请求时间与下载内容，其隐私与可用性由相应运营方负责。</li>
+        <li>你可以在设置中手动检查更新；卸载或删除本软件不影响已完成更新的运行。</li>
+      </ul>
+      <h3>八、协议的变更与终止</h3>
+      <ul>
+        <li>本协议可能随软件版本更新而修订，重大变更将通过应用内公告提示。</li>
+        <li>你可以随时停止使用并卸载本软件；卸载前可使用应用内的数据导出与删除功能处理你的数据。</li>
+        <li>本协议适用中华人民共和国法律。</li>
+      </ul>
+    </section>
+    <section class="legal-doc" id="privacy">
+      <h2 class="legal-doc__title">隐私政策</h2>
+      <p class="legal-doc__intro">巨天agent 以本地优先为设计原则。本政策说明本软件处理哪些信息、如何处理、存放在哪里，以及你对自己的信息有哪些控制权。个人信息处理者为你自己（数据全部存储于你的计算机），开发者无法访问你的数据。</p>
+      <h3>一、我们处理的信息（全部存于本机 ~/.lyclaw 目录）</h3>
+      <ul>
+        <li>对话记录：你发送的消息与 AI 的回复，含工具调用记录。</li>
+        <li>长期记忆：主对话记忆与你为 AI 角色创建的记忆条目（自定义键值）。</li>
+        <li>角色数据：你创建/编辑的 AI 角色设定、会话记录。</li>
+        <li>配置信息：API 地址与密钥、模型选择、界面偏好、工作目录。</li>
+        <li>知识库：你主动导入的文档与索引。</li>
+        <li>统计数据：本机的调用次数与 token 估算（不包含消息内容）。</li>
+      </ul>
+      <h3>二、信息的使用与不对外提供</h3>
+      <ul>
+        <li>上述信息仅存储在你的计算机上，用于向你提供软件功能。开发者不收集、不上传、无法访问这些数据。</li>
+        <li>你的聊天内容不会用于训练任何模型。</li>
+        <li>当你使用在线模型服务时，实现当前对话功能所必需的内容（对话文本、附件）会发送给你所配置的模型服务商，并受其隐私政策约束——请在配置前阅读服务商的条款。</li>
+        <li>使用免 key 免费网关（如 Kilo、Pollinations）时，对话内容同样会经过该第三方网关，请知悉。</li>
+      </ul>
+      <h3>三、自动更新产生的网络通信</h3>
+      <ul>
+        <li>自动更新时，软件会访问 GitHub 获取版本信息（可能包含：IP 地址、软件版本号、系统平台）。更新包内容为程序代码，不含你的个人数据。</li>
+        <li>当 GitHub 不可达时，将依次尝试第三方镜像站；该过程同样会发生上述网络通信。</li>
+        <li>你可以选择不更新继续使用旧版本，但可能无法获得安全修复与新功能。</li>
+      </ul>
+      <h3>四、敏感场景提示</h3>
+      <ul>
+        <li>对话中主动提供的健康、财务、身份等信息属于敏感个人信息，是否提供由你决定。建议避免在对话中输入不必要的敏感信息。</li>
+        <li>AI 角色的长期记忆是你明示创建或确认的，可随时查看与删除。</li>
+      </ul>
+      <h3>五、你的权利（查阅 / 复制 / 更正 / 删除）</h3>
+      <ul>
+        <li>查阅与复制：记忆页（含角色记忆分区）可查看全部记忆；对话记录、知识库在对应页面均可导出。</li>
+        <li>更正与删除：任何一条记忆、一个角色的会话与记忆、整段对话均可一键删除，删除后不可恢复。</li>
+        <li>一键清除：卸载前删除 ~/.lyclaw 目录即可完全清除本软件产生的全部数据。</li>
+        <li>撤回同意：关闭相关功能（如角色记忆、自动朗读）即停止对应处理。</li>
+      </ul>
+      <h3>六、安全措施</h3>
+      <ul>
+        <li>数据仅写入本机用户目录；远程访问（WebUI）默认关闭，开启后仅限局域网并使用配对令牌。</li>
+        <li>API 密钥存储于本机，界面回显为掩码，不会随对话内容发送给第三方。</li>
+        <li>本软件为开源软件，数据读写逻辑可公开审计。</li>
+      </ul>
+      <h3>七、未成年人信息</h3>
+      <ul>
+        <li>不满十四周岁未成年人的个人信息属于敏感个人信息。监护人为未成年人配置使用前，请知悉本政策全部内容。</li>
+        <li>本软件不主动收集年龄信息；未成年人模式下将限制相关功能。</li>
+      </ul>
+      <h3>八、政策更新</h3>
+      <ul>
+        <li>本政策随软件功能更新而修订（如新增需要说明的数据处理场景），版本与更新日期将在文档顶部标注。</li>
+        <li>重大变更将通过应用内公告提示。</li>
+      </ul>
+    </section>
+    </div>
+  </div>
 </main>
+<footer class="footer dark">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <a class="brand" href="index.html" style="color:var(--c-on-dark)"><span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></span>巨天agent</a>
+        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
+      </div>
+      <div class="footer__col"><h4>产品</h4><ul>
+        <li><a href="highlights.html">核心亮点</a></li>
+        <li><a href="features.html">特性与参数</a></li>
+        <li><a href="scenarios.html">使用场景</a></li>
+        <li><a href="index.html#download">下载</a></li>
+      </ul></div>
+      <div class="footer__col"><h4>资源</h4><ul>
+        <li><a href="features.html#specs">系统要求</a></li>
+        <li><a href="about.html">关于我们</a></li>
+        <li><a href="legal.html">用户协议与隐私政策</a></li>
+      </ul></div>
+      <div class="footer__col"><h4>工作室</h4><ul>
+        <li><a href="about.html">巨天工作室</a></li>
+        <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
+        <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
+      </ul></div>
+    </div>
+    <div class="footer__bottom">
+      <span>© 2026 巨天工作室 (Jutian Studio)</span>
+      <span>本地优先 · 数据归你</span>
+    </div>
+  </div>
+</footer>
+<div class="transition-veil" aria-hidden="true"></div>
+<script src="assets/js/scroll.js" defer></script>
+<script src="assets/js/interactions.js" defer></script>
+<script src="assets/js/app.js" defer></script>
 </body>
 </html>

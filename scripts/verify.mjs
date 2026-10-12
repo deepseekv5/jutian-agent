@@ -181,5 +181,23 @@ try {
   else bad('免费回落丢失 — 未配置模型将无法对话')
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+// ─── 6. 官网协议页与 legal.ts 同源 ───
+// docs/legal.html 由 scripts/gen-legal-site.mjs 从 src/shared/legal.ts 生成。
+// 改了协议却忘了重跑生成器，官网就会与软件内文本不一致（协议页声称"同一文本"）。
+// 这里比对版本号，漂移即拦下。
+section('官网协议页同源(docs/legal.html)')
+try {
+  const legalSrc = fs.readFileSync(path.join(ROOT, 'src/shared/legal.ts'), 'utf-8')
+  const ver = (legalSrc.match(/LEGAL_VERSION\s*=\s*['"]([^'"]+)['"]/) || [])[1]
+  if (!ver) bad('legal.ts 未找到 LEGAL_VERSION')
+  else {
+    const site = fs.readFileSync(path.join(ROOT, 'docs/legal.html'), 'utf-8')
+    if (site.includes(ver)) ok(`docs/legal.html 版本一致(${ver})`)
+    else bad(`docs/legal.html 版本与 legal.ts(${ver}) 不一致 — 请运行 node scripts/gen-legal-site.mjs`)
+    if (/href="legal\.html"[^>]*>用户协议/.test(site)) ok('协议页自含入口链接')
+    else bad('legal.html 页脚缺少协议入口链接')
+  }
+} catch (e) { bad(`读取失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)
