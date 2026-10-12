@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
 import TerminalPanel from '../code/TerminalPanel'
+import FileViewer from '../code/FileViewer'
 import GitPanel from './GitPanel'
 import SubAgentTracker from '../app/SubAgentTracker'
 import type { Message, Settings } from '../types'
@@ -258,9 +259,7 @@ function FilesPane({ workDir }: { workDir: string }) {
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <pre className="flex-1 overflow-auto scrollbar-thin px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: c.textSecondary, fontFamily: 'var(--font-mono)' }}>
-              {preview.content}
-            </pre>
+            <FileViewer name={preview.name} content={preview.content} />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center px-4 text-center text-[11px] leading-relaxed" style={{ color: c.textMuted }}>
