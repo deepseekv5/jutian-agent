@@ -10,6 +10,7 @@ import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
 import { MODE_ACCENT } from '../../shared/chatModes'
 import { hhmmss } from '../utils/datetime'
+import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -347,6 +348,26 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     setAttachedFiles(prev => { const existing = new Set(prev.map(x => x.name)); return [...prev, ...Array.from(files).map(f => ({ path: '', name: f.name, size: f.size, file: f })).filter(x => !existing.has(x.name))] })
     e.target.value = ''
   }, [])
+
+  // ─── 拖拽入图：整个 composer 是拖放区 ───
+  const [dragOver, setDragOver] = useState(false)
+  const [dragNotice, setDragNotice] = useState('')
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const dropped = Array.from(e.dataTransfer?.files || [])
+    if (!dropped.length) return
+    const existing = attachedFiles.map(f => f.name)
+    const result = pickDroppedFiles(dropped, existing)
+    if (result.accepted.length) {
+      setAttachedFiles(prev => [...prev, ...result.accepted.map(f => ({ path: '', name: f.name, size: f.size, file: f }))])
+    }
+    const hint = dragHint(result)
+    if (hint) {
+      setDragNotice(hint)
+      setTimeout(() => setDragNotice(''), 2600)
+    }
+  }, [attachedFiles])
 
   // 技能列表
   const loadSkills = useCallback(() => {
@@ -1083,15 +1104,33 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
           </div>
         )}
 
-        {/* Composer —— ChatGPT 布局：文本域在上，操作行在下；毛玻璃透出动态壁纸 */}
-        <div className="rounded-[26px] border transition-shadow"
+        {/* Composer —— ChatGPT 布局：文本域在上，操作行在下；毛玻璃透出动态壁纸。
+            整个容器是拖放区：拖文件进来即成附件，比点附件按钮更顺手 */}
+        <div
+          onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragOver(true) }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false) }}
+          onDrop={handleDrop}
+          className="rounded-[26px] border transition-shadow relative"
           style={{
             background: glass,
             backdropFilter: 'blur(20px) saturate(1.15)',
             WebkitBackdropFilter: 'blur(20px) saturate(1.15)',
-            borderColor: focused ? c.accent : c.border,
-            boxShadow: focused ? '0 2px 14px rgba(0,0,0,0.08)' : '0 1px 8px rgba(0,0,0,0.05)',
+            borderColor: dragOver ? c.accent : focused ? c.accent : c.border,
+            boxShadow: dragOver
+              ? `0 0 0 3px ${c.accent}22`
+              : focused ? '0 2px 14px rgba(0,0,0,0.08)' : '0 1px 8px rgba(0,0,0,0.05)',
           }}>
+          {/* 拖放中遮罩：明确告知"松手即成附件"，以及哪些会被挡掉 */}
+          {dragOver && (
+            <div className="absolute inset-0 z-30 rounded-[26px] flex flex-col items-center justify-center gap-1.5 pointer-events-none"
+              style={{ background: `${c.accent}0f`, backdropFilter: 'blur(2px)' }}>
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6} style={{ color: c.accent }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              <span className="text-[12.5px] font-medium" style={{ color: c.accent }}>松手即加入附件</span>
+              <span className="text-[10.5px]" style={{ color: c.textTertiary }}>支持代码 / 文本 / 图片 / PDF · 单个最大 20MB</span>
+            </div>
+          )}
 
           {/* 已附加文件 */}
           {attachedFiles.length > 0 && (
@@ -1103,6 +1142,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                   <button onClick={() => setAttachedFiles(prev => prev.filter(f => f.path !== file.path))} className="hover:opacity-70" style={{ color: c.textTertiary }}>&times;</button>
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* 拖放结果提示：被挡下的文件要说清原因，否则用户以为拖放坏了 */}
+          {dragNotice && (
+            <div className="px-4 pt-2">
+              <span className="text-[11px]" style={{ color: c.textTertiary }}>{dragNotice}</span>
             </div>
           )}
 
