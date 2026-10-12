@@ -80,7 +80,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (dirs?.length) setSessionWorkDir(dirs[0])
   }, [setSessionWorkDir])
 
-  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal, plan, clearPlan } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
+  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal, plan, clearPlan, planMode, setPlanMode: enterPlanMode, approvePlan, exitPlanMode, pendingPlanResume } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
   // 同理给消息操作用 ref 包一层：下面传给 ChatView 的回调因此是全稳定引用，
@@ -100,6 +100,12 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   const handleRegenerateAt = useCallback((idx: number) => regenerateRef.current(idx), [])
   const handleRollback = useCallback((idx: number) => rollbackRef.current(idx), [])
   const handleEditMessage = useCallback((idx: number, text: string) => editMessageRef.current(idx, text), [])
+  // 计划批准后自动续跑：用户点了"批准执行"就该立刻开跑，而不是等他再敲一句话
+  useEffect(() => {
+    if (!pendingPlanResume || streamingId) return
+    const t = setTimeout(() => sendRef.current('开始执行上面的计划', undefined, undefined, {}), 60)
+    return () => clearTimeout(t)
+  }, [pendingPlanResume, streamingId])
   const handleQuickSend = useCallback((text: string) => { setTimeout(() => sendRef.current(text), 100) }, [])
 
   // ─── Git 检查点：每次对话发送前自动快照工作目录，对话后可一键撤销本轮文件更改 ───
@@ -372,6 +378,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                   onScreenshotConsumed={onScreenshotConsumed}
                   onSend={handleSendQueued}
                   onOpenResearch={onOpenResearch}
+                  planMode={planMode}
+                  onTogglePlanMode={() => (planMode ? exitPlanMode() : enterPlanMode())}
                   queueCount={queue.length}
                   currentModel={chatSettings.model}
                   onModelChange={onModelChange}
@@ -401,7 +409,10 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
               )}
               {plan && plan.steps.length > 0 && (
                 <div className="px-6 pt-1 pb-2 shrink-0">
-                  <PlanCard plan={plan} onClear={clearPlan} />
+                  <PlanCard plan={plan} onClear={clearPlan}
+                    planModeOn={planMode}
+                    onApprove={(fb?: string) => approvePlan(fb)}
+                    onExitPlanMode={exitPlanMode} />
                 </div>
               )}
               <MessageInput
@@ -410,6 +421,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 onScreenshotConsumed={onScreenshotConsumed}
                 onSend={handleSendQueued}
                   onOpenResearch={onOpenResearch}
+                  planMode={planMode}
+                  onTogglePlanMode={() => (planMode ? exitPlanMode() : enterPlanMode())}
                 queueCount={queue.length}
                 queueItems={queue}
                 onRemoveQueued={removeQueued}

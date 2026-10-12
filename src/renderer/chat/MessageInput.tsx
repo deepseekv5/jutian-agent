@@ -17,6 +17,8 @@ interface Props {
   onSend: (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string }) => void
   /** 打开深度调研专属工作台，参数为当前输入框内容（带过去当初始问题） */
   onOpenResearch?: (seed?: string) => void
+  planMode?: boolean
+  onTogglePlanMode?: () => void
   disabled?: boolean
   /** 消息队列长度：流式中发送会排队 */
   queueCount?: number
@@ -132,7 +134,7 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMo
   )
 }
 
-export default function MessageInput({ onSend, onOpenResearch, disabled, currentModel, onModelChange, messages, settings, queueCount = 0, queueItems, onRemoveQueued, incomingScreenshot, onScreenshotConsumed, sessionId }: Props) {
+export default function MessageInput({ onSend, onOpenResearch, planMode, onTogglePlanMode, disabled, currentModel, onModelChange, messages, settings, queueCount = 0, queueItems, onRemoveQueued, incomingScreenshot, onScreenshotConsumed, sessionId }: Props) {
   const [value, setValue] = useState('')
   const [showToolbar, setShowToolbar] = useState(false)
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
@@ -435,6 +437,54 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
     setSlashIdx(0)
   }
 
+  // ─── @ 文件提及：输入 @ 弹出工作区文件补全（Claude Code 的 @ 语义）──
+  // 只认"光标前最近的 @"，且 @ 后到光标之间不能有空格——避免把普通文本里的 @ 误判成提及。
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const [mentionHits, setMentionHits] = useState<{ name: string; path: string }[]>([])
+  const [mentionLoading, setMentionLoading] = useState(false)
+  const [mentionRange, setMentionRange] = useState<{ start: number; end: number } | null>(null)
+
+  const detectMention = useCallback((text: string, caret: number) => {
+    const before = text.slice(0, caret)
+    const at = before.lastIndexOf('@')
+    if (at < 0) { setMentionRange(null); setMentionHits([]); return }
+    const token = before.slice(at + 1)
+    if (/[\s@]/.test(token)) { setMentionRange(null); setMentionHits([]); return }
+    const q = token.trim().toLowerCase()
+    if (!q) { setMentionRange({ start: at, end: caret }); setMentionHits([]); return }
+    setMentionRange({ start: at, end: caret })
+    let cancelled = false
+    setMentionLoading(true)
+    const root = settings?.workDir || ''
+    fetch(`/api/code/find-files?path=${encodeURIComponent(root)}&q=${encodeURIComponent(q)}&limit=12`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (cancelled) return; setMentionHits(Array.isArray(d?.files) ? d.files : []); setMentionIdx(0) })
+      .catch(() => { if (!cancelled) setMentionHits([]) })
+      .finally(() => { if (!cancelled) setMentionLoading(false) })
+    return () => { cancelled = true }
+  }, [settings])
+
+  const mentionActive = !!mentionRange
+  const applyMention = (file: { name: string; path: string }) => {
+    if (!mentionRange) return
+    const ta = textareaRef.current
+    const before = value.slice(0, mentionRange.start)
+    const after = value.slice(mentionRange.end)
+    // 插入为 markdown 链接：模型与用户都能读出真实路径
+    const insert = `@[${file.name}](${file.path}) `
+    const next = before + insert + after
+    setValue(next)
+    setMentionRange(null)
+    setMentionHits([])
+    requestAnimationFrame(() => {
+      if (ta) {
+        const pos = before.length + insert.length
+        ta.focus()
+        ta.setSelectionRange(pos, pos)
+      }
+    })
+  }
+
   // 上下文上限：设置手动设置值优先；仍是默认 1M 时按模型名推断真实窗口
   const configuredCtxWindow = settings?.contextWindow
   const effectiveCtxLimit = useMemo(() => {
@@ -625,6 +675,18 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
         return
       }
       if (e.key === 'Escape') { e.preventDefault(); setValue(''); setSlashIdx(0); return }
+    }
+    // ─── @ 文件提及菜单：↑↓ 选择 / Enter·Tab 插入 / Esc 关闭 ───
+    if (mentionActive && mentionHits.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => (i + 1) % mentionHits.length); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx(i => (i - 1 + mentionHits.length) % mentionHits.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const f = mentionHits[Math.min(mentionIdx, mentionHits.length - 1)]
+        if (f) applyMention(f)
+        return
+      }
+      if (e.key === 'Escape') { e.preventDefault(); setMentionRange(null); setMentionHits([]); return }
     }
     // ↑/↓ 输入历史：空输入按 ↑ 开始回溯；导航中 ↓ 后退，退无可退恢复空输入
     if (e.key === 'ArrowUp' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -992,6 +1054,35 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
           </div>
         )}
 
+        {/* @ 文件提及菜单：输入 @ 触发，补全工作区文件路径 */}
+        {mentionActive && (mentionHits.length > 0 || mentionLoading) && (
+          <div className="absolute bottom-full left-0 right-0 mb-2 z-40 rounded-2xl border shadow-lg animate-fade-in overflow-hidden glass-strong"
+            style={{ borderColor: c.border }}>
+            <div className="py-1.5 max-h-64 overflow-y-auto scrollbar-thin">
+              {mentionLoading && mentionHits.length === 0 && (
+                <div className="px-4 py-2 text-[12px]" style={{ color: c.textTertiary }}>搜索文件中…</div>
+              )}
+              {mentionHits.map((f, i) => (
+                <button key={f.path} onClick={() => applyMention(f)} onMouseEnter={() => setMentionIdx(i)}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors"
+                  style={{ background: i === mentionIdx ? c.surfaceHover : 'transparent' }}>
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ color: c.textTertiary }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  <span className="text-[12.5px] font-medium shrink-0" style={{ color: c.text }}>{f.name}</span>
+                  <span className="ml-auto text-[11px] truncate shrink min-w-0 hidden sm:inline" style={{ color: c.textTertiary }}>{f.path}</span>
+                </button>
+              ))}
+              {!mentionLoading && mentionHits.length === 0 && (
+                <div className="px-4 py-2 text-[12px]" style={{ color: c.textTertiary }}>没有匹配的文件</div>
+              )}
+            </div>
+            <div className="px-4 py-1.5 text-[10.5px] border-t" style={{ color: c.textMuted, borderColor: c.borderLight }}>
+              ↑↓ 选择 · Enter 插入 · Esc 取消 · 插入的是带路径的链接
+            </div>
+          </div>
+        )}
+
         {/* Composer —— ChatGPT 布局：文本域在上，操作行在下；毛玻璃透出动态壁纸 */}
         <div className="rounded-[26px] border transition-shadow"
           style={{
@@ -1015,7 +1106,9 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
             </div>
           )}
 
-          <textarea ref={textareaRef} value={value} onChange={e => setValue(e.target.value)} onPaste={handlePaste} onKeyDown={handleKeyDown}
+          <textarea ref={textareaRef} value={value}
+            onChange={e => { setValue(e.target.value); requestAnimationFrame(() => detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length)) }}
+            onPaste={handlePaste} onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
             placeholder={disabled ? t(`回复生成中，发送将排队（${queueCount} 条待发）`, `Reply in progress — queued (${queueCount})`) : chatMode === 'coding' ? t('描述编程任务，可直接粘贴报错信息…', 'Describe the coding task; paste errors directly…') : t(`给 ${ASSISTANT_NAME} 发送消息`, `Message ${ASSISTANT_NAME}`)}
             rows={fullscreenEdit ? 16 : 1}
@@ -1064,6 +1157,21 @@ export default function MessageInput({ onSend, onOpenResearch, disabled, current
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
               </svg>
               <span className="text-[12px] font-medium">调研</span>
+            </button>
+
+            {/* 计划模式：只读探索 → 出计划 → 批准后才执行 */}
+            <button onClick={() => onTogglePlanMode?.()}
+              title={planMode ? '计划模式已开启：现在我只读探索、不动文件，方案给你确认后再执行 · 点击退出' : '计划模式：先出方案，你批准后我才动手 · 点击开启'}
+              className="h-8 pl-2.5 pr-2 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+              style={{
+                background: planMode ? '#7c3aed1a' : 'transparent',
+                border: `1px solid ${planMode ? '#7c3aed66' : c.border}`,
+                color: planMode ? '#7c3aed' : c.textSecondary,
+              }}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+              </svg>
+              <span className="text-[12px] font-medium">计划模式</span>
             </button>
 
             {/* 本次权限档位：需确认 / 可编辑 / 完全访问 */}

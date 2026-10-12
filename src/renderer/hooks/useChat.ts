@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useReducer } from 'react'
 import type { Message, Settings, ToolCall, ToolDef, AttachedFile } from '../types'
 import { BUILTIN_TOOLS } from '../types'
 import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter, effectiveApiKey } from '../store/storage'
@@ -7,6 +7,8 @@ import { planCompression, mergeSummary, buildCompressedMessages, type ApiMsgLike
 import { executeTool } from '../engine/tools'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { parsePlanArgs, planAck, planReject, loadPlan, savePlan, clearPlan, type Plan } from '../../shared/planTool'
+import { gatePlanTool, PLAN_MODE_PROMPT, PLAN_MODE_INITIAL, planModeReducer } from '../../shared/planMode'
+import { parsePlanFromText, looksLikePlan } from '../engine/planParse'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
 import { runSubagents } from '../engine/subagent'
@@ -124,6 +126,20 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
     if (sessionId) clearPlan(`lyclaw_plan_${sessionId}`)
     setPlanState(null)
   }, [sessionId])
+
+  // ─── 计划模式：只读探索 → 出计划 → 批准后才允许执行 ───
+  // 与权限档位（ask/edit/full）正交：计划模式是"先给我看方案"，权限档位是"你能不能动手"。
+  // 状态机在 shared/planMode（纯函数、有测试），这里只做 UI 侧接线。
+  const [pmState, pmDispatch] = useReducer(planModeReducer, PLAN_MODE_INITIAL)
+  const planMode = pmState.active
+  // 门禁只在"发起请求的那一刻"取值，用 ref 持有，避免流式中途切换档位影响已在跑的工具调用
+  const planApprovedRef = useRef(false)
+  planApprovedRef.current = pmState.approved
+  const pendingPlanResume = pmState.resume
+  /** 用户从计划卡片点"批准"（或带修改意见）：解除只读门禁并把意图送给模型 */
+  const approvePlan = useCallback((feedback?: string) => pmDispatch({ type: 'approve', feedback }), [])
+  const exitPlanMode = useCallback(() => pmDispatch({ type: 'exit' }), [])
+  const enterPlanMode = useCallback(() => pmDispatch({ type: 'enter' }), [])
 
   // 评估器：独立轻量请求，判断目标是否已达成（不污染主对话上下文）。
   // 三态返回：ok=false 表示评估器本身不可用（模型未配置/请求失败/解析失败），
@@ -522,6 +538,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       setGoal(null)
     }
 
+    // 计划批准后的续跑：把"已批准，开始执行"补发一次，模型据此解除只读约束
+    if (pendingPlanResume) {
+      pmDispatch({ type: 'consumeResume' })
+      content = `${content}\n\n${pendingPlanResume}`
+    }
+
     // 构建附加文件上下文
     let userContent = content
     if (attachedFiles && attachedFiles.length > 0) {
@@ -612,7 +634,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       max: '【思考程度：最大】进行最深入、最全面的思考，穷举关键细节后再作答。',
     }
     const perMsg = [accessText[sendOpts?.accessLevel || ''], thinkText[sendOpts?.thinking || '']].filter(Boolean).join('\n')
-    let finalSystemPrompt = perMsg ? `${systemPrompt}\n\n${perMsg}` : systemPrompt
+    // 计划模式约束进系统提示词（行为引导）；硬拦截在 beforeTool，不靠模型自律
+    const planBlock = planMode && !planApprovedRef.current ? `\n\n${PLAN_MODE_PROMPT}` : ''
+    let finalSystemPrompt = (perMsg ? `${systemPrompt}\n\n${perMsg}` : systemPrompt) + planBlock
     // ─── 知识库引用（RAG）：仅当本条开启「知识库」开关时检索注入 ───
     if (sendOpts?.kb) try {
       const kbRes = await fetch('/api/kb/search', {
@@ -855,6 +879,14 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
             }
           }
         } catch { /* ignore */ }
+        // 计划模式：模型以自由文本给出方案时，解析成结构化清单让用户一键批准
+        // （模型也可以用 update_plan 工具，那条路径在下方工具分支处理）
+        if (planMode && !planApprovedRef.current && looksLikePlan(fullContent)) {
+          const parsed = parsePlanFromText(fullContent)
+          if (parsed && parsed.steps.length > 0) {
+            setPlan({ explanation: '', steps: parsed.steps.map(s => ({ title: s.title, status: 'pending' as const })) })
+          }
+        }
         setStreamingId(null)
         const msgs = await listMessages(sessionId)
         setMessages(msgs)
@@ -908,6 +940,13 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
        * full 档：全部放行。
        */
       beforeTool: (tc) => {
+        // 计划模式硬只读：未批准时副作用工具一律拦下（代码层，优先于权限档位判断）
+        if (planMode && !planApprovedRef.current) {
+          const gate = gatePlanTool(tc.name, false)
+          if (!gate.allowed) {
+            return JSON.stringify({ ok: false, error: `【计划模式】${gate.reason}${gate.hint ? ' ' + gate.hint : ''}` })
+          }
+        }
         const level = sendOpts?.accessLevel || 'ask'
         if (level === 'full') return null
         let args: unknown = {}
@@ -985,7 +1024,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       streamingRef.current = null
       await send(`（目标模式 · 自动续跑 ${g.rounds}/${MAX_GOAL_ROUNDS}）评估器判断目标尚未达成：${verdict.note || '请继续'}。请接着完成目标：「${g.text}」`, lastSkillIdsRef.current, undefined, { ...sendOpts, goal: undefined, goalContinue: true })
     }
-  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal, flushPendingVariants, setPlan])
+  }, [sessionId, settings, loadSkillTools, generateAiTitle, runAgentSwarm, evaluateGoal, flushPendingVariants, setPlan, planMode, pendingPlanResume])
 
   const rollbackTo = useCallback(async (messageIndex: number) => {
     if (!sessionId) return
@@ -1080,6 +1119,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     /** 任务清单（update_plan 维护）：进度展示与手动清除 */
     plan,
     clearPlan: clearSessionPlan,
+    /** 计划模式：只读探索 → 出计划 → 批准执行 */
+    planMode,
+    setPlanMode: enterPlanMode,
+    approvePlan,
+    exitPlanMode,
+    pendingPlanResume,
     /** 手动加载 Skill */
     loadSkill: loadSkillTools,
     /** 已加载的 Skill 列表 */

@@ -3480,6 +3480,42 @@ http.createServer(async (req, res) => {
         return json(res, items);
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
+    // 按文件名模糊搜索（@ 提及补全用）。与 /api/code/search 不同——那个是内容 grep，
+    // 这里只要"名字里含这个片段"，所以直接遍历目录树，不落 shell。
+    if (url.pathname === "/api/code/find-files" && req.method === "GET") {
+      try {
+        const root = path.resolve(url.searchParams.get("path") || globalWorkDir || process.env.HOME);
+        if (!ok(root)) return json(res, { success: false, error: "路径不允许", files: [] }, 403);
+        const q = String(url.searchParams.get("q") || "").trim().toLowerCase();
+        if (!q) return json(res, { success: true, files: [] });
+        const cap = Math.min(Number(url.searchParams.get("limit")) || 20, 50);
+        const SKIP = new Set(["node_modules", ".git", "dist", "build", "__pycache__", ".next", "target", ".venv", "venv", ".cache"]);
+        const MAX_DEPTH = 8;
+        const MAX_SCAN = 20000;
+        const files = [];
+        let scanned = 0;
+        let overflow = false;
+        var walk = (dir, depth) => {
+          if (files.length >= cap || overflow) return;
+          let entries;
+          try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+          for (const e of entries) {
+            if (files.length >= cap) return;
+            if (e.name.startsWith(".")) continue;
+            if (++scanned > MAX_SCAN) { overflow = true; return; }
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) {
+              if (SKIP.has(e.name) || depth >= MAX_DEPTH) continue;
+              walk(full, depth + 1);
+            } else if (e.isFile() && e.name.toLowerCase().includes(q)) {
+              files.push({ name: e.name, path: full });
+            }
+          }
+        };
+        walk(root, 0);
+        return json(res, { success: true, files, truncated: overflow || scanned > MAX_SCAN });
+      } catch (e) { return json(res, { success: false, error: e.message, files: [] }, 500); }
+    }
     if (url.pathname === "/api/code/read-file" && req.method === "GET") {
       try {
         const fp = path.resolve(url.searchParams.get("path") || "");
