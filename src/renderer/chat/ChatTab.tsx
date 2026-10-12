@@ -10,6 +10,7 @@ import GoalCard from './GoalCard'
 import PlanCard from './PlanCard'
 import type { Settings } from '../types'
 import { dateTimeCN, hhmmss } from '../utils/datetime'
+import { buildExport, EXPORT_META, type ExportFormat } from '../utils/exportChat'
 
 const WD_KEY = 'lyclaw_session_workdirs'
 const CP_KEY = 'lyclaw_last_checkpoint'
@@ -183,11 +184,11 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [kbSavedTip, setKbSavedTip] = useState(false)
   const [showOutline, setShowOutline] = useState(false)
-  const doExport = useCallback((fmt: 'md' | 'txt' | 'json' | 'kb') => {
+  const doExport = useCallback((fmt: ExportFormat | 'kb') => {
     if (messages.length === 0) return
-    const date = new Date().toISOString().slice(0, 10)
     if (fmt === 'kb') {
       // 整个会话存为一篇知识库笔记
+      const date = new Date().toISOString().slice(0, 10)
       const md = messages.map(m => m.role === 'user' ? `## ❯ 用户\n\n${m.content}\n` : `## ● 巨天\n\n${m.content}\n`).join('\n')
       fetch('/api/kb/entry', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -195,20 +196,12 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
       }).then(() => { setKbSavedTip(true); setTimeout(() => setKbSavedTip(false), 2200) }).catch(() => {})
       return
     }
-    let blob: Blob
-    let name: string
-    if (fmt === 'json') {
-      blob = new Blob([JSON.stringify({ session: sessionId, exported_at: new Date().toISOString(), messages: messages.map(m => ({ role: m.role, content: m.content, created_at: m.created_at })) }, null, 2)], { type: 'application/json;charset=utf-8' })
-      name = `巨天对话-${date}.json`
-    } else if (fmt === 'txt') {
-      const txt = messages.map(m => `${m.role === 'user' ? '【用户】' : '【巨天】'}\n${m.content}\n`).join('\n')
-      blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
-      name = `巨天对话-${date}.txt`
-    } else {
-      const md = ['# 对话导出', `> ${dateTimeCN()} · 巨天agent`, '', ...messages.map(m => m.role === 'user' ? `## ❯ 用户\n\n${m.content}\n` : `## ● 巨天\n\n${m.content}\n`)].join('\n')
-      blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
-      name = `巨天对话-${date}.md`
-    }
+    const { text, name } = buildExport(fmt, messages, {
+      sessionId,
+      stamp: dateTimeCN(),
+      date: new Date().toISOString().slice(0, 10),
+    })
+    const blob = new Blob([text], { type: EXPORT_META[fmt].mime })
     const a2 = document.createElement('a')
     a2.href = URL.createObjectURL(blob)
     a2.download = name
@@ -377,7 +370,14 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
         {showExportMenu && (
           <div className="absolute right-4 top-9 z-30 rounded-lg py-1 shadow-lg w-40 glass-strong"
             style={{ border: `1px solid ${c.border}` }} onMouseLeave={() => setShowExportMenu(false)}>
-            {([['md', 'Markdown 文档'], ['txt', '纯文本'], ['json', 'JSON 数据'], ['kb', '存入知识库']] as const).map(([fmt, label]) => (
+            {([
+              ['md', EXPORT_META.md.label],
+              ['doc', EXPORT_META.doc.label],
+              ['html', EXPORT_META.html.label],
+              ['txt', EXPORT_META.txt.label],
+              ['json', EXPORT_META.json.label],
+              ['kb', '存入知识库'],
+            ] as [ExportFormat | 'kb', string][]).map(([fmt, label]) => (
               <button key={fmt} onClick={() => { doExport(fmt); setShowExportMenu(false) }}
                 className="w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:opacity-70"
                 style={{ color: fmt === 'kb' ? '#0b6b4f' : c.text }}>
