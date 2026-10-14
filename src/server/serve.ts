@@ -4119,7 +4119,10 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           if (b.id === "kilo-auto/free") return 1;
           return a.name.localeCompare(b.name);
         });
-        const paid = arr.filter((m) => { const id = String(m?.id || ""); return !(isFreeId(id) || m?.isFree === true); }).map(pick).filter((m) => m.id);
+        // 付费档不再下发：本面板定位是"免 key 就能用"，混着 375 个付费档
+        // 既让清单臃肿，也容易让人误以为选中的是免费额度。需要付费模型
+        // 走设置里的常规供应商配置。
+        const paid: typeof arr = [];
         // Zen 清单：每次请求实时拉上游 /models。拉不到就退回离线兜底，
         // 而不是让面板空着——用户至少能看到上次已知的可用项。
         const zenRes = ZEN_MOD ? await ZEN_MOD.fetchZenModels() : { ok: false, models: [], error: "模块未加载" };

@@ -48,13 +48,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   const [q, setQ] = useState('')
   const [testing, setTesting] = useState('')
   const [latency, setLatency] = useState<Record<string, number | string>>({})
-  const [showPaid, setShowPaid] = useState(false)
-  const [paidLimit, setPaidLimit] = useState(40)
   // Kilo 账户密钥(解锁付费档):存 DB 的 kilo_api_key,GET 回显为掩码
-  const [kiloKey, setKiloKey] = useState('')
-  const [kiloKeyDraft, setKiloKeyDraft] = useState('')
-  const [kiloKeySaving, setKiloKeySaving] = useState(false)
-  const [kiloKeyMsg, setKiloKeyMsg] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -70,35 +64,13 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     setLoading(false)
   }, [])
 
-  const loadKiloKey = useCallback(async () => {
-    try {
-      const r = await fetch('/api/settings')
-      const d = await r.json()
-      setKiloKey(String(d?.kilo_api_key || ''))
-    } catch { /* ignore */ }
-  }, [])
-
-  useEffect(() => { load(); loadKiloKey() }, [load, loadKiloKey])
-
-  const saveKiloKey = async () => {
-    const v = kiloKeyDraft.trim()
-    if (!v) { setKiloKeyMsg('请输入密钥'); return }
-    if (v.includes('****')) { setKiloKeyMsg('这是掩码回显,不是新密钥'); return }
-    setKiloKeySaving(true); setKiloKeyMsg('')
-    try {
-      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'kilo_api_key', value: v }) })
-      setKiloKeyMsg('已保存 ✓'); setKiloKeyDraft('')
-      await loadKiloKey()
-    } catch (e: any) { setKiloKeyMsg('保存失败:' + String(e?.message || e)) }
-    setKiloKeySaving(false)
-  }
+  useEffect(() => { load() }, [load])
 
   const gh = sources.find(s => s.id === 'github')
   const kilo = sources.find(s => s.id === 'kilo')
   const currentBase = settings.apiBaseUrl || ''
   const isGh = /models\.github\.ai/.test(currentBase)
   const isKilo = /api\.kilo\.ai/.test(currentBase)
-  const kiloReady = kiloKey !== '' && !kiloKey.includes('****')
 
   const filter = (list: ModelInfo[]) => {
     const k = q.trim().toLowerCase()
@@ -106,8 +78,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     return list.filter(m => m.id.toLowerCase().includes(k) || m.name.toLowerCase().includes(k))
   }
 
-  const switchTo = (m: ModelInfo, src: Source, isPaid: boolean) => {
-    if (isPaid && !kiloReady) { setKiloKeyMsg('请先在上方配置 Kilo 账户密钥'); return }
+  const switchTo = (m: ModelInfo, src: Source) => {
     const next: Settings = {
       ...settings,
       provider: 'api',
@@ -116,7 +87,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
       model: m.id,
     }
     onSettingsChange?.(next)
-    pushNotice({ type: 'system', title: isPaid ? '已切换付费模型' : '已切换免费模型', body: m.name })
+    pushNotice({ type: 'system', title: '已切换免费模型', body: m.name })
   }
 
   const testModel = async (m: ModelInfo, src: Source) => {
@@ -174,9 +145,9 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             {testing === m.id ? '…' : (latency[m.id] !== undefined ? (typeof latency[m.id] === 'number' ? latency[m.id] + 'ms' : String(latency[m.id])) : t('测速', 'Ping'))}
           </button>
         )}
-        <button onClick={() => switchTo(m, src, isPaid)} disabled={active}
+        <button onClick={() => switchTo(m, src)} disabled={active}
           className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40"
-          style={{ background: isPaid ? '#b45309' : '#10a37f', color: '#fff' }}>
+          style={{ background: '#10a37f', color: '#fff' }}>
           {t('切换', 'Use')}
         </button>
       </div>
@@ -212,7 +183,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             <div className="text-[11.5px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
               {t('推理 + 工具调用能力,完全免费无需注册;另有 Kilo 网关 21 个免费档(默认 openrouter/free 自动路由)。', 'Reasoning + tool calling, fully free, no signup. Plus Kilo gateway with 21 free tiers (default openrouter/free auto-routing).')}
             </div>
-            <button onClick={() => { const src = sources.find(s => s.id === 'pollinations'); if (src) switchTo(src.models[0], src, false) }}
+            <button onClick={() => { const src = sources.find(s => s.id === 'pollinations'); if (src) switchTo(src.models[0], src) }}
               disabled={!sources.some(s => s.id === 'pollinations')}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
               style={{ background: '#10a37f', color: '#fff' }}>
@@ -220,26 +191,6 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             </button>
           </div>
         )}
-
-        {/* Kilo 账户密钥配置(解锁付费档) */}
-        <div className="mb-3 rounded-xl p-3" style={{ background: c.surfaceCard, border: `1px ${kiloReady ? 'solid rgba(16,163,127,.4)' : `dashed ${c.border}`}` }}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[12.5px] font-semibold" style={{ color: c.textHead }}>{t('Kilo 账户密钥', 'Kilo account key')}</span>
-            <span className="text-[10.5px]" style={{ color: kiloReady ? '#10a37f' : c.textTertiary }}>
-              {kiloReady ? `已配置 · ${kiloKey}` : t('未配置 — 仅能使用免费档', 'Not set — free tier only')}
-            </span>
-            <a href="https://app.kilo.ai" target="_blank" rel="noopener" className="ml-auto text-[10.5px]" style={{ color: '#60a5fa' }}>{t('去官网获取 →', 'Get one →')}</a>
-          </div>
-          <div className="flex items-center gap-2">
-            <input value={kiloKeyDraft} onChange={e => setKiloKeyDraft(e.target.value)} type="password"
-              placeholder={t('粘贴 Kilo API Key,仅存本机', 'Paste Kilo API key, stored locally only')}
-              className="flex-1 h-8 px-2.5 rounded-lg text-[12px] outline-none" style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.border}` }} />
-            <button onClick={saveKiloKey} disabled={kiloKeySaving}
-              className="px-3 h-8 rounded-lg text-[12px] font-semibold disabled:opacity-50"
-              style={{ background: '#10a37f', color: '#fff' }}>{kiloKeySaving ? '…' : t('保存', 'Save')}</button>
-          </div>
-          {kiloKeyMsg && <div className="text-[10.5px] mt-1.5" style={{ color: kiloKeyMsg.includes('✓') ? '#10a37f' : '#f59e0b' }}>{kiloKeyMsg}</div>}
-        </div>
 
         {loading ? (
           <div className="grid place-items-center py-16 text-[12.5px]" style={{ color: c.textTertiary }}>{t('正在拉取免费模型目录…', 'Loading free catalogs…')}</div>
@@ -265,17 +216,15 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
               </div>
             ))}
 
-            {/* Kilo 免费档 */}
+            {/* Kilo 免费档。
+                这里只列免费模型：付费档（375 个）已移除——本面板的定位是
+                "免 key 就能用"，混着付费档既让清单臃肿，也容易让人误以为
+                选中的是免费额度。需要付费模型走设置里的常规供应商配置。 */}
             {kilo && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[12px] font-bold" style={{ color: c.textHead }}>Kilo Gateway · {t('免费档', 'free')}</span>
                   <span className="text-[10px]" style={{ color: c.textTertiary }}>{kilo.models.length} {t('个', 'models')}</span>
-                  {kilo.paid && kilo.paid.length > 0 && (
-                    <button onClick={() => setShowPaid(v => !v)} className="ml-auto px-2 py-1 rounded-full" style={{ background: 'rgba(245,158,11,.12)', color: '#f59e0b' }}>
-                      {t('付费档', 'Paid')} {kilo.paid.length} {showPaid ? '▴' : '▾'}
-                    </button>
-                  )}
                 </div>
                 <div className="space-y-1.5">
                   {filter(kilo.models).map(m => row(m, kilo, false, m.id === 'openrouter/free'))}
@@ -283,17 +232,6 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
                     <div className="text-center py-6 text-[12px]" style={{ color: c.textTertiary }}>{t('没有匹配的模型', 'No match')}</div>
                   )}
                 </div>
-                {showPaid && kilo.paid && (
-                  <div className="mt-3 space-y-1.5">
-                    <div className="text-[11px] font-semibold mb-1.5" style={{ color: '#f59e0b' }}>{t('付费档模型(使用上方 Kilo 账户密钥)', 'Paid models (uses your Kilo key)')}</div>
-                    {filter(kilo.paid).slice(0, paidLimit).map(m => row(m, kilo, true))}
-                    {kilo.paid.length > paidLimit && filter(kilo.paid).length >= paidLimit && (
-                      <button onClick={() => setPaidLimit(v => v + 80)} className="w-full py-2 rounded-lg text-[11.5px]" style={{ background: c.bgInput, color: c.textSecondary }}>
-                        {t('显示更多', 'Show more')}（{kilo.paid.length - paidLimit}）
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </>
