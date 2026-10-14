@@ -51,6 +51,7 @@ serve.cjs
 src/shared/personas.cjs
 src/shared/sessionCleanup.cjs
 src/shared/opencodeZen.cjs
+src/shared/localApi.cjs
 
 # lint/cache 临时文件
 .eslintcache

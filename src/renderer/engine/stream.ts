@@ -15,6 +15,7 @@ import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
 import { ssePayloads } from '../../shared/sse'
+import { extractReasoning } from '../../shared/reasoning'
 import {
   parseToolCallsFromDelta, accumulateToolCallDelta,
   adoptNonStreamToolCalls, toolCallsToArray,
@@ -101,10 +102,12 @@ export async function streamChat(
           const parsed = JSON.parse(data)
           const delta = parsed.choices?.[0]?.delta
           if (!delta) continue
-          // 深度思考内容
-          if (delta.reasoning_content) {
-            fullThinking += delta.reasoning_content
-            callbacks.onThinking?.(delta.reasoning_content)
+          // 深度思考内容：字段名各家不同（reasoning_content / reasoning /
+          // reasoning_details），归一化逻辑在 shared/reasoning（有测试）
+          const think = extractReasoning(delta)
+          if (think) {
+            fullThinking += think
+            callbacks.onThinking?.(think)
           }
           // 文本输出
           if (delta.content) {

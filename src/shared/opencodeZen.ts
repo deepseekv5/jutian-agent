@@ -27,7 +27,7 @@ import { randomBytes } from 'node:crypto'
 export const ZEN_BASE = 'https://opencode.ai/zen/v1'
 export const ZEN_KEY = 'public'
 
-/** 实测可用的免费模型（按上游 /models 的 -free 后缀筛出后再逐个探活） */
+/** 实测可用的免费模型（离线兜底；在线时以实时拉取为准） */
 export const ZEN_FREE_MODELS: { id: string; name: string; context: number; note?: string }[] = [
   { id: 'big-pickle', name: 'Big Pickle', context: 200000, note: '综合能力最强的一档' },
   { id: 'mimo-v2.6-flash-free', name: 'MiMo V2.6 Flash', context: 262144 },
@@ -37,12 +37,47 @@ export const ZEN_FREE_MODELS: { id: string; name: string; context: number; note?
   { id: 'space-bunny-free', name: 'Space Bunny', context: 131072 },
 ]
 
-/** 清单里标着 free 但实测不路由的，单独列出以便界面如实标注 */
-export const ZEN_UNAVAILABLE: { id: string; reason: string }[] = [
-  { id: 'cat-jam-free', reason: '上游返回 Endpoint is unavailable' },
-  { id: 'muse-spark-1.2-contributor-free', reason: '中国大陆出口被地区限制' },
-  { id: 'muse-spark-1.3-contributor-free', reason: '中国大陆出口被地区限制' },
-]
+/** 已知不路由的 id → 原因（用于给实时清单打状态标记） */
+export const ZEN_KNOWN_DEAD: Record<string, string> = {
+  'cat-jam-free': '上游暂不路由该模型',
+  'muse-spark-1.2-contributor-free': '中国大陆出口被地区限制',
+  'muse-spark-1.3-contributor-free': '中国大陆出口被地区限制',
+  'jev-1.13-free': '实测未通过（上游拒绝）',
+}
+
+/**
+ * 从上游 /models 拉取清单。
+ *
+ * 面板要"显示所有模型"，所以这里返回**全部** -free 条目（含已知不可用的），
+ * 由上层标注状态，而不是替用户过滤掉——用户有权看到上游声明了什么、
+ * 哪些在这个网络下用不了。付费档不列（本车道只免费用）。
+ */
+export async function fetchZenModels(timeoutMs = 15000): Promise<{
+  ok: boolean
+  models: { id: string; name: string; free: boolean; dead?: string }[]
+  error?: string
+}> {
+  try {
+    const r = await fetch(`${ZEN_BASE}/models`, {
+      headers: zenHeaders(mintSessionId(), mintRequestId(), false),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!r.ok) return { ok: false, models: [], error: `上游返回 ${r.status}` }
+    const j = await r.json() as { data?: { id?: string }[] }
+    const ids = (j.data || []).map(m => String(m.id || '')).filter(Boolean)
+    const models = ids
+      .filter(id => /-free$/.test(id) || id === 'big-pickle')
+      .map(id => ({
+        id,
+        name: id.replace(/-free$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        free: true,
+        dead: ZEN_KNOWN_DEAD[id],
+      }))
+    return { ok: true, models }
+  } catch (e) {
+    return { ok: false, models: [], error: String((e as Error)?.message || e) }
+  }
+}
 
 /** 走 /responses 而非 /chat/completions 的模型 */
 const RESPONSES_MODELS = /^muse-spark/

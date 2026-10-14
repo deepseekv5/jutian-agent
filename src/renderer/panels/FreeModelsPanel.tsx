@@ -157,13 +157,23 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             {isPaid && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(245,158,11,.14)', color: '#f59e0b' }}>{t('付费', 'Paid')}</span>}
           </div>
           <div className="font-mono text-[10.5px] mt-0.5 truncate" style={{ color: c.textTertiary }}>{m.id} · ctx {fmtCtx(m.context)}</div>
+          {(m as any).unavailable && (
+            <div className="text-[10.5px] mt-0.5" style={{ color: '#d97706' }}>
+              {(m as any).reason || '当前网络下不可用'}
+            </div>
+          )}
         </div>
-        <button onClick={() => testModel(m, src)} disabled={testing === m.id}
-          className="px-2 h-7 rounded-lg text-[11px] shrink-0 disabled:opacity-50"
-          style={{ background: c.bgInput, color: c.textSecondary }}
-          title={t('发送最小请求测延迟', 'Ping latency')}>
-          {testing === m.id ? '…' : (latency[m.id] !== undefined ? (typeof latency[m.id] === 'number' ? latency[m.id] + 'ms' : String(latency[m.id])) : t('测速', 'Ping'))}
-        </button>
+        {/* 测速按钮：Zen 车道不给——它的请求姿势与通用探测不同
+            （必须带 x-opencode-* 指纹头 + 强制流式 + 四个指纹工具），
+            拿通用最小请求去测只会得到误导性的失败，不如不给。 */}
+        {src.id !== 'opencode-zen' && (
+          <button onClick={() => testModel(m, src)} disabled={testing === m.id}
+            className="px-2 h-7 rounded-lg text-[11px] shrink-0 disabled:opacity-50"
+            style={{ background: c.bgInput, color: c.textSecondary }}
+            title={t('发送最小请求测延迟', 'Ping latency')}>
+            {testing === m.id ? '…' : (latency[m.id] !== undefined ? (typeof latency[m.id] === 'number' ? latency[m.id] + 'ms' : String(latency[m.id])) : t('测速', 'Ping'))}
+          </button>
+        )}
         <button onClick={() => switchTo(m, src, isPaid)} disabled={active}
           className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40"
           style={{ background: isPaid ? '#b45309' : '#10a37f', color: '#fff' }}>

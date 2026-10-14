@@ -10,6 +10,7 @@ import { parsePlanArgs, planAck, planReject, loadPlan, savePlan, clearPlan, type
 import { gatePlanTool, PLAN_MODE_PROMPT, PLAN_MODE_INITIAL, planModeReducer } from '../../shared/planMode'
 import { parsePlanFromText, looksLikePlan } from '../engine/planParse'
 import { sanitizeTitle, fallbackTitle } from '../utils/titleSanitize'
+import { extractReasoning } from '../../shared/reasoning'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
 import { runSubagents } from '../engine/subagent'
@@ -200,8 +201,9 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
       const msg = data.choices?.[0]?.message || {}
       // 推理模型（如 step 系列）思考会吃掉 max_tokens，content 可能为空 → 回退从 reasoning 提取
       let title = (msg.content || '').trim()
-      if (!title && msg.reasoning_content) {
-        const rc = String(msg.reasoning_content)
+      const rc0 = extractReasoning(msg)
+      if (!title && rc0) {
+        const rc = rc0
         const m = rc.match(/[「『"']([^」』"']{2,20})[」』"']/) || rc.match(/(?:标题|题目|可以?[叫称])(?:是|为|用)[:：]?\s*([^\n，。,.]{2,20})/)
         if (m) title = m[1].trim()
         else {
@@ -292,8 +294,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         const msg = data.choices?.[0]?.message
         if (!msg) throw new Error('空响应')
         // 记录思考过程（展示用，不回传模型；本地 UI 即时更新，DB 按 agent 落库）
-        if (msg.reasoning_content) {
-          ag.messages = [...(ag.messages || []), { role: 'thinking', content: msg.reasoning_content }].slice(-10)
+        const rcSwarm = extractReasoning(msg)
+        if (rcSwarm) {
+          ag.messages = [...(ag.messages || []), { role: 'thinking', content: rcSwarm }].slice(-10)
           patchSwarm(swarm)
         }
         if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {

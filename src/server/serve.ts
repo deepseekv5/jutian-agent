@@ -2882,13 +2882,21 @@ http.createServer(async (req, res) => {
       const { key, value } = await body(req);
       if (!key) return json(res, { error: "缺少 key" }, 400);
       if (isMasked(value)) return json(res, { ok: true, skipped: "masked" });
+      // 本地 API 的开关/端口/范围/Key 改动后要立刻生效（启停或重启监听）
+      const isLocalApiKey = /^local_api_/.test(String(key));
       if (sharedDb) {
-        try { db.setSetting(key, value == null ? "" : String(value)); if (key === "keepAwake") syncKeepAwake(); return json(res, { ok: true }); } catch {}
+        try {
+          db.setSetting(key, value == null ? "" : String(value));
+          if (key === "keepAwake") syncKeepAwake();
+          if (isLocalApiKey) { try { syncLocalApi(); } catch (e) { console.error("同步本地 API 失败:", e.message); } }
+          return json(res, { ok: true });
+        } catch {}
       }
       const settings = loadJson("settings.json");
       settings[key] = value;
       saveJson("settings.json", settings);
       if (key === "keepAwake") syncKeepAwake();
+      if (isLocalApiKey) { try { syncLocalApi(); } catch (e) { console.error("同步本地 API 失败:", e.message); } }
       return json(res, { ok: true });
     }
 
@@ -3943,6 +3951,19 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           return a.name.localeCompare(b.name);
         });
         const paid = arr.filter((m) => { const id = String(m?.id || ""); return !(isFreeId(id) || m?.isFree === true); }).map(pick).filter((m) => m.id);
+        // Zen 清单：每次请求实时拉上游 /models。拉不到就退回离线兜底，
+        // 而不是让面板空着——用户至少能看到上次已知的可用项。
+        const zenRes = ZEN_MOD ? await ZEN_MOD.fetchZenModels() : { ok: false, models: [], error: "模块未加载" };
+        const zenFetchOk = !!zenRes.ok;
+        const zenFetchErr = zenRes.error || "";
+        const zenModels = (zenFetchOk && zenRes.models.length
+          ? zenRes.models
+          : (ZEN_MOD ? ZEN_MOD.ZEN_FREE_MODELS : []).map((m) => ({ id: m.id, name: m.name, free: true }))
+        ).map((m) => ({
+          id: m.id, name: m.name, context: 131072, vision: false, tools: true,
+          // 已知用不了的标注出来，界面据此显示状态而不是假装可用
+          ...(m.dead ? { unavailable: true, reason: m.dead } : {}),
+        }));
         const out = {
           ok: true,
           sources: [
@@ -3953,15 +3974,15 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
               models: [{ id: "openai-fast", name: "GPT-OSS 20B(推理·工具)", context: 131072, vision: false, tools: true }],
             },
             {
-              // OpenCode Zen 免费车道：实测可用（2026-10，中国大陆出口免代理）。
-              // 清单只放逐个探活通过的模型——上游 /models 里标着 -free 但
-              // 实际不路由的（cat-jam / muse-spark）不列进可用档。
+              // OpenCode Zen 免费车道：清单每次实时拉取上游 /models，
+              // 显示全部 -free 条目（含当前网络下不可用的，带状态标注）——
+              // 用户有权看到上游声明了什么、哪些在这个出口用不了。
+              // 拉取失败时退回离线兜底清单，不显示空面板。
               id: "opencode-zen", name: "OpenCode Zen Free", keyless: true,
               base: "https://opencode.ai/zen/v1",
-              note: "免 key 公共档:6 个实测可用模型(需流式，已自动处理)",
-              models: (ZEN_MOD ? ZEN_MOD.ZEN_FREE_MODELS : []).map((m) => ({
-                id: m.id, name: m.name, context: m.context, vision: false, tools: true,
-              })),
+              note: "免 key 公共档：每次实时拉取上游清单（需流式，已自动处理）",
+              models: zenModels,
+              ...(zenFetchOk ? {} : { note2: zenFetchErr || "上游拉取失败，显示离线清单" }),
             },
             {
               id: "kilo", name: "Kilo Gateway", keyless: true,
@@ -4014,9 +4035,13 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
           } catch {}
         }
         if (!targetBase) return json(res, { models: [], error: "缺少 API 地址" }, 200);
+        // OpenCode Zen 的 /models 也要客户端指纹，否则拿不到清单
+        const zenList = isZenBase(targetBase);
+        const listHeaders: Record<string, string> = zenList
+          ? zenHeaders(mintSessionId(), mintRequestId(), false)
+          : (apiKey && apiKey !== "free" && apiKey !== "keyless" ? { "Authorization": `Bearer ${apiKey}` } : {});
         const r = await fetch(`${targetBase.replace(/\/+$/, "")}/models`, {
-          // 免 key 网关:free/keyless/空 都不带 Authorization
-          headers: apiKey && apiKey !== "free" && apiKey !== "keyless" ? { "Authorization": `Bearer ${apiKey}` } : {},
+          headers: listHeaders,
           signal: AbortSignal.timeout(15e3)
         });
         if (!r.ok) {
@@ -4025,7 +4050,10 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         }
         const data2 = await r.json().catch(() => null);
         const arr = Array.isArray(data2?.data) ? data2.data : Array.isArray(data2) ? data2 : [];
-        const models = [...new Set(arr.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean))];
+        // Zen 是混合清单（85 个里只有 9 个免费），本车道只列免费档——
+        // 否则用户选中付费 id 会直接报错
+        const ids = arr.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
+        const models = [...new Set(zenList ? ids.filter((id) => /-free$/.test(id) || id === "big-pickle") : ids)];
         return json(res, { models });
       } catch (e) {
         return json(res, { models: [], error: e.message || "请求失败" }, 200);
@@ -4565,6 +4593,175 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
   } catch (e) {
     json(res, { error: e.message }, 500);
   }
+// ─── 开放本地 API：把本机当成一个 OpenAI 兼容服务，供其它工具调用 ───
+// 安全取向见 shared/localApi（有测试）：默认关闭；只认显式生成的 Key；
+// 本机 Key 与局域网 Key 互不通用；局域网范围未开时外部请求一律拒绝。
+var LOCAL_API_MOD = (() => { try { return require("./src/shared/localApi.cjs"); } catch (e) { console.error("localApi.cjs load failed:", e.message); return null; } })();
+var localApiServer = null;
+var localApiConfig = { enabled: false, port: 18080, scope: "local", key: "", lanKey: "" };
+
+function localApiFromLoopback(req) {
+  const ra = String(req.socket?.remoteAddress || "");
+  return ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+}
+
+// 读取配置：存在 SQLite 的 settings 表，与其它设置同源
+function loadLocalApiConfig() {
+  try {
+    if (!sharedDb) return;
+    const rows = db.getAllSettings();
+    const get = (k) => { const r = rows.find((x) => x.key === k); return r ? String(r.value) : ""; };
+    localApiConfig = {
+      enabled: get("local_api_enabled") === "1",
+      port: Number(get("local_api_port")) || 18080,
+      scope: get("local_api_scope") === "lan" ? "lan" : "local",
+      key: get("local_api_key"),
+      lanKey: get("local_api_lankey"),
+    };
+  } catch (e) { console.error("读取本地 API 配置失败:", e.message); }
+}
+
+/** 把请求转发到本机的 llm-proxy，实现 OpenAI 兼容端点 */
+async function localApiHandler(req, res) {
+  const cfg = localApiConfig;
+  const fromLoop = localApiFromLoopback(req);
+  const auth = LOCAL_API_MOD
+    ? LOCAL_API_MOD.authorizeLocalApi(req.headers["authorization"], fromLoop, cfg)
+    : { ok: false, status: 403, error: "模块未加载" };
+  const jsonOut = (obj, code = 200) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
+  if (!auth.ok) {
+    // 按 OpenAI 的错误形状返回，便于客户端识别
+    return jsonOut({ error: { message: auth.error, type: "invalid_request_error", code: auth.status === 401 ? "invalid_api_key" : "forbidden" } }, auth.status || 401);
+  }
+
+  const url = new URL(req.url || "/", "http://localhost");
+  // 只暴露三个标准端点：模型清单 / 对话 / 补全（后者走同一处理器）
+  if (req.method === "GET" && /^\/v1\/models\/?$/.test(url.pathname)) {
+    const base = (db.getSetting ? db.getSetting("apiBaseUrl") : "") || "";
+    const model = (db.getSetting ? db.getSetting("model") : "") || "";
+    // 模型清单取自当前配置的上游，拉不到就至少回当前模型，别回空
+    let ids = model ? [String(model)] : [];
+    try {
+      if (base) {
+        const r = await fetch(`${String(base).replace(/\/+$/, "")}/models`, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) {
+          const j = await r.json();
+          const arr = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+          const got = arr.map((m) => (typeof m === "string" ? m : m?.id)).filter(Boolean);
+          if (got.length) ids = got;
+        }
+      }
+    } catch { /* 拉不到就用兜底 */ }
+    return jsonOut({ object: "list", data: ids.map((id) => ({ id, object: "model", owned_by: "jutian-agent" })) });
+  }
+
+  if (req.method === "POST" && (/^\/v1\/chat\/completions\/?$/.test(url.pathname) || /^\/v1\/completions\/?$/.test(url.pathname))) {
+    // 读原始 body，原样转给内部 llm-proxy
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const raw = Buffer.concat(chunks).toString("utf8");
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch { /* 交给下游报错 */ }
+    if (!parsed || typeof parsed !== "object") {
+      return jsonOut({ error: { message: "请求体不是合法 JSON", type: "invalid_request_error" } }, 400);
+    }
+    // 客户端没指定模型时用应用当前模型
+    if (!parsed.model) {
+      try { parsed.model = (db.getSetting ? db.getSetting("model") : "") || ""; } catch {}
+    }
+    try {
+      const upstream = await fetch(`http://127.0.0.1:${PORT}/api/llm-proxy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Target-Base": String((db.getSetting ? db.getSetting("apiBaseUrl") : "") || ""),
+          // 故意不传 X-Api-Key：GET /api/settings 回显的是掩码(sk-H****)，
+          // 拿它当钥匙会被上游 401。llm-proxy 在头缺失或为掩码时会自己
+          // 从库里取真钥匙——密钥不出本机，这里交给它处理。
+        },
+        body: JSON.stringify(parsed),
+      });
+      // 原样透传（含 SSE 流），客户端拿到的语义与直连上游一致
+      res.writeHead(upstream.status, {
+        "Content-Type": upstream.headers.get("content-type") || "application/json",
+        "Cache-Control": "no-cache",
+      });
+      if (upstream.body) {
+        const reader = upstream.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(Buffer.from(value));
+        }
+      }
+      res.end();
+    } catch (e) {
+      return jsonOut({ error: { message: String(e?.message || e), type: "upstream_error" } }, 502);
+    }
+    return;
+  }
+
+  return jsonOut({ error: { message: `未知端点 ${url.pathname}（支持 GET /v1/models、POST /v1/chat/completions）`, type: "invalid_request_error" } }, 404);
+}
+
+/** 按配置启停本地 API 监听。配置变化时由设置保存接口调用。 */
+function syncLocalApi() {
+  loadLocalApiConfig();
+  const want = localApiConfig.enabled && !!localApiConfig.key;
+  if (want && !localApiServer) {
+    const bind = LOCAL_API_MOD ? LOCAL_API_MOD.bindAddress(localApiConfig.scope) : "127.0.0.1";
+    // 端口可能被别的程序占用（实测 8326 常被 DeepSeek Harness 占着）。
+    // 按备选列表依次试，全都失败才放弃——比让用户自己去猜端口友好得多。
+    const fallbacks = LOCAL_API_MOD ? LOCAL_API_MOD.LOCAL_API_PORT_FALLBACKS : [localApiConfig.port];
+    const candidates = [localApiConfig.port, ...fallbacks.filter((p) => p !== localApiConfig.port)];
+    const tryListen = (idx) => {
+      if (idx >= candidates.length) {
+        console.error("本地 API 启动失败：候选端口全部被占用");
+        localApiServer = null;
+        return;
+      }
+      const port = candidates[idx];
+      const srv = http.createServer((req, res) => { localApiHandler(req, res).catch(() => { try { res.end(); } catch {} }); });
+      srv.once("error", (e) => {
+        if (e && e.code === "EADDRINUSE") {
+          console.log(`本地 API 端口 ${port} 被占用，换下一个`);
+          try { srv.close(); } catch {}
+          tryListen(idx + 1);
+        } else {
+          console.error("本地 API 监听失败:", e.message);
+          localApiServer = null;
+        }
+      });
+      srv.listen(port, bind, () => {
+        localApiServer = srv;
+        // 实际生效的端口回写配置，界面显示与实际一致
+        if (port !== localApiConfig.port) {
+          localApiConfig.port = port;
+          try { db.setSetting("local_api_port", String(port)); } catch {}
+        }
+        console.log(`→ 本地 API 已开放: http://${bind}:${port}/v1`);
+      });
+    };
+    tryListen(0);
+  } else if (!want && localApiServer) {
+    try { localApiServer.close(); } catch {}
+    localApiServer = null;
+    console.log("→ 本地 API 已关闭");
+  } else if (want && localApiServer) {
+    // 端口或范围变了：重启监听
+    const addr = localApiServer.address();
+    const curPort = addr && typeof addr === "object" ? addr.port : 0;
+    const bind = LOCAL_API_MOD ? LOCAL_API_MOD.bindAddress(localApiConfig.scope) : "127.0.0.1";
+    const curBind = addr && typeof addr === "object" ? addr.address : "";
+    if (curPort !== localApiConfig.port || curBind !== bind) {
+      try { localApiServer.close(); } catch {}
+      localApiServer = null;
+      syncLocalApi();
+    }
+  }
+}
+try { loadLocalApiConfig(); syncLocalApi(); } catch (e) { console.error("本地 API 初始化失败:", e.message); }
+
 }).listen(PORT, () => {
 
 // ─── 定时任务执行器（每 30s 检查一次，到点真实执行）───

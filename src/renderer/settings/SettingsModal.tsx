@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { reportError } from '../app/ErrorToast';
@@ -25,7 +25,7 @@ interface Props {
   onOpenFreeModels?: () => void;
 }
 
-type TabId = 'inference' | 'workspace' | 'security' | 'usage' | 'data' | 'appearance' | 'language' | 'about';
+type TabId = 'inference' | 'workspace' | 'security' | 'usage' | 'data' | 'appearance' | 'language' | 'localapi' | 'about';
 
 // 提供商预设：一键切换 API 地址/默认模型/上下文窗口/多模态能力
 const PROVIDERS = [
@@ -51,6 +51,7 @@ const CATEGORIES: { id: TabId; label: string; icon: string }[] = [
   { id: 'data', label: '数据', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
   { id: 'appearance', label: '外观', icon: 'M4 6h16M4 12h16M4 18h16' },
   { id: 'language', label: '语言', icon: 'M3 5h12M9 3v2m1.5 0l-3 14m4.5 0h-6m9-3l4-8 4 8m-.5-2h-7' },
+  { id: 'localapi', label: '本地 API', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
   { id: 'about', label: '关于', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 ]
 
@@ -133,6 +134,38 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   // 环境诊断状态
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagResult, setDiagResult] = useState<any>(null);
+  // 开放本地 API（OpenAI 兼容转发）
+  const [localApi, setLocalApi] = useState<{ enabled: boolean; port: number; scope: 'local' | 'lan'; key: string; lanKey: string }>({
+    enabled: false, port: 18080, scope: 'local', key: '', lanKey: '',
+  });
+  const [localApiMsg, setLocalApiMsg] = useState('');
+  const loadLocalApi = useCallback(async () => {
+    try {
+      const d = await fetch('/api/settings').then(r => r.json());
+      setLocalApi({
+        enabled: String(d?.local_api_enabled || '') === '1',
+        port: Number(d?.local_api_port) || 18080,
+        scope: String(d?.local_api_scope || '') === 'lan' ? 'lan' : 'local',
+        key: String(d?.local_api_key || ''),
+        lanKey: String(d?.local_api_lankey || ''),
+      });
+    } catch { /* 读不到就保持默认 */ }
+  }, []);
+  useEffect(() => { loadLocalApi() }, [loadLocalApi]);
+  const saveLocalApi = useCallback(async (patch: Partial<{ enabled: boolean; port: number; scope: 'local' | 'lan' }>) => {
+    const next = { ...localApi, ...patch };
+    setLocalApi(next);
+    setLocalApiMsg('');
+    const map: [string, string][] = []
+    if (patch.enabled !== undefined) map.push(['local_api_enabled', patch.enabled ? '1' : '0'])
+    if (patch.port !== undefined) map.push(['local_api_port', String(patch.port)])
+    if (patch.scope !== undefined) map.push(['local_api_scope', patch.scope])
+    for (const [key, value] of map) {
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, value }) }).catch(() => {})
+    }
+    await loadLocalApi();
+    setLocalApiMsg('✓ 已保存');
+  }, [localApi, loadLocalApi]);
   // 数据库维护
   const [vacuumMsg, setVacuumMsg] = useState('');
   const [diagCopied, setDiagCopied] = useState(false);
@@ -1180,6 +1213,103 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 ))}
               </Sub>
 
+            </>)}
+
+            {tab === 'localapi' && (<>
+              <Sub c={c} title={t('开放本地 API', 'Local API')}>
+                <p className="text-[11px] mb-3 leading-relaxed" style={{ color: c.textMuted }}>
+                  {t('把本机变成一个 OpenAI 兼容服务，供编辑器插件、脚本或局域网内的其它设备调用——它们不必再单独配置密钥。默认关闭。',
+                     'Expose this machine as an OpenAI-compatible endpoint for editor plugins, scripts, or LAN devices — they reuse your configured model without their own key. Off by default.')}
+                </p>
+
+                {/* 开关 */}
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-[12.5px]" style={{ color: c.text }}>{t('启用', 'Enable')}</span>
+                  <button onClick={() => saveLocalApi({ enabled: !localApi.enabled })}
+                    className="w-11 h-6 rounded-full transition-colors relative shrink-0"
+                    style={{ background: localApi.enabled ? '#10a37f' : c.bgInput, border: `1px solid ${c.border}` }}>
+                    <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                      style={{ left: localApi.enabled ? 22 : 2 }} />
+                  </button>
+                </div>
+
+                {/* 端口 */}
+                <div className="flex items-center justify-between py-2 gap-3">
+                  <span className="text-[12.5px] shrink-0" style={{ color: c.text }}>{t('端口', 'Port')}</span>
+                  <input type="number" min={1024} max={65535} value={localApi.port}
+                    onChange={e => setLocalApi(v => ({ ...v, port: Number(e.target.value) || 18080 }))}
+                    onBlur={() => saveLocalApi({ port: localApi.port })}
+                    className="w-28 h-8 px-2 rounded-lg text-[12px] font-mono outline-none"
+                    style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.border}` }} />
+                </div>
+
+                {/* 范围 */}
+                <div className="flex items-center justify-between py-2 gap-3">
+                  <span className="text-[12.5px] shrink-0" style={{ color: c.text }}>{t('监听范围', 'Scope')}</span>
+                  <div className="flex gap-1.5">
+                    {([['local', t('仅本机', 'Local only')], ['lan', t('局域网', 'LAN')]] as const).map(([id, label]) => (
+                      <button key={id} onClick={() => saveLocalApi({ scope: id })}
+                        className="px-2.5 h-8 rounded-lg text-[12px] font-medium"
+                        style={{ background: localApi.scope === id ? c.bgCard : c.bgInput, color: localApi.scope === id ? c.textHead : c.textTertiary, border: `1px solid ${localApi.scope === id ? c.border : 'transparent'}` }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {localApiMsg && <p className="text-[11px] mt-1" style={{ color: localApiMsg.startsWith('✓') ? '#10a37f' : '#d97706' }}>{localApiMsg}</p>}
+              </Sub>
+
+              {/* Key 管理：本机 Key 与局域网 Key 分开，任一泄露只轮换一侧 */}
+              <Sub c={c} title={t('访问密钥', 'API Keys')}>
+                {([['key', t('本机 Key', 'Local key')], ['lanKey', t('局域网 Key', 'LAN key')]] as const).map(([k, label]) => (
+                  <div key={k} className="py-2">
+                    <div className="text-[11.5px] mb-1" style={{ color: c.textTertiary }}>{label}</div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 min-w-0 truncate text-[11px] px-2 py-1.5 rounded-lg font-mono"
+                        style={{ background: c.bgInput, color: (k === 'key' ? localApi.key : localApi.lanKey) ? c.text : c.textMuted, border: `1px solid ${c.border}` }}>
+                        {(k === 'key' ? localApi.key : localApi.lanKey) || t('（未生成）', '(none)')}
+                      </code>
+                      <button onClick={async () => {
+                        const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ key: k === 'key' ? 'local_api_key' : 'local_api_lankey', value: 'ly-' + Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('') }) })
+                        if (r.ok) { await loadLocalApi(); setLocalApiMsg('✓ 已生成新密钥（旧密钥立即失效）') }
+                      }} className="px-2 h-7 rounded-lg text-[11px] shrink-0" style={{ background: c.bgInput, color: c.textSecondary }}>
+                        {(k === 'key' ? localApi.key : localApi.lanKey) ? t('重新生成', 'Rotate') : t('生成', 'Generate')}
+                      </button>
+                      {(k === 'key' ? localApi.key : localApi.lanKey) && (
+                        <button onClick={() => { navigator.clipboard?.writeText((k === 'key' ? localApi.key : localApi.lanKey)); setLocalApiMsg('✓ 已复制') }}
+                          className="px-2 h-7 rounded-lg text-[11px] shrink-0" style={{ background: c.bgInput, color: c.textSecondary }}>
+                          {t('复制', 'Copy')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </Sub>
+
+              {/* 接入信息 */}
+              <Sub c={c} title={t('接入方式', 'How to connect')}>
+                <div className="text-[11.5px] space-y-2" style={{ color: c.textSecondary }}>
+                  <div>
+                    <span style={{ color: c.textTertiary }}>Base URL：</span>
+                    <code className="font-mono" style={{ color: c.text }}>{`http://${localApi.scope === 'lan' ? '<本机IP>' : '127.0.0.1'}:${localApi.port}/v1`}</code>
+                  </div>
+                  <div><span style={{ color: c.textTertiary }}>{t('端点', 'Endpoints')}：</span><code className="font-mono">GET /v1/models · POST /v1/chat/completions</code></div>
+                  <div className="rounded-lg p-2.5 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap"
+                    style={{ background: c.bgInput, color: c.textTertiary, border: `1px solid ${c.border}` }}>
+{`curl http://${localApi.scope === 'lan' ? '<本机IP>' : '127.0.0.1'}:${localApi.port}/v1/chat/completions \\
+  -H "Authorization: Bearer ${(localApi.key || 'ly-...').slice(0, 12)}…" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"${settings.model || 'auto'}","messages":[{"role":"user","content":"hi"}]}'`}
+                  </div>
+                  {localApi.scope === 'lan' && (
+                    <p style={{ color: '#d97706' }}>
+                      {t('局域网已开启：任何能访问该端口的设备都能消耗你的模型额度，请仅在可信网络使用。', 'LAN is on: anyone who can reach this port can spend your model quota. Use only on trusted networks.')}
+                    </p>
+                  )}
+                </div>
+              </Sub>
             </>)}
 
             {tab === 'language' && (<>

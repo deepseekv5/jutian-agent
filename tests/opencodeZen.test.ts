@@ -12,7 +12,7 @@ import {
   mintSessionId, mintRequestId, SESSION_RE, REQUEST_RE,
   isZenBase, zenEndpoint, zenHeaders, zenBody,
   withFingerprintTools, classifyZenError, FINGERPRINT_TOOLS,
-  ZEN_FREE_MODELS, ZEN_UNAVAILABLE,
+  ZEN_FREE_MODELS, ZEN_KNOWN_DEAD,
 } from '../src/shared/opencodeZen'
 
 describe('session / request id 形状', () => {
@@ -156,17 +156,24 @@ describe('classifyZenError — 两种 403 必须分清', () => {
 })
 
 describe('模型清单', () => {
-  it('可用清单非空且 id 唯一', () => {
+  it('离线兜底清单非空且 id 唯一', () => {
     expect(ZEN_FREE_MODELS.length).toBeGreaterThan(0)
     expect(new Set(ZEN_FREE_MODELS.map(m => m.id)).size).toBe(ZEN_FREE_MODELS.length)
   })
 
-  it('不把实测不可用的模型混进可用清单', () => {
+  // 已知不路由的 id 走"标记"而不是"隐藏"：面板要显示全部模型，
+  // 但必须如实标注哪些在当前网络下用不了
+  it('已知不可用的 id 都在标记表里，且不混进离线可用清单', () => {
     const usable = new Set(ZEN_FREE_MODELS.map(m => m.id))
-    for (const u of ZEN_UNAVAILABLE) expect(usable.has(u.id)).toBe(false)
+    for (const id of Object.keys(ZEN_KNOWN_DEAD)) {
+      expect(usable.has(id)).toBe(false)
+      expect(ZEN_KNOWN_DEAD[id].length).toBeGreaterThan(0)
+    }
   })
 
-  it('不可用项都带原因（界面要如实标注）', () => {
-    for (const u of ZEN_UNAVAILABLE) expect(u.reason.length).toBeGreaterThan(0)
+  it('标记表覆盖实测确认不可用的那几个', () => {
+    for (const id of ['cat-jam-free', 'muse-spark-1.3-contributor-free']) {
+      expect(ZEN_KNOWN_DEAD[id]).toBeTruthy()
+    }
   })
 })

@@ -352,6 +352,33 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [])
 
   // ─── 拖拽入图：整个 composer 是拖放区 ───
+  // ─── 模型下拉：显示当前供应商的全部模型，打开时实时拉取 ───
+  // 之前只读 settings.models（静态存的一份，来自设置页那一次拉取），
+  // 换供应商或上游新增模型后这里不会更新。改为每次展开下拉就重新拉，
+  // 并保留已选值——上游暂时拉不到时不能把用户当前模型弄丢。
+  const [liveModels, setLiveModels] = useState<string[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsErr, setModelsErr] = useState('')
+  const fetchLiveModels = useCallback(async () => {
+    const base = settings?.apiBaseUrl || ''
+    if (!base) return
+    setModelsLoading(true); setModelsErr('')
+    try {
+      const r = await fetch('/api/models-list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Target-Base': base,
+          'X-Api-Key': effectiveApiKey(settings?.apiKey),
+        },
+      })
+      const d = await r.json()
+      if (Array.isArray(d?.models) && d.models.length) setLiveModels(d.models)
+      else setModelsErr(String(d?.error || '上游未返回模型'))
+    } catch (e) { setModelsErr(String((e as Error)?.message || e)) }
+    setModelsLoading(false)
+  }, [settings?.apiBaseUrl, settings?.apiKey])
+
   const [dragOver, setDragOver] = useState(false)
   const [dragNotice, setDragNotice] = useState('')
   // 发送前自检提示（未配模型 / 缺联网能力）
@@ -1315,14 +1342,19 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
             {/* 模型：常驻下拉（对应参考 UI 的 "gpt-5.6-sol ▾" 芯片） */}
             {(() => {
-              const modelChoices = [...new Set([...((settings as any)?.models || []), settings?.model].filter(Boolean))] as string[]
+              const modelChoices = [...new Set([...liveModels, ...((settings as any)?.models || []), settings?.model].filter(Boolean))] as string[]
               const cur = currentModel || settings?.model || ''
               if (modelChoices.length === 0) {
-                return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title="未配置模型（设置 → 推理）">{cur || '未配置模型'}</span>
+                return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title={modelsErr || '未配置模型（设置 → 推理）'}>{modelsLoading ? '拉取中…' : (cur || '未配置模型')}</span>
               }
               return (
-                <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 max-w-[190px]" style={{ background: c.surfaceInput, border: `1px solid ${c.border}` }} title="切换模型">
-                  <select value={cur} onChange={e => onModelChange?.(e.target.value)} aria-label="切换模型"
+                <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 max-w-[190px]" style={{ background: c.surfaceInput, border: `1px solid ${c.border}` }}
+                  title={modelsErr ? `上游拉取失败：${modelsErr}（显示已缓存清单）` : `切换模型 · 共 ${modelChoices.length} 个`}>
+                  <select value={cur}
+                    // 展开即实时拉取当前供应商的模型清单
+                    onFocus={() => { fetchLiveModels() }}
+                    onMouseDown={() => { fetchLiveModels() }}
+                    onChange={e => onModelChange?.(e.target.value)} aria-label="切换模型"
                     className="bg-transparent outline-none cursor-pointer text-[12px] font-mono appearance-none max-w-[150px] truncate"
                     style={{ color: c.textSecondary }}>
                     {modelChoices.map(m => <option key={m} value={m}>{m}</option>)}
