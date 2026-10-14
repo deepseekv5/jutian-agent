@@ -180,6 +180,15 @@ var _EMPTY_CLEANUP = (() => {
   } catch (e) { console.error("空会话清理失败:", e.message); }
 })();
 // AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
+// OpenCode Zen 免费车道：请求构造与判定（与前端共用 src/shared/opencodeZen.ts）
+var ZEN_MOD = (() => { try { return require("./src/shared/opencodeZen.cjs"); } catch (e) { console.error("opencodeZen.cjs load failed:", e.message); return null; } })();
+var isZenBase = ZEN_MOD ? ZEN_MOD.isZenBase : () => false;
+var zenEndpoint = ZEN_MOD ? ZEN_MOD.zenEndpoint : () => "/chat/completions";
+var zenHeaders = ZEN_MOD ? ZEN_MOD.zenHeaders : () => ({});
+var zenBody = ZEN_MOD ? ZEN_MOD.zenBody : (_m, b) => b;
+var mintSessionId = ZEN_MOD ? ZEN_MOD.mintSessionId : () => "";
+var mintRequestId = ZEN_MOD ? ZEN_MOD.mintRequestId : () => "";
+var withFingerprintTools = ZEN_MOD ? ZEN_MOD.withFingerprintTools : (t) => t;
 var PERSONA_MOD = (() => { try { return require("./src/shared/personas.cjs"); } catch (e) { console.error("personas.cjs load failed:", e.message); return null; } })();
 var PRESET_PERSONAS = PERSONA_MOD ? PERSONA_MOD.PRESET_PERSONAS : [];
 var PERSONA_DISCLAIMER = PERSONA_MOD ? PERSONA_MOD.DISCLAIMER : { disclaimer: [], privacy: [] };
@@ -2361,14 +2370,42 @@ http.createServer(async (req, res) => {
         // 从 body 中移除内部字段
         delete bodyData.targetBase;
         delete bodyData.apiKey;
-        // Pollinations 的端点本身就是 /openai(chat completions),不拼后缀
-        const upstreamUrl = /\/openai$/.test(targetBase) ? targetBase : `${targetBase}/chat/completions`;
-        console.log(`\u2192 llm-proxy \u2192 ${targetBase}`);
         // 免 key 网关(如 Kilo Gateway):密钥填 free/keyless 时完全不带
         // Authorization 头——此类网关对任何无效 token 反而报 INVALID_TOKEN
         const keyless = apiKey === "free" || apiKey === "keyless" || apiKey === "";
         const proxyHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        if (!keyless) proxyHeaders["Authorization"] = `Bearer ${apiKey}`;
+        // ─── OpenCode Zen 免费车道：需要特殊头 + 强制流式 ───
+        // 这条车道不能按普通 OpenAI 兼容源处理：
+        //  · 必须带 x-opencode-* 客户端指纹，且 session/request id 要是特定形状
+        //  · 必须 stream:true —— 非流式一律 403，且报的是误导性的 FreeTierError
+        //  · 免费额度要求 body.tools 声明 bash/glob/grep/read 四个小写工具
+        // 判定与构造都在 shared/opencodeZen（有测试）
+        const zen = isZenBase(targetBase);
+        if (zen) {
+          const sess = mintSessionId();
+          const reqId = mintRequestId();
+          Object.assign(proxyHeaders, zenHeaders(sess, reqId, true));
+          bodyData = zenBody(String(bodyData.model || ""), bodyData);
+          // 指纹工具：保留调用方真实工具，只补缺的槽位
+          const bd = bodyData as Record<string, unknown>;
+          const tools = Array.isArray(bd.tools) ? (bd.tools as unknown[]) : [];
+          bd.tools = withFingerprintTools(tools as { function?: { name?: string } }[], (name) => ({
+            type: "function",
+            function: {
+              name,
+              description: "Not available. Never call this tool.",
+              parameters: { type: "object", properties: {}, additionalProperties: false },
+            },
+          }));
+        } else if (!keyless) {
+          proxyHeaders["Authorization"] = `Bearer ${apiKey}`;
+        }
+        // Pollinations 的端点本身就是 /openai(chat completions),不拼后缀；
+        // Zen 按模型分流 /chat/completions 与 /responses
+        const upstreamUrl = zen
+          ? `${targetBase.replace(/\/+$/, "")}${zenEndpoint(String(bodyData.model || ""))}`
+          : /\/openai$/.test(targetBase) ? targetBase : `${targetBase}/chat/completions`;
+        console.log(`\u2192 llm-proxy \u2192 ${targetBase}${zen ? " (zen)" : ""}`);
         // v11:主上游连接失败不再抛出 —— 置 null 落入下方接力链（免费链兜底）
         let proxyRes = null;
         try {
@@ -3914,6 +3951,17 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
               base: "https://text.pollinations.ai/openai",
               note: "免 key 匿名档:GPT-OSS 20B(推理·工具调用)",
               models: [{ id: "openai-fast", name: "GPT-OSS 20B(推理·工具)", context: 131072, vision: false, tools: true }],
+            },
+            {
+              // OpenCode Zen 免费车道：实测可用（2026-10，中国大陆出口免代理）。
+              // 清单只放逐个探活通过的模型——上游 /models 里标着 -free 但
+              // 实际不路由的（cat-jam / muse-spark）不列进可用档。
+              id: "opencode-zen", name: "OpenCode Zen Free", keyless: true,
+              base: "https://opencode.ai/zen/v1",
+              note: "免 key 公共档:6 个实测可用模型(需流式，已自动处理)",
+              models: (ZEN_MOD ? ZEN_MOD.ZEN_FREE_MODELS : []).map((m) => ({
+                id: m.id, name: m.name, context: m.context, vision: false, tools: true,
+              })),
             },
             {
               id: "kilo", name: "Kilo Gateway", keyless: true,

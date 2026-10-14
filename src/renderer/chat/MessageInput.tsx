@@ -11,6 +11,8 @@ import { ASSISTANT_NAME } from '../brand'
 import { MODE_ACCENT } from '../../shared/chatModes'
 import { hhmmss } from '../utils/datetime'
 import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
+import { selfCheck, shouldBlock } from '../engine/selfCheck'
+import { effectiveApiKey } from '../store/storage'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -352,6 +354,8 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   // ─── 拖拽入图：整个 composer 是拖放区 ───
   const [dragOver, setDragOver] = useState(false)
   const [dragNotice, setDragNotice] = useState('')
+  // 发送前自检提示（未配模型 / 缺联网能力）
+  const [checkNotice, setCheckNotice] = useState('')
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
@@ -641,6 +645,27 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const handleSend = () => {
     const trimmed = value.trim()
     if (!trimmed) return
+
+    // ─── 发送前自检：把"确定做不到"提前说，而不是等模型回一句做不到 ───
+    // 只拦 block（实际只有"没配模型"）；warn 仅提示，不阻断。
+    // 联网能力按"实际会被发送的工具表"判断：HARNESS 里关掉 web_search
+    // 是常见配置，那种情况下不提醒用户就是假承诺。
+    let hasWebTool = false
+    try {
+      const disabled: string[] = JSON.parse(localStorage.getItem('harness-disabled-tools') || '[]')
+      hasWebTool = BUILTIN_TOOLS.some(t =>
+        (t.name === 'web_search' || t.name === 'web_fetch') && !disabled.includes(t.name))
+    } catch { hasWebTool = BUILTIN_TOOLS.some(t => t.name === 'web_search' || t.name === 'web_fetch') }
+    const check = selfCheck(trimmed, {
+      web: modes.search || hasWebTool,
+      // 模型是否可用：看「有没有选模型」，而不是看 apiKey 字符串。
+      // apiKey 在界面里是掩码（sk-****），effectiveApiKey 对掩码返回空串——
+      // 拿它判断会把每个正常用户都误判成"没配模型"并拦下发送。
+      modelConfigured: !!effectiveApiKey(settings?.apiKey) || !!settings?.model,
+    })
+    if (check.level !== 'ok') setCheckNotice(check.message)
+    if (shouldBlock(check)) return
+    if (check.level === 'warn') setTimeout(() => setCheckNotice(''), 6000)
 
     // 单次任务模式：按原项目语义包装用户输入
     let content = trimmed
@@ -1145,10 +1170,19 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             </div>
           )}
 
-          {/* 拖放结果提示：被挡下的文件要说清原因，否则用户以为拖放坏了 */}
-          {dragNotice && (
-            <div className="px-4 pt-2">
-              <span className="text-[11px]" style={{ color: c.textTertiary }}>{dragNotice}</span>
+          {/* 拖放结果 / 发送前自检提示 */}
+          {(dragNotice || checkNotice) && (
+            <div className="px-4 pt-2 space-y-1">
+              {dragNotice && <div className="text-[11px]" style={{ color: c.textTertiary }}>{dragNotice}</div>}
+              {checkNotice && (
+                <div className="flex items-start gap-1.5 text-[11.5px] leading-relaxed"
+                  style={{ color: '#b45309' }}>
+                  <svg className="w-3.5 h-3.5 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                  </svg>
+                  <span>{checkNotice}</span>
+                </div>
+              )}
             </div>
           )}
 
