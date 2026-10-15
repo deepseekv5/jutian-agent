@@ -27,6 +27,8 @@ export interface ToolCall {
   finished_at?: string
   /** 时序交错:工具调用开始时正文已流出的长度,渲染按真实顺序排布 */
   preLen?: number
+  /** 时序交错:工具调用开始时思考已累积的长度,渲染据此切出「思考→执行→思考」多块 */
+  thinkLen?: number
   /** 文件变更 id（edit_file 类工具返回，供 diff 卡片定位与撤销） */
   changeId?: string
 }

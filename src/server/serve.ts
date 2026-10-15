@@ -574,6 +574,38 @@ async function shell(a) {
 async function read_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
+  // 路径是目录时不能直接 readFile（会抛 EISDIR）。实测复现：模型传
+  // about_me.html，但该路径当时是目录（如网页另存为时生成的同名文件夹），
+  // 直接读崩成 EISDIR，模型无从判断该读哪个文件。
+  // 改为：列出目录内容 + 若目录里就有同名文件则直接读出来（省一轮往返）。
+  let st;
+  try { st = await fsp.stat(p); } catch (e) { return { success: false, error: e.message }; }
+  if (st.isDirectory()) {
+    try {
+      const entries = await fsp.readdir(p, { withFileTypes: true });
+      const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+      const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name + "/");
+      // 目录里正好有同名文件（about_me.html/about_me.html）→ 直接读它
+      const base = path.basename(p);
+      const sameName = files.find((f) => f.toLowerCase() === base.toLowerCase());
+      if (sameName) {
+        let c = await fsp.readFile(path.join(p, sameName), "utf-8");
+        if (a.offset || a.limit) {
+          const ls = c.split("\n");
+          c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
+        }
+        return { success: true, output: c.slice(0, MAX_OUT), note: `（自动读取目录内同名文件 ${sameName}）` };
+      }
+      const listing = [...dirs.sort(), ...files.sort()];
+      return {
+        success: false,
+        isDirectory: true,
+        error: `"${a.path}" 是目录，不是文件。请从下面挑一个具体文件再读：\n${listing.slice(0, 60).join("\n") || "（空目录）"}`,
+      };
+    } catch (e) {
+      return { success: false, error: `读取目录失败: ${e.message}` };
+    }
+  }
   try {
     let c = await fsp.readFile(p, "utf-8");
     if (a.offset || a.limit) {

@@ -159,6 +159,27 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
   )
 }
 
+/** 单段思考块：多轮「思考→执行→思考」时，每段思考独立显示、独立展开。
+ *  与顶部 ThinkingCard 的区别：ThinkingCard 把整条消息的思考堆在一起，
+ *  而工具循环里模型会「想一段→做个动作→再想一段」，这里按动作边界切开，
+ *  让阅读顺序跟真实推理顺序一致。展开状态自管理，默认展开。 */
+function ThinkingBlock({ text, label }: { text: string; label: string }) {
+  const { c } = useTheme()
+  const [open, setOpen] = useState(true)
+  if (!text || !text.trim()) return null
+  return (
+    <div className="thinking-card my-2">
+      <div className="thinking-header" onClick={() => setOpen(v => !v)}>
+        <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        <span>{label}</span>
+      </div>
+      {open && <div className="thinking-content">{text}</div>}
+    </div>
+  )
+}
+
 /** 代码块：语言栏 + 复制按钮（ChatGPT 风格） */
 function CodeBlock({ children }: { children?: any }) {
   const [copied, setCopied] = useState(false)
@@ -598,7 +619,11 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           )
         })()}
 
-        <ThinkingCard thinking={thinking || ''} isStreaming={!!isStreaming} open={thinkingOpen} onToggle={() => setThinkingOpen(v => !v)} thinkMs={isUser ? null : readThinkMs(msgId)} />
+        {/* 顶部思考卡：仅在没有 thinkLen 分块信息时显示（历史无标记消息、
+            或流式进行中尚未落库）。有分块时思考被切进下方时间线，不再堆顶。 */}
+        {!(toolCalls || []).some((tc: any) => typeof tc.thinkLen === 'number') && (
+          <ThinkingCard thinking={thinking || ''} isStreaming={!!isStreaming} open={thinkingOpen} onToggle={() => setThinkingOpen(v => !v)} thinkMs={isUser ? null : readThinkMs(msgId)} />
+        )}
         {(() => {
           const tcs: any[] = toolCalls || []
           const diffFor = (tc: any) => ((tc.name === 'write_file' || tc.name === 'edit_file') && tc.changeId && tc.status !== 'pending')
@@ -616,14 +641,37 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           )
           // 时序交错:带 preLen 标记(本轮会话产生)→ 文本与工具卡按真实顺序排布,
           // 说在工具前的话在卡片上方,最终输出收尾;历史无标记行 → 文在前卡在后
-          if (tcs.some((tc: any) => typeof tc.preLen === 'number')) {
+          const hasPre = tcs.some((tc: any) => typeof tc.preLen === 'number')
+          // 带 thinkLen → 把整段 thinking 按工具边界切成「思考→执行→思考」多块，
+          // 每块独立折叠，阅读顺序与真实推理顺序一致
+          const hasThink = tcs.some((tc: any) => typeof tc.thinkLen === 'number')
+          const thinkStr = thinking || ''
+          // 首块标签带耗时（"思考了 8 秒"），后续块"继续思考"——时间信息不丢
+          const thinkMs = isUser ? null : readThinkMs(msgId)
+          const firstLabel = thinkMs ? fmtThink(thinkMs) : '思考'
+          if (hasPre || hasThink) {
             let last = 0
+            let tLast = 0
+            let thinkBlock = 0
             const seq: any[] = []
             for (const tc of tcs) {
+              // 该工具之前的思考段
+              if (hasThink) {
+                const tCut = Math.max(tLast, Math.min(Number(tc.thinkLen) || 0, thinkStr.length))
+                if (tCut > tLast) {
+                  seq.push(<ThinkingBlock key={'th' + seq.length} text={thinkStr.slice(tLast, tCut)} label={thinkBlock === 0 ? firstLabel : '继续思考'} />)
+                  thinkBlock++
+                }
+                tLast = tCut
+              }
               const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, shownContent.length))
               if (cut > last) seq.push(<Text key={'t' + seq.length} v={displayContent.slice(last, Math.min(cut, displayContent.length))} />)
               seq.push(<Fragment key={'c' + tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</Fragment>)
               last = cut
+            }
+            // 收尾：最后一段思考 + 最终正文
+            if (hasThink && thinkStr.length > tLast) {
+              seq.push(<ThinkingBlock key="th-end" text={thinkStr.slice(tLast)} label={thinkBlock === 0 ? firstLabel : '继续思考'} />)
             }
             if (last < displayContent.length) seq.push(<Text key="t-end" v={displayContent.slice(last)} />)
             return seq
