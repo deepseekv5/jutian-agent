@@ -131,6 +131,9 @@ export async function streamChat(
   // 工具循环护栏（判据与文案见 toolLoopGuard）
   let toolRound = 0
   const callSignatures = new Map<string, number>()
+  // 思考内容跨轮累积：放在循环外，否则"思考→调工具→再思考"时
+  // 只有最后一轮的思考会落库，前面的全丢
+  let fullThinking = ''
 
   while (true) {
     if (signal?.aborted) return
@@ -190,7 +193,6 @@ export async function streamChat(
 
       // 累积式 tool call 收集器
       const toolCallMap = new Map<number, ToolCallAccum>()
-
       for await (const data of ssePayloads(res.body)) {
         if (data === '[DONE]') break
 
@@ -200,6 +202,17 @@ export async function streamChat(
           if (!choice) continue
 
           const delta = choice.delta
+
+          // 深度思考内容。字段名各家不同（reasoning_content / reasoning /
+          // reasoning_details），归一化见 shared/reasoning。
+          // 这里曾经漏掉：本地模型分支有处理、API 分支没有，导致接
+          // OpenCode Zen 后它的思考过程一个字都不显示（上游推的是
+          // delta.reasoning，OpenRouter 风格）。
+          const think = extractReasoning(delta)
+          if (think) {
+            fullThinking += think
+            callbacks.onThinking?.(think)
+          }
 
           // 文本流式输出
           if (delta?.content) {
@@ -226,9 +239,9 @@ export async function streamChat(
       // 将累积的 tool calls 转为数组（按 index 升序，与模型给出的调用顺序一致）
       const toolCalls = toolCallsToArray(toolCallMap)
 
-      // 没有 tool_calls → 完成，返回最终文本
+      // 没有 tool_calls → 完成，返回最终文本（带思考内容，供落库与界面展示）
       if (toolCalls.length === 0) {
-        await callbacks.onDone(fullContent, [])
+        await callbacks.onDone(fullContent, [], fullThinking || undefined)
         return
       }
 

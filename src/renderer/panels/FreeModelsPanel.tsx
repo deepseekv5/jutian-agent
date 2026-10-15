@@ -47,6 +47,9 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   const [error, setError] = useState('')
   const [q, setQ] = useState('')
   const [testing, setTesting] = useState('')
+  // 正在切换的模型（src.id + m.id）：用于点击瞬间给出反馈，
+  // 不等 settings 往返，避免"点了没反应"的观感
+  const [switching, setSwitching] = useState('')
   const [latency, setLatency] = useState<Record<string, number | string>>({})
   // Kilo 账户密钥(解锁付费档):存 DB 的 kilo_api_key,GET 回显为掩码
 
@@ -69,8 +72,18 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   const gh = sources.find(s => s.id === 'github')
   const kilo = sources.find(s => s.id === 'kilo')
   const currentBase = settings.apiBaseUrl || ''
-  const isGh = /models\.github\.ai/.test(currentBase)
-  const isKilo = /api\.kilo\.ai/.test(currentBase)
+
+  /**
+   * 某个源是不是"当前正在用的"。
+   *
+   * 之前这里只判断 github 和 kilo 两个源，导致在 Zen / Pollinations 上
+   * 点切换后，「使用中」高亮永远不亮——看起来像点了没反应。
+   * 改为按 base url 与源一一比对：源的 base 就是切过去会写入的地址。
+   */
+  const isSourceActive = (src: Source) => {
+    const norm = (s: string) => String(s || '').replace(/\/+$/, '')
+    return norm(currentBase) === norm(src.base)
+  }
 
   const filter = (list: ModelInfo[]) => {
     const k = q.trim().toLowerCase()
@@ -79,6 +92,9 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   }
 
   const switchTo = (m: ModelInfo, src: Source) => {
+    // 即时反馈：先本地标记"切换中"，不等 settings 往返——否则点下去
+    // 到高亮变化之间有一段无响应窗口，看起来像没点动
+    setSwitching(src.id + m.id)
     const next: Settings = {
       ...settings,
       provider: 'api',
@@ -88,6 +104,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
     }
     onSettingsChange?.(next)
     pushNotice({ type: 'system', title: '已切换免费模型', body: m.name })
+    setTimeout(() => setSwitching(''), 900)
   }
 
   const testModel = async (m: ModelInfo, src: Source) => {
@@ -115,10 +132,18 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   }
 
   const row = (m: ModelInfo, src: Source, isPaid: boolean, isDefault = false) => {
-    const active = (src.id === 'github' ? isGh : isKilo) && settings.model === m.id
+    // 按 base url 判断是否当前源，而不是只认 github/kilo——
+    // 否则 Zen/Pollinations 上点切换后高亮不亮，看着像没反应
+    const active = isSourceActive(src) && settings.model === m.id
+    const rowKey = src.id + m.id
+    const isSwitching = switching === rowKey
     return (
-      <div key={src.id + m.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3"
-        style={{ background: active ? 'rgba(16,163,127,.10)' : c.surfaceCard, border: `1px ${active ? 'solid rgba(16,163,127,.45)' : isDefault ? 'dashed rgba(16,163,127,.5)' : `solid ${c.border}`}` }}>
+      <div key={rowKey} className="rounded-xl px-3 py-2.5 flex items-center gap-3 transition-all duration-200"
+        style={{
+          background: active ? 'rgba(16,163,127,.10)' : isSwitching ? 'rgba(16,163,127,.06)' : c.surfaceCard,
+          border: `1px ${active || isSwitching ? 'solid rgba(16,163,127,.45)' : isDefault ? 'dashed rgba(16,163,127,.5)' : `solid ${c.border}`}`,
+          transform: isSwitching ? 'scale(0.99)' : 'none',
+        }}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[13px] font-medium truncate" style={{ color: c.textHead }}>{m.name}</span>
@@ -145,10 +170,10 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             {testing === m.id ? '…' : (latency[m.id] !== undefined ? (typeof latency[m.id] === 'number' ? latency[m.id] + 'ms' : String(latency[m.id])) : t('测速', 'Ping'))}
           </button>
         )}
-        <button onClick={() => switchTo(m, src)} disabled={active}
-          className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40"
-          style={{ background: '#10a37f', color: '#fff' }}>
-          {t('切换', 'Use')}
+        <button onClick={() => switchTo(m, src)} disabled={active || isSwitching}
+          className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40 transition-all duration-150"
+          style={{ background: isSwitching ? '#0d8a6a' : '#10a37f', color: '#fff' }}>
+          {isSwitching ? t('切换中…', 'Switching…') : t('切换', 'Use')}
         </button>
       </div>
     )
@@ -203,7 +228,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
                   <span className="text-[12px] font-bold" style={{ color: c.textHead }}>{src.name}{src.paid ? ` · ${t('免费档', 'free')}` : ''}</span>
                   <span className="text-[10px]" style={{ color: c.textTertiary }}>{src.models.length} {t('个', 'models')}</span>
                   {src.note && <span className="text-[10px] truncate" style={{ color: c.textTertiary }}>{src.note}</span>}
-                  {((src.id === 'kilo' ? isKilo : /pollinations/.test(currentBase)) && settings.model) &&
+                  {isSourceActive(src) && settings.model &&
                     <span className="ml-auto text-[10.5px]" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>}
                 </div>
                 <div className="space-y-1.5">
