@@ -999,6 +999,11 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {
         await updateMessageContent(assistantMsg.id, sessionId, fullContent || '(已中止)')
+        // 中止也要把已产生的思考落库——否则用户点了停止就再也看不到
+        // 模型前面想了什么（实测反馈："终止后看不到思考过程"）
+        if (fullThinking) {
+          await updateMessageThinking(assistantMsg.id, sessionId, fullThinking)
+        }
         if (allToolCalls.length > 0) {
           await updateMessageToolCalls(assistantMsg.id, sessionId, allToolCalls)
         }

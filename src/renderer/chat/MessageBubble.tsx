@@ -137,12 +137,26 @@ function fmtThink(ms: number): string {
 
 function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thinking: string; isStreaming: boolean; open: boolean; onToggle: () => void; thinkMs?: number | null }) {
   const { c } = useTheme()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  // 流式期间自动滚到底：思考是持续追加的，不跟到底部就只能看到开头
+  useEffect(() => {
+    if (isStreaming && open && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
+    }
+  }, [thinking, isStreaming, open])
+  // 生成结束后自动收起：长思考（推理模型动辄几千字）全展开会把正文
+  // 挤到屏幕外。只在用户没手动开合过时收，避免跟用户操作打架。
+  const userToggled = useRef(false)
+  useEffect(() => {
+    if (!isStreaming && thinking && !userToggled.current && open) onToggle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming])
   if (!thinking && !isStreaming && !thinkMs) return null
   const label = isStreaming ? '思考中…' : (thinkMs ? fmtThink(thinkMs) : '已深度思考')
   const collapsible = !!thinking || isStreaming
   return (
     <div className="thinking-card my-2">
-      <div className="thinking-header" onClick={collapsible ? onToggle : undefined} style={collapsible ? undefined : { cursor: 'default' }}>
+      <div className="thinking-header" onClick={collapsible ? () => { userToggled.current = true; onToggle() } : undefined} style={collapsible ? undefined : { cursor: 'default' }}>
         {collapsible && (
           <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -151,7 +165,7 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
         <span>{label}</span>
       </div>
       {open && collapsible && (
-        <div className="thinking-content">
+        <div className="thinking-content" ref={bodyRef}>
           {thinking || (isStreaming ? '思考中…' : '')}
         </div>
       )}
@@ -162,20 +176,32 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
 /** 单段思考块：多轮「思考→执行→思考」时，每段思考独立显示、独立展开。
  *  与顶部 ThinkingCard 的区别：ThinkingCard 把整条消息的思考堆在一起，
  *  而工具循环里模型会「想一段→做个动作→再想一段」，这里按动作边界切开，
- *  让阅读顺序跟真实推理顺序一致。展开状态自管理，默认展开。 */
-function ThinkingBlock({ text, label }: { text: string; label: string }) {
+ *  让阅读顺序跟真实推理顺序一致。
+ *  展开状态自管理：流式进行中默认展开（让人看到它在想），
+ *  结束后自动收起——否则长思考会把正文和工具卡全挤到屏幕外。 */
+function ThinkingBlock({ text, label, streaming }: { text: string; label: string; streaming?: boolean }) {
   const { c } = useTheme()
   const [open, setOpen] = useState(true)
+  const touched = useRef(false)   // 用户手动开合过就不再自动收
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (streaming && open && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight
+    }
+  }, [text, streaming, open])
+  useEffect(() => {
+    if (!streaming && !touched.current) setOpen(false)
+  }, [streaming])
   if (!text || !text.trim()) return null
   return (
     <div className="thinking-card my-2">
-      <div className="thinking-header" onClick={() => setOpen(v => !v)}>
+      <div className="thinking-header" onClick={() => { touched.current = true; setOpen(v => !v) }}>
         <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
         <span>{label}</span>
       </div>
-      {open && <div className="thinking-content">{text}</div>}
+      {open && <div className="thinking-content" ref={bodyRef}>{text}</div>}
     </div>
   )
 }
@@ -659,7 +685,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               if (hasThink) {
                 const tCut = Math.max(tLast, Math.min(Number(tc.thinkLen) || 0, thinkStr.length))
                 if (tCut > tLast) {
-                  seq.push(<ThinkingBlock key={'th' + seq.length} text={thinkStr.slice(tLast, tCut)} label={thinkBlock === 0 ? firstLabel : '继续思考'} />)
+                  seq.push(<ThinkingBlock key={'th' + seq.length} text={thinkStr.slice(tLast, tCut)} label={thinkBlock === 0 ? firstLabel : '继续思考'} streaming={!!isStreaming} />)
                   thinkBlock++
                 }
                 tLast = tCut
@@ -671,7 +697,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             }
             // 收尾：最后一段思考 + 最终正文
             if (hasThink && thinkStr.length > tLast) {
-              seq.push(<ThinkingBlock key="th-end" text={thinkStr.slice(tLast)} label={thinkBlock === 0 ? firstLabel : '继续思考'} />)
+              seq.push(<ThinkingBlock key="th-end" text={thinkStr.slice(tLast)} label={thinkBlock === 0 ? firstLabel : '继续思考'} streaming={!!isStreaming} />)
             }
             if (last < displayContent.length) seq.push(<Text key="t-end" v={displayContent.slice(last)} />)
             return seq

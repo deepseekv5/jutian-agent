@@ -728,7 +728,10 @@
    ============================================================ */
 .thinking-card { border-left: 2px solid var(--border-light); margin-left: 4px; padding-left: 12px; }
 .thinking-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; padding: 4px 0; }
-.thinking-content { font-size: 13px; color: var(--text-tertiary); line-height: 1.65; white-space: pre-wrap; font-family: inherit; margin-top: 6px; }
+.thinking-content { font-size: 13px; color: var(--text-tertiary); line-height: 1.65; white-space: pre-wrap; font-family: inherit; margin-top: 6px;
+  /* 思考可能很长（推理模型动辄几千字）。不设上限会把整屏撑开、
+     把正文挤到看不见；给一个滚动窗口，流式期间自动跟到底部。 */
+  max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
 
 /* ============================================================
    毛玻璃质感（与输入框一致）—— 全局应用
