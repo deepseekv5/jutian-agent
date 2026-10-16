@@ -206,7 +206,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
               <span className="text-[10px]" style={{ color: c.textTertiary }}>{t('免 key 直连', 'keyless')}</span>
             </div>
             <div className="text-[11.5px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
-              {t('推理 + 工具调用能力,完全免费无需注册;另有 Kilo 网关 21 个免费档(默认 openrouter/free 自动路由)。', 'Reasoning + tool calling, fully free, no signup. Plus Kilo gateway with 21 free tiers (default openrouter/free auto-routing).')}
+              {t('三个免 key 源：Pollinations（GPT-OSS 20B）、Kilo 网关（19 个免费档，默认 openrouter/free 自动路由）、OpenCode Zen Free（6 个实测可用，最大 1M 上下文）。都无需注册与密钥，按 IP 限速。', 'Three keyless sources: Pollinations (GPT-OSS 20B), Kilo gateway (19 free tiers, default openrouter/free auto-routing), OpenCode Zen Free (6 verified, up to 1M context). No signup, no key, rate-limited per IP.')}
             </div>
             <button onClick={() => { const src = sources.find(s => s.id === 'pollinations'); if (src) switchTo(src.models[0], src) }}
               disabled={!sources.some(s => s.id === 'pollinations')}

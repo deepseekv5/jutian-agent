@@ -38,7 +38,7 @@ const CARDS: Card[] = [
   { type: 'outputs', desc: '查看所有生成的文件与作品', descEn: 'Everything the agent produced', chips: ['PPT', '文档', '图片'], chipsEn: ['Decks', 'Docs', 'Images'] },
   { type: 'diary', desc: '记录每天的工作与生活', descEn: 'Your daily log', chips: ['时间线'], chipsEn: ['Timeline'] },
   { type: 'employees', desc: 'Agent 集群：总管拆任务，成员互相 @ 接管', descEn: 'Swarm: lead delegates, members relay', chips: ['并行', '自定义员工'], chipsEn: ['Parallel', 'Custom agents'] },
-  { type: 'freemodels', desc: '免 key 免费模型目录，一键切换', descEn: 'Keyless free models, one-click switch', chips: ['21 个免费档'], chipsEn: ['21 free tiers'] },
+  { type: 'freemodels', desc: '免 key 免费模型目录，一键切换', descEn: 'Keyless free models, one-click switch', chips: ['26 个免费档'], chipsEn: ['26 free tiers'] },
   { type: 'qqbot', desc: '连接 QQ 机器人，聊天里指挥它干活', descEn: 'Connect a QQ bot and command it from chat', chips: ['官方网关'], chipsEn: ['Official gateway'] },
   { type: 'settings', desc: '模型、外观、权限与数据管理', descEn: 'Model, appearance, permissions, data', chips: ['种子色', '协议'], chipsEn: ['Seed color', 'Legal'] },
   { type: 'about', desc: '版本、更新日志与自动更新', descEn: 'Version, changelog, auto-update', chips: ['一键更新'], chipsEn: ['One-click update'] },

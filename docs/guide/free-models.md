@@ -2,45 +2,48 @@
 
 > [← 返回文档索引](../../README.md#docs)
 
-**科技不是高高在上,而是服务于人民。** 巨天agent 内置免费模型面板:不注册、不付费、不填密钥,一键切换 21 个免费模型;配一个 Kilo 账户密钥即可解锁全部 378 个付费档。
+**科技不是高高在上,而是服务于人民。** 巨天agent 内置免费模型面板:不注册、不付费、不填密钥,一键切换 **26 个免费模型**(Pollinations 1 + Kilo 网关 19 + OpenCode Zen Free 6,均免 key,按 IP 限速)。
 
 ## 打开面板
 
 侧边栏快捷入口 **「免费AI」**(星星图标),或新标签页 → 免费模型。
 
-## 免费档(免 key)
+## 三个免 key 源
 
-| 模型 | 说明 |
-|---|---|
-| `openrouter/free` | **默认** — OpenRouter 免费路由器(经 Kilo 网关免 key,实测可用),聚合 20+ 免费模型自动路由,识图+推理 |
-| `kilo-auto/free` | Kilo 自动路由备选,永远挑当前最快的免费活源 |
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B MoE,1M 上下文 |
-| `stepfun/step-3.7-flash:free` | 多模态,262K 上下文,识图 |
-| `poolside/laguna-s-2.1:free` / `xs:free` | 编码向,262K |
-| `nvidia/nemotron-3-nano-omni:free` | 30B MoE,识图 |
-| `cohere/north-mini-code:free` | 代码向,256K |
+| 源 | 数量 | 说明 |
+|---|---|---|
+| **Kilo 网关** | 19 个免费档 | 默认 `openrouter/free` 自动路由,识图 + 推理;另含 `kilo-auto/free` 等备选 |
+| **OpenCode Zen Free** | 6 个实测可用 | 最大 1M 上下文 / 512K 输出,部分带五档推理与全模态输入 |
+| **Pollinations** | 1 个 | `openai-fast`(GPT-OSS 20B),免 key 匿名档 |
 
-- 默认模型为 **OpenRouter Free Models Router**(`openrouter/free`);**其余免费档请自行测试可用性**——免费源按网关负载轮换,面板里每个模型旁有「测速」按钮,空响应服务端会自动重试(最多 3 次,推理模型自动加大 token 预算)
-- 额度:**每 IP 200 次/小时**,超限等待或切换模型
+### OpenCode Zen Free 六个模型
+
+| 模型 | 上下文 | 输出 | 特点 |
+|---|---|---|---|
+| Big Pickle | 200K | 32K | 紧凑纯文本,快 |
+| MiMo V2.6 Flash | 200K | 32K | 文本/图像/音频/视频全吃 |
+| Nemotron 3.5 Lightning | 262K | 262K | 超长输出 |
+| Step 5 Preview | 1M | 66K | 三档可调推理 |
+| LongCat 2.5 Preview | 1M | 131K | 图文长文 |
+| Space Bunny | 1M | 524K | 五档推理,全能旗舰 |
+
+清单每次打开面板实时拉取上游;当前网络下不可用的会保留显示并标注原因。
+
 - 「切换」= 自动写入网关地址 + 免鉴权占位 + 模型名,无需任何配置
-
-## 付费档(Kilo 账户密钥)
-
-面板顶部输入 **Kilo API Key**(app.kilo.ai 免费注册获取)→ 保存 → 付费档列表解锁(378 个:Claude、GPT、Gemini 等),一键切换同免费档体验。
-
-- 密钥只存本机 SQLite(`~/.lyclaw/data.db`),界面回显为掩码
-- 保存后可随时在设置 → 推理查看与修改
+- 免费源按网关负载轮换,**可用性随时可能变化**;面板里 Kilo 模型旁有「测速」按钮,空响应服务端会自动重试(最多 3 次,推理模型自动加大 token 预算)
+- 额度:免费档按 IP 限速,超限请等待或切换模型
+- 注:OpenCode Zen 的免费车道要求请求带特定客户端指纹且必须流式,服务端已自动处理,无需你操心
 
 ## 常见问题
 
 **免费模型回答质量不稳定?**
-免费档按网关负载路由,高峰期会降智。重要任务切付费档或自配服务商。
+免费档按网关负载路由,高峰期会降智。重要任务请在 设置 → 推理 配置自己的服务商。
 
-**200 次/小时不够?**
-免费档是面向轻度使用的额度;高频使用请配置 Kilo 账户密钥或自备 OpenAI 兼容服务。
+**额度不够用?**
+免费档是面向轻度使用的额度;高频使用请自备 OpenAI 兼容服务(地址 + 密钥 + 模型)。
 
 **断网能用吗?**
-不能——所有模型(免费/付费)都在线服务。本地模型(Ollama/LM Studio)请在 设置 → 推理 配置 `http://localhost:11434/v1` 并使用 provider=local。
+不能——所有模型(免费/自备)都在线服务。本地模型(Ollama/LM Studio)请在 设置 → 推理 配置 `http://localhost:11434/v1` 并使用 provider=local。
 
 ## 其他模型来源
 

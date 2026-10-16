@@ -924,20 +924,34 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       },
 
       onClientTool: async (tc) => {
+        // 客户端工具的调用记录也要进 allToolCalls——否则 update_plan /
+        // dispatch_subagents 的卡片只活在当前流里，刷新后整条消失
+        // （服务端工具走 onToolEnd 会记录，客户端工具绕过了那条路径）
+        const record = (result: string) => {
+          allToolCalls.push({
+            ...tc,
+            status: /"ok":false|"error"/.test(result) ? 'error' : 'done',
+            result,
+            finished_at: new Date().toISOString(),
+            preLen: toolPreLen[tc.id] ?? 0,
+            thinkLen: toolThinkLen[tc.id] ?? 0,
+          })
+          return result
+        }
         if (tc.name === 'update_plan') {
           // 任务清单：解析后写入本会话的 plan 状态并持久化，UI 实时显示进度
           const { plan: p, error } = parsePlanArgs(tc.arguments || '{}')
-          if (!p) return planReject(error || '参数无效')
+          if (!p) return record(planReject(error || '参数无效'))
           setPlan(p)
           savePlan(`lyclaw_plan_${sessionId}`, p)
-          return planAck(p)
+          return record(planAck(p))
         }
-        if (tc.name !== 'dispatch_subagents') return '{"ok":false,"error":"unknown"}'
+        if (tc.name !== 'dispatch_subagents') return record('{"ok":false,"error":"unknown"}')
         try {
           const args = JSON.parse(tc.arguments || '{}')
-          return await runSubagents({ agents: args.agents || [], settings, signal: controller.signal })
+          return record(await runSubagents({ agents: args.agents || [], settings, signal: controller.signal }))
         } catch (e: any) {
-          return JSON.stringify({ ok: false, error: String(e?.message || e) })
+          return record(JSON.stringify({ ok: false, error: String(e?.message || e) }))
         }
       },
 

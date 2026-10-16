@@ -568,7 +568,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <span className="text-[13.5px] font-bold" style={{ color: c.textHead }}>{t('不想配置?一键免费用 AI', 'No setup? Use AI for free')}</span>
                 </div>
                 <p className="text-[12px] leading-relaxed mb-3" style={{ color: c.textSecondary }}>
-                  {t('默认走 OpenRouter 免费路由器(openrouter/free,免 key、免注册,聚合 20+ 免费模型),每 IP 200 次/小时。科技不是高高在上,而是服务于人民。', 'Default: OpenRouter free router (openrouter/free) — keyless, no signup, 20+ free models, 200 req/hour per IP.')}
+                  {t('三个免 key 源开箱即用：Kilo 网关（19 个免费档，含 openrouter/free 自动路由）、OpenCode Zen Free（6 个实测可用，最大 1M 上下文 / 512K 输出）、Pollinations（GPT-OSS 20B）。都不需要注册和密钥，按 IP 限速。科技不是高高在上，而是服务于人民。', 'Three keyless sources out of the box: Kilo gateway (19 free tiers incl. openrouter/free auto-routing), OpenCode Zen Free (6 verified models, up to 1M context / 512K output), Pollinations (GPT-OSS 20B). No signup, no API key, rate-limited per IP.')}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button type="button"
@@ -583,7 +583,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   </button>
                   <button type="button" onClick={() => onOpenFreeModels?.()}
                     className="px-4 h-9 rounded-full text-[12.5px] font-medium" style={{ background: 'rgba(255,255,255,.7)', color: '#0f766e', border: '1px solid rgba(16,163,127,.35)' }}>
-                    {t('浏览全部 21 个免费模型 →', 'Browse all 21 free models →')}
+                    {t('浏览全部免费模型（26 个）→', 'Browse all free models (26) →')}
                   </button>
                   {savedFlash === 'free' && <span className="text-[11.5px]" style={{ color: '#10a37f' }}>{t('已启用,去对话试试', 'Enabled — try it in chat')}</span>}
                 </div>
