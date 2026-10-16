@@ -178,6 +178,52 @@ export function zenBody(model: string, body: Record<string, unknown>): Record<st
   return out
 }
 
+/**
+ * 把 OpenAI Chat Completions 形状转成 Responses API 形状。
+ *
+ * muse-spark 系列走 /responses 端点，但调用方（渲染层）只会说 Chat 形状
+ * （messages / max_tokens / stream_options）。直接转发会 400——Responses
+ * API 要 input / max_output_tokens，且没有 stream_options 这个字段。
+ * 没这层转换，这两个模型即使不在地区限制名单里也调不通。
+ *
+ * 转换规则（保持最小必要）：
+ *   messages            → input（拼成一段带角色的文本，Responses 的字符串形态）
+ *   max_tokens          → max_output_tokens
+ *   stream_options      → 删除（Responses 无此字段）
+ *   其余字段（temperature 等）→ 原样保留
+ */
+export function chatToResponsesShape(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...body }
+  delete out.stream_options
+  delete out.messages
+
+  const msgs = body.messages
+  if (Array.isArray(msgs)) {
+    // Responses 的纯文本 input：每行一段「角色: 内容」。多轮时足够模型理解语境；
+    // 单轮（最常见的 zen 免费车道用法）就是用户原话。
+    out.input = msgs
+      .map((m: { role?: string; content?: unknown }) => {
+        const role = String(m?.role || 'user')
+        const content = typeof m?.content === 'string' ? m.content : JSON.stringify(m?.content ?? '')
+        return role === 'user' ? content : `${role}: ${content}`
+      })
+      .join('\n\n')
+  }
+
+  if (typeof body.max_tokens === 'number') {
+    out.max_output_tokens = body.max_tokens
+    delete out.max_tokens
+  }
+  // tools 在 /responses 下用扁平形状（{name,description,parameters}），
+  // Chat 形状的 {type:'function',function:{…}} 要剥一层
+  if (Array.isArray(body.tools)) {
+    out.tools = (body.tools as { function?: Record<string, unknown>; name?: string }[]).map(t =>
+      t?.function && typeof t.function === 'object' ? t.function : t,
+    )
+  }
+  return out
+}
+
 /** 错误分类：把上游的两种 403 分开，便于界面给准确提示 */
 export function classifyZenError(status: number, text: string): { kind: 'region' | 'unavailable' | 'auth' | 'other'; message: string } {
   const t = String(text || '')

@@ -12,7 +12,7 @@ import {
   mintSessionId, mintRequestId, SESSION_RE, REQUEST_RE,
   isZenBase, zenEndpoint, zenHeaders, zenBody,
   withFingerprintTools, classifyZenError, FINGERPRINT_TOOLS,
-  ZEN_FREE_MODELS, ZEN_KNOWN_DEAD,
+  ZEN_FREE_MODELS, ZEN_KNOWN_DEAD, chatToResponsesShape,
 } from '../src/shared/opencodeZen'
 
 describe('session / request id 形状', () => {
@@ -175,5 +175,67 @@ describe('模型清单', () => {
     for (const id of ['cat-jam-free', 'muse-spark-1.3-contributor-free']) {
       expect(ZEN_KNOWN_DEAD[id]).toBeTruthy()
     }
+  })
+})
+
+// muse-spark 系列走 /responses 端点，但渲染层只会发 Chat 形状。
+// 不转换即使不在地区限制名单里也会 400——input/max_output_tokens 形状不匹配。
+describe('chatToResponsesShape — /responses 端点形状转换', () => {
+  it('messages → input', () => {
+    const r = chatToResponsesShape({ messages: [{ role: 'user', content: '你好' }] })
+    expect(r.input).toBe('你好')
+    expect(r.messages).toBeUndefined()
+  })
+
+  it('多轮拼接带角色前缀（system/assistant 可辨识）', () => {
+    const r = chatToResponsesShape({
+      messages: [
+        { role: 'system', content: '你是助手' },
+        { role: 'user', content: '问题' },
+        { role: 'assistant', content: '回答' },
+      ],
+    })
+    expect(r.input).toBe('system: 你是助手\n\n问题\n\nassistant: 回答')
+  })
+
+  it('max_tokens → max_output_tokens', () => {
+    const r = chatToResponsesShape({ messages: [], max_tokens: 512 })
+    expect(r.max_output_tokens).toBe(512)
+    expect(r.max_tokens).toBeUndefined()
+  })
+
+  it('stream_options 被删除（Responses 无此字段）', () => {
+    const r = chatToResponsesShape({ messages: [], stream_options: { include_usage: true } })
+    expect(r.stream_options).toBeUndefined()
+  })
+
+  it('无 max_tokens 时不产生 max_output_tokens', () => {
+    const r = chatToResponsesShape({ messages: [{ role: 'user', content: 'x' }] })
+    expect(r.max_output_tokens).toBeUndefined()
+  })
+
+  it('tools 从 Chat 嵌套形状剥平为 Responses 扁平形状', () => {
+    const r = chatToResponsesShape({
+      messages: [],
+      tools: [{ type: 'function', function: { name: 'bash', description: 'd', parameters: {} } }],
+    })
+    expect(r.tools).toEqual([{ name: 'bash', description: 'd', parameters: {} }])
+  })
+
+  it('已是扁平形状的 tools 原样保留', () => {
+    const flat = { name: 'read', description: 'x', parameters: {} }
+    const r = chatToResponsesShape({ messages: [], tools: [flat] })
+    expect(r.tools).toEqual([flat])
+  })
+
+  it('其余字段原样保留（temperature 等）', () => {
+    const r = chatToResponsesShape({ messages: [], temperature: 0.7, stream: true })
+    expect(r.temperature).toBe(0.7)
+    expect(r.stream).toBe(true)
+  })
+
+  it('messages 缺失/非数组 → 不产生 input，不抛错', () => {
+    const r = chatToResponsesShape({})
+    expect(r.input).toBeUndefined()
   })
 })

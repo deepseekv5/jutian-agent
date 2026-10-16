@@ -191,6 +191,7 @@ var isZenBase = ZEN_MOD ? ZEN_MOD.isZenBase : () => false;
 var zenEndpoint = ZEN_MOD ? ZEN_MOD.zenEndpoint : () => "/chat/completions";
 var zenHeaders = ZEN_MOD ? ZEN_MOD.zenHeaders : () => ({});
 var zenBody = ZEN_MOD ? ZEN_MOD.zenBody : (_m, b) => b;
+var chatToResponsesShape = ZEN_MOD ? ZEN_MOD.chatToResponsesShape : (b) => b;
 var mintSessionId = ZEN_MOD ? ZEN_MOD.mintSessionId : () => "";
 var mintRequestId = ZEN_MOD ? ZEN_MOD.mintRequestId : () => "";
 var withFingerprintTools = ZEN_MOD ? ZEN_MOD.withFingerprintTools : (t) => t;
@@ -2663,6 +2664,11 @@ http.createServer(async (req, res) => {
           const reqId = mintRequestId();
           Object.assign(proxyHeaders, zenHeaders(sess, reqId, true));
           bodyData = zenBody(String(bodyData.model || ""), bodyData);
+          // muse-spark 系列走 /responses 端点，但渲染层发的是 Chat 形状。
+          // 不转换的话这些模型即使不在地区限制名单里也会 400（input/max_output_tokens 形状不匹配）。
+          if (zenEndpoint(String(bodyData.model || "")) === "/responses") {
+            bodyData = chatToResponsesShape(bodyData);
+          }
           // 指纹工具：保留调用方真实工具，只补缺的槽位
           const bd = bodyData as Record<string, unknown>;
           const tools = Array.isArray(bd.tools) ? (bd.tools as unknown[]) : [];
@@ -2738,7 +2744,27 @@ http.createServer(async (req, res) => {
             if (ci > 0) { payload = { ...payload, model: u.model }; console.log(`llm-proxy 接力 → ${u.name}`); }
             // 首响复用:ci=0 且主上游首响正常时直接用 proxyRes（连接失败/!ok 均走接力）
             const first = ci === 0 ? (proxyRes && proxyRes.ok ? proxyRes : null) : await callOne(u, payload).catch(() => null);
-            if (!first || !first.ok) { console.error(`llm-proxy ${u.name} HTTP ${first ? first.status : "?"}`); continue; }
+            if (!first || !first.ok) {
+              const st = first ? first.status : 0;
+              // 429 按 Retry-After 退避后同上游再试一次（限速是暂态，换上游太浪费）；
+              // 其余状态（401/404/5xx）才是上游问题，直接换下一家
+              if (st === 429) {
+                const ra = Number(first?.headers?.get?.("retry-after")) || 0;
+                await sleep(Math.min(Math.max(ra * 1000, 800), 4000));
+                const r2 = await callOne(u, payload).catch(() => null);
+                if (r2 && r2.ok) {
+                  let j2 = null;
+                  try { j2 = JSON.parse(await r2.text()); } catch {}
+                  if (!bodyEmpty(j2)) {
+                    res.writeHead(200, { ...sseHeaders, "X-Relay-Used": `${u.name}(429-retry)` });
+                    res.end(JSON.stringify(j2));
+                    return;
+                  }
+                }
+              }
+              console.error(`llm-proxy ${u.name} HTTP ${first ? first.status : "?"}`);
+              continue;
+            }
             let j = null;
             try { j = JSON.parse(await first.text()); } catch {}
             for (let att = 1; att <= 3 && bodyEmpty(j); att++) {
@@ -2771,7 +2797,21 @@ http.createServer(async (req, res) => {
           for (let att = 1; att <= (ci === 0 ? 3 : 2); att++) {
             let r = null;
             try { r = att === 1 && ci === 0 ? proxyRes : await callOne(u, payload); } catch (e) { break; }
-            if (!r || !r.ok) break;
+            if (!r || !r.ok) {
+              // 429 与 5xx 分开处理：429 是按 IP 限速，等 Retry-After 后
+              // 同上游重试往往就能过；5xx 才是上游真挂，立即换下一家。
+              // 都不做退避的话，超限时的 3 次重试会瞬间打完，白白烧掉额度窗口。
+              const status = r ? r.status : 0;
+              if (status === 429 && att < (ci === 0 ? 3 : 2)) {
+                const ra = Number(r.headers?.get?.("retry-after")) || 0;
+                await sleep(Math.min(Math.max(ra * 1000, 800), 4000));
+                console.log(`llm-proxy 流式 429(${u.name} attempt ${att})，退避后同上游重试`);
+                payload = escalate(payload, "");
+                continue;
+              }
+              if (status >= 500 && att < (ci === 0 ? 3 : 2)) { await sleep(500 * att); continue; }
+              break;
+            }
             const reader = r.body.getReader();
             const decoder = new TextDecoder();
             let sawContent = false, finishFr = "", tail = "";
