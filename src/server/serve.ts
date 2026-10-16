@@ -594,7 +594,16 @@ async function read_file(a) {
       const base = path.basename(p);
       const sameName = files.find((f) => f.toLowerCase() === base.toLowerCase());
       if (sameName) {
-        let c = await fsp.readFile(path.join(p, sameName), "utf-8");
+        const samePath = path.join(p, sameName);
+        // 同一条大文件保护（与正常读取路径一致），否则这条路会绕开限制
+        const sameSize = (await fsp.stat(samePath)).size;
+        if (sameSize > 2 * 1024 * 1024) {
+          return {
+            success: false,
+            error: `目录内同名文件 ${sameName} 过大（${(sameSize / 1048576).toFixed(1)} MB），请改用 offset/limit 分段读取。`,
+          };
+        }
+        let c = await fsp.readFile(samePath, "utf-8");
         if (a.offset || a.limit) {
           const ls = c.split("\n");
           c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
@@ -612,6 +621,21 @@ async function read_file(a) {
     }
   }
   try {
+    // 大文件保护：整文件读进内存再截断，读一个几百 MB 的日志会把进程内存
+    // 打满（实测风险）。先看 stat 大小，超限就不读，并告诉模型怎么分段取。
+    const size = st.size;
+    const MAX_READ = 2 * 1024 * 1024;   // 2MB：足够覆盖源码与文档
+    if (size > MAX_READ) {
+      const lines = await (async () => {
+        try { const fh = await fsp.open(p, "r"); const buf = Buffer.alloc(64 * 1024); await fh.read(buf, 0, buf.length, 0); await fh.close(); return buf.toString("utf-8").split("\n").length; } catch { return 0 }
+      })();
+      return {
+        success: false,
+        error: `文件过大（${(size / 1048576).toFixed(1)} MB），直接读取会占用大量内存与上下文。`
+          + `请改用 offset/limit 分段读取（如 offset: 1, limit: 200），或先用 search_content 定位再读指定区域。`
+          + (lines ? `\n（文件首 64KB 约 ${lines} 行）` : ""),
+      };
+    }
     let c = await fsp.readFile(p, "utf-8");
     if (a.offset || a.limit) {
       const ls = c.split("\n");
