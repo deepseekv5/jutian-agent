@@ -153,6 +153,11 @@ function makeDbFallback() {
 var db = sharedDb || makeDbFallback();
 // 空会话清理模块（判据与选集都有测试）—— 与前端共用 src/shared/sessionCleanup.ts
 var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs"); } catch (e) { console.error("sessionCleanup.cjs load failed:", e.message); return null; } })();
+// 工具参数校验（严格化）：规格表 + 覆盖提醒，见 shared/toolArgs（有测试）
+var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } catch (e) { console.error("toolArgs.cjs load failed:", e.message); return null; } })();
+var TOOL_SPECS = ARGS_MOD ? ARGS_MOD.TOOL_SPECS : {};
+var validateArgs = ARGS_MOD ? ARGS_MOD.validateArgs : () => ({ ok: true });
+var overwriteWarning = ARGS_MOD ? ARGS_MOD.overwriteWarning : () => null;
 // 空会话清理：应用每次冷启动建一个默认对话，用户没打字就留下"新对话"。
 // 反复启动会让侧栏被几十条空会话淹没，且界面上与真实会话无从分辨。
 // 副作用型一次性初始化：结果不用，只在启动时跑
@@ -665,16 +670,20 @@ async function write_file(a) {
   try {
     await fsp.mkdir(path.dirname(p), { recursive: true });
     let __old = "";
-    try { __old = await fsp.readFile(p, "utf-8"); } catch {}
+    let existed = false;
+    try { __old = await fsp.readFile(p, "utf-8"); existed = true; } catch {}
     await writeFileAtomic(p, a.content);
     const __chg = recordChange(p, __old, String(a.content || ""));
-    return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}`, changeId: __chg };
+    // 覆盖提醒：不清空、不阻断（模型常常就是要改文件），只把风险说清楚，
+    // 让它有机会在回复里说明改了什么
+    const warn = existed ? overwriteWarning(true, __old.length, String(a.content || "").length) : null;
+    return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}${warn ? `\n${warn}` : ""}`, changeId: __chg };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 async function edit_file(a) {
-  const p = path.resolve(a.path);
+  const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     let c = await fsp.readFile(p, "utf-8");
@@ -789,7 +798,7 @@ async function search_content(a) {
 }
 async function get_file_info(a) {
   try {
-    const p = path.resolve(a.path);
+    const p = resolveWork(a.path);
     if (!ok(p)) return { success: false, error: "路径不允许" };
     const s = await fsp.stat(p);
     return { success: true, output: JSON.stringify({ size: s.size, type: s.isFile() ? "file" : "directory", modified: s.mtime.toISOString() }, null, 2) };
@@ -798,9 +807,27 @@ async function get_file_info(a) {
   }
 }
 async function move_file(a) {
-  const s = path.resolve(a.src), d = path.resolve(a.dest);
+  const s = resolveWork(a.src), d = resolveWork(a.dest);
   if (!ok(s) || !ok(d)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
+    // 源必须存在且不是目录：否则 rename 会抛含糊的 ENOENT/EISDIR
+    let sst;
+    try { sst = await fsp.stat(s); }
+    catch { return { success: false, error: `源路径不存在：${s}` }; }
+    if (sst.isDirectory()) {
+      return { success: false, error: `源路径是目录（${s}），move_file 只移动文件。目录请用 shell 的 mv 并说明意图。` };
+    }
+    // 目标已存在时不再静默覆盖（rename 会直接盖掉同名文件，原文件就没了）。
+    // 这是实测风险点：模型以为在"移动"，实际把目标文件毁掉了。
+    let destExists = false;
+    try { await fsp.stat(d); destExists = true; } catch {}
+    if (destExists) {
+      return {
+        success: false,
+        error: `目标已存在：${d}。移动会覆盖它，已中止。`
+          + `若确实要覆盖，请先用 delete_file 删除目标，或改用新文件名。`,
+      };
+    }
     await fsp.mkdir(path.dirname(d), { recursive: true });
     await fsp.rename(s, d);
     return { success: true, output: `\u2705 ${s} \u2192 ${d}` };
@@ -809,11 +836,22 @@ async function move_file(a) {
   }
 }
 async function delete_file(a) {
-  const p = path.resolve(a.path);
+  const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
+    // 目录要走 unlink 会报 EISDIR，模型看不懂；明确告诉它该怎么删目录
+    let st;
+    try { st = await fsp.stat(p); }
+    catch { return { success: false, error: `路径不存在：${p}` }; }
+    if (st.isDirectory()) {
+      return {
+        success: false,
+        error: `"${p}" 是目录，delete_file 只删文件。`
+          + `删除目录（含其中内容）请用 shell: rm -rf "${p}"，并先确认里面没有要保留的东西。`,
+      };
+    }
     await fsp.unlink(p);
-    return { success: true, output: `\u2705 \u5DF2\u5220\u9664` };
+    return { success: true, output: `\u2705 \u5DF2\u5220\u9664: ${p}` };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -847,7 +885,7 @@ async function npm_run(a) {
   return shell({ command: `npm ${a.command || ""}`, workdir: a.projectPath });
 }
 async function code_analysis(a) {
-  const p = path.resolve(a.path);
+  const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     const c = await fsp.readFile(p, "utf-8");
@@ -2435,8 +2473,22 @@ http.createServer(async (req, res) => {
         }, 404);
       }
       console.log(`→ ${name}`);
+      // ─── 参数校验（严格化）：模型传参是不可信输入，先按规格验一遍 ───
+      // 实测踩过的坑：write_file 缺 content → 文件被写成字符串 "undefined"；
+      // move_file 目标已存在 → rename 静默覆盖；类型错 → 一路走到 fs 层
+      // 才炸成 ENOENT/EISDIR，模型看不懂报错就反复重试同一参数。
+      // 规格表见 shared/toolArgs（有测试）。校验不通过直接回错，不进工具。
+      let callArgs = args;
+      const spec = TOOL_SPECS[name];
+      if (spec) {
+        const v = validateArgs(callArgs, spec);
+        if (!v.ok) {
+          return json(res, { success: false, error: `【参数错误】${v.error}请修正后重试。` });
+        }
+        callArgs = v.value;
+      }
       let r;
-      try { r = await h(args); }
+      try { r = await h(callArgs); }
       catch (e) { r = { success: false, error: String((e && e.message) || e || "工具执行异常") }; }
       if (!r || typeof r !== "object") r = { success: true, output: String(r) };
       console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
