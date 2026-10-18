@@ -45,6 +45,7 @@ const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
 const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import { isMac as platformIsMac } from '../utils/platform';
+import AnnouncementBanner from './AnnouncementBanner';
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
 function TabFallback() {
@@ -505,6 +506,8 @@ function MainApp() {
           onOpenWorkDir={() => fetch(`/api/sessions/${activeId || ''}/folder`).catch(() => {})}
           workingSessionIds={streamingSessionIds}
         />
+        {/* 应用公告横幅（v11.7）：进应用自动读取 GitHub docs/notice.md；关同条不再打扰 */}
+        <AnnouncementBanner />
         {tabs.map(tab => {
           const isActive = tab.id === activeTab?.id;
           // 从未激活过的标签不挂载：其懒加载 chunk 不会下载，首屏只加载对话核心

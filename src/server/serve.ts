@@ -155,6 +155,8 @@ var db = sharedDb || makeDbFallback();
 var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs"); } catch (e) { console.error("sessionCleanup.cjs load failed:", e.message); return null; } })();
 // 工具参数校验（严格化）：规格表 + 覆盖提醒，见 shared/toolArgs（有测试）
 var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } catch (e) { console.error("toolArgs.cjs load failed:", e.message); return null; } })();
+// 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
+var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
 var TOOL_SPECS = ARGS_MOD ? ARGS_MOD.TOOL_SPECS : {};
 var validateArgs = ARGS_MOD ? ARGS_MOD.validateArgs : () => ({ ok: true });
 var overwriteWarning = ARGS_MOD ? ARGS_MOD.overwriteWarning : () => null;
@@ -3380,6 +3382,11 @@ http.createServer(async (req, res) => {
       pushServerNotice({ type: n.type || "system", title: String(n.title || "").slice(0, 80), body: String(n.body || "").slice(0, 200) });
       return json(res, { ok: true });
     }
+    // ─── 应用公告（v11.7）：GitHub 仓库 docs/notice.md，进应用自动读取 ───
+    if (url.pathname === "/api/announcement" && req.method === "GET") {
+      const fresh = url.searchParams.get("fresh") === "1";
+      return json(res, await getAnnouncement(fresh));
+    }
     // ─── 可编辑 diff（v5.6）：查看 / 撤销 / 编辑应用 ───
     const diffIdMatch = url.pathname.match(/^\/api\/diff\/changes\/([^/]+)$/);
     if (diffIdMatch && req.method === "GET") {
@@ -5038,6 +5045,11 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
   }
 
 }).listen(PORT, () => {
+  console.log(`
+  \u{1F43E} \u8001\u6538 Agent v2 \u2014 http://localhost:${PORT}
+  ${Object.keys(TOOLS).length} tools | \u5355\u8FDB\u7A0B | \u4F4E\u5185\u5B58
+  `);
+});
 
 // ─── 定时任务执行器（每 30s 检查一次，到点真实执行）───
 // ─── 服务端通知桥（v7.0）：notices.json 供渲染层合并进通知中心 ───
@@ -5049,6 +5061,56 @@ function pushServerNotice(n) {
     list.unshift({ id: "n_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts: Date.now(), read: false, ...n });
     fs.writeFileSync(NOTICE_FILE(), JSON.stringify(list.slice(0, 50)));
   } catch {}
+}
+
+// ─── 应用公告拉取（v11.7）：GitHub docs/notice.md ────────────────────────────
+//
+// 设计：
+//   - 公告文件放 GitHub 仓库 docs/notice.md，Pages 与 raw 两个域名互为镜像
+//     （国内网络 raw.githubusercontent 常被墙，Pages 走 github.io 相对稳；
+//     两个都失败再用 gh 加速镜像兜底）
+//   - 结果缓存到 ~/.lyclaw/data/announcement.json，TTL 6 小时——
+//     进应用每次都会请求，但不该每次都出网；离线时回缓存
+//   - 解析器（shared/announcement.ts）负责格式与 id，服务端只管取+缓存
+const ANNOUNCE_FILE = path.join(DATA_DIR, "announcement.json");
+const ANNOUNCE_SOURCES = [
+  "https://deepseekv5.github.io/jutian-agent/notice.md",
+  "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/docs/notice.md",
+  "https://gh-proxy.com/https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/docs/notice.md",
+];
+var _announceTtlMs = 6 * 3600 * 1000;
+function readAnnounceCache() {
+  try { return JSON.parse(fs.readFileSync(ANNOUNCE_FILE, "utf-8")); } catch { return null; }
+}
+function writeAnnounceCache(obj) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(ANNOUNCE_FILE, JSON.stringify(obj)); } catch {}
+}
+async function fetchAnnouncementText() {
+  for (const src of ANNOUNCE_SOURCES) {
+    try {
+      const r = await fetch(src, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.trim()) return t;
+    } catch { /* 换下一个源 */ }
+  }
+  return "";
+}
+async function getAnnouncement(forceFresh) {
+  const cache = readAnnounceCache();
+  const fresh = cache && Date.now() - (cache.fetchedAt || 0) < _announceTtlMs;
+  if (fresh && !forceFresh) return { ok: true, ...cache.data, cached: true };
+  const text = await fetchAnnouncementText();
+  if (!text) {
+    // 出网失败：有旧缓存就用旧的（哪怕过期），没有就返回"无公告"。
+    // 关键是不能因为取不到公告就弹错误——公告是锦上添花。
+    if (cache) return { ok: true, ...cache.data, cached: true };
+    return { ok: true, announcement: null };
+  }
+  const parsed = ANNOUNCE_MOD ? ANNOUNCE_MOD.parseNoticeMd(text) : null;
+  const data = { announcement: parsed, fetchedAt: Date.now() };
+  writeAnnounceCache(data);
+  return { ok: true, ...data, cached: false };
 }
 
 function runScheduler() {  try {
@@ -5120,11 +5182,6 @@ function runScheduler() {  try {
 }
 setInterval(runScheduler, 30000);
 console.log("[ly-next] 定时任务调度器已启动（30s 轮询）");
-  console.log(`
-  \u{1F43E} \u8001\u6538 Agent v2 \u2014 http://localhost:${PORT}
-  ${Object.keys(TOOLS).length} tools | \u5355\u8FDB\u7A0B | \u4F4E\u5185\u5B58
-  `);
-});
 
 // ─── 合盖保持运行：caffeinate 防止系统休眠（设置 keepAwake，默认开启）───
 let caffeinateProc = null;

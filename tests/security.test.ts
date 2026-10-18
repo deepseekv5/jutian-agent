@@ -191,6 +191,38 @@ describe('跨站与异常请求', () => {
   }, 30000)
 })
 
+describe('通知桥与作用域回归', () => {
+  // serve.ts 曾把 pushServerNotice / 通知桥 / 公告 / 调度器整段定义在
+  // http.createServer(...).listen(PORT, () => { ... }) 的回调里——那段代码
+  // 在请求处理器创建之后才声明，且回调作用域对处理器不可见，于是
+  // POST /api/notices 直接 ReferenceError（500）、GET 静默回空数组：
+  // v7.0 的「手机已连接远程」通知从来没弹出来过。这里锁死可用。
+  it('POST /api/notices 真实写入通知文件（不再 ReferenceError）', async () => {
+    const r = await fetch(`${BASE}/api/notices`, {
+      method: 'POST', headers: ORIGIN,
+      body: JSON.stringify({ type: 'system', title: '测试通知', body: '回归' }),
+    })
+    expect(r.status).toBe(200)
+    const j = await r.json()
+    expect(j.ok).toBe(true)
+    const list = await fetch(`${BASE}/api/notices`, { headers: ORIGIN }).then(x => x.json())
+    expect(Array.isArray(list)).toBe(true)
+    expect(list.some(n => n.title === '测试通知')).toBe(true)
+  })
+
+  it('GET /api/announcement 返回结构合法（公告或 null，不能 500）', async () => {
+    const r = await fetch(`${BASE}/api/announcement`, { headers: ORIGIN })
+    expect(r.status).toBe(200)
+    const j = await r.json()
+    expect(j.ok).toBe(true)
+    if (j.announcement) {
+      expect(j.announcement.id).toBeTruthy()
+      expect(typeof j.announcement.title).toBe('string')
+      expect(['info', 'warn', 'critical']).toContain(j.announcement.level)
+    }
+  })
+})
+
 describe('技能安装路径穿越', () => {
   // 最危险的一条：install-from-github 会先 rm -rf 目标目录再 clone。
   // 修复前 "https://github.com/x/../../.." 得到 repoName=".."，
