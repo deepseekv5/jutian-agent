@@ -27,6 +27,10 @@ jobs:
           node-version: 20
           cache: npm
 
+      # 安装依赖——漏了这一步 ESLint 会报 "'eslint' is not recognized"
+      - name: 安装依赖
+        run: npm ci
+
       # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
       # 只警告不拦，避免基建波动堵住发版。
       # shell: bash 是必须的——Windows runner 默认 PowerShell，这套 bash 语法
