@@ -2,9 +2,9 @@
  * AnnouncementBanner — 应用公告横幅（v11.7）
  *
  * 来源：GitHub 仓库 docs/notice.md（serve.ts 缓存 6h，/api/announcement）。
- * 每次进入应用都会读取；有新公告（id 本地没记过）就在页面顶部显示横幅，
- * 关闭后同 id 不再打扰，换新公告自动再弹——这是"公告"类横幅唯一
- * 被接受的打扰方式：常驻会挡住主操作区，永远静默又等于没发。
+ * 行为按需求「每次进入应用自动读取显示」：已读状态记在 sessionStorage——
+ * 同一次运行内关掉不再打扰，下次冷启动会重新显示（公告就是要让人看到）；
+ * 换新公告（id 不同）运行中也会立刻弹出。
  *
  * 渲染只认最朴素的 markdown 子集（标题行/列表/空行），
  * 引 react-markdown 会把重依赖拖进首屏 chunk（vite 懒加载坑，见记忆）。
@@ -16,10 +16,11 @@ import { useTheme } from '../hooks/useTheme'
 const READ_KEY = 'jutian-announcement-read'
 
 function readDismissedId(): string {
-  try { return localStorage.getItem(READ_KEY) || '' } catch { return '' }
+  // sessionStorage（非 local）：重启应用后重新显示 = 「每次进入自动读取显示」
+  try { return sessionStorage.getItem(READ_KEY) || '' } catch { return '' }
 }
 function dismiss(id: string) {
-  try { localStorage.setItem(READ_KEY, id) } catch { /* ignore */ }
+  try { sessionStorage.setItem(READ_KEY, id) } catch { /* ignore */ }
 }
 
 const LEVEL_STYLE: Record<Announcement['level'], { bar: string; bg: string; icon: string }> = {
