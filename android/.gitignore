@@ -1,0 +1,7 @@
+# 签名密钥与本机配置绝不提交
+jutian-release.keystore
+keystore.properties
+local.properties
+.gradle/
+build/
+app/build/

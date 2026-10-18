@@ -3,12 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#0a0a0b">
+<meta name="theme-color" content="#f7f6f4">
 <title>巨天agent · 远程</title>
 <style>
-:root{--bg:#0a0a0b;--card:#141416;--line:rgba(255,255,255,.09);--ink:#f5f5f4;--ink2:rgba(245,245,244,.62);--ink3:rgba(245,245,244,.4);--acc:#10a37f}
+/* 亮色液态玻璃：与桌面端同一套视觉语言（用户偏好亮色，不用深色编辑风）。
+   卡片用半透明白 + 背景模糊，文字用墨色；品牌青绿只做强调色。 */
+:root{
+  --bg:#f7f6f4;
+  --bg-grad:radial-gradient(120% 90% at 12% 0%, #e8f5f0 0%, #f7f6f4 46%, #f4f1ec 100%);
+  --card:rgba(255,255,255,.72);
+  --card-solid:#ffffff;
+  --line:rgba(17,24,32,.10);
+  --line-strong:rgba(17,24,32,.18);
+  --ink:#111820;
+  --ink2:rgba(17,24,32,.66);
+  --ink3:rgba(17,24,32,.42);
+  --acc:#10a37f;
+  --acc-soft:rgba(16,163,127,.10);
+  --user-bubble:rgba(16,163,127,.13);
+  --shadow:0 1px 3px rgba(17,24,32,.06), 0 8px 24px rgba(17,24,32,.05);
+}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+html,body{height:100%;background:var(--bg);background-image:var(--bg-grad);background-attachment:fixed;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 #app{display:flex;flex-direction:column;height:100%}
 header{padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);flex-shrink:0}
 header .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(150deg,#10a37f,#0b7a5e);display:grid;place-items:center;flex-shrink:0}
@@ -17,7 +33,7 @@ header b{font-size:15px;letter-spacing:-.01em}
 header .st{margin-left:auto;font-size:10.5px;color:var(--ink3);font-family:ui-monospace,Menlo,monospace}
 #view{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 /* 会话列表 */
-.sess{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.sess{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s}
 .sess:active{background:var(--card)}
 .sess .tt{font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sess .tm{margin-left:auto;font-size:10.5px;color:var(--ink3);font-family:ui-monospace,Menlo,monospace;flex-shrink:0}
@@ -25,13 +41,13 @@ header .st{margin-left:auto;font-size:10.5px;color:var(--ink3);font-family:ui-mo
 /* 聊天 */
 #msgs{padding:16px 14px;display:flex;flex-direction:column;gap:14px}
 .m{max-width:82%;padding:11px 14px;border-radius:18px;font-size:15px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
-.m.u{align-self:flex-end;background:#26262a;border-bottom-right-radius:5px}
-.m.a{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
+.m.u{align-self:flex-end;background:var(--user-bubble);border:1px solid rgba(16,163,127,.22);border-bottom-right-radius:5px}
+.m.a{align-self:flex-start;background:var(--card);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);border:1px solid var(--line);border-bottom-left-radius:5px;box-shadow:var(--shadow)}
 .m.sys{align-self:center;background:transparent;color:var(--ink3);font-size:12px;padding:2px}
 .m .tl{display:block;font-size:11px;color:var(--acc);font-family:ui-monospace,Menlo,monospace;margin-top:6px}
 /* 输入 */
-#inputbar{flex-shrink:0;display:flex;gap:8px;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);border-top:1px solid var(--line);background:var(--bg)}
-#inp{flex:1;height:44px;border-radius:22px;background:var(--card);border:1px solid var(--line);color:var(--ink);font-size:15px;padding:0 18px;outline:none}
+#inputbar{flex-shrink:0;display:flex;gap:8px;padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);border-top:1px solid var(--line);background:rgba(255,255,255,.66);backdrop-filter:blur(18px) saturate(1.25);-webkit-backdrop-filter:blur(18px) saturate(1.25)}
+#inp{flex:1;height:44px;border-radius:22px;background:var(--card-solid);border:1px solid var(--line);color:var(--ink);font-size:15px;padding:0 18px;outline:none;box-shadow:var(--shadow)}
 #inp:focus{border-color:var(--acc)}
 #send{width:44px;height:44px;border-radius:99px;border:0;background:var(--acc);color:#fff;display:grid;place-items:center;font-size:17px}
 #send:disabled{opacity:.35}

@@ -1,0 +1,56 @@
+// 应用级构建脚本
+plugins {
+    id 'com.android.application' version '8.7.2'
+}
+
+android {
+    namespace 'com.jutian.agent'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.jutian.agent"
+        minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
+        targetSdk 35
+        versionCode 11060500
+        versionName "11.6.5"
+    }
+
+    // 签名配置从 keystore.properties 读（该文件与 keystore 都不入库）。
+    // 没有这个文件时（如 CI）跳过签名，仍能产出 debug 包。
+    def ksFile = rootProject.file('keystore.properties')
+    if (ksFile.exists()) {
+        def ks = new Properties()
+        ksFile.withInputStream { ks.load(it) }
+        signingConfigs {
+            release {
+                storeFile rootProject.file(ks['storeFile'])
+                storePassword ks['storePassword']
+                keyAlias ks['keyAlias']
+                keyPassword ks['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // 不混淆：这是壳应用，代码量极小，混淆反而增加排查难度
+            minifyEnabled false
+            if (ksFile.exists()) signingConfig signingConfigs.release
+        }
+    }
+
+    lint {
+        // release 构建不跑 lint：AGP 8.7 的 lint 在 JDK 25 下会崩
+        // （Unsupported class file major version）。壳应用代码量极小，
+        // lint 的收益远小于它在构建链上的风险。
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// 无第三方依赖：WebView 是系统组件，配置界面用原生控件

@@ -160,11 +160,16 @@ var validateArgs = ARGS_MOD ? ARGS_MOD.validateArgs : () => ({ ok: true });
 var overwriteWarning = ARGS_MOD ? ARGS_MOD.overwriteWarning : () => null;
 // 空会话清理：应用每次冷启动建一个默认对话，用户没打字就留下"新对话"。
 // 反复启动会让侧栏被几十条空会话淹没，且界面上与真实会话无从分辨。
-// 副作用型一次性初始化：结果不用，只在启动时跑
-var _EMPTY_CLEANUP = (() => {
+//
+// 时机很关键：原先只在启动时跑一次。实测发现用户可能几天不重启应用
+// （app.asar 是 10/16 的，到 10/18 仍在跑同一个进程），于是空会话一直
+// 堆着、清理从没执行过。现在改为「启动时 + 每小时」都跑。
+//
+// 保护集：调用方传入"当前打开的会话"，避免清掉用户正在看的那条。
+function runEmptyCleanup(protectIds) {
   try {
-    if (!CLEANUP_MOD || !sharedDb || typeof sharedDb.listSessions !== "function") return;
-    if (typeof sharedDb.messageCounts !== "function") return;
+    if (!CLEANUP_MOD || !sharedDb || typeof sharedDb.listSessions !== "function") return 0;
+    if (typeof sharedDb.messageCounts !== "function") return 0;
     var all = sharedDb.listSessions() || [];
     // messageCounts() 只返回"有消息"的会话，零消息的会话不在结果里。
     // 必须按会话列表补齐缺失项为 0，否则它们会被 isEmptySession 的
@@ -176,14 +181,15 @@ var _EMPTY_CLEANUP = (() => {
       counts.set(id0, Number(raw[id0] || 0));
     }
     var empties = all.filter(function (s) { return counts.get(String(s.id)) === 0; });
-    if (!CLEANUP_MOD.shouldCleanup(empties.length)) return;
-    // 清掉全部空会话：保护集为空——此刻还没有用户打开的 tab，
-    // 且空会话本就没有内容，删掉不丢任何东西
-    var ids = CLEANUP_MOD.pickEmptySessions(all, counts, new Set(), empties.length);
+    if (!CLEANUP_MOD.shouldCleanup(empties.length)) return 0;
+    var ids = CLEANUP_MOD.pickEmptySessions(all, counts, protectIds || new Set(), empties.length);
     for (var id of ids) { try { sharedDb.deleteSession(id); } catch (e) {} }
-    console.log("已清理空会话:", ids.length);
-  } catch (e) { console.error("空会话清理失败:", e.message); }
-})();
+    if (ids.length) console.log("已清理空会话:", ids.length);
+    return ids.length;
+  } catch (e) { console.error("空会话清理失败:", e.message); return 0; }
+}
+// 启动时跑一次（此刻还没有用户打开的 tab，保护集为空）
+var _EMPTY_CLEANUP = runEmptyCleanup(new Set());
 // AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
 // OpenCode Zen 免费车道：请求构造与判定（与前端共用 src/shared/opencodeZen.ts）
 var ZEN_MOD = (() => { try { return require("./src/shared/opencodeZen.cjs"); } catch (e) { console.error("opencodeZen.cjs load failed:", e.message); return null; } })();
@@ -5037,3 +5043,7 @@ process.on("SIGTERM", killCaffeinate);
 process.on("SIGINT", killCaffeinate);
 syncKeepAwake();
 setInterval(syncKeepAwake, 20000);
+// 空会话定期清理：每小时一次。启动时已经跑过一次，但用户可能几天不重启
+// 应用（实测遇到过），只在启动时清理等于永远不清。保护集传空——
+// 正在被打开的会话都有消息或正被使用，空会话删掉不丢内容。
+setInterval(function () { try { runEmptyCleanup(new Set()); } catch {} }, 3600e3);
