@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { spawn, type ChildProcess } from 'node:child_process'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -101,12 +102,14 @@ describe('工具层目录白名单', () => {
   })
 
   it('get_file_info 拒绝带 .. 的相对穿越', async () => {
-    const r = await execTool('get_file_info', { path: '/tmp/../etc/passwd' })
+    const r = await execTool('get_file_info', { path: path.join(os.tmpdir(), '..', 'etc', 'passwd') })
     expect(r.success).toBe(false)
   })
 
-  it('get_file_info 放行 /tmp 下的真实文件', async () => {
-    const probe = path.join('/tmp', `jutian-probe-${process.pid}.txt`)
+  it('get_file_info 放行系统临时目录下的真实文件', async () => {
+    // 用 os.tmpdir() 而不是硬编码 /tmp：Windows 上没有 /tmp，
+    // 硬编码会让这个用例在 Windows 上必然失败（CI 实测踩过）
+    const probe = path.join(os.tmpdir(), `jutian-probe-${process.pid}.txt`)
     fs.writeFileSync(probe, 'x')
     try {
       const r = await execTool('get_file_info', { path: probe })

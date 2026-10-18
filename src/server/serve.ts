@@ -223,7 +223,11 @@ var MIME = {
 };
 var IS_WIN = process.platform === "win32";
 var USER_HOME = process.env.HOME || process.env.USERPROFILE || (IS_WIN ? "C:\\Users" : os.homedir());
+// macOS 的 os.tmpdir() 是 /var/folders/…，不在原来的白名单里——工具读临时
+// 文件会被"路径不允许"挡住（写测试时才暴露：原先用硬编码 /tmp 碰巧能过）。
+// /var 只在 macOS 上追加；Linux 的 /tmp 已在列，Windows 的 temp 走 USERPROFILE。
 var ALLOWED = [USER_HOME, "/tmp", "/Users", "/opt", "/usr/local"];
+if (!IS_WIN && fs.existsSync("/var/folders")) ALLOWED.push("/var/folders");
 // 目录包含判断必须带路径分隔符，否则 /Users/evilx 会被 /Users 前缀放行
 var ok = (p) => {
   const rp = path.resolve(p);
