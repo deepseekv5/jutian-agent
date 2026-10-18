@@ -69,7 +69,8 @@ describe('parseNoticeMd', () => {
     const raw = fs.readFileSync(path.resolve(__dirname, '../docs/notice.md'), 'utf-8')
     const a = parseNoticeMd(raw)
     expect(a).not.toBeNull()
-    expect(a!.id).toMatch(/v1169/)
+    // id 会随公告版本变——断言格式而不是具体值
+    expect(a!.id).toMatch(/2026-\d\d-\d\d-v\d+/)
     expect(a!.title).toBeTruthy()
     expect(a!.body.length).toBeGreaterThan(10)
   })
