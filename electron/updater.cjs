@@ -67,7 +67,12 @@ function sendReady() {
       try { w.webContents.send('update-ready') } catch {}
     }
   } catch {}
-  pushUpdateNotice('新版本已就绪', '更新已下载完成 — 重启应用后生效(设置 → 关于 → 重启即用)')
+  // Windows 走「启动时替换」：必须完全退出再打开才生效（不是刷新窗口）。
+  // 文案要说明这点，否则用户点了重启却发现没更新，会以为更新失败。
+  const body = process.platform === 'win32'
+    ? '更新已下载完成 — 请完全退出应用再重新打开，新版本才会生效（Windows 需在启动时完成替换）'
+    : '更新已下载完成 — 重启应用后生效(设置 → 关于 → 重启即用)'
+  pushUpdateNotice('新版本已就绪', body)
 }
 
 function asarPath() {
@@ -144,6 +149,15 @@ async function applyUpdate(asarUrl) {
     const bak = target + '.bak'
     sendProgress({ stage: 'apply' })
     fs.writeFileSync(tmp, buf)
+    if (process.platform === 'win32') {
+      // Windows 上运行中的 app.asar 被本进程锁着，renameSync 会抛 EPERM/EBUSY
+      // ——这就是 v8.1 在 Windows 上「只能下载不能更新」的根因（macOS/Linux
+      // 允许重命名已打开的文件，所以那边一直正常）。
+      // 对策：不在运行时替换，只把 .new 落好，由下次启动在加载 asar 之前换名。
+      sendProgress({ stage: 'done', pct: 100 })
+      sendReady()
+      return
+    }
     try { fs.copyFileSync(target, bak) } catch {}
     fs.renameSync(tmp, target)
     sendProgress({ stage: 'done', pct: 100 })
@@ -157,9 +171,35 @@ async function applyUpdate(asarUrl) {
   }
 }
 
+/**
+ * 启动时应用待安装的更新（Windows 路径）。
+ *
+ * 必须在 Electron 加载 app.asar **之前**执行——所以 register() 是在 main.cjs
+ * 顶部 require 的。此刻本进程还没打开 asar，rename 不会被文件锁挡住。
+ * 失败（只读安装目录/权限不足）时保留 .new 并记录原因，下次启动再试。
+ */
+function applyPendingOnBoot() {
+  try {
+    const target = asarPath()
+    if (!target) return
+    const pending = target + '.new'
+    if (!fs.existsSync(pending)) return
+    const bak = target + '.bak'
+    try { fs.copyFileSync(target, bak) } catch {}
+    fs.renameSync(pending, target)
+    console.log('[updater] 已应用待安装更新（启动时替换）')
+  } catch (e) {
+    console.error('[updater] 启动时替换失败:', e.message)
+  }
+}
+
 let _currentAbort = null
 
 function register() {
+  // 先把上次下载好的 .new 换上去（Windows 专用路径）。
+  // register() 在 main.cjs 顶部被 require，此刻 app.asar 还没被加载，
+  // 文件锁不存在，rename 能成功。
+  applyPendingOnBoot()
   ipcMain.handle('update-check', async () => {
     try { const info = await checkLatest(); return { ok: true, ...info } }
     catch (e) { return { ok: false, error: String(e.message || e) } }
