@@ -168,6 +168,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   }, [localApi, loadLocalApi]);
   // 数据库维护
   const [vacuumMsg, setVacuumMsg] = useState('');
+  const [emptyMsg, setEmptyMsg] = useState('');
   const [diagCopied, setDiagCopied] = useState(false);
   const { lang, setLang, t } = useLanguage();
   const [tab, setTab] = useState<TabId>('inference');
@@ -993,6 +994,17 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       const d = await r.json()
                       setVacuumMsg(d.success ? d.output : `失败: ${d.error}`)
                     } catch { setVacuumMsg('请求失败') }
+                  }} className="px-3 py-1.5 rounded-lg text-[11px] font-medium shrink-0" style={{ background: c.bgInput, border: `1px solid ${c.border}`, color: c.textSecondary }}>执行</button>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('清理空会话', 'Clean empty chats')}</div><div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{emptyMsg || t('删除没有消息的「新对话」，清理侧栏（启动时与每小时自动执行）', 'Remove chats with no messages (also runs at startup and hourly)')}</div></div>
+                  <button type="button" onClick={async () => {
+                    setEmptyMsg('执行中…')
+                    try {
+                      const r = await fetch('/api/db/cleanup-empty', { method: 'POST' })
+                      const d = await r.json()
+                      setEmptyMsg(d.success ? d.output : `失败: ${d.error}`)
+                    } catch { setEmptyMsg('请求失败') }
                   }} className="px-3 py-1.5 rounded-lg text-[11px] font-medium shrink-0" style={{ background: c.bgInput, border: `1px solid ${c.border}`, color: c.textSecondary }}>执行</button>
                 </div>
               </div>

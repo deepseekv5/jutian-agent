@@ -2370,6 +2370,17 @@ http.createServer(async (req, res) => {
         return json(res, { success: true, output: `完成：${mb(r.before)} MB → ${mb(r.after)} MB（回收 ${mb(Math.max(0, r.before - r.after))} MB）` });
       } catch (e) { return json(res, { success: false, error: e.message }); }
     }
+    // 手动清理空会话（设置 → 数据）。自动清理是「启动 + 每小时」，
+    // 但用户可能想立刻清一次；这个端点也便于诊断自动清理是否生效。
+    if (url.pathname === "/api/db/cleanup-empty" && req.method === "POST") {
+      try {
+        if (!sharedDb) return json(res, { success: false, error: "数据库不可用（db 未加载）" });
+        const before = (sharedDb.listSessions() || []).length;
+        const removed = runEmptyCleanup(new Set());
+        const after = (sharedDb.listSessions() || []).length;
+        return json(res, { success: true, removed, before, after, output: `已清理 ${removed} 个空会话（${before} → ${after}）` });
+      } catch (e) { return json(res, { success: false, error: e.message }); }
+    }
     // 环境诊断：一键体检各子系统可用性（设置 → 关于 → 环境诊断）
     // 前端错误上报（渲染层崩溃时由 ErrorBoundary / 全局监听调用）
     if (url.pathname === "/api/client-error" && req.method === "POST") {
