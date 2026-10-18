@@ -15,6 +15,7 @@ import { effectiveApiKey } from '../store/storage';
 import AboutContent from './AboutContent';
 import { fmtTokens } from '../utils/tokens';
 import { dateTimeCN } from '../utils/datetime';
+import { isWindows } from '../utils/platform';
 
 interface Props {
   settings: Settings;
@@ -770,7 +771,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               </Sub>
               <Sub c={c} title="本机环境">
                 <div className="p-3 rounded-lg text-[11px] leading-relaxed" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}`, color: c.textTertiary }}>
-                  当前系统：{/Win/i.test(navigator.platform || '') ? 'Windows（PowerShell）' : 'macOS（zsh）'} · 数据存储：本地 SQLite · 工作目录影响所有对话的 AI 工具调用
+                  当前系统：{isWindows() ? 'Windows（PowerShell）' : 'macOS（zsh）'} · 数据存储：本地 SQLite · 工作目录影响所有对话的 AI 工具调用
                 </div>
               </Sub>
               <Sub c={c} title={t('运行行为', 'Runtime')}>

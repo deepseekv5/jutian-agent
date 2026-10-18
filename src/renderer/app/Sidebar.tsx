@@ -6,6 +6,7 @@ import BrandMark from './BrandMark'
 import SubAgentTracker from './SubAgentTracker'
 import type { PageType } from './TabBar'
 import { APP_NAME, APP_VERSION } from '../brand'
+import { isMac as platformIsMac } from '../utils/platform'
 
 interface Props {
   sessions: Session[]
@@ -131,7 +132,7 @@ function loadCollapsedProjects(): Set<string> {
   try { const raw = localStorage.getItem('lyclaw_collapsed_projects'); const arr = raw ? JSON.parse(raw) : []; return new Set(Array.isArray(arr) ? arr : []) } catch { return new Set() }
 }
 
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+const isMac = platformIsMac()
 
 export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCreate, onDelete, onOpenTab, onCollapse, onJumpToMessage }: Props) {
   const { lang, t } = useLanguage()

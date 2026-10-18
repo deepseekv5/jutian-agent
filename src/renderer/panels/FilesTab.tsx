@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { Settings } from '../types'
+import { isWindows } from '../utils/platform'
 
 interface DirEntry {
   name: string
@@ -8,7 +9,7 @@ interface DirEntry {
 }
 
 function getDefaultDir(workDir: string, home: string): string {
-  const isWin = /Win/i.test(navigator.platform || '')
+  const isWin = isWindows()
   if (workDir) return workDir
   if (home) return home
   return isWin ? 'C:\\Users' : '/'
@@ -84,7 +85,7 @@ export default function FilesTab({ settings }: { settings: Settings }) {
     } catch {}
   }
 
-  const isWin = /Win/i.test(navigator.platform || '')
+  const isWin = isWindows()
   const joinPath = (dir: string, name: string) => isWin ? `${dir.replace(/[\\]+$/, '')}\\${name}` : `${dir.replace(/\/+$/, '')}/${name}`
   const parentPath = (dir: string) => {
     const sep = isWin ? '\\' : '/'

@@ -13,6 +13,7 @@ import { hhmmss } from '../utils/datetime'
 import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 import { selfCheck, shouldBlock } from '../engine/selfCheck'
 import { effectiveApiKey } from '../store/storage'
+import { baseName } from '../utils/pathName'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -338,7 +339,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
       try {
         const paths: string[] = await api.openFileDialog()
         if (!paths?.length) return
-        setAttachedFiles(prev => { const existing = new Set(prev.map(f => f.path)); return [...prev, ...paths.map(p => ({ path: p, name: p.split('/').pop() || p, size: 0 })).filter(f => !existing.has(f.path))] })
+        setAttachedFiles(prev => { const existing = new Set(prev.map(f => f.path)); return [...prev, ...paths.map(p => ({ path: p, name: baseName(p) || p, size: 0 })).filter(f => !existing.has(f.path))] })
       } catch {}
       return
     }

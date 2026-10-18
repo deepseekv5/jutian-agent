@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { CMPrimaryBtn, CMInput } from './ui'
 import { useModalBehavior } from '../hooks/useModalBehavior'
+import { baseName } from '../utils/pathName'
 
 interface Props {
   onClose: () => void
@@ -25,7 +26,7 @@ export default function NewProjectDialog({ onClose, onCreateProject }: Props) {
     const dirs: string[] = await api.openFolderDialog()
     if (dirs?.length) {
       setPath(dirs[0])
-      if (!name) setName(dirs[0].split('/').pop() || '新项目')
+      if (!name) setName(baseName(dirs[0]) || '新项目')
     }
   }
 
@@ -33,7 +34,7 @@ export default function NewProjectDialog({ onClose, onCreateProject }: Props) {
     const p = path.trim()
     if (!p) return
     setBusy(true)
-    onCreateProject(name.trim() || p.split('/').pop() || '新项目', p)
+    onCreateProject(name.trim() || baseName(p) || '新项目', p)
     setBusy(false)
   }
 

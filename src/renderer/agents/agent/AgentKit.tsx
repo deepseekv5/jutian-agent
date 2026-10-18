@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import { osName as detectOsName, runtimeEnvLine } from '../../utils/platform'
 import type { Employee } from '../../../shared/employees'
 import type { Settings } from '../../types'
 
@@ -91,8 +92,7 @@ export function agentMsgId(): string {
 
 /* ─── 人设系统提示词 ─── */
 export function buildAgentSystemPrompt(emp: Employee, settings: Settings, extra?: string): string {
-  const isWin = /Win/i.test(navigator.platform || '')
-  const osName = isWin ? 'Windows' : 'macOS'
+  const osName = detectOsName()
   const workDir = settings.workDir || ''
   return `${emp.prompt || `你是「${emp.name}」，${emp.role || '团队成员'}。`}
 
@@ -103,6 +103,7 @@ export function buildAgentSystemPrompt(emp: Employee, settings: Settings, extra?
 
 【运行环境】
 - 系统：${osName}
+- Shell：${runtimeEnvLine()}
 - 工作目录：${workDir || '用户主目录'}
 - 你拥有完整工具能力（读写文件、执行命令、联网搜索等），需要时直接调用，不要只说不做
 - 用中文交流${extra ? `

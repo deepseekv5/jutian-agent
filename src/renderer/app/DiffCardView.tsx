@@ -6,6 +6,7 @@
  */
 import { useState, useRef } from 'react'
 import type { ToolCall } from '../types'
+import { baseName } from '../utils/pathName'
 
 const TEXT_SECONDARY = '#a1a1aa'
 const TEXT_MUTED = '#5b5b60'
@@ -103,7 +104,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
         <span style={{ color: c.accent }}>diff</span>
-        <span className="truncate">{path.split('/').pop()}</span>
+        <span className="truncate">{baseName(path)}</span>
         <span className="shrink-0" style={{ color: '#4ade80' }}>+{added}</span>
         <span className="shrink-0" style={{ color: ERR }}>-{removed}</span>
         {state === 'undone' && <span className="shrink-0" style={{ color: ERR }}>已撤销</span>}

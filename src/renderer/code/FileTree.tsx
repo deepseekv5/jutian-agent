@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import type { FileNode, GitStatusData } from '../types/code'
 import { getLanguage } from '../types/code'
 import { useTheme } from '../hooks/useTheme'
+import { baseName } from '../utils/pathName'
 
 interface Props {
   nodes: FileNode[]
@@ -340,7 +341,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
 
   // Open rename dialog
   const handleOpenRename = useCallback((nodePath: string) => {
-    const name = nodePath.split('/').pop() || ''
+    const name = baseName(nodePath) || ''
     setRenamePath(nodePath)
     setRenameName(name)
     setRenameError('')
@@ -351,7 +352,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
 
   // OpenDeleteConfirm
   const handleOpenDeleteConfirm = useCallback((nodePath: string, isDir: boolean) => {
-    const name = nodePath.split('/').pop() || ''
+    const name = baseName(nodePath) || ''
     setDeletePath(nodePath)
     setDeleteName(`${isDir ? '文件夹' : '文件'} "${name}"`)
     setShowDeleteConfirm(true)

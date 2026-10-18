@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef, type DragEvent } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { CodeProject } from '../types/code'
+import { baseName, dirName } from '../utils/pathName'
 
 interface Props {
   projects: CodeProject[]
@@ -83,7 +84,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
       if (entry?.isDirectory) {
         // Drag folder -> use as project root directory
         const dirPath = entry.fullPath || (e.dataTransfer?.files[0] as any)?.path
-        const name = dirPath.split('/').filter(Boolean).pop() || '未命名项目'
+        const name = baseName(dirPath) || '未命名项目'
         onCreateProject(name, dirPath)
         setDropState('idle')
       } else if (entry?.isFile) {
@@ -91,10 +92,8 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
         const file = e.dataTransfer?.files[0] as any
         const filePath = file?.path || entry.fullPath
         if (filePath) {
-          const parts = filePath.split('/')
-          parts.pop()
-          const dirPath = parts.join('/') || '/'
-          const projectName = dirPath.split('/').filter(Boolean).pop() || '未命名项目'
+          const dirPath = dirName(filePath) || '/'
+          const projectName = baseName(dirPath) || '未命名项目'
           onCreateProject(projectName, dirPath, filePath)
         }
         setDropState('idle')
@@ -106,10 +105,8 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
             // Might be folder
             onCreateProject(file.name, file.path)
           } else {
-            const parts = file.path.split('/')
-            parts.pop()
-            const dirPath = parts.join('/')
-            const projectName = dirPath.split('/').filter(Boolean).pop() || '未命名项目'
+            const dirPath = dirName(file.path)
+            const projectName = baseName(dirPath) || '未命名项目'
             onCreateProject(projectName, dirPath, file.path)
           }
         }
@@ -127,7 +124,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
       const res = await fetch('/api/code/select-directory', { method: 'POST' })
       const data = await res.json()
       if (data.path) {
-        const name = data.path.split('/').filter(Boolean).pop() || 'Untitled Project'
+        const name = baseName(data.path) || 'Untitled Project'
         onCreateProject(name, data.path)
       }
     } catch (e: any) {
@@ -141,10 +138,8 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
       const res = await fetch('/api/code/select-file', { method: 'POST' })
       const data = await res.json()
       if (data.path) {
-        const parts = data.path.split('/')
-        parts.pop()
-        const dirPath = parts.join('/') || '/'
-        const projectName = dirPath.split('/').filter(Boolean).pop() || 'Untitled Project'
+        const dirPath = dirName(data.path) || '/'
+        const projectName = baseName(dirPath) || 'Untitled Project'
         onCreateProject(projectName, dirPath, data.path)
       }
     } catch (e: any) {

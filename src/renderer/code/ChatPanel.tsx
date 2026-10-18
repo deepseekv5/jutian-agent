@@ -10,6 +10,8 @@ import rehypeHighlight from 'rehype-highlight'
 import type { Settings, ToolCall, ToolDef, AttachedFile } from '../types'
 import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { executeTool } from '../engine/tools'
+import { baseName } from '../utils/pathName'
+import { osName, runtimeEnvLine } from '../utils/platform'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import ContextGauge, { type ContextPart } from '../chat/ContextGauge'
@@ -440,7 +442,7 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
       max: '【思考程度：最大】进行最深入、最全面的思考，穷举关键细节后再作答。',
     }
     const modeDesc = APPROVAL_MODES.find(m => m.id === approvalMode)?.desc || ''
-    const systemPrompt = `你是一个专业的代码助手，正在帮助用户开发项目"${projectName}"。\n\n【工作目录边界 — 最高优先级】\n- 用户项目目录（你的合法工作区）：${projectRoot}\n- 本应用自身项目目录禁止读取、修改、删除或访问。\n- 所有文件操作自动限制在用户项目目录 ${projectRoot} 内。\n\n当前审批模式：${approvalMode}（${modeDesc}）。若工具不可用，请以建议形式给出修改方案。\n\n${agentsMd ? `【项目指令 AGENTS.md】\n${agentsMd}\n\n` : ''}你拥有以下工具能力：${toolsForMode(approvalMode).map(t => t.name).join(', ')}。\n\n规则：\n1. 所有文件操作仅限用户项目目录 ${projectRoot}\n2. 回答简洁专业、直击要点\n3. 修改代码时说明理由并用 edit_file 或 write_file 执行\n4. 不确定时先 read_file 或 list_dir 了解上下文\n5. 建议运行命令时使用 shell 工具\n6. 如需用户确认（如删除文件），先说明理由再执行\n7. 多步任务（≥3 步）必须先用 update_plan 工具列出步骤清单，每完成一步更新对应状态\n\n${thinkText[thinking] || ''}`
+    const systemPrompt = `你是一个专业的代码助手，正在帮助用户开发项目"${projectName}"。\n\n【工作目录边界 — 最高优先级】\n- 用户项目目录（你的合法工作区）：${projectRoot}\n- 本应用自身项目目录禁止读取、修改、删除或访问。\n- 所有文件操作自动限制在用户项目目录 ${projectRoot} 内。\n\n【运行环境 — 写命令前必须先看这里】\n- 操作系统：${osName()}\n- Shell：${runtimeEnvLine()}\n写 shell 命令前对照本段：用错语法会直接报错，而报错≠工具不可用，不要因此声称无法调用工具。\n\n当前审批模式：${approvalMode}（${modeDesc}）。若工具不可用，请以建议形式给出修改方案。\n\n${agentsMd ? `【项目指令 AGENTS.md】\n${agentsMd}\n\n` : ''}你拥有以下工具能力：${toolsForMode(approvalMode).map(t => t.name).join(', ')}。\n\n规则：\n1. 所有文件操作仅限用户项目目录 ${projectRoot}\n2. 回答简洁专业、直击要点\n3. 修改代码时说明理由并用 edit_file 或 write_file 执行\n4. 不确定时先 read_file 或 list_dir 了解上下文\n5. 建议运行命令时使用 shell 工具\n6. 如需用户确认（如删除文件），先说明理由再执行\n7. 多步任务（≥3 步）必须先用 update_plan 工具列出步骤清单，每完成一步更新对应状态\n\n${thinkText[thinking] || ''}`
 
     const apiMessages: any[] = [
       { role: 'system', content: systemPrompt },
@@ -532,7 +534,7 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
     if (api?.openFileDialog) {
       try {
         const paths: string[] = await api.openFileDialog()
-        if (paths?.length) setAttachedFiles(prev => { const existing = new Set(prev.map(f => f.path)); return [...prev, ...paths.map(p => ({ path: p, name: p.split('/').pop() || p, size: 0 })).filter(f => !existing.has(f.path))] })
+        if (paths?.length) setAttachedFiles(prev => { const existing = new Set(prev.map(f => f.path)); return [...prev, ...paths.map(p => ({ path: p, name: baseName(p) || p, size: 0 })).filter(f => !existing.has(f.path))] })
       } catch {}
     }
   }, [])

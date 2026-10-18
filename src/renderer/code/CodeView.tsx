@@ -25,6 +25,7 @@ import { useTheme } from '../hooks/useTheme'
 import type { CodeProject, AICompletionEvent, FollowTarget, ChangedLine, FileChangeInfo, GitStatusData } from '../types/code'
 import * as CS from '../store/codeStorage'
 import type { Settings } from '../types'
+import { baseName } from '../utils/pathName'
 
 // Runnable file types
 const RUNNABLE_EXTS = new Set(['sh', 'js', 'mjs', 'cjs', 'py', 'bash', 'zsh', 'rb', 'pl', 'php', 'ts', 'go'])
@@ -121,7 +122,7 @@ export default function CodeView({ settings, onBack }: Props) {
   useEffect(() => {
     if (!followTarget || !followMode) return
     if (highlightTimerRef.current) { clearTimeout(highlightTimerRef.current); highlightTimerRef.current = null }
-    const fileName = followTarget.filePath.split('/').pop() || followTarget.filePath
+    const fileName = baseName(followTarget.filePath) || followTarget.filePath
     openFile(followTarget.filePath, fileName)
     if (followTarget.line) {
       setScrollTargetLine(followTarget.line)
@@ -445,7 +446,7 @@ export default function CodeView({ settings, onBack }: Props) {
           {/* 工具条:文件状态 + 高频操作(低频操作全部收入活动栏) */}
           <div className="h-9 flex items-center px-2 gap-0.5 border-b glass shrink-0" style={{ borderColor: c.borderLight }}>
             <span className="text-[10.5px] font-mono truncate max-w-[220px] shrink-0" style={{ color: c.textMuted }} title={code.activeTab?.path}>
-              {code.activeTab ? (code.activeTab.modified ? '● ' : '') + (code.activeTab.path.split('/').pop() || '') : t2('未打开文件')}
+              {code.activeTab ? (code.activeTab.modified ? '● ' : '') + (baseName(code.activeTab.path) || '') : t2('未打开文件')}
             </span>
             {code.activeTab?.name?.endsWith('.md') && (
               <TBtn c={c} title="Markdown 预览" active={markdownPreview} onClick={handleToggleMarkdownPreview}
@@ -469,7 +470,7 @@ export default function CodeView({ settings, onBack }: Props) {
             tab={code.activeTab}
             tabs={code.tabs}
             activeTabPath={code.activeTabPath}
-            onSelectTab={(path: string) => { code.openFile(path, path.split('/').pop() || path) }}
+            onSelectTab={(path: string) => { code.openFile(path, baseName(path) || path) }}
             onCloseTab={code.closeTab}
             onCloseOtherTabs={handleCloseOtherTabs}
             onCloseRightTabs={handleCloseRightTabs}

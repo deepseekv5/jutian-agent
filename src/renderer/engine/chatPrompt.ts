@@ -1,14 +1,14 @@
 import type { Settings } from '../types'
 import { getSkillManifest } from './skillManifest'
+import { isWindows, osName as detectOsName, runtimeEnvLine } from '../utils/platform'
 
 /**
  * 聊天系统提示词（唯一来源）
  * useChat 发送请求和上下文面板统计 token 共用，保证估算一致。
  */
 export function buildChatSystemPrompt(settings: Settings): string {
-  const isWin = /Win/i.test(navigator.platform || '')
-  const osName = isWin ? 'Windows' : 'macOS'
-  const shellName = isWin ? 'PowerShell' : 'zsh'
+  const isWin = isWindows()
+  const osName = detectOsName()
   const workDir = settings.workDir || ''
   const saveDir = workDir || (isWin ? 'C:\\Users\\<用户名>\\Documents\\lyclaw' : '~/Desktop/lyclaw')
   // 已安装技能清单：让模型知道有哪些技能可用，意图匹配时主动 load_skill
@@ -25,7 +25,7 @@ export function buildChatSystemPrompt(settings: Settings): string {
 
 【运行环境 — 重要】
 - 操作系统：${osName}
-- Shell：${shellName}${isWin ? '（命令需兼容 PowerShell 语法，如 Get-ChildItem、$env: 变量；路径用反斜杠 C:\\Users\\...）' : '（命令需兼容 zsh/bash 语法；路径用正斜杠 /Users/...）'}
+- Shell：${runtimeEnvLine()}
 - 默认工作目录：${workDir || '用户主目录'}
 - 执行 shell 命令、读写文件时，除非用户明确指定，默认都在该工作目录内进行。${workDir ? '' : isWin ? '未设置时请使用相对路径或明确询问用户。' : ''}
 

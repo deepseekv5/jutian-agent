@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { SearchResult } from '../types/code'
+import { baseName, dirName } from '../utils/pathName'
 
 interface Props {
   projectRoot: string
@@ -100,8 +101,8 @@ export default function CodeSearchPanel({ projectRoot, onOpenFile, onClose, init
               Total: {results.length}  results
             </div>
             {results.map((r, i) => {
-              const fileName = r.filePath.split('/').pop() || r.filePath
-              const dir = r.filePath.substring(0, r.filePath.lastIndexOf('/')) || '/'
+              const fileName = baseName(r.filePath) || r.filePath
+              const dir = dirName(r.filePath) || '/'
               return (
                 <div
                   key={i}

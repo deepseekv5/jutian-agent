@@ -1,5 +1,6 @@
 // Terminal Panel
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { baseName } from '../utils/pathName'
 
 interface Props {
   cwd?: string
@@ -85,7 +86,7 @@ export default function TerminalPanel({ cwd }: Props) {
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#d29922' }} />
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#3fb950' }} />
         </div>
-        <span className="text-[10px] ml-2" style={{ color: '#8b949e' }}>Terminal — {cwd ? (cwd.split('/').pop() || cwd) : '默认目录'}</span>
+        <span className="text-[10px] ml-2" style={{ color: '#8b949e' }}>Terminal — {cwd ? (baseName(cwd) || cwd) : '默认目录'}</span>
         <div className="flex-1" />
         <button onClick={() => navigator.clipboard.writeText(history.map(h => `$ ${h.command}\n${h.output}`).join('\n\n')).catch(() => {})}
           className="text-[10px] px-1.5 hover:text-white transition-colors" style={{ color: '#8b949e' }} title="复制全部输出">复制</button>

@@ -44,6 +44,7 @@ const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
 const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
+import { isMac as platformIsMac } from '../utils/platform';
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
 function TabFallback() {
@@ -477,7 +478,7 @@ function MainApp() {
 
       {/* Sidebar toggle */}
       {sidebarCollapsed && (
-        <div className="absolute top-2 z-30 titlebar-nodrag" style={{ left: /Mac/i.test(navigator.platform || navigator.userAgent) ? 84 : 8 }}>
+        <div className="absolute top-2 z-30 titlebar-nodrag" style={{ left: platformIsMac() ? 84 : 8 }}>
           <button onClick={() => setSidebarCollapsed(false)}
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
             style={{ color: c.textTertiary }}

@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { CodeProject, FileNode, EditorTab } from '../types/code'
 import { getLanguage } from '../types/code'
 import * as CS from '../store/codeStorage'
+import { baseName } from '../utils/pathName'
 
 export function useCodeProject() {
   const [projects, setProjects] = useState<CodeProject[]>([])
@@ -47,7 +48,7 @@ export function useCodeProject() {
       if (pendingOpenFile.current) {
         const filePath = pendingOpenFile.current
         pendingOpenFile.current = null
-        const fileName = filePath.split('/').pop() || ''
+        const fileName = baseName(filePath) || ''
         // 延迟一帧，确保文件树状态已更新
         requestAnimationFrame(() => {
           openFileRef.current?.(filePath, fileName)

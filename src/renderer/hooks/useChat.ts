@@ -10,6 +10,8 @@ import { parsePlanArgs, planAck, planReject, loadPlan, savePlan, clearPlan, type
 import { gatePlanTool, PLAN_MODE_PROMPT, PLAN_MODE_INITIAL, planModeReducer } from '../../shared/planMode'
 import { parsePlanFromText, looksLikePlan } from '../engine/planParse'
 import { sanitizeTitle, fallbackTitle } from '../utils/titleSanitize'
+import { baseName } from '../utils/pathName'
+import { runtimeEnvLine } from '../utils/platform'
 import { extractReasoning } from '../../shared/reasoning'
 import { buildCodingPersona, OFFICE_MODE_SUFFIX } from '../../shared/chatModes'
 import { refreshAgentsMd, getAgentsMd } from '../engine/agentsMd'
@@ -623,7 +625,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     const agentsBlock = getAgentsMd(workDir) ? `\n\n【项目指令 AGENTS.md — 来自工作目录根，优先遵守】\n${getAgentsMd(workDir)}` : ''
     const systemPrompt = chatMode === 'coding'
       // 编程形态：工程 Agent 人格（动手改文件为先）+ 运行环境一行
-      ? buildCodingPersona(workDir) + `\n\n【运行环境】${/Win/i.test(navigator.platform || '') ? 'Windows（PowerShell 语法，路径用反斜杠）' : 'macOS/Linux（zsh/bash 语法，路径用正斜杠）'}${agentsBlock}`
+      ? buildCodingPersona(workDir) + `\n\n【运行环境】${runtimeEnvLine()}` + agentsBlock
       // 办公形态：通用桌面助手人格 + 办公聚焦段（文档产出为先，代码操作克制）
       : buildChatSystemPrompt(settings) + '\n\n' + OFFICE_MODE_SUFFIX + agentsBlock
 
@@ -654,7 +656,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         const kd = await kbRes.json()
         const hits = (kd?.hits || []).filter((h: any) => h.score > 0.35)
         if (hits.length > 0) {
-          const srcLabel = (h: any) => String(h.path).startsWith('entry:') ? String(h.chunk || '').split('\n')[0].slice(0, 24) : String(h.path).split('/').pop()
+          const srcLabel = (h: any) => String(h.path).startsWith('entry:') ? String(h.chunk || '').split('\n')[0].slice(0, 24) : baseName(h.path)
           const refs = hits.map((h: any, i: number) => `[${i + 1}] 《${srcLabel(h)}》\n${String(h.chunk).slice(0, 600)}`).join('\n---\n')
           finalSystemPrompt += `\n\n【知识库参考 — 来自用户的知识库，回答时优先依据】\n${refs}`
         }

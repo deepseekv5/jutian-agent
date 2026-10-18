@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
+import { isMac as platformIsMac } from '../utils/platform'
 
 export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research'
 
@@ -60,7 +61,7 @@ interface Props {
 export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenType, toolServerOk, onOpenSettings, onOpenWorkDir, workingSessionIds }: Props) {
   const { c } = useTheme()
   const { lang } = useLanguage()
-  const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+  const isMac = platformIsMac()
   // 氛围模式状态（App.tsx 渲染光晕层，此处只维护开关）
   const [ambient, setAmbient] = useState(() => localStorage.getItem('lyclaw_ambient') === '1')
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
+import { baseName } from '../utils/pathName'
 
 interface FileEntry { path: string; sessionTitle: string; createdAt: string }
 
@@ -89,7 +90,7 @@ export default function OutputsPanel({ onClose, embedded: _embedded }: { onClose
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate" style={{ color: c.text }}>{f.path.split('/').pop()}</div>
+                  <div className="text-[13px] font-medium truncate" style={{ color: c.text }}>{baseName(f.path)}</div>
                   <div className="text-[11px] truncate font-mono" style={{ color: c.textMuted }}>{f.path}</div>
                 </div>
                 <div className="flex gap-1 shrink-0">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
+import { isMac as platformIsMac } from '../utils/platform'
 
 declare global {
   interface Window {
@@ -74,7 +75,7 @@ export default function BrowserOverlay({ initialUrl, onClose }: Props) {
   const openExternal = () => { window.open(url, '_blank') }
 
   const displayUrl = url.length ? (url.length > 80 ? url.slice(0, 80) + '...' : url) : ''
-  const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
+  const isMac = platformIsMac()
 
   // 导航按钮本身必须 no-drag：整条工具栏是拖拽区，而 Electron 里
   // -webkit-app-region: drag 会吞掉鼠标点击，导致压在它下面的 ✕ 点不动
