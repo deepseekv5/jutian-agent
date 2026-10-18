@@ -29,7 +29,10 @@ jobs:
 
       # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
       # 只警告不拦，避免基建波动堵住发版。
+      # shell: bash 是必须的——Windows runner 默认 PowerShell，这套 bash 语法
+      # （set +e / $? / fi）会直接 ParserError（实测踩过）。
       - name: 依赖漏洞门禁(high/critical)
+        shell: bash
         run: |
           set +e
           npm audit --audit-level=high > /tmp/audit.log 2>&1
@@ -59,8 +62,10 @@ jobs:
 
       # better-sqlite3 原生模块：Windows 上必须换成 Electron 对应的 ABI
       # （v130），否则 Electron 跑起来时报 NODE_MODULE_VERSION 不匹配。
-      # 这一步在 electron-builder 之前，且只针对 win。
+      # electron-rebuild 不在项目依赖里（只在发版用），用 npx 现装。
+      # shell: bash：这条是多行块，且 npx 行为在 bash 下更可预期。
       - name: 重建 better-sqlite3（Electron ABI）
+        shell: bash
         run: |
           npx --yes electron-rebuild@3.2.10 -f -w better-sqlite3 -v 33.4.11
 
@@ -79,7 +84,9 @@ jobs:
 
       # app.asar 一并上传：Windows 应用内自更新走的是它（不是 exe）。
       # v8.1 用户先装一次 exe，之后才能自动更新——所以两个都要有。
+      # shell: bash：mkdir -p 是 bash 专有（PowerShell 无此开关）
       - name: 产出 app.asar（应用内更新用）
+        shell: bash
         run: |
           npx esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs
           npx vite build
