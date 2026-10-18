@@ -235,7 +235,15 @@ var ok = (p) => {
   const rp = path.resolve(p);
   return ALLOWED.some((b) => {
     const rb = path.resolve(b);
-    return rp === rb || rp.startsWith(rb + path.sep);
+    if (rp === rb || rp.startsWith(rb + path.sep)) return true;
+    // Windows 文件系统不区分大小写：USERPROFILE 是 C:\Users\me，模型常写
+    // c:\users\me，逐字比较会把合法路径挡成「路径不允许」。
+    // 只在 Win 上放宽——POSIX 大小写敏感，/Users/a 不能因此摸到 /users。
+    if (IS_WIN) {
+      const lr = rp.toLowerCase(), lb = rb.toLowerCase();
+      return lr === lb || lr.startsWith(lb + "\\");
+    }
+    return false;
   });
 };
 // 技能/记忆等以名称作为目录名的场景，统一白名单清洗，杜绝 ../ 穿越

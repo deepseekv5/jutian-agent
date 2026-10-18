@@ -76,19 +76,31 @@ jobs:
         run: |
           npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11
 
-      # app.asar：应用内自更新走的是它（不是 exe）。必须排在
-      # electron-builder **之前**——打完包 release/ 里会多出 win-unpacked
-      # 等一堆目录，那时再 pack . 会把安装包自己打进去（体积翻倍）。
-      - name: 产出 app.asar（应用内更新用）
+      # Windows 包也要带 TTS：runner 上没有本机的 openai-edge-tts 目录，
+      # 直接在 CI 里浅克隆一份，EDGE_TTS_DIR 指过去，eb-config 就会把它
+      # 收进 resources/edge-tts。克隆失败不阻断打包（资源会被跳过）。
+      - name: 准备 edge-tts 资源
         shell: bash
         run: |
-          mkdir -p asar-out
-          npx @electron/asar pack . asar-out/jutian-agent-${{ github.ref_name }}-app.asar --unpack "**/*.node"
+          git clone --depth 1 https://github.com/roudy/openai-edge-tts "$RUNNER_TEMP/openai-edge-tts" \
+            && echo "EDGE_TTS_DIR=$RUNNER_TEMP/openai-edge-tts" >> "$GITHUB_ENV" \
+            || echo "::warning::edge-tts 克隆失败，本次包不含 TTS 资源"
 
       - name: 打包 Windows 安装包
         run: npx electron-builder --win --x64 --config scripts/eb-config.cjs
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # app.asar（应用内自更新用）直接取 electron-builder 的打包产物。
+      # 之前是 `asar pack .` 现打——那会把整个 node_modules 都塞进去
+      # （实测 565MB，用户端自更新等于下载全仓库）。electron-builder
+      # 已按 files 白名单打好 48MB 量级的 app.asar，原样取用即可。
+      - name: 取 app.asar（应用内更新用）
+        shell: bash
+        run: |
+          mkdir -p asar-out
+          cp release/win-unpacked/resources/app.asar "asar-out/jutian-agent-${GITHUB_REF_NAME#v}-app.asar"
+          ls -la asar-out/
 
       # 产物目录是 release/（package.json 的 build.directories.output），
       # 不是 dist/——之前这里写 dist/*.exe，glob 一个都匹配不上，
