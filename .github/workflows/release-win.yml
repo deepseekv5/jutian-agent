@@ -74,7 +74,15 @@ jobs:
           npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11
 
       - name: 打包 Windows 安装包
-        run: npx electron-builder --win --x64
+        shell: bash
+        run: |
+          # EDGE_TTS_DIR 必须显式定义：electron-builder 的 extraResources
+          # 里有 ${env.EDGE_TTS_DIR} 宏，变量未定义会直接
+          # "cannot expand pattern ... env EDGE_TTS_DIR is not defined"。
+          # 脚本找不到目录时输出空串，这里兜底成当前目录并让 filter 跳过。
+          export EDGE_TTS_DIR="$(node scripts/edge-tts-dir.mjs 2>/dev/null || echo .)"
+          echo "EDGE_TTS_DIR=$EDGE_TTS_DIR"
+          npx electron-builder --win --x64
         env:
           GH_TOKEN: ${{ github.token }}
 
