@@ -872,8 +872,12 @@ async function search_files(a) {
   if (!ok(d)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     if (IS_WIN) {
-      const cmd = `Get-ChildItem -Path "${d}" -Filter "${a.pattern}" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 100 -ExpandProperty FullName`;
-      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT, env: shellEnv() });
+      // 参数一律走环境变量，不拼进命令文本：pattern 来自模型输出，
+      // 直接插进 "..." 里的话 `"$(calc)"`、反引号、引号都会被执行/截断
+      // （引号截断后还能接上任意命令）。env 展开不会被当代码重新求值。
+      const cmd = "Get-ChildItem -Path $env:JT_DIR -Filter $env:JT_PATTERN -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 100 -ExpandProperty FullName";
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
+        { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: d, JT_PATTERN: String(a.pattern || "*") } });
       return { success: true, output: r.stdout.trim().slice(0, MAX_OUT) };
     }
     const r = await execAsync("find", [d, "-name", a.pattern, "-maxdepth", String(a.maxDepth || 5)], { timeout: 15e3, maxBuffer: MAX_OUT });
@@ -887,8 +891,10 @@ async function search_content(a) {
   if (!ok(d)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     if (IS_WIN) {
-      const cmd = `Get-ChildItem -Path "${d}" -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern "${a.pattern}" -List | Select-Object -First 20 -ExpandProperty Path`;
-      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT, env: shellEnv() });
+      // 同 search_files：pattern 走 env，不拼进命令文本（见那里的说明）
+      const cmd = "Get-ChildItem -Path $env:JT_DIR -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern $env:JT_PATTERN -List | Select-Object -First 20 -ExpandProperty Path";
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
+        { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: d, JT_PATTERN: String(a.pattern || "") } });
       return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
     }
     const r = await execAsync("grep", ["-rn", a.pattern, d, "--max-count=20"], { timeout: 15e3, maxBuffer: MAX_OUT });
@@ -1033,13 +1039,18 @@ async function process_list(a) {
     let r;
     if (IS_WIN) {
       // Windows:Get-Process;filter 为空时按 CPU 时间取前 40
+      // filter 走 env 而不是拼进 '...' 里：单引号转义挡不住 PowerShell 的
+      // 字符串展开规则（且这层转义一旦漏改就是命令注入）。
       const ps = a.filter
-        ? `Get-Process | Where-Object { $_.ProcessName -like '*${a.filter.replace(/'/g, "''")}*' } | Select-Object -First 30 Id,ProcessName,CPU,WS | Format-Table -AutoSize`
+        ? "$p = $env:JT_FILTER; Get-Process | Where-Object { $_.ProcessName -like \"*$p*\" } | Select-Object -First 30 Id,ProcessName,CPU,WS | Format-Table -AutoSize"
         : "Get-Process | Sort-Object CPU -Descending | Select-Object -First 40 Id,ProcessName,CPU,WS | Format-Table -AutoSize";
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
-        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`], { timeout: 1e4, maxBuffer: MAX_OUT, env: shellEnv() });
+        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`],
+        { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
     } else {
-      r = await execAsync("zsh", ["-c", a.filter ? `ps aux | grep -i "${a.filter}" | head -30` : "ps aux | head -40"], { timeout: 1e4, maxBuffer: MAX_OUT });
+      // POSIX 侧同样不拼字符串：filter 里带 " 或 $() 会被 shell 展开
+      const cmd = a.filter ? 'ps aux | grep -i -- "$JT_FILTER" | head -30' : "ps aux | head -40";
+      r = await execAsync("zsh", ["-c", cmd], { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
     }
     return { success: true, output: r.stdout.trim() || "(无匹配)" };
   } catch (e) {
@@ -1049,8 +1060,14 @@ async function process_list(a) {
 async function port_check(a) {
   try {
     if (IS_WIN) {
-      // Windows:netstat -ano 过滤端口(lsof 不存在)
-      const r = await execAsync("cmd.exe", ["/c", `netstat -ano | findstr :${a.port}`], { timeout: 5000, maxBuffer: 65536, encoding: "utf8" });
+      // Windows:netstat -ano 过滤端口(lsof 不存在)。
+      // 端口号来自模型输出，先强制成整数——直接拼进 cmd.exe 命令行时
+      // 一个 `& calc` 就能接上任意命令。
+      const port = Number(a.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return { success: false, error: `端口号非法：${a.port}` };
+      }
+      const r = await execAsync("cmd.exe", ["/c", `netstat -ano | findstr :${port}`], { timeout: 5000, maxBuffer: 65536, encoding: "utf8" });
       const out = r.stdout.trim();
       return { success: true, output: out ? `端口 ${a.port}: 被占用\n${out}` : `端口 ${a.port} 空闲 ✅` };
     }
@@ -4068,8 +4085,24 @@ http.createServer(async (req, res) => {
         const { query, dir } = await body(req);
         const target = path.resolve(dir || process.env.HOME);
         if (!ok(target)) return json(res, { success: false, error: "路径不允许" }, 403);
+        // query / target 走环境变量，不拼进命令文本：
+        // 之前用 JSON.stringify 包成双引号，`$(...)` 与反引号仍会被 shell
+        // 展开执行（实测 `"$(whoami)"` 能跑）；env 展开不会再求值。
+        if (IS_WIN) {
+          // 这里原来固定用 zsh——Windows 上根本没有 zsh，全局搜索必然
+          // 报 spawn ENOENT，整个功能等于不可用。改用 PowerShell Select-String。
+          const cmd = "$ErrorActionPreference='SilentlyContinue'; "
+            + "Get-ChildItem -Path $env:JT_DIR -Recurse -File | "
+            + "Where-Object { $_.FullName -notmatch '\\\\(node_modules|\\.git|dist|build|__pycache__|\\.next|target)\\\\' } | "
+            + "Select-String -Pattern $env:JT_QUERY -List | Select-Object -First 50 -ExpandProperty Path";
+          const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
+            { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: target, JT_QUERY: String(query || "") } });
+          const files = r.stdout.trim().split(/\r?\n/).filter(Boolean);
+          return json(res, { success: true, files });
+        }
         const excludeDirs = ["node_modules", ".git", "dist", "build", "__pycache__", ".next", "target"].map((d) => `-path '*/${d}' -prune -o`).join(" ");
-        const r = await execAsync("zsh", ["-c", `find ${JSON.stringify(target)} ${excludeDirs} -type f -print0 | xargs -0 grep -Il ${JSON.stringify(query)} | head -50`], { timeout: 15e3, maxBuffer: MAX_OUT });
+        const r = await execAsync("zsh", ["-c", `find "$JT_DIR" ${excludeDirs} -type f -print0 | xargs -0 grep -Il "$JT_QUERY" | head -50`],
+          { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: target, JT_QUERY: String(query || "") } });
         const files = r.stdout.trim().split("\n").filter(Boolean);
         return json(res, { success: true, files });
       } catch (e) { return json(res, { success: e.code === 1, error: e.stderr || e.message, files: [] }, e.code === 1 ? 200 : 500); }
