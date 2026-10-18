@@ -312,10 +312,17 @@ export async function streamChat(
         callbacks.onToolEnd(toolCallObj)
 
         // 添加 tool result 到对话历史
+        // result 必须是有内容的字符串：undefined/空串会让模型以为工具没执行，
+        // 于是声称「我无法调用工具」然后换个方式再试一遍（Windows 上观感极差）
+        const toolResultText = (toolCallObj.result && String(toolCallObj.result).trim())
+          ? String(toolCallObj.result)
+          : (toolCallObj.status === 'error'
+              ? `工具 ${tc.name} 执行失败（未返回具体错误信息）。`
+              : `工具 ${tc.name} 已执行，但返回空结果。`);
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
-          content: toolCallObj.result,
+          content: toolResultText,
         })
       }
 

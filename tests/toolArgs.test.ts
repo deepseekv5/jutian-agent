@@ -155,3 +155,64 @@ describe('overwriteWarning — 覆盖提醒', () => {
     expect(overwriteWarning(true, 0, 0)).toBeNull()
   })
 })
+
+// ─── Windows 工具链回归 ───
+// 这些是 Windows 上「AI 说自己无法调用工具，却又自己用了工具」的直接原因。
+describe('Windows 工具结果可读性', () => {
+  // execFile 的 e.stdout/e.stderr 在 Windows 上常是 Buffer，直接塞 JSON
+  // 会得到乱码或 {type:'Buffer'}，模型看不到真实报错
+  it('Buffer 形态的 stdout/stderr 必须转成字符串', () => {
+    const e = { stdout: Buffer.from('partial out'), stderr: Buffer.from('npm ERR! missing script') }
+    const out = String(e.stdout ?? '')
+    const err = String(e.stderr ?? '')
+    expect(out).toBe('partial out')
+    expect(err).toBe('npm ERR! missing script')
+    expect(err).not.toContain('Buffer')
+  })
+
+  it('undefined 的 stdout/stderr 不抛错', () => {
+    const e = {} as { stdout?: unknown; stderr?: unknown }
+    expect(String(e.stdout ?? '')).toBe('')
+    expect(String(e.stderr ?? '')).toBe('')
+  })
+
+  // 只回 e.message（"Command failed: npm ERR!"）会让模型看不到真实错误，
+  // 于是声称无法调用工具；必须把 stderr 原文带上
+  it('非超时失败必须带上 stderr 原文（否则模型看不到真实报错）', () => {
+    const err = 'npm ERR! Missing script: "buid"'
+    const detail = err.trim() || 'some message'
+    expect(detail).toContain('Missing script')
+    expect(detail.length).toBeGreaterThan(0)
+  })
+})
+
+describe('工具空结果不得为空 content', () => {
+  // 空/undefined 的 result 会让模型以为工具没执行，
+  // 转而声称「我无法调用工具」然后换个方式再试一遍
+  const toToolContent = (result: string | undefined, status: string, name: string) =>
+    (result && String(result).trim())
+      ? String(result)
+      : (status === 'error'
+          ? `工具 ${name} 执行失败（未返回具体错误信息）。`
+          : `工具 ${name} 已执行，但返回空结果。`)
+
+  it('正常结果原样透传', () => {
+    expect(toToolContent('ok 完成', 'done', 'shell')).toBe('ok 完成')
+  })
+
+  it('空串 result → 占位说明，不是空', () => {
+    const c = toToolContent('', 'done', 'shell')
+    expect(c.length).toBeGreaterThan(0)
+    expect(c).toContain('返回空结果')
+  })
+
+  it('undefined result → 占位说明，不是 undefined', () => {
+    const c = toToolContent(undefined, 'error', 'read_file')
+    expect(c).not.toBeUndefined()
+    expect(c).toContain('执行失败')
+  })
+
+  it('纯空白 result 也算空', () => {
+    expect(toToolContent('   \n  ', 'done', 'shell')).toContain('返回空结果')
+  })
+})

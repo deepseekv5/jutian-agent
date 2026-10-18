@@ -59,7 +59,17 @@ export async function executeTool(req: ToolRequest, workDir?: string, signal?: A
     const data = await res.json() as ToolResult
     return { ...data, duration_ms: Date.now() - start }
   } catch (err: unknown) {
-    const e = err as { message?: string }
+    const e = err as { message?: string; name?: string }
+    // 用户主动中止必须和"后端挂了"区分开：否则模型会以为工具坏了，
+    // 转而声称无法调用工具，然后换一种方式重试
+    if (e.name === 'AbortError' || signal?.aborted) {
+      return {
+        success: false,
+        output: '',
+        error: '已中止（用户停止）',
+        duration_ms: Date.now() - start,
+      }
+    }
     return {
       success: false,
       output: '',

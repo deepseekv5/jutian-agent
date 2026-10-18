@@ -427,7 +427,44 @@ function shellExecOpts(timeoutSec) {
     timeout: timeoutSec * 1e3,
     maxBuffer: MAX_OUT,
     killSignal: "SIGTERM",
+    // Windows 上必须补全 PATH。GUI 启动的 Electron 继承的是系统精简 PATH
+    // （只有 System32 等），没有用户 PATH——于是 npm / node / git 全部
+    // 找不到，命令以 "command not found" 失败。这是 Windows 上「指令无法执行」
+    // 的头号根因：模型看到的是命令失败，于是声称无法调用工具。
+    env: shellEnv(),
   }
+}
+
+/**
+ * 取一份完整 PATH 的环境变量（只在 Windows 上需要，其他平台原样透传）。
+ *
+ * 做法：从注册表读用户的 PATH（HKCU\\Environment）与系统 PATH
+ * （HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment），
+ * 拼到进程 PATH 前面。读不到就退回进程 PATH——至少不更糟。
+ *
+ * 用 powershell 读注册表而不是 winapi 包：零新依赖，且 powershell 在
+ * Windows 上必然存在（shell 已经在用它）。
+ */
+var _shellEnvCache = null;
+function shellEnv() {
+  if (!IS_WIN) return process.env;
+  if (_shellEnvCache) return _shellEnvCache;
+  var base = process.env.PATH || "";
+  try {
+    var cp = require("child_process");
+    var r = cp.execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+      "[Environment]::GetEnvironmentVariable('Path','User') + ';' + [Environment]::GetEnvironmentVariable('Path','Machine')"
+    ], { encoding: "utf8", timeout: 8000 });
+    var extra = String(r || "").trim();
+    if (extra) {
+      var seen = {};
+      var parts = (extra + ";" + base).split(";").map(function (s) { return s.trim().replace(/[\\/]+$/, ""); })
+        .filter(function (s) { if (!s || seen[s.toLowerCase()]) return false; seen[s.toLowerCase()] = 1; return true; });
+      base = parts.join(";");
+    }
+  } catch (e) { /* 读不到注册表就用进程 PATH，至少不比原来差 */ }
+  _shellEnvCache = Object.assign({}, process.env, { PATH: base });
+  return _shellEnvCache;
 }
 
 /* ─── 后台 shell（长驻进程：dev server / watch / 构建）───
@@ -452,7 +489,10 @@ function startBackgroundShell(command, cwd, label) {
     : ["zsh", ["-c", command]]
   let child
   try {
-    child = cp.spawn(bin, args, { cwd, env: { ...process.env, TERM: "dumb" } })
+    // PATH 必须用补全后的 env：后台进程同样是 GUI 启动的 Electron 子进程，
+    // 不补 PATH 的话 dev server / watch 起不来（前台已修，这里同步）。
+    // TERM=dumb 只对 POSIX shell 有意义，Windows 上忽略即可。
+    child = cp.spawn(bin, args, { cwd, env: IS_WIN ? shellEnv() : { ...shellEnv(), TERM: "dumb" } })
   } catch (e) {
     return { success: false, error: `启动失败: ${e.message}` }
   }
@@ -561,13 +601,24 @@ async function shell(a) {
       //    Node 按 UTF-8 解码会乱码;常量前缀不引入注入面。
       // 2) -NoProfile 避免用户 profile 拖慢/污染输出。
       const wrapped = `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${a.command}`;
+      // 注意：不能在这里写 env: process.env——那会覆盖 shellExecOpts 里
+      // 补全过的 PATH，让 npm/node/git 又变回"找不到命令"。
+      // encoding 走 opts 保证 stdout 是字符串而不是 Buffer。
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", wrapped],
-        { ...shellExecOpts(timeoutSec), env: process.env, cwd, encoding: "utf8" });
+        { ...shellExecOpts(timeoutSec), cwd });
     } else {
-      r = await execAsync("zsh", ["-c", a.command], { ...shellExecOpts(timeoutSec), env: { ...process.env, TERM: "dumb" }, cwd });
+      // zsh 分支保留 TERM=dumb（去掉颜色控制符），但用补全后的 env
+      r = await execAsync("zsh", ["-c", a.command], { ...shellExecOpts(timeoutSec), env: { ...shellEnv(), TERM: "dumb" }, cwd });
     }
-    return { success: true, output: (r.stdout || "").trim() + ((r.stderr || "").trim() ? `\n[stderr]\n${r.stderr.trim()}` : "") };
+    const outStr = String(r.stdout ?? "");
+    const errStr = String(r.stderr ?? "");
+    return { success: true, output: outStr.trim() + (errStr.trim() ? `\n[stderr]\n${errStr.trim()}` : "") };
   } catch (e) {
+    // execFile 的 e.stdout / e.stderr 可能是 Buffer（execAsync 的 encoding
+    // 选项在部分平台不生效），直接塞进 JSON 会变成乱码或 {type:'Buffer'}。
+    // 统一转成字符串。
+    const out = String(e.stdout ?? "");
+    const err = String(e.stderr ?? "");
     // 超时的错误信息必须可辨识：默认的 "Command failed: xxx" 让人分不清
     // 是命令本身失败还是被超时中断，模型会据此做出错误判断（比如以为
     // 命令语法有误而反复改参数重试）
@@ -575,12 +626,17 @@ async function shell(a) {
     if (killed) {
       return {
         success: false,
-        output: e.stdout || "",
+        output: out,
         error: `命令超时（${timeoutSec} 秒）已被中断。若任务确实需要更久，请拆分执行；`
           + `若是长驻进程（如 dev server），请改用后台方式启动。`,
       };
     }
-    return { success: false, output: e.stdout || "", error: e.message };
+    // 关键：非超时失败必须把 stderr 原样回给模型。
+    // 只回 e.message（形如 "Command failed: npm ERR!"）时，模型看不到
+    // 真实报错，就会声称「我无法调用工具」然后换一种方式再试——
+    // 这是 Windows 上观感极差的直接原因之一。
+    const detail = err.trim() || String(e.message || e);
+    return { success: false, output: out, error: `命令执行失败：\n${detail.slice(0, 4000)}` };
   }
 }
 async function read_file(a) {
