@@ -66,12 +66,12 @@ jobs:
 
       # better-sqlite3 原生模块：Windows 上必须换成 Electron 对应的 ABI
       # （v130），否则 Electron 跑起来时报 NODE_MODULE_VERSION 不匹配。
-      # electron-rebuild 不在项目依赖里（只在发版用），用 npx 现装。
-      # shell: bash：这条是多行块，且 npx 行为在 bash 下更可预期。
+      # 包名是 @electron/rebuild（旧名 electron-rebuild 停在 3.2.9；
+      # 之前写 electron-rebuild@3.2.10 会 ETARGET，实测踩过）。
       - name: 重建 better-sqlite3（Electron ABI）
         shell: bash
         run: |
-          npx --yes electron-rebuild@3.2.10 -f -w better-sqlite3 -v 33.4.11
+          npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11
 
       - name: 打包 Windows 安装包
         run: npx electron-builder --win --x64

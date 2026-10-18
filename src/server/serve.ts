@@ -865,7 +865,7 @@ async function search_files(a) {
   try {
     if (IS_WIN) {
       const cmd = `Get-ChildItem -Path "${d}" -Filter "${a.pattern}" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 100 -ExpandProperty FullName`;
-      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT });
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT, env: shellEnv() });
       return { success: true, output: r.stdout.trim().slice(0, MAX_OUT) };
     }
     const r = await execAsync("find", [d, "-name", a.pattern, "-maxdepth", String(a.maxDepth || 5)], { timeout: 15e3, maxBuffer: MAX_OUT });
@@ -880,7 +880,7 @@ async function search_content(a) {
   try {
     if (IS_WIN) {
       const cmd = `Get-ChildItem -Path "${d}" -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern "${a.pattern}" -List | Select-Object -First 20 -ExpandProperty Path`;
-      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT });
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], { timeout: 15e3, maxBuffer: MAX_OUT, env: shellEnv() });
       return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
     }
     const r = await execAsync("grep", ["-rn", a.pattern, d, "--max-count=20"], { timeout: 15e3, maxBuffer: MAX_OUT });
@@ -998,9 +998,12 @@ async function system_info() {
     let tools: Record<string, boolean> = {};
     if (IS_WIN) {
       // Windows:用 PowerShell 的 Get-Command 探测,不依赖 zsh/which
+      // env: shellEnv() 是必须的——GUI 启动的 Electron 继承的是精简 PATH，
+      // 不补全的话 Get-Command 会把 node/npm/git 全报成 no，模型据此
+      // 以为环境里没工具，于是声称"我无法调用工具"（实测根因之一）。
       const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
         "[Console]::OutputEncoding=[Text.Encoding]::UTF8; foreach ($t in 'node','npm','python','pip','git','docker','go','java') { if (Get-Command $t -ErrorAction SilentlyContinue) { Write-Output \"$t=yes\" } else { Write-Output \"$t=no\" } }"],
-        { timeout: 8000, maxBuffer: 65536, encoding: "utf8" });
+        { timeout: 8000, maxBuffer: 65536, env: shellEnv() });
       for (const l of r.stdout.trim().split("\n")) {
         const [k, v] = l.split("=");
         if (k && v) tools[k.trim()] = v.trim() === "yes";
@@ -1026,7 +1029,7 @@ async function process_list(a) {
         ? `Get-Process | Where-Object { $_.ProcessName -like '*${a.filter.replace(/'/g, "''")}*' } | Select-Object -First 30 Id,ProcessName,CPU,WS | Format-Table -AutoSize`
         : "Get-Process | Sort-Object CPU -Descending | Select-Object -First 40 Id,ProcessName,CPU,WS | Format-Table -AutoSize";
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
-        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`], { timeout: 1e4, maxBuffer: MAX_OUT, encoding: "utf8" });
+        `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`], { timeout: 1e4, maxBuffer: MAX_OUT, env: shellEnv() });
     } else {
       r = await execAsync("zsh", ["-c", a.filter ? `ps aux | grep -i "${a.filter}" | head -30` : "ps aux | head -40"], { timeout: 1e4, maxBuffer: MAX_OUT });
     }
@@ -4070,7 +4073,7 @@ http.createServer(async (req, res) => {
 Add-Type -AssemblyName System.Windows.Forms
 $f = New-Object System.Windows.Forms.FolderBrowserDialog
 $f.Description = '选择目录'
-if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath }`], { timeout: 120e3 });
+if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath }`], { timeout: 120e3, env: shellEnv() });
           const p = r.stdout.trim();
           if (!p) return json(res, { success: false, error: "已取消" });
           return json(res, { success: true, path: p });
@@ -4087,7 +4090,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath }`], { timeout: 120
 Add-Type -AssemblyName System.Windows.Forms
 $f = New-Object System.Windows.Forms.OpenFileDialog
 $f.Title = '选择文件'
-if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 });
+if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, env: shellEnv() });
           const p = r.stdout.trim();
           if (!p) return json(res, { success: false, error: "已取消" });
           return json(res, { success: true, path: p });
@@ -4110,7 +4113,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3 }
         const { command, cwd } = await body(req);
         let r;
         if (IS_WIN) {
-          r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command || "Write-Output ready"], { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024 });
+          r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command || "Write-Output ready"], { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024, env: shellEnv() });
         } else {
           r = await execAsync("zsh", ["-c", command || "echo ready"], { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024 });
         }
