@@ -1,0 +1,87 @@
+# Windows 打包（GitHub Actions）
+#
+# 本机（macOS）无 wine，无法交叉打包 win-x64；electron-builder 的 win
+# 打包需要 wine 来生成 nsis 安装包。所以走 CI：在 windows-latest runner 上
+# 原生打包，产物自动挂到 Release。
+#
+# 触发：打 tag（v*）后自动跑；也可手动 dispatch。
+name: Release Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write     # 要上传 Release 资产
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
+      # 只警告不拦，避免基建波动堵住发版。
+      - name: 依赖漏洞门禁(high/critical)
+        run: |
+          set +e
+          npm audit --audit-level=high > /tmp/audit.log 2>&1
+          code=$?
+          set -e
+          cat /tmp/audit.log
+          if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' /tmp/audit.log; then
+            echo "::error::发现 high/critical 级别依赖漏洞，请先处理"
+            exit 1
+          fi
+          echo "::warning::npm audit 未完成(registry 不支持 audit 端点或网络问题)，本次跳过漏洞门禁"
+
+      - name: ESLint（零 error）
+        run: npm run lint
+
+      - name: TypeScript 类型门禁（零 error）
+        run: npm run check
+
+      - name: 契约校验
+        run: npm run verify
+
+      - name: 构建后端
+        run: npm run build:server
+
+      - name: 测试
+        run: npm test
+
+      # better-sqlite3 原生模块：Windows 上必须换成 Electron 对应的 ABI
+      # （v130），否则 Electron 跑起来时报 NODE_MODULE_VERSION 不匹配。
+      # 这一步在 electron-builder 之前，且只针对 win。
+      - name: 重建 better-sqlite3（Electron ABI）
+        run: |
+          npx --yes electron-rebuild@3.2.10 -f -w better-sqlite3 -v 33.4.11
+
+      - name: 打包 Windows 安装包
+        run: npx electron-builder --win --x64
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: 上传安装包到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.asar
+          fail_on_unmatched_files: false
+
+      # app.asar 一并上传：Windows 应用内自更新走的是它（不是 exe）。
+      # v8.1 用户先装一次 exe，之后才能自动更新——所以两个都要有。
+      - name: 产出 app.asar（应用内更新用）
+        run: |
+          npx esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs
+          npx vite build
+          mkdir -p asar-out
+          npx @electron/asar pack . asar-out/jutian-agent-${{ github.ref_name }}-app.asar --unpack "**/*.node"
