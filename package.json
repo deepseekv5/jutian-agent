@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "11.6.6",
+  "version": "11.6.7",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -37,8 +37,8 @@
     "serve": "NODE_OPTIONS='--max-old-space-size=512' node serve.cjs",
     "start": "node scripts/run.js",
     "electron:dev": "vite build && electron .",
-    "electron:build": "vite build && bash scripts/rebuild-for-electron.sh && EDGE_TTS_DIR=\"${EDGE_TTS_DIR:-$(node scripts/edge-tts-dir.mjs)}\" electron-builder --mac",
-    "electron:build:win": "vite build && EDGE_TTS_DIR=\"${EDGE_TTS_DIR:-$(node scripts/edge-tts-dir.mjs)}\" electron-builder --win",
+    "electron:build": "vite build && bash scripts/rebuild-for-electron.sh && electron-builder --mac --config scripts/eb-config.cjs",
+    "electron:build:win": "vite build && electron-builder --win --config scripts/eb-config.cjs",
     "electron:dist": "npm run electron:build",
     "patch": "node scripts/patch-update.mjs",
     "patch:fast": "node scripts/patch-update.mjs --no-build",

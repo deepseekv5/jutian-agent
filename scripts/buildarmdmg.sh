@@ -34,8 +34,10 @@ echo "[4/5] 重建 electron 原生模块..."
 bash scripts/rebuild-for-electron.sh
 
 # 5. 打包 DMG (仅 ARM64)
+# 配置走 scripts/eb-config.cjs：静态 extraResources 在目录缺失时会把
+# from="" 当成项目根，把 release/ 里的产物递归复制进自己，直到磁盘写满。
 echo "[5/5] 打包 DMG (arm64)..."
-npx electron-builder --mac --arm64 --publish=never
+npx electron-builder --mac --arm64 --publish=never --config scripts/eb-config.cjs
 
 # 输出结果
 DMG_PATH="$(ls -t release/*.dmg 2>/dev/null | head -1)"
