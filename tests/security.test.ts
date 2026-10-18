@@ -221,6 +221,21 @@ describe('通知桥与作用域回归', () => {
       expect(['info', 'warn', 'critical']).toContain(j.announcement.level)
     }
   })
+
+  it('第二次请求（命中 6h 缓存）不能丢 announcement 字段', async () => {
+    // 回归锁：getAnnouncement 曾把缓存展开写成 ...cache.data（缓存是扁平
+    // {announcement,fetchedAt}，没有 .data 层）——命中缓存的请求回的对象
+    // 根本没有 announcement 键，横幅只在缓存刚写入后显示一次，
+    // 之后每次进应用都消失（与「每次进入自动读取显示」直接矛盾）。
+    const first = await fetch(`${BASE}/api/announcement`, { headers: ORIGIN }).then(r => r.json())
+    const second = await fetch(`${BASE}/api/announcement`, { headers: ORIGIN }).then(r => r.json())
+    expect(second.ok).toBe(true)
+    expect('announcement' in second).toBe(true)
+    if (first.announcement) {
+      // 首次取到了公告，第二次必须回同一条（缓存路径原样带出）
+      expect(second.announcement?.id).toBe(first.announcement.id)
+    }
+  })
 })
 
 describe('技能安装路径穿越', () => {

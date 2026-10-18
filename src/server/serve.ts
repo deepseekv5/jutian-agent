@@ -5097,14 +5097,18 @@ async function fetchAnnouncementText() {
   return "";
 }
 async function getAnnouncement(forceFresh) {
+  // 缓存形状是扁平的 { announcement, fetchedAt }（见 writeAnnounceCache(data)）。
+  // 读取必须展开 cache 本身。之前两条都写成 ...cache.data——cache 没有 .data 层，
+  // 展开 undefined 等于什么都没带，于是命中 6h 缓存的请求全部回 announcement 缺失，
+  // 横幅只在缓存刚写入那一次显示、之后每次进应用都消失（实测复现）。
   const cache = readAnnounceCache();
   const fresh = cache && Date.now() - (cache.fetchedAt || 0) < _announceTtlMs;
-  if (fresh && !forceFresh) return { ok: true, ...cache.data, cached: true };
+  if (fresh && !forceFresh) return { ok: true, announcement: cache.announcement || null, cached: true };
   const text = await fetchAnnouncementText();
   if (!text) {
     // 出网失败：有旧缓存就用旧的（哪怕过期），没有就返回"无公告"。
     // 关键是不能因为取不到公告就弹错误——公告是锦上添花。
-    if (cache) return { ok: true, ...cache.data, cached: true };
+    if (cache) return { ok: true, announcement: cache.announcement || null, cached: true };
     return { ok: true, announcement: null };
   }
   const parsed = ANNOUNCE_MOD ? ANNOUNCE_MOD.parseNoticeMd(text) : null;
