@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research'
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts'
 
 export interface WorkTab {
   id: string
@@ -40,6 +40,11 @@ export const PAGE_META: Record<PageType, { label: string; labelEn?: string; icon
   legal: { label: '协议', labelEn: 'Legal', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   persona: { label: 'AI 角色', labelEn: 'AI Roles', icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
   research: { label: '调研', labelEn: 'Research', icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z' },
+  templates: { label: '模板库', labelEn: 'Templates', icon: 'M4 5a2 2 0 012-2h3l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V5z' },
+  snippets: { label: '片段库', labelEn: 'Snippets', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
+  usage: { label: '用量', labelEn: 'Usage', icon: 'M3 3v18h18M7 14l4-4 3 3 4-6' },
+  diagnostics: { label: '诊断', labelEn: 'Diagnostics', icon: 'M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  shortcuts: { label: '快捷键', labelEn: 'Shortcuts', icon: 'M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6zm4 4h.01M11 10h.01M15 10h.01M7 14h10' },
   newtab: { label: '新建标签页', labelEn: 'New Tab', icon: 'M12 4v16m8-8H4' },
   freemodels: { label: '免费模型', labelEn: 'Free AI', icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z' },
 }

@@ -14,6 +14,8 @@ import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 import { selfCheck, shouldBlock } from '../engine/selfCheck'
 import { effectiveApiKey } from '../store/storage'
 import { baseName } from '../utils/pathName'
+import { matchTrigger, snippetVars } from '../../shared/snippets'
+import { loadSnippets } from '../store/snippets'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -153,6 +155,19 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   // 对话模式：通用 / Coding（全局记忆，随时切换）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
   const switchChatMode = (m: 'general' | 'coding') => { setChatMode(m); try { localStorage.setItem('lyclaw_chat_mode', m) } catch {} }
+
+  // 模板库 / 片段库点击「填入输入框」→ 追加到当前草稿（不覆盖已有内容）。
+  // 用事件而不是 context：这两个面板是懒加载的独立标签页，共享 context
+  // 会把它们并进首屏 chunk（vite 懒加载坑，见记忆）。
+  useEffect(() => {
+    const onInsert = (e: Event) => {
+      const text = String((e as CustomEvent).detail ?? '')
+      if (!text) return
+      setValue((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text))
+    }
+    window.addEventListener('insert-into-input', onInsert)
+    return () => window.removeEventListener('insert-into-input', onInsert)
+  }, [])
   // 侧栏顶部的 编程/办公 切换 → 同步到本 composer
   useEffect(() => {
     const h = () => setChatMode((localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
@@ -1215,7 +1230,22 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
           )}
 
           <textarea ref={textareaRef} value={value}
-            onChange={e => { setValue(e.target.value); requestAnimationFrame(() => detectMention(e.target.value, e.target.selectionStart ?? e.target.value.length)) }}
+            onChange={e => {
+              const next = e.target.value
+              // 片段触发器：输入 "log " 时整段替换为片段内容。
+              // 只在"用户刚敲完一个空格"时尝试，避免每输入一个字符都全表扫描。
+              if (next.endsWith(' ') && next.length > value.length) {
+                const hit = matchTrigger(next, loadSnippets())
+                if (hit && snippetVars(hit.snippet.body).length === 0) {
+                  const expanded = hit.rest ? `${hit.snippet.body}\n${hit.rest}` : hit.snippet.body
+                  setValue(expanded)
+                  requestAnimationFrame(() => detectMention(expanded, expanded.length))
+                  return
+                }
+              }
+              setValue(next)
+              requestAnimationFrame(() => detectMention(next, e.target.selectionStart ?? next.length))
+            }}
             onPaste={handlePaste} onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
             placeholder={disabled ? t(`回复生成中，发送将排队（${queueCount} 条待发）`, `Reply in progress — queued (${queueCount})`) : chatMode === 'coding' ? t('描述编程任务，可直接粘贴报错信息…', 'Describe the coding task; paste errors directly…') : t(`给 ${ASSISTANT_NAME} 发送消息`, `Message ${ASSISTANT_NAME}`)}

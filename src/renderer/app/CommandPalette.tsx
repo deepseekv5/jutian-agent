@@ -46,6 +46,11 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
       { id: 'ppt', label: '生成 PPT', hint: 'AI 驱动的演示文稿', icon: 'M9 17v-6h6v6m-7 4h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z', run: () => { onOpenTab('ppt'); onClose() } },
       { id: 'skills', label: '技能市场', hint: '安装 / 管理 Skill', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', run: () => { onOpenTab('skills'); onClose() } },
       { id: 'tasks', label: '定时任务', hint: '周期性自动执行', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', run: () => { onOpenTab('tasks'); onClose() } },
+      { id: 'templates', label: '提示词模板库', hint: '10 个可复用模板，填参数直接用', icon: 'M4 5a2 2 0 012-2h3l2 2h7a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V5z', run: () => { onOpenTab('templates'); onClose() } },
+      { id: 'snippets', label: '代码片段库', hint: '存常用片段，触发器一键展开', icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4', run: () => { onOpenTab('snippets'); onClose() } },
+      { id: 'usage', label: '用量与成本', hint: 'Token 趋势 / 按模型花费', icon: 'M3 3v18h18M7 14l4-4 3 3 4-6', run: () => { onOpenTab('usage'); onClose() } },
+      { id: 'diagnostics', label: '环境诊断', hint: '一键自检并复制报告', icon: 'M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', run: () => { onOpenTab('diagnostics'); onClose() } },
+      { id: 'shortcuts', label: '快捷键一览', hint: '查看全部快捷键', icon: 'M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6zm4 4h.01M11 10h.01M15 10h.01M7 14h10', run: () => { onOpenTab('shortcuts'); onClose() } },
       { id: 'settings', label: '打开设置', hint: '推理 / 外观 / 安全', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', run: () => { onOpenTab('settings'); onClose() } },
     ]
     const chatCmds: CmdItem[] = sessions.slice(0, 30).map(s => ({

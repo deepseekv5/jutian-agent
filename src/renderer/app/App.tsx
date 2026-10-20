@@ -36,6 +36,11 @@ const PPTView = lazy(() => import('../media/PPTView'));
 const QQBotTab = lazy(() => import('../panels/QQBotTab'));
 const DiaryPanel = lazy(() => import('../panels/DiaryPanel'));
 const ResearchPanel = lazy(() => import('../panels/ResearchPanel'));
+const TemplatesPanel = lazy(() => import('../panels/TemplatesPanel'));
+const SnippetsPanel = lazy(() => import('../panels/SnippetsPanel'));
+const UsagePanel = lazy(() => import('../panels/UsagePanel'));
+const DiagnosticsPanel = lazy(() => import('../panels/DiagnosticsPanel'));
+const ShortcutsPanel = lazy(() => import('../panels/ShortcutsPanel'));
 const EmployeesPanel = lazy(() => import('../agents/EmployeesPanel'));
 const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
@@ -448,6 +453,16 @@ function MainApp() {
         return <LegalPage onClose={() => closeTab(tab.id)} />;
       case 'research':
         return <ResearchPanel onClose={() => closeTab(tab.id)} />;
+      case 'templates':
+        return <TemplatesPanel onClose={() => closeTab(tab.id)} />;
+      case 'snippets':
+        return <SnippetsPanel onClose={() => closeTab(tab.id)} />;
+      case 'usage':
+        return <UsagePanel onClose={() => closeTab(tab.id)} />;
+      case 'diagnostics':
+        return <DiagnosticsPanel onClose={() => closeTab(tab.id)} />;
+      case 'shortcuts':
+        return <ShortcutsPanel onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:

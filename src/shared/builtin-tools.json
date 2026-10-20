@@ -979,5 +979,183 @@
     }
    }
   }
+ },
+ {
+  "name": "text_diff",
+  "description": "比较两段文本或两个文件的差异，返回统一 diff。用于确认改动范围、审查 AI 改了什么。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "a": {
+     "type": "string",
+     "description": "旧文本，或旧文件路径（配合 aIsPath）"
+    },
+    "b": {
+     "type": "string",
+     "description": "新文本，或新文件路径"
+    },
+    "aIsPath": {
+     "type": "boolean",
+     "description": "把 a 当文件路径读取"
+    },
+    "bIsPath": {
+     "type": "boolean",
+     "description": "把 b 当文件路径读取"
+    },
+    "context": {
+     "type": "number",
+     "description": "上下文行数，默认 3"
+    }
+   },
+   "required": [
+    "a",
+    "b"
+   ]
+  }
+ },
+ {
+  "name": "todo_write",
+  "description": "维护一份待办清单（用户可见的勾选状态）。与 update_plan 的区别：update_plan 是当前任务的执行步骤，todo_write 是跨轮次的长期待办。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "todos": {
+     "type": "array",
+     "description": "完整清单（全量覆盖）",
+     "items": {
+      "type": "object",
+      "properties": {
+       "content": {
+        "type": "string"
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "pending",
+         "in_progress",
+         "completed"
+        ]
+       }
+      },
+      "required": [
+       "content",
+       "status"
+      ]
+     }
+    }
+   },
+   "required": [
+    "todos"
+   ]
+  }
+ },
+ {
+  "name": "find_in_files",
+  "description": "在项目里按正则搜索并返回匹配行（带行号与上下文），比 search_content 更适合精确定位。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "pattern": {
+     "type": "string",
+     "description": "正则表达式"
+    },
+    "path": {
+     "type": "string",
+     "description": "搜索目录，默认工作目录"
+    },
+    "include": {
+     "type": "string",
+     "description": "文件通配符，如 *.ts"
+    },
+    "maxResults": {
+     "type": "number",
+     "description": "最多返回多少条，默认 50"
+    }
+   },
+   "required": [
+    "pattern"
+   ]
+  }
+ },
+ {
+  "name": "file_stats",
+  "description": "统计目录或文件的信息：文件数、总大小、按扩展名分布。用于快速了解项目体量。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "目录或文件路径，默认工作目录"
+    }
+   },
+   "required": []
+  }
+ },
+ {
+  "name": "clipboard_read",
+  "description": "读取系统剪贴板文本，仅支持 macOS 与 Windows。用于查看用户刚复制的内容。",
+  "parameters": {
+   "type": "object",
+   "properties": {}
+  }
+ },
+ {
+  "name": "clipboard_write",
+  "description": "把文本写入系统剪贴板。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "text": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "text"
+   ]
+  }
+ },
+ {
+  "name": "open_path",
+  "description": "用系统默认程序打开文件或目录（macOS 用 open，Windows 用 start）。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  }
+ },
+ {
+  "name": "archive",
+  "description": "打包或解包 zip：action=zip 把目录压缩成 zip，action=unzip 解压到目录。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "action": {
+     "type": "string",
+     "enum": [
+      "zip",
+      "unzip"
+     ]
+    },
+    "source": {
+     "type": "string",
+     "description": "源目录，或源 zip"
+    },
+    "dest": {
+     "type": "string",
+     "description": "目标 zip 路径，或解压目录"
+    }
+   },
+   "required": [
+    "action",
+    "source",
+    "dest"
+   ]
+  }
  }
 ]

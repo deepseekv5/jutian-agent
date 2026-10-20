@@ -19,6 +19,7 @@ import { runSubagents } from '../engine/subagent'
 import { pushNotice } from '../notify'
 import { estimateTokens } from '../utils/tokens'
 import { addUsage } from '../store/usage'
+import { appendUsageRecord } from '../store/usageHistory'
 
 /** 正在流式输出的消息 ID（null = 没有在输出） */
 type StreamingId = string | null
@@ -792,6 +793,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       await updateMessageContent(assistantMsg.id, sessionId, final)
       await flushPendingVariants(assistantMsg.id)
       addUsage(settings.model, estimateTokens(userContent) * 3, estimateTokens(final))
+      // 明细（用量面板的成本趋势用）：聚合表只知道"天+模型"，
+      // 没有逐条时间戳就算不出趋势与单次成本
+      appendUsageRecord({
+        ts: Date.now(), model: settings.model, provider: settings.apiBaseUrl,
+        promptTokens: estimateTokens(userContent) * 3, completionTokens: estimateTokens(final),
+      })
       setStreamingId(null)
       setMessages(await listMessages(sessionId))
       abortRef.current = null
@@ -882,6 +889,11 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         }
         // 用量统计
         addUsage(settings.model, sentPromptTokens, estimateTokens(fullContent) + estimateTokens(fullThinking))
+        appendUsageRecord({
+          ts: Date.now(), model: settings.model, provider: settings.apiBaseUrl,
+          promptTokens: sentPromptTokens,
+          completionTokens: estimateTokens(fullContent) + estimateTokens(fullThinking),
+        })
         // 回复完成系统通知（设置开启且窗口在后台时）
         try {
           if ((settings as any)?.notifyDone && document.hidden && typeof Notification !== 'undefined') {

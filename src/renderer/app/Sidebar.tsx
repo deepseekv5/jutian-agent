@@ -7,6 +7,8 @@ import SubAgentTracker from './SubAgentTracker'
 import type { PageType } from './TabBar'
 import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
+import { useMetaMap } from '../store/sessionMeta'
+import { filterByTags, tagCloud } from '../../shared/sessionMeta'
 
 interface Props {
   sessions: Session[]
@@ -140,6 +142,10 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [starred, setStarred] = useState<Set<string>>(loadStarred())
+  // v12：会话元信息（置顶/标签/归档）与标签筛选
+  const metaMap = useMetaMap()
+  const [activeTags, setActiveTags] = useState<string[]>([])
+  const allTags = useMemo(() => tagCloud(Object.values(metaMap)).slice(0, 12), [metaMap])
   const [search, setSearch] = useState('')
   const [msgHits, setMsgHits] = useState<SearchHit[]>([])
   const [titleHits, setTitleHits] = useState<{ id: string; title: string }[]>([])
@@ -206,14 +212,20 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const base = [...sessions].sort((a, b) => {
+    // 归档会话默认不出现在列表；标签筛选走 shared 的 AND 语义
+    let pool = sessions.filter(s => !metaMap[s.id]?.archived)
+    if (activeTags.length) pool = filterByTags(pool, (id) => metaMap[id], activeTags)
+    const base = [...pool].sort((a, b) => {
+      // 置顶优先（v12），其次收藏，最后按更新时间
+      const pa = metaMap[a.id]?.pinnedAt || 0, pb = metaMap[b.id]?.pinnedAt || 0
+      if (pa !== pb) return pb - pa
       const sa = starred.has(a.id) ? 1 : 0, sb = starred.has(b.id) ? 1 : 0
       if (sa !== sb) return sb - sa
       return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
     })
     if (!q) return base
     return base.filter(s => String(s.title || '').toLowerCase().includes(q))
-  }, [search, sessions, starred])
+  }, [search, sessions, starred, metaMap, activeTags])
 
   const groups = useMemo(() => groupSessionsMixed(filtered, lang), [filtered, lang])
 
@@ -428,6 +440,26 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             </svg>
           </button>
         </div>
+        {/* 标签筛选（v12）：只在有标签时出现，避免空状态占位 */}
+        {allTags.length > 0 && (
+          <div className="mt-2 flex items-center gap-1 flex-wrap">
+            {allTags.map(({ tag, count }) => {
+              const on = activeTags.includes(tag)
+              return (
+                <button key={tag}
+                  onClick={() => setActiveTags(prev => on ? prev.filter(t => t !== tag) : [...prev, tag])}
+                  className="text-[10px] px-1.5 py-0.5 rounded-full transition-colors"
+                  style={{ background: on ? c.accent : c.surfaceCard, color: on ? '#fff' : c.textTertiary, border: `1px solid ${on ? c.accent : c.border}` }}
+                  title={`${count} 个会话`}>
+                  {tag}{count > 1 ? ` ${count}` : ''}
+                </button>
+              )
+            })}
+            {activeTags.length > 0 && (
+              <button onClick={() => setActiveTags([])} className="text-[10px] px-1" style={{ color: c.textMuted }}>清除</button>
+            )}
+          </div>
+        )}
         {manageMode && (
           <div className="mt-2 flex items-center gap-1.5 rounded-xl px-2.5 h-9" style={{ background: c.surfaceCard, border: `1px solid ${c.border}` }}>
             <button onClick={() => setSelectedIds(new Set(filtered.map(s => s.id)))}

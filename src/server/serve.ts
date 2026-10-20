@@ -2100,11 +2100,285 @@ var TOOLS = {
   json_process, text_tools, screenshot,
   url_tools, base64_tools, hash_tools,
   uuid_generate, timestamp_tools, random_tools, color_tools, image_generate,
+  text_diff, todo_write, find_in_files, file_stats,
+  clipboard_read, clipboard_write, open_path, archive,
   list_skills, load_skill, install_skill, create_skill,
   remember, recall, forget,
   save_knowledge: toolSaveKnowledge,
   consult_guidance: consultGuidance
 };
+
+/* ─── v12 新工具实现 ─────────────────────────────────────────────
+ * 保持与既有工具相同的返回形状 { success, output?, error? }。
+ * 路径一律走 resolveWork + ok()（Windows 大小写、白名单边界都在里面）。
+ */
+
+async function text_diff(a) {
+  const readSide = async (v, isPath) => {
+    if (!isPath) return String(v ?? "");
+    const p = resolveWork(String(v));
+    if (!ok(p)) throw new Error("路径不允许");
+    return await fsp.readFile(p, "utf-8");
+  };
+  try {
+    const [oldText, newText] = await Promise.all([
+      readSide(a.a, a.aIsPath), readSide(a.b, a.bIsPath),
+    ]);
+    const ctx = Math.max(0, Math.min(20, Number(a.context) || 3));
+    // 简易 LCS diff：按行做最长公共子序列，输出统一格式。
+    // 不引第三方 diff 库（体积与依赖风险都不值），这段只处理行级差异。
+    const A = oldText.split("\n"), B = newText.split("\n");
+    const n = A.length, m = B.length;
+    // 内存保护：两边都上千行时退化成逐行对比，避免 O(n*m) 表爆掉
+    if (n * m > 4_000_000) {
+      const out = [];
+      const max = Math.max(n, m);
+      for (let i = 0; i < max; i++) {
+        if (A[i] === B[i]) { if (A[i] !== undefined) out.push("  " + A[i]); }
+        else {
+          if (A[i] !== undefined) out.push("- " + A[i]);
+          if (B[i] !== undefined) out.push("+ " + B[i]);
+        }
+      }
+      return { success: true, output: out.join("\n").slice(0, MAX_OUT) };
+    }
+    const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const lines = [];
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (A[i] === B[j]) { lines.push([" ", A[i]]); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { lines.push(["-", A[i]]); i++; }
+      else { lines.push(["+" , B[j]]); j++; }
+    }
+    while (i < n) { lines.push(["-", A[i]]); i++; }
+    while (j < m) { lines.push(["+" , B[j]]); j++; }
+    // 折叠未变更的长段落
+    const out = [];
+    let sameRun = 0;
+    for (let k = 0; k < lines.length; k++) {
+      const [sign, text] = lines[k];
+      if (sign === " ") {
+        sameRun++;
+        // 只保留变更点前后 ctx 行
+        const nearChange = (() => {
+          for (let d = 1; d <= ctx; d++) {
+            if (lines[k - d] && lines[k - d][0] !== " ") return true;
+            if (lines[k + d] && lines[k + d][0] !== " ") return true;
+          }
+          return false;
+        })();
+        if (nearChange) out.push("  " + text);
+        else if (sameRun === ctx + 1) out.push("  …");
+      } else {
+        sameRun = 0;
+        out.push(sign + " " + text);
+      }
+    }
+    const changed = lines.filter((l) => l[0] !== " ").length;
+    return { success: true, output: `差异 ${changed} 行\n\n` + (out.join("\n") || "（无差异）").slice(0, MAX_OUT) };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function todo_write(a) {
+  const list = Array.isArray(a.todos) ? a.todos : [];
+  const clean = list.slice(0, 100).map((t) => ({
+    content: String(t?.content || "").slice(0, 200),
+    status: ["pending", "in_progress", "completed"].includes(t?.status) ? t.status : "pending",
+  })).filter((t) => t.content);
+  const path = path.join(DATA_DIR, "todos.json");
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(path, JSON.stringify(clean, null, 1));
+  } catch (e) {
+    return { success: false, error: `保存待办失败：${e.message}` };
+  }
+  const done = clean.filter((t) => t.status === "completed").length;
+  return { success: true, output: `已保存 ${clean.length} 条待办（完成 ${done} 条 / 进行中 ${clean.filter((t) => t.status === "in_progress").length} 条）` };
+}
+
+async function find_in_files(a) {
+  const dir = resolveWork(a.path);
+  if (!ok(dir)) return { success: false, error: "路径不允许" };
+  const limit = Math.max(1, Math.min(500, Number(a.maxResults) || 50));
+  if (IS_WIN) {
+    const cmd = "$ErrorActionPreference='SilentlyContinue'; "
+      + "Get-ChildItem -Path $env:JT_DIR -Recurse -File"
+      + (a.include ? " -Filter $env:JT_INCLUDE" : "")
+      + " | Select-String -Pattern $env:JT_RE | Select-Object -First $env:JT_LIMIT | ForEach-Object { \"$($_.Path):$($_.LineNumber): $($_.Line.Trim())\" }";
+    try {
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd], {
+        timeout: 20e3, maxBuffer: MAX_OUT,
+        env: { ...shellEnv(), JT_DIR: dir, JT_RE: String(a.pattern || ""), JT_INCLUDE: String(a.include || ""), JT_LIMIT: String(limit) },
+      });
+      return { success: true, output: r.stdout.trim() || "(无匹配)" };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+  const args = ["-rn", "--max-count=1", a.pattern, dir];
+  if (a.include) args.push(`--include=${a.include}`);
+  try {
+    const r = await execAsync("grep", args, { timeout: 20e3, maxBuffer: MAX_OUT, env: shellEnv() });
+    const lines = String(r.stdout || "").split("\n").filter(Boolean).slice(0, limit);
+    return { success: true, output: lines.join("\n") || "(无匹配)" };
+  } catch (e) {
+    if (e.code === 1) return { success: true, output: "(无匹配)" };
+    return { success: false, error: e.stderr || e.message };
+  }
+}
+
+async function file_stats(a) {
+  const target = resolveWork(a.path);
+  if (!ok(target)) return { success: false, error: "路径不允许" };
+  const byExt = {};
+  let files = 0, dirs = 0, bytes = 0;
+  const walk = async (p, depth) => {
+    if (depth > 12 || files > 200000) return;
+    let entries;
+    try { entries = await fsp.readdir(p, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      // 跳过依赖与版本库：统计项目体量时它们只会误导
+      if (e.name === "node_modules" || e.name === ".git" || e.name === "dist") continue;
+      const full = path.join(p, e.name);
+      if (e.isDirectory()) { dirs++; await walk(full, depth + 1); }
+      else if (e.isFile()) {
+        try {
+          const st = await fsp.stat(full);
+          files++; bytes += st.size;
+          const ext = path.extname(e.name).toLowerCase() || "(无扩展名)";
+          byExt[ext] = (byExt[ext] || 0) + 1;
+        } catch { /* 跳过读不了的文件 */ }
+      }
+    }
+  };
+  try {
+    const st = await fsp.stat(target);
+    if (st.isFile()) {
+      return { success: true, output: JSON.stringify({ type: "file", bytes: st.size, human: (st.size / 1024).toFixed(1) + " KB" }, null, 2) };
+    }
+    await walk(target, 0);
+    const top = Object.entries(byExt).sort((x, y) => y[1] - x[1]).slice(0, 15);
+    return { success: true, output: JSON.stringify({
+      root: target, files, dirs, totalBytes: bytes,
+      human: (bytes / 1024 / 1024).toFixed(2) + " MB",
+      byExtension: Object.fromEntries(top),
+    }, null, 2) };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function clipboard_read() {
+  try {
+    if (IS_WIN) {
+      const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"], { timeout: 5000, maxBuffer: 1024 * 512, encoding: "utf8", env: shellEnv() });
+      return { success: true, output: String(r.stdout || "").slice(0, MAX_OUT) || "(剪贴板为空)" };
+    }
+    const r = await execAsync("pbpaste", [], { timeout: 5000, maxBuffer: 1024 * 512 });
+    return { success: true, output: String(r.stdout || "").slice(0, MAX_OUT) || "(剪贴板为空)" };
+  } catch (e) {
+    return { success: false, error: `读取剪贴板失败：${e.message}` };
+  }
+}
+
+async function clipboard_write(a) {
+  const text = String(a.text ?? "");
+  try {
+    if (IS_WIN) {
+      // 走 stdin 传文本，避免把任意内容拼进 PowerShell 命令（引号/反引号会被执行）
+      await new Promise((resolve, reject) => {
+        const cp2 = require("child_process").spawn("powershell.exe",
+          ["-NoProfile", "-NonInteractive", "-Command", "$input | Set-Clipboard"],
+          { env: shellEnv(), stdio: ["pipe", "ignore", "pipe"] });
+        cp2.on("error", reject);
+        cp2.on("close", (code) => (code === 0 ? resolve(null) : reject(new Error("Set-Clipboard 失败"))));
+        cp2.stdin.write(text);
+        cp2.stdin.end();
+      });
+      return { success: true, output: `已写入剪贴板（${text.length} 字符）` };
+    }
+    await new Promise((resolve, reject) => {
+      const cp2 = require("child_process").spawn("pbcopy", [], { stdio: ["pipe", "ignore", "ignore"] });
+      cp2.on("error", reject);
+      cp2.on("close", (code) => (code === 0 ? resolve(null) : reject(new Error("pbcopy 失败"))));
+      cp2.stdin.write(text);
+      cp2.stdin.end();
+    });
+    return { success: true, output: `已写入剪贴板（${text.length} 字符）` };
+  } catch (e) {
+    return { success: false, error: `写入剪贴板失败：${e.message}` };
+  }
+}
+
+async function open_path(a) {
+  const p = resolveWork(a.path);
+  if (!ok(p)) return { success: false, error: "路径不允许" };
+  try {
+    await fsp.access(p);
+  } catch {
+    return { success: false, error: `路径不存在：${p}` };
+  }
+  try {
+    if (IS_WIN) {
+      const cp2 = require("child_process");
+      // start 是 cmd 内建命令，必须经 cmd /c；空标题位避免路径被当成窗口标题
+      cp2.spawn("cmd.exe", ["/c", "start", "", p], { detached: true, stdio: "ignore", env: shellEnv() }).unref();
+    } else {
+      const cp2 = require("child_process");
+      cp2.spawn("open", [p], { detached: true, stdio: "ignore" }).unref();
+    }
+    return { success: true, output: `已用系统默认程序打开：${p}` };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function archive(a) {
+  const src = resolveWork(a.source);
+  const dest = resolveWork(a.dest);
+  if (!ok(src) || !ok(dest)) return { success: false, error: "路径不允许" };
+  if (a.action === "zip") {
+    try {
+      await fsp.mkdir(path.dirname(dest), { recursive: true });
+      if (IS_WIN) {
+        await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+          "Compress-Archive -Path $env:JT_SRC -DestinationPath $env:JT_DEST -Force"],
+          { timeout: 120e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_SRC: src, JT_DEST: dest } });
+      } else {
+        // ditto 在 macOS 上保留资源分支与权限；zip 命令在部分文件名上会丢中文
+        await execAsync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", src, dest], { timeout: 120e3, maxBuffer: MAX_OUT });
+      }
+      const st = await fsp.stat(dest);
+      return { success: true, output: `已打包：${dest}（${(st.size / 1024 / 1024).toFixed(2)} MB）` };
+    } catch (e) {
+      return { success: false, error: `打包失败：${e.message}` };
+    }
+  }
+  if (a.action === "unzip") {
+    try {
+      await fsp.mkdir(dest, { recursive: true });
+      if (IS_WIN) {
+        await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+          "Expand-Archive -Path $env:JT_SRC -DestinationPath $env:JT_DEST -Force"],
+          { timeout: 120e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_SRC: src, JT_DEST: dest } });
+      } else {
+        await execAsync("ditto", ["-x", "-k", src, dest], { timeout: 120e3, maxBuffer: MAX_OUT });
+      }
+      return { success: true, output: `已解压到：${dest}` };
+    } catch (e) {
+      return { success: false, error: `解压失败：${e.message}` };
+    }
+  }
+  return { success: false, error: "action 只能是 zip 或 unzip" };
+}
+
 // ─── 静态资源：磁盘 LRU 缓存 + gzip 压缩 + HTTP 缓存协商 ───
 // 首屏 JS 总计约 800KB；手机远程经 LAN 访问时压缩能从 ~2.1MB 降到 ~500KB。
 // 磁盘缓存避免每次请求都 readfs，冷启动后首次请求也不阻塞。
