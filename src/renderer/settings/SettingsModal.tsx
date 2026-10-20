@@ -17,6 +17,7 @@ import { fmtTokens } from '../utils/tokens';
 import { dateTimeCN } from '../utils/datetime';
 import { isWindows } from '../utils/platform';
 import { recommendModels, inferCapability, TASK_LABEL, type TaskKind } from '../../shared/modelCapability';
+import { fetchCompat } from '../api'
 
 interface Props {
   settings: Settings;
@@ -143,7 +144,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const [localApiMsg, setLocalApiMsg] = useState('');
   const loadLocalApi = useCallback(async () => {
     try {
-      const d = await fetch('/api/settings').then(r => r.json());
+      const d = await fetchCompat('/api/settings').then(r => r.json());
       setLocalApi({
         enabled: String(d?.local_api_enabled || '') === '1',
         port: Number(d?.local_api_port) || 18080,
@@ -163,7 +164,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     if (patch.port !== undefined) map.push(['local_api_port', String(patch.port)])
     if (patch.scope !== undefined) map.push(['local_api_scope', patch.scope])
     for (const [key, value] of map) {
-      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, value }) }).catch(() => {})
+      await fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, value }) }).catch(() => {})
     }
     await loadLocalApi();
     setLocalApiMsg('✓ 已保存');
@@ -196,7 +197,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   });
   // 启动时从 DB 恢复快捷指令（DB 值优先，防强杀丢数据）
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(d => {
+    fetchCompat('/api/settings').then(r => r.json()).then(d => {
       const fromDb = (d as any).lyclaw_quick_commands
       if (fromDb) {
         try {
@@ -244,7 +245,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     setQuickCmds(list)
     try { localStorage.setItem('lyclaw_quick_commands', JSON.stringify(list)) } catch {}
     // 同步到 DB：localStorage 会在强杀时丢失，DB 不会
-    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'lyclaw_quick_commands', value: JSON.stringify(list) }) }).catch(() => {})
+    fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'lyclaw_quick_commands', value: JSON.stringify(list) }) }).catch(() => {})
     window.dispatchEvent(new Event('quick-commands-changed'))
   }
 
@@ -283,7 +284,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
       const file = input.files?.[0]; if (!file) return;
       const formData = new FormData(); formData.append('bg', file);
       try {
-        const res = await fetch('/api/code/upload-bg', { method: 'POST', body: formData });
+        const res = await fetchCompat('/api/code/upload-bg', { method: 'POST', body: formData });
         const data = await res.json();
         if (data.success) saveVisual({ ...visual, bgImage: data.path });
         else reportError(`壁纸上传失败：${data.error || `服务端返回 ${res.status}`}`);
@@ -292,7 +293,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     input.click();
   }
 
-  async function scanLmModels() { setLmScanning(true); setLmError(''); try { const res = await fetch('/api/lm-models'); const data = await res.json(); if (!data.data?.length) setLmError(t('LM Studio 已连接，但没有加载模型', 'LM Studio connected but no models loaded')); setLmModels(data.data || []); } catch (err: any) { setLmError(err.message || t('无法连接 LM Studio', 'Cannot connect to LM Studio')); setLmModels([]); } finally { setLmScanning(false); } }
+  async function scanLmModels() { setLmScanning(true); setLmError(''); try { const res = await fetchCompat('/api/lm-models'); const data = await res.json(); if (!data.data?.length) setLmError(t('LM Studio 已连接，但没有加载模型', 'LM Studio connected but no models loaded')); setLmModels(data.data || []); } catch (err: any) { setLmError(err.message || t('无法连接 LM Studio', 'Cannot connect to LM Studio')); setLmModels([]); } finally { setLmScanning(false); } }
 
   useEffect(() => {
     if (form.provider === 'local') scanLmModels()
@@ -320,7 +321,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     setTestingConn(null)
     setConnDetail('')
     try {
-      const res = await fetch('/api/llm-proxy', {
+      const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': form.apiBaseUrl, 'X-Api-Key': effectiveApiKey(form.apiKey) },
         body: JSON.stringify({ model: form.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5, stream: false }),
@@ -360,7 +361,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     setFetchingModels(true)
     if (!silent) setConnDetail('')
     try {
-      const res = await fetch('/api/models-list', {
+      const res = await fetchCompat('/api/models-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': base, 'X-Api-Key': effectiveApiKey(key) },
         body: '{}',
@@ -391,12 +392,12 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
   const handleBackup = async () => {
     try {
-      const sessions = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
-      const settingsRow = await fetch('/api/settings').then(r => r.json()).catch(() => ({}))
-      const memories = await fetch('/api/memories').then(r => r.json()).catch(() => ({}))
+      const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
+      const settingsRow = await fetchCompat('/api/settings').then(r => r.json()).catch(() => ({}))
+      const memories = await fetchCompat('/api/memories').then(r => r.json()).catch(() => ({}))
       const sessionsWithMsgs = await Promise.all((Array.isArray(sessions) ? sessions : []).map(async (s: any) => ({
         ...s,
-        messages: await fetch(`/api/sessions/${s.id}/messages`).then(r => r.json()).catch(() => []),
+        messages: await fetchCompat(`/api/sessions/${s.id}/messages`).then(r => r.json()).catch(() => []),
       })))
       const payload = { app: 'lyclaw', version: APP_VERSION, exported_at: new Date().toISOString(), settings: settingsRow, memories, sessions: sessionsWithMsgs }
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -409,9 +410,9 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
   const handleClearChats = async () => {
     if (!confirm('确定清空所有对话？此操作不可恢复，建议先导出备份。')) return
-    const sessions = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
+    const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
     for (const s of (Array.isArray(sessions) ? sessions : [])) {
-      await fetch(`/api/sessions/${s.id}`, { method: 'DELETE' }).catch(() => {})
+      await fetchCompat(`/api/sessions/${s.id}`, { method: 'DELETE' }).catch(() => {})
     }
     location.reload()
   }
@@ -431,9 +432,9 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
       let imported = 0
       for (const s of data.sessions) {
         const sid = s.id || `imp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-        await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: sid, title: s.title || '导入会话' }) }).catch(() => {})
+        await fetchCompat('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: sid, title: s.title || '导入会话' }) }).catch(() => {})
         for (const m of (s.messages || [])) {
-          await fetch(`/api/sessions/${sid}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, role: m.role, content: m.content || '', thinking: m.thinking || '', tool_calls: m.tool_calls ? JSON.stringify(m.tool_calls) : '[]' }) }).catch(() => {})
+          await fetchCompat(`/api/sessions/${sid}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, role: m.role, content: m.content || '', thinking: m.thinking || '', tool_calls: m.tool_calls ? JSON.stringify(m.tool_calls) : '[]' }) }).catch(() => {})
         }
         imported++
       }
@@ -443,10 +444,10 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
   useEffect(() => {
     (async () => {
-      const sessions = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
+      const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
       let messages = 0
       for (const s of (Array.isArray(sessions) ? sessions : []).slice(0, 50)) {
-        const msgs = await fetch(`/api/sessions/${s.id}/messages`).then(r => r.json()).catch(() => [])
+        const msgs = await fetchCompat(`/api/sessions/${s.id}/messages`).then(r => r.json()).catch(() => [])
         messages += Array.isArray(msgs) ? msgs.length : 0
       }
       setStorageStats({ sessions: (Array.isArray(sessions) ? sessions : []).length, messages })
@@ -964,7 +965,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 <div className="flex gap-2 mb-1">
                   <button type="button" onClick={async () => {
                     try {
-                      const r = await fetch('/api/backup/export')
+                      const r = await fetchCompat('/api/backup/export')
                       const d = await r.json()
                       if (!r.ok || d.error) { reportError(`导出失败：${d.error || `服务端返回 ${r.status}`}`); return }
                       const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
@@ -987,7 +988,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     if (!confirm('导入将合并会话与设置，继续？')) return
                     try {
                       const text = await f.text()
-                      const r = await fetch('/api/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text })
+                      const r = await fetchCompat('/api/backup/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text })
                       const d = await r.json()
                       if (d.error || !r.ok) reportError('导入失败: ' + (d.error || `服务端返回 ${r.status}`))
                       else {
@@ -1037,7 +1038,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <button type="button" onClick={async () => {
                     setVacuumMsg('执行中…')
                     try {
-                      const r = await fetch('/api/db/vacuum', { method: 'POST' })
+                      const r = await fetchCompat('/api/db/vacuum', { method: 'POST' })
                       const d = await r.json()
                       setVacuumMsg(d.success ? d.output : `失败: ${d.error}`)
                     } catch { setVacuumMsg('请求失败') }
@@ -1048,7 +1049,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <button type="button" onClick={async () => {
                     setEmptyMsg('执行中…')
                     try {
-                      const r = await fetch('/api/db/cleanup-empty', { method: 'POST' })
+                      const r = await fetchCompat('/api/db/cleanup-empty', { method: 'POST' })
                       const d = await r.json()
                       setEmptyMsg(d.success ? d.output : `失败: ${d.error}`)
                     } catch { setEmptyMsg('请求失败') }
@@ -1218,7 +1219,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     <button type="button"
                       onClick={() => {
                         try { (window as any).__ttsPreview?.pause?.() } catch {}
-                        fetch('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '你好，我是巨天，这是朗读音色试听效果。', voice: form.voiceId || 'zh-CN-XiaoxiaoNeural', speed: Number(form.ttsSpeed) || 1.0 }) })
+                        fetchCompat('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '你好，我是巨天，这是朗读音色试听效果。', voice: form.voiceId || 'zh-CN-XiaoxiaoNeural', speed: Number(form.ttsSpeed) || 1.0 }) })
                           .then(r => { if (!r.ok) throw new Error(); return r.blob() })
                           .then(b => { const a = new Audio(URL.createObjectURL(b)); (window as any).__ttsPreview = a; a.play() })
                           .catch(() => alert('试听失败：语音服务未就绪'))
@@ -1330,7 +1331,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                         {(k === 'key' ? localApi.key : localApi.lanKey) || t('（未生成）', '(none)')}
                       </code>
                       <button onClick={async () => {
-                        const r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        const r = await fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ key: k === 'key' ? 'local_api_key' : 'local_api_lankey', value: 'ly-' + Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('') }) })
                         if (r.ok) { await loadLocalApi(); setLocalApiMsg('✓ 已生成新密钥（旧密钥立即失效）') }
                       }} className="px-2 h-7 rounded-lg text-[11px] shrink-0" style={{ background: c.bgInput, color: c.textSecondary }}>
@@ -1392,7 +1393,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <button onClick={async () => {
                     setDiagLoading(true); setDiagResult(null)
                     try {
-                      const r = await fetch('/api/diagnostics')
+                      const r = await fetchCompat('/api/diagnostics')
                       setDiagResult(await r.json())
                     } catch { setDiagResult({ success: false, checks: [], allOk: false }) }
                     setDiagLoading(false)
@@ -1485,7 +1486,7 @@ function CliEntry() {
   const [show, setShow] = useState(false)
   const [cliPath, setCliPath] = useState('')
   useEffect(() => {
-    fetch('/api/cli/status').then((r) => r.json()).then((r) => { setInstalled(!!r.installed); setCliPath(r.path || '') }).catch(() => {})
+    fetchCompat('/api/cli/status').then((r) => r.json()).then((r) => { setInstalled(!!r.installed); setCliPath(r.path || '') }).catch(() => {})
   }, [])
   return (
     <div>
@@ -1507,7 +1508,7 @@ function CliEntry() {
           {installed ? '管理' : '安装'}
         </button>
       </div>
-      {show && <CliInstallModal onClose={() => { setShow(false); fetch('/api/cli/status').then((r) => r.json()).then((r) => setInstalled(!!r.installed)).catch(() => {}) }} />}
+      {show && <CliInstallModal onClose={() => { setShow(false); fetchCompat('/api/cli/status').then((r) => r.json()).then((r) => setInstalled(!!r.installed)).catch(() => {}) }} />}
     </div>
   )
 }

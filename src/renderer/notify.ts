@@ -5,6 +5,7 @@
  * 系统通知：文档隐藏且已授权时弹出（复用 notifyDone 的权限）。
  */
 import { useEffect, useState } from 'react'
+import { fetchCompat } from './api'
 
 export interface AppNotice {
   id: string
@@ -55,7 +56,7 @@ export function unreadCount(): number { return load().filter(n => !n.read).lengt
 /** 服务端通知桥（v7.0）：拉取定时任务/远程接入等 server 通知并合并进本地 */
 export async function mergeServerNotices(): Promise<void> {
   try {
-    const r = await fetch('/api/notices')
+    const r = await fetchCompat('/api/notices')
     if (!r.ok) return
     const server: AppNotice[] = await r.json()
     if (!Array.isArray(server) || !server.length) return

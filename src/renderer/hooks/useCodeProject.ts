@@ -4,6 +4,7 @@ import type { CodeProject, FileNode, EditorTab } from '../types/code'
 import { getLanguage } from '../types/code'
 import * as CS from '../store/codeStorage'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 export function useCodeProject() {
   const [projects, setProjects] = useState<CodeProject[]>([])
@@ -40,7 +41,7 @@ export function useCodeProject() {
   const loadFileTree = useCallback(async (rootPath: string) => {
     setTreeLoading(true)
     try {
-      const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(rootPath))
+      const res = await fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(rootPath))
       if (!res.ok) throw new Error('Failed to read directory')
       const nodes: FileNode[] = await res.json()
       setFileTree(nodes)
@@ -122,7 +123,7 @@ export function useCodeProject() {
       // 如果已有 tab 但内容为空（从 localStorage 恢复的占位 tab），需要重新加载
       if (!existing.content) {
         try {
-          const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(filePath))
+          const res = await fetchCompat('/api/code/read-file?path=' + encodeURIComponent(filePath))
           if (!res.ok) return
           const data = await res.json()
           const content = data.content || ''
@@ -138,7 +139,7 @@ export function useCodeProject() {
 
     // 加载文件内容
     try {
-      const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(filePath))
+      const res = await fetchCompat('/api/code/read-file?path=' + encodeURIComponent(filePath))
       if (!res.ok) throw new Error('Failed to read file')
       const data = await res.json()
       const content = data.content || ''
@@ -194,7 +195,7 @@ export function useCodeProject() {
     if (!tab) return false
     setSaving(true)
     try {
-      const res = await fetch('/api/code/write-file', {
+      const res = await fetchCompat('/api/code/write-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath, content: tab.content }),
@@ -219,7 +220,7 @@ export function useCodeProject() {
   // 创建新文件
   const createFile = useCallback(async (dirPath: string, fileName: string, overwrite = false): Promise<{ success: boolean; error?: string; exists?: boolean; path?: string }> => {
     try {
-      const res = await fetch('/api/code/create-file', {
+      const res = await fetchCompat('/api/code/create-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dirPath, fileName, overwrite }),
@@ -236,7 +237,7 @@ export function useCodeProject() {
   // 强制重新读取磁盘内容到已打开的标签(diff 撤销/应用后刷新)
   const reloadFile = useCallback(async (filePath: string) => {
     try {
-      const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(filePath))
+      const res = await fetchCompat('/api/code/read-file?path=' + encodeURIComponent(filePath))
       if (!res.ok) return
       const data = await res.json()
       const content = data.content || ''

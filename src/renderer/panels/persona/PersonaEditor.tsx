@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useTheme } from '../../hooks/useTheme'
 import type { Persona } from '../../../shared/personas'
 import { savePersona } from '../../../shared/personaChat'
+import { fetchCompat } from '../../api'
 
 const REQUIRED_BOUNDARY = '你是虚构的 AI 角色，不是真人，不声称有真实生活经历'
 
@@ -46,7 +47,7 @@ export default function PersonaEditor({ persona, onSaved, onCancel }: Props) {
     setSaving(false)
     if (!res.ok) { setError(res.error || '保存失败'); return }
     // 重新拉列表拿完整对象
-    const list = await fetch('/api/personas').then(r => r.json()).catch(() => null)
+    const list = await fetchCompat('/api/personas').then(r => r.json()).catch(() => null)
     const saved = (list?.items || []).find((p: Persona) => p.name === name.trim())
     if (saved) onSaved(saved)
   }

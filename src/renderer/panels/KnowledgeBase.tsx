@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme'
 import { effectiveApiKey } from '../store/storage'
 import PageShell from '../app/PageShell'
 import type { KbEntry } from '../types/kb'
+import { fetchCompat } from '../api'
 
 type Tab = 'notes' | 'graph' | 'index'
 
@@ -27,8 +28,8 @@ export default function KnowledgeBase({ onClose }: { onClose: () => void }) {
   const refresh = useCallback(async () => {
     try {
       const [e, st] = await Promise.all([
-        fetch('/api/kb/entries').then(r => r.json()),
-        fetch('/api/kb/status').then(r => r.json()),
+        fetchCompat('/api/kb/entries').then(r => r.json()),
+        fetchCompat('/api/kb/status').then(r => r.json()),
       ])
       setEntries(Array.isArray(e?.entries) ? e.entries : [])
       if (!st?.error) setStatus({ chunks: st.chunks || 0, files: st.files || 0 })
@@ -41,7 +42,7 @@ export default function KnowledgeBase({ onClose }: { onClose: () => void }) {
 
   const removeEntry = async (id: string) => {
     if (!confirm('删除该笔记及其连线？')) return
-    await fetch(`/api/kb/entry/${id}`, { method: 'DELETE' })
+    await fetchCompat(`/api/kb/entry/${id}`, { method: 'DELETE' })
     if (selectedId === id) setSelectedId(null)
     refresh()
   }
@@ -174,14 +175,14 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
       pinned: selected?.pinned ? 1 : 0,
     }
     if (selectedId) body.id = selectedId
-    await fetch('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    await fetchCompat('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setSaving(false); setDirty(false); setPreview(true); setEditing(false)
     onChanged()
   }
 
   const togglePin = async () => {
     if (!selected) return
-    await fetch('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    await fetchCompat('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: selected.id, title: selected.title, content: selected.content, notebook: selected.notebook, tags: selected.tags, pinned: selected.pinned ? 0 : 1, source: selected.source }) })
     onChanged()
   }
@@ -388,8 +389,8 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
               if (aiContinue) return
               setAiContinue(true)
               try {
-                const s = await fetch('/api/settings').then(r => r.json()).catch(() => null)
-                const res = await fetch('/api/llm-proxy', {
+                const s = await fetchCompat('/api/settings').then(r => r.json()).catch(() => null)
+                const res = await fetchCompat('/api/llm-proxy', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'X-Target-Base': s?.apiBaseUrl || '', 'X-Api-Key': effectiveApiKey(s?.apiKey) },
                   body: JSON.stringify({
@@ -599,7 +600,7 @@ function IndexTab({ status, entries, onChanged }: { status: { chunks: number; fi
     if (!folder || busy) return
     setBusy(true); setError(''); setMsg('正在读取文件并生成向量索引…')
     try {
-      const r = await fetch('/api/kb/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder }) })
+      const r = await fetchCompat('/api/kb/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder }) })
       const d = await r.json()
       if (d.error) setError(`索引失败：${d.error}`); else { setMsg(`索引完成：${d.files} 个文件，${d.chunks} 个片段`); onChanged() }
     } catch (e: any) { setError(`索引失败：${e?.message}`) } finally { setBusy(false) }
@@ -616,7 +617,7 @@ function IndexTab({ status, entries, onChanged }: { status: { chunks: number; fi
       <div className="p-5 rounded-2xl" style={{ background: dark ? '#1d1d22' : '#fff', border: `1px solid ${dark ? '#26262b' : '#ececf0'}`, boxShadow: softShadow }}>
         <div className="text-[14px] font-semibold mb-1" style={{ color: c.textHead }}>索引范围</div>
         <p className="text-[11px] mb-3" style={{ color: c.textMuted }}>每篇笔记都会**全文切块**自动索引（不只是开头）。下方可重建全部，或额外索引外部文件夹。</p>
-        <button onClick={async () => { setReIndexing(true); setError(''); setMsg('正在重建全部笔记索引…'); try { const r = await fetch('/api/kb/reindex', { method: 'POST' }); const d = await r.json(); if (d.error) setError(d.error); else { setMsg(`已重建：${d.notes} 篇笔记 · ${d.chunks} 个片段`); onChanged() } } catch (e: any) { setError(e.message) } finally { setReIndexing(false) } }}
+        <button onClick={async () => { setReIndexing(true); setError(''); setMsg('正在重建全部笔记索引…'); try { const r = await fetchCompat('/api/kb/reindex', { method: 'POST' }); const d = await r.json(); if (d.error) setError(d.error); else { setMsg(`已重建：${d.notes} 篇笔记 · ${d.chunks} 个片段`); onChanged() } } catch (e: any) { setError(e.message) } finally { setReIndexing(false) } }}
           disabled={reIndexing} className="w-full mb-4 py-2.5 rounded-lg text-[12.5px] font-semibold disabled:opacity-40" style={{ background: '#10b981', color: '#fff' }}>
           {reIndexing ? '重建中…' : '重建全部笔记索引'}
         </button>

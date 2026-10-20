@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getAllMemories, setMemory, deleteMemory } from '../store/storage'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
+import { fetchCompat } from '../api'
 
 interface Props { onClose: () => void; embedded?: boolean }
 
@@ -30,7 +31,7 @@ export default function MemoryPanel({ onClose }: Props) {
   // v11 记忆中枢：拉取角色记忆聚合
   const loadPersonaMemories = useCallback(async () => {
     try {
-      const r = await fetch('/api/memory-hub')
+      const r = await fetchCompat('/api/memory-hub')
       const d = await r.json()
       if (d?.ok) setPersonaGroups(Array.isArray(d.personas) ? d.personas : [])
     } catch { /* 服务不可用则隐藏分区 */ }
@@ -171,7 +172,7 @@ export default function MemoryPanel({ onClose }: Props) {
                         <div key={it.key} className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: c.bgInput }}>
                           <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ color: c.textSecondary, background: c.bg }}>{it.key}</span>
                           <span className="text-[12px] flex-1 min-w-0 whitespace-pre-wrap" style={{ color: c.textSecondary }}>{it.value}</span>
-                          <button onClick={async () => { if (!confirm(`删除角色「${p.name}」的记忆 "${it.key}"?`)) return; await fetch(`/api/memory-hub/persona/${encodeURIComponent(p.id)}/${encodeURIComponent(it.key)}`, { method: 'DELETE' }); setPersonaGroups(prev => prev.map(g => g.id === p.id ? { ...g, items: g.items.filter(x => x.key !== it.key) } : g)) }}
+                          <button onClick={async () => { if (!confirm(`删除角色「${p.name}」的记忆 "${it.key}"?`)) return; await fetchCompat(`/api/memory-hub/persona/${encodeURIComponent(p.id)}/${encodeURIComponent(it.key)}`, { method: 'DELETE' }); setPersonaGroups(prev => prev.map(g => g.id === p.id ? { ...g, items: g.items.filter(x => x.key !== it.key) } : g)) }}
                             className="w-6 h-6 rounded-md flex items-center justify-center shrink-0" style={{ color: c.toolErr }} title="删除">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>

@@ -1,6 +1,7 @@
 import type { GenerateOptions, SlideSpec, LayoutId, ChartKind } from '../types/ppt'
 import { getSettingsSync, effectiveApiKey } from './storage'
 import { dateCN } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 /**
  * PPT AI 智能生成：由大模型根据主题产出完整大纲与内容（JSON），
@@ -143,7 +144,7 @@ export async function aiGenerateSlides(opts: GenerateOptions): Promise<SlideSpec
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 90000)
-    const res = await fetch('/api/llm-proxy', {
+    const res = await fetchCompat('/api/llm-proxy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

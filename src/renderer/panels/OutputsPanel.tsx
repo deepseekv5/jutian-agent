@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 interface FileEntry { path: string; sessionTitle: string; createdAt: string }
 
@@ -16,11 +17,11 @@ export default function OutputsPanel({ onClose, embedded: _embedded }: { onClose
 
   async function loadOutputs() {
     try {
-      const sessions = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
+      const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
       const entries: FileEntry[] = []
       for (const session of Array.isArray(sessions) ? sessions.slice(0, 50) : []) {
         try {
-          const msgs = await fetch(`/api/sessions/${session.id}/messages`).then(r => r.json()).catch(() => [])
+          const msgs = await fetchCompat(`/api/sessions/${session.id}/messages`).then(r => r.json()).catch(() => [])
           for (const msg of Array.isArray(msgs) ? msgs : []) {
             if (!msg.tool_calls?.length) continue
             for (const tc of msg.tool_calls) {
@@ -47,9 +48,9 @@ export default function OutputsPanel({ onClose, embedded: _embedded }: { onClose
     return files.filter(f => f.path.toLowerCase().includes(q) || f.sessionTitle.toLowerCase().includes(q))
   }, [search, files])
 
-  const openFile = (filePath: string) => { fetch('/api/open-file?path=' + encodeURIComponent(filePath)).catch(() => {}) }
-  const revealFolder = (filePath: string) => { fetch('/api/open-finder?path=' + encodeURIComponent(filePath.replace(/[/\\][^/\\]+$/, ''))).catch(() => {}) }
-  const trashFile = async (filePath: string) => { setDeleting(filePath); try { await fetch('/api/trash-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath }) }); setFiles(p => p.filter(f => f.path !== filePath)) } catch {} setDeleting(null) }
+  const openFile = (filePath: string) => { fetchCompat('/api/open-file?path=' + encodeURIComponent(filePath)).catch(() => {}) }
+  const revealFolder = (filePath: string) => { fetchCompat('/api/open-finder?path=' + encodeURIComponent(filePath.replace(/[/\\][^/\\]+$/, ''))).catch(() => {}) }
+  const trashFile = async (filePath: string) => { setDeleting(filePath); try { await fetchCompat('/api/trash-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath }) }); setFiles(p => p.filter(f => f.path !== filePath)) } catch {} setDeleting(null) }
 
   return (
     <PageShell onClose={onClose} title="产出文件" description="AI 生成的全部文件与作品，统一管理" wide icon="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
+import { fetchCompat } from '../api'
 
 interface ScheduledTask { id: string; title: string; type: 'once' | 'daily' | 'weekly'; content: string; nextRun: string; enabled: boolean; createdAt: string; cron?: string }
 
@@ -30,7 +31,7 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
       const body: any = { title: newTitle.trim(), content: newContent.trim(), type: newType, enabled: true }
       if (newType === 'once') body.delayMinutes = Math.max(1, parseInt(newSchedule) || 60)
       else body.cron = newSchedule
-      const res = await fetch('/api/scheduled-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await fetchCompat('/api/scheduled-tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json()
       if (data.ok && data.task) { const updated = [...tasks, data.task]; setTasks(updated); saveTasks(updated); setShowNewForm(false); setNewTitle(''); setNewContent(''); setNewSchedule('') }
     } catch {}
@@ -40,11 +41,11 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
   const handleToggle = async (task: ScheduledTask) => {
     const updated = tasks.map(t => t.id === task.id ? { ...t, enabled: !t.enabled } : t)
     setTasks(updated); saveTasks(updated)
-    try { await fetch(`/api/scheduled-tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !task.enabled }) }) } catch {}
+    try { await fetchCompat(`/api/scheduled-tasks/${task.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !task.enabled }) }) } catch {}
   }
   const handleDelete = async (id: string) => {
     const updated = tasks.filter(t => t.id !== id); setTasks(updated); saveTasks(updated); setConfirmDeleteId(null)
-    try { await fetch(`/api/scheduled-tasks/${id}`, { method: 'DELETE' }) } catch {}
+    try { await fetchCompat(`/api/scheduled-tasks/${id}`, { method: 'DELETE' }) } catch {}
   }
 
   return (

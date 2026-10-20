@@ -41,6 +41,8 @@ const SnippetsPanel = lazy(() => import('../panels/SnippetsPanel'));
 const UsagePanel = lazy(() => import('../panels/UsagePanel'));
 const DiagnosticsPanel = lazy(() => import('../panels/DiagnosticsPanel'));
 const ShortcutsPanel = lazy(() => import('../panels/ShortcutsPanel'));
+const ExportPanel = lazy(() => import('../panels/ExportPanel'));
+const BackupPanel = lazy(() => import('../panels/BackupPanel'));
 const EmployeesPanel = lazy(() => import('../agents/EmployeesPanel'));
 const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
@@ -51,6 +53,7 @@ const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import { isMac as platformIsMac } from '../utils/platform';
 import AnnouncementBanner from './AnnouncementBanner';
+import { fetchCompat } from '../api'
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
 function TabFallback() {
@@ -158,7 +161,7 @@ function MainApp() {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch('/api/health');
+        const res = await fetchCompat('/api/health');
         if (!cancelled) setToolServerOk(res.ok);
       } catch {
         if (!cancelled) setTimeout(check, 2000);
@@ -203,6 +206,16 @@ function MainApp() {
     window.addEventListener('open-skills-market', h)
     window.addEventListener('open-harness', h)
     return () => { window.removeEventListener('open-skills-market', h); window.removeEventListener('open-harness', h) }
+  }, [openTab])
+
+  // v12.1：输入框的 /导出 、/用量 等命令 → 打开对应面板标签
+  useEffect(() => {
+    const h = (e: Event) => {
+      const type = String((e as CustomEvent).detail || '')
+      if (type) openTab(type as PageType)
+    }
+    window.addEventListener('open-panel', h)
+    return () => window.removeEventListener('open-panel', h)
   }, [openTab])
 
   // v11.0.3：打开「用户协议与隐私政策」页（关于页入口派发）
@@ -274,7 +287,7 @@ function MainApp() {
       setSplashDone(true);
       try {
         if (!shouldShowCliPrompt()) return;
-        const r = await fetch('/api/cli/status').then((x) => x.json());
+        const r = await fetchCompat('/api/cli/status').then((x) => x.json());
         if (r && r.installed === false) setCliPrompt(true);
       } catch { /* 服务未就绪则不弹 */ }
     }, 3600);
@@ -463,6 +476,10 @@ function MainApp() {
         return <DiagnosticsPanel onClose={() => closeTab(tab.id)} />;
       case 'shortcuts':
         return <ShortcutsPanel onClose={() => closeTab(tab.id)} />;
+      case 'export':
+        return <ExportPanel sessions={sessions} loadMessages={async (sid) => (await import('../store/storage')).listMessages(sid)} onClose={() => closeTab(tab.id)} />;
+      case 'backup':
+        return <BackupPanel onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:
@@ -518,7 +535,7 @@ function MainApp() {
           onOpenType={(type) => openTab(type)}
           toolServerOk={toolServerOk}
           onOpenSettings={() => openTab('settings')}
-          onOpenWorkDir={() => fetch(`/api/sessions/${activeId || ''}/folder`).catch(() => {})}
+          onOpenWorkDir={() => fetchCompat(`/api/sessions/${activeId || ''}/folder`).catch(() => {})}
           workingSessionIds={streamingSessionIds}
         />
         {/* 应用公告横幅（v11.7）：进应用自动读取 GitHub docs/notice.md；关同条不再打扰 */}

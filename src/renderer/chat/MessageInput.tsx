@@ -16,6 +16,10 @@ import { effectiveApiKey } from '../store/storage'
 import { baseName } from '../utils/pathName'
 import { matchTrigger, snippetVars } from '../../shared/snippets'
 import { loadSnippets } from '../store/snippets'
+import { pasteDisposition, pastedFileName, dedupeAttachments, exceedsSizeLimit } from '../../shared/attachments'
+import { readDraft, saveDraft, dropDraft } from '../store/drafts'
+import { inputStats } from '../../shared/drafts'
+import { fetchCompat } from '../api'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
 
@@ -91,6 +95,14 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { cmd: '思考低', label: '思考:低', hint: '简短思考，更快回复', key: 'think-low' },
   { cmd: '思考高', label: '思考:高', hint: '深入推理，权衡方案', key: 'think-high' },
   { cmd: '思考最大', label: '思考:最大', hint: '穷举关键细节后作答', key: 'think-max' },
+
+  // v12.1：把新面板接进入口（命令名都是中文，与上面风格一致）
+  { cmd: '导出', label: '导出会话', hint: 'Markdown · 可筛选', key: 'export' },
+  { cmd: '模板', label: '提示词模板', hint: '10 个常用模板', key: 'templates' },
+  { cmd: '片段', label: '代码片段库', hint: '触发器一键展开', key: 'snippets' },
+  { cmd: '用量', label: '用量与成本', hint: 'Token 趋势 / 花费', key: 'usage' },
+  { cmd: '诊断', label: '环境自检', hint: '一键检查并复制报告', key: 'diagnostics' },
+  { cmd: '备份', label: '数据备份', hint: '导出/导入', key: 'backup' },
 ]
 
 const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false }
@@ -105,7 +117,7 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMo
     setGit(null)
     if (!workDir) return
     const t = setTimeout(() => {
-      fetch(`/api/git/status?dir=${encodeURIComponent(workDir)}`)
+      fetchCompat(`/api/git/status?dir=${encodeURIComponent(workDir)}`)
         .then(r => r.json())
         .then(d => { if (alive && d?.success && d.isRepo) setGit({ branch: String(d.branch || ''), changes: (d.changes || []).length }) })
         .catch(() => {})
@@ -141,7 +153,10 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMo
 }
 
 export default function MessageInput({ onSend, onOpenResearch, planMode, onTogglePlanMode, disabled, currentModel, onModelChange, messages, settings, queueCount = 0, queueItems, onRemoveQueued, incomingScreenshot, onScreenshotConsumed, sessionId }: Props) {
-  const [value, setValue] = useState('')
+  // 草稿恢复（v12.1）：切会话或意外关窗后不丢正在打的内容
+  const [value, setValue] = useState(() => readDraft(sessionId || ''))
+  // 输入统计（v12.1）：字数 / 估算 token / 估算花费，随输入实时更新
+  const stats = useMemo(() => inputStats(value), [value])
   const [showToolbar, setShowToolbar] = useState(false)
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
   const [installedSkills, setInstalledSkills] = useState<InstalledSkill[]>([])
@@ -155,6 +170,26 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   // 对话模式：通用 / Coding（全局记忆，随时切换）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
   const switchChatMode = (m: 'general' | 'coding') => { setChatMode(m); try { localStorage.setItem('lyclaw_chat_mode', m) } catch {} }
+
+  // 草稿自动保存：输入停顿 800ms 落盘一次。
+  // 逐字写 localStorage 会在大段粘贴时卡输入（同步 IO），所以必须防抖。
+  useEffect(() => {
+    if (!sessionId) return
+    const t = setTimeout(() => saveDraft(sessionId, value), 800)
+    return () => clearTimeout(t)
+  }, [value, sessionId])
+
+  // 切换会话时：把旧草稿存好，再把新会话的草稿读进来
+  const draftSessionRef = useRef(sessionId)
+  useEffect(() => {
+    if (draftSessionRef.current === sessionId) return
+    const prev = draftSessionRef.current
+    if (prev) saveDraft(prev, value)
+    draftSessionRef.current = sessionId
+    setValue(readDraft(sessionId || ''))
+    // 只在 sessionId 变化时执行，value 不参与依赖（否则每次打字都会重跑）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
 
   // 模板库 / 片段库点击「填入输入框」→ 追加到当前草稿（不覆盖已有内容）。
   // 用事件而不是 context：这两个面板是懒加载的独立标签页，共享 context
@@ -219,7 +254,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     setTranscribing(true)
     try {
       const formData = new FormData(); formData.append('audio', wav, 'recording.wav')
-      const res = await fetch('/api/speech-to-text', { method: 'POST', body: formData })
+      const res = await fetchCompat('/api/speech-to-text', { method: 'POST', body: formData })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       const text = data?.text || ''
@@ -380,7 +415,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     if (!base) return
     setModelsLoading(true); setModelsErr('')
     try {
-      const r = await fetch('/api/models-list', {
+      const r = await fetchCompat('/api/models-list', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -419,7 +454,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   // 技能列表
   const loadSkills = useCallback(() => {
     refreshSkillManifest()
-    fetch('/api/skills/list').then(res => res.json()).then(data => {
+    fetchCompat('/api/skills/list').then(res => res.json()).then(data => {
       const list = Array.isArray(data) ? data : JSON.parse(data.output || '[]')
       setInstalledSkills(list.filter((s: InstalledSkill) => s.name !== 'builtin'))
     }).catch(() => {})
@@ -492,6 +527,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [slashActive, slashQuery])
   useEffect(() => { setSlashIdx(0) }, [slashQuery])
   const applySlash = (sc: SlashCmd) => {
+    // v12.1：面板类命令直接派发事件打开对应标签页（不经过模型）
+    if (['export', 'templates', 'snippets', 'usage', 'diagnostics', 'backup'].includes(sc.key)) {
+      window.dispatchEvent(new CustomEvent('open-panel', { detail: sc.key }))
+      setValue('')
+      setSlashIdx(0)
+      return
+    }
     if (sc.key === 'kb') toggleKb()
     else if (sc.key === 'shot') { setValue(''); handleScreenshot(); return }
     else if (sc.key === 'coding') switchChatMode('coding')
@@ -524,7 +566,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     let cancelled = false
     setMentionLoading(true)
     const root = settings?.workDir || ''
-    fetch(`/api/code/find-files?path=${encodeURIComponent(root)}&q=${encodeURIComponent(q)}&limit=12`)
+    fetchCompat(`/api/code/find-files?path=${encodeURIComponent(root)}&q=${encodeURIComponent(q)}&limit=12`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (cancelled) return; setMentionHits(Array.isArray(d?.files) ? d.files : []); setMentionIdx(0) })
       .catch(() => { if (!cancelled) setMentionHits([]) })
@@ -688,6 +730,8 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const handleSend = () => {
     const trimmed = value.trim()
     if (!trimmed) return
+    // 发出即清草稿：否则下次进入这个会话又会看到已发送的内容
+    if (sessionId) dropDraft(sessionId)
 
     // ─── 发送前自检：把"确定做不到"提前说，而不是等模型回一句做不到 ───
     // 只拦 block（实际只有"没配模型"）；warn 仅提示，不阻断。
@@ -746,11 +790,31 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         const f = it.getAsFile()
         if (!f) continue
         e.preventDefault()
-        setAttachedFiles(prev => [...prev, { path: '', name: f.name || `粘贴图片 ${hhmmss()}.png`, size: f.size, file: f }])
+        // 去重：同一张图反复粘贴只留一份（之前会叠出多条同样的附件）
+        setAttachedFiles(prev => dedupeAttachments([...prev, { path: '', name: f.name || `粘贴图片 ${hhmmss()}.png`, size: f.size, file: f }]))
         return
       }
     }
-  }, [])
+
+    // 超长文本粘贴转成附件（v12.1）：
+    // 直接粘进输入框会让输入框卡顿、且整段进入上下文挤掉历史。
+    // 阈值见 shared/attachments（8000 字符）。
+    const text = e.clipboardData?.getData('text/plain') || ''
+    if (text && pasteDisposition(text.length, 'text/plain') === 'file') {
+      e.preventDefault()
+      const name = pastedFileName(text)
+      const file = new File([text], name, { type: 'text/plain' })
+      const size = file.size
+      if (exceedsSizeLimit([...attachedFiles.map(a => ({ size: a.size })), { size }])) {
+        // 超限时改回普通粘贴，并在提示里说明原因（不静默吞掉用户内容）
+        setSttError(`附件总大小超过 20MB，这段文本改为直接粘贴在输入框`)
+        setValue(v => (v ? v + '\n' : '') + text)
+        return
+      }
+      setAttachedFiles(prev => dedupeAttachments([...prev, { path: '', name, size, file }]))
+      return
+    }
+  }, [attachedFiles])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // ─── 斜杠命令菜单（优先级最高）：↑↓ 选择 / Enter·Tab 执行 / Esc 关闭 ───
@@ -1513,6 +1577,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             {sttError ? <span style={{ color: c.toolErr }}>{sttError} </span> : null}
             {disabled ? '正在思考…' : `${ASSISTANT_NAME} 可能会犯错。请核查重要信息。`}
           </span>
+          {/* 输入统计（v12.1）：只在有内容时显示，空输入不占位 */}
+          {stats.chars > 0 && (
+            <span className="text-[10px] font-mono shrink-0 mr-2" style={{ color: c.textMuted }}
+              title="估算值：中文约 1 字 1 token，英文约 4 字符 1 token">
+              {stats.chars} 字 · ~{stats.tokens} tokens
+            </span>
+          )}
           <ContextGauge parts={contextParts} limit={effectiveCtxLimit} />
         </div>
 

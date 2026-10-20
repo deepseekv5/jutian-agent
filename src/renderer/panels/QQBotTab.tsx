@@ -4,6 +4,7 @@ import { getSettingsSync, effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from '../engine/tools'
 import { hhmmss } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 /**
  * QQ 机器人接入（双模式）
@@ -38,7 +39,7 @@ const INTENT_GROUP_C2C = 1 << 25
 
 // AppID + AppSecret → AccessToken（经本地后端换取，2 小时有效）
 async function getAccessToken(appId: string, secret: string, sandbox: boolean): Promise<string> {
-  const r = await fetch('/api/qq/token', {
+  const r = await fetchCompat('/api/qq/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ appId, secret, sandbox }),
@@ -62,10 +63,10 @@ export default function QQBotTab() {
   // QQ 配置持久化到 DB（localStorage 会被强杀丢失，DB 不会）：写即双存，启动时 DB 值优先恢复
   const saveQQ = useCallback((k: string, v: string) => {
     try { localStorage.setItem(k, v) } catch {}
-    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, value: v }) }).catch(() => {})
+    fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, value: v }) }).catch(() => {})
   }, [])
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(d => {
+    fetchCompat('/api/settings').then(r => r.json()).then(d => {
       for (const k of ['qq_mode', 'qq_ws', 'qq_token', 'qq_appid', 'qq_secret', 'qq_sandbox', 'qq_auto', 'qq_reply_mode']) {
         const v = (d as any)[k]
         if (v !== undefined && v !== '' && v !== null && v !== localStorage.getItem(k)) {
@@ -127,7 +128,7 @@ export default function QQBotTab() {
     const body: any = { msg_type: 0, content: text }
     if (msgId) body.msg_id = msgId
       try {
-        await fetch('/api/qq/proxy', {
+        await fetchCompat('/api/qq/proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url, method: 'POST', token: at, body }),
@@ -140,7 +141,7 @@ export default function QQBotTab() {
     const at = accessTokenRef.current
     if (!at) return '缺少 AccessToken'
     try {
-      const r = await fetch('/api/qq/send-file', {
+      const r = await fetchCompat('/api/qq/send-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: filePath, kind, openid, msgId, sandbox, token: at }),
@@ -189,7 +190,7 @@ export default function QQBotTab() {
       let final = ''
       let toolCount = 0
       for (let round = 0; round < 50; round++) {
-        const res = await fetch('/api/llm-proxy', {
+        const res = await fetchCompat('/api/llm-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
           body: JSON.stringify({ model: settings.model, messages, tools: toolDefs, max_tokens: 2000, stream: false }),
@@ -248,7 +249,7 @@ export default function QQBotTab() {
     hist.push({ role: 'user', content: text })
     const trimmed = hist.slice(-10)
     try {
-      const res = await fetch('/api/llm-proxy', {
+      const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
         body: JSON.stringify({
@@ -368,7 +369,7 @@ export default function QQBotTab() {
       const apiBase = sandbox ? OFFICIAL_SANDBOX_API : OFFICIAL_API
       let gatewayUrl = sandbox ? 'wss://sandbox.api.sgroup.qq.com/websocket/' : 'wss://api.sgroup.qq.com/websocket/'
       try {
-        const r = await fetch('/api/qq/proxy', {
+        const r = await fetchCompat('/api/qq/proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: `${apiBase}/gateway`, method: 'GET', token: at }),

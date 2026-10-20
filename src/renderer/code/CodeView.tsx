@@ -26,6 +26,7 @@ import type { CodeProject, AICompletionEvent, FollowTarget, ChangedLine, FileCha
 import * as CS from '../store/codeStorage'
 import type { Settings } from '../types'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 // Runnable file types
 const RUNNABLE_EXTS = new Set(['sh', 'js', 'mjs', 'cjs', 'py', 'bash', 'zsh', 'rb', 'pl', 'php', 'ts', 'go'])
@@ -149,7 +150,7 @@ export default function CodeView({ settings, onBack }: Props) {
     setBottomPanel('output')
     setRunOutput(null); setRunError(false)
     try {
-      const r = await fetch('/api/code/run', {
+      const r = await fetchCompat('/api/code/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: code.activeTab.path, cwd: code.activeProject?.rootPath || '' }),
       })
@@ -158,7 +159,7 @@ export default function CodeView({ settings, onBack }: Props) {
       pollRef.current = setInterval(async () => {
         if (!runIdRef.current) return
         try {
-          const s = await fetch(`/api/code/run/status?runId=${runIdRef.current}`)
+          const s = await fetchCompat(`/api/code/run/status?runId=${runIdRef.current}`)
           const status = await s.json()
           if (status.status !== 'running') {
             clearInterval(pollRef.current!)
@@ -182,7 +183,7 @@ export default function CodeView({ settings, onBack }: Props) {
   const handleStop = useCallback(async () => {
     const id = runIdRef.current
     if (!id) return
-    try { await fetch('/api/code/run/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: id }) }) } catch {}
+    try { await fetchCompat('/api/code/run/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: id }) }) } catch {}
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     runIdRef.current = null
     setRunning(false)
@@ -209,7 +210,7 @@ export default function CodeView({ settings, onBack }: Props) {
     if (!code.activeProject) return
     setGitLoading(true)
     try {
-      const r = await fetch(`/api/code/git-status?cwd=${encodeURIComponent(code.activeProject.rootPath)}`)
+      const r = await fetchCompat(`/api/code/git-status?cwd=${encodeURIComponent(code.activeProject.rootPath)}`)
       if (r.ok) setGitStatus(await r.json())
     } catch { /* git not available */ }
     setGitLoading(false)
@@ -220,7 +221,7 @@ export default function CodeView({ settings, onBack }: Props) {
   useEffect(() => {
     if (sidePanel !== 'stats' || !code.activeProject || codeStats) return
     setCodeStatsLoading(true)
-    fetch(`/api/code/stats?root=${encodeURIComponent(code.activeProject.rootPath)}`)
+    fetchCompat(`/api/code/stats?root=${encodeURIComponent(code.activeProject.rootPath)}`)
       .then(r => r.json()).then(d => { if (d.success) setCodeStats(d) }).catch(() => {})
       .finally(() => setCodeStatsLoading(false))
   }, [sidePanel, code.activeProject, codeStats])
@@ -359,7 +360,7 @@ export default function CodeView({ settings, onBack }: Props) {
                         onCreateFile={code.createFile} gitStatus={gitStatus} gitLoading={gitLoading} />
                     </div>
                     <div className="px-2 pb-2 shrink-0">
-                      <button onClick={() => { fetch('/api/open-finder?path=' + encodeURIComponent(project.rootPath)).catch(() => {}) }}
+                      <button onClick={() => { fetchCompat('/api/open-finder?path=' + encodeURIComponent(project.rootPath)).catch(() => {}) }}
                         className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[10px] transition-colors"
                         style={{ color: c.textMuted }}
                         onMouseEnter={e => { e.currentTarget.style.background = c.bgHover }}
@@ -391,7 +392,7 @@ export default function CodeView({ settings, onBack }: Props) {
                           if (e.key === 'Enter' && gitCommitMsg.trim()) {
                             setGitCommitting(true)
                             try {
-                              const r = await fetch('/api/code/git-commit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: project.rootPath, message: gitCommitMsg.trim() }) }).then(r => r.json())
+                              const r = await fetchCompat('/api/code/git-commit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cwd: project.rootPath, message: gitCommitMsg.trim() }) }).then(r => r.json())
                               setGitCommitResult(r.success ? `已提交 ${r.summary || ''}` : (r.error || '提交失败'))
                               if (r.success) { setGitCommitMsg(''); fetchGitStatus() }
                             } catch (err: any) { setGitCommitResult(err.message) }

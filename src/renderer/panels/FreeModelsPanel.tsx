@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Settings } from '../types'
 import { pushNotice } from '../notify'
+import { fetchCompat } from '../api'
 
 interface ModelInfo {
   id: string
@@ -56,7 +57,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const r = await fetch('/api/free-models')
+      const r = await fetchCompat('/api/free-models')
       const d = await r.json()
       if (d?.ok && Array.isArray(d.sources)) {
         setSources(d.sources)
@@ -110,7 +111,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   const testModel = async (m: ModelInfo, src: Source) => {
     setTesting(m.id)
     try {
-      const r = await fetch('/api/free-model-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m.id, base: src.id }) })
+      const r = await fetchCompat('/api/free-model-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m.id, base: src.id }) })
       const d = await r.json()
       setLatency(prev => ({ ...prev, [m.id]: d.ok ? d.ms : `✕ ${String(d.error || '失败').slice(0, 30)}` }))
     } catch (e: any) { setLatency(prev => ({ ...prev, [m.id]: `✕ ${e?.message || '失败'}` })) }

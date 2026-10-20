@@ -9,6 +9,7 @@ import { BUILTIN_TOOLS } from '../types'
 import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import BrandMark from '../app/BrandMark'
 import type { Settings, ToolCall } from '../types'
+import { fetchCompat } from '../api'
 
 type Phase = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'
 
@@ -253,7 +254,7 @@ export default function VoiceCall({ settings, onClose }: Props) {
       el.onended = () => { audioElRef.current = null; resolve() }
       el.onerror = () => { audioElRef.current = null; resolve() }
       el.onpause = () => { audioElRef.current = null; resolve() }
-      fetch('/api/edge-tts', {
+      fetchCompat('/api/edge-tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice, speed: Number(speed) || 1.0 }),
@@ -332,7 +333,7 @@ export default function VoiceCall({ settings, onClose }: Props) {
     try {
       const fd = new FormData()
       fd.append('audio', wavBlob(chunks), 'call.wav')
-      const r = await fetch('/api/speech-to-text', { method: 'POST', body: fd })
+      const r = await fetchCompat('/api/speech-to-text', { method: 'POST', body: fd })
       const d = await r.json()
       userText = (d?.text || '').trim()
     } catch { /* ignore */ }

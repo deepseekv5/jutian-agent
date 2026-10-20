@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import PageShell from '../app/PageShell'
+import { fetchCompat } from '../api'
 
 interface SkillTool { name: string; description: string }
 interface MarketSkill { id: string; name: string; version: string; author: string; description: string; tags: string[]; tools: SkillTool[]; instructions?: string; source_url?: string }
@@ -22,8 +23,8 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
   const loadMarket = useCallback(async () => {
     try {
       const [marketRes, installedRes] = await Promise.all([
-        fetch('/api/skills/market'),
-        fetch('/api/tools/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'list_skills', args: {} }) })
+        fetchCompat('/api/skills/market'),
+        fetchCompat('/api/tools/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'list_skills', args: {} }) })
       ])
       let marketSkills: MarketSkill[] = []
       if (marketRes.ok) {
@@ -60,7 +61,7 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
   const handleInstall = async (skill: MarketSkill) => {
     setInstallingIds(prev => new Set(prev).add(skill.id)); setError('')
     try {
-      const res = await fetch('/api/skills/install-from-market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skillId: skill.id }) })
+      const res = await fetchCompat('/api/skills/install-from-market', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skillId: skill.id }) })
       const data = await res.json()
       if (data.success) { setInstalledIds(prev => new Set(prev).add(skill.id)); window.dispatchEvent(new Event('skills-changed')) }
       else setError(data.error || '安装失败')
@@ -71,7 +72,7 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
   const handleUninstall = async (skillId: string) => {
     setUninstallingIds(prev => new Set(prev).add(skillId)); setError('')
     try {
-      const res = await fetch('/api/skills/uninstall', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skillName: skillId }) })
+      const res = await fetchCompat('/api/skills/uninstall', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skillName: skillId }) })
       const data = await res.json()
       if (data.success) { setInstalledIds(prev => { const n = new Set(prev); n.delete(skillId); return n }); setSkills(prev => prev.filter(s => s.id !== skillId)); window.dispatchEvent(new Event('skills-changed')) }
       else setError(data.error || '卸载失败')
@@ -83,7 +84,7 @@ export default function SkillMarket({ onClose, embedded: _embedded }: { onClose:
     const url = githubUrl.trim(); if (!url) return
     setGithubInstalling(true); setError('')
     try {
-      const res = await fetch('/api/skills/install-from-github', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ githubUrl: url }) })
+      const res = await fetchCompat('/api/skills/install-from-github', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ githubUrl: url }) })
       const data = await res.json()
       if (data.success) { setInstalledIds(prev => new Set(prev).add(data.repo || 'github-skill')); setGithubUrl(''); loadMarket(); window.dispatchEvent(new Event('skills-changed')) }
       else setError(data.error || '安装失败')

@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import PageShell from '../app/PageShell'
 import { useTheme } from '../hooks/useTheme'
 import { ymd } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 interface Entry { id: string; date: string; title: string; content: string; createdAt?: string; updatedAt?: string }
 
@@ -30,7 +31,7 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
 
   const load = useCallback(async () => {
     try {
-      const list = await fetch('/api/diary').then(r => r.json())
+      const list = await fetchCompat('/api/diary').then(r => r.json())
       setEntries(Array.isArray(list) ? list : [])
       return list as Entry[]
     } catch { return [] }
@@ -49,7 +50,7 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
     if (!draft || saving) return
     setSaving(true)
     try {
-      const saved = await fetch('/api/diary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) }).then(r => r.json())
+      const saved = await fetchCompat('/api/diary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) }).then(r => r.json())
       await load()
       setActiveId(saved.id)
       setDraft(prev => prev ? { ...prev, id: saved.id, createdAt: saved.createdAt, updatedAt: saved.updatedAt } : prev)
@@ -60,7 +61,7 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
 
   const remove = async (id: string) => {
     if (!confirm('删除这篇日记？不可恢复。')) return
-    await fetch('/api/diary/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    await fetchCompat('/api/diary/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     const list = await load()
     setEntries(list)
     if (activeId === id) { setActiveId(null); setDraft(null) }

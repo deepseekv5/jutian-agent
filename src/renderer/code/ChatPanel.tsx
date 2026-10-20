@@ -16,6 +16,7 @@ import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import ContextGauge, { type ContextPart } from '../chat/ContextGauge'
 import { dateTimeCN } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 const CODE_TOOLS: ToolDef[] = [
   { name: 'read_file', description: '读取项目中的文本文件内容。', parameters: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'number' }, limit: { type: 'number' } }, required: ['path'] } },
@@ -355,7 +356,7 @@ export default function ChatPanel({ activeTab: _activeTab, projectName, projectR
         return true
       }
       const target = arg.trim()
-      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'model', value: target }) }).catch(() => {})
+      await fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'model', value: target }) }).catch(() => {})
       try {
         const local = JSON.parse(localStorage.getItem('lyclaw_settings') || '{}')
         local.model = target

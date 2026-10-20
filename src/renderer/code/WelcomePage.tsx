@@ -3,6 +3,7 @@ import { useState, useCallback, useRef, type DragEvent } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { CodeProject } from '../types/code'
 import { baseName, dirName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 interface Props {
   projects: CodeProject[]
@@ -121,7 +122,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
   // Click Browse for folder
   const handleBrowseFolder = useCallback(async () => {
     try {
-      const res = await fetch('/api/code/select-directory', { method: 'POST' })
+      const res = await fetchCompat('/api/code/select-directory', { method: 'POST' })
       const data = await res.json()
       if (data.path) {
         const name = baseName(data.path) || 'Untitled Project'
@@ -135,7 +136,7 @@ export default function WelcomePage({ projects, onOpenProject, onDeleteProject, 
   // Click Browse for file
   const handleBrowseFile = useCallback(async () => {
     try {
-      const res = await fetch('/api/code/select-file', { method: 'POST' })
+      const res = await fetchCompat('/api/code/select-file', { method: 'POST' })
       const data = await res.json()
       if (data.path) {
         const dirPath = dirName(data.path) || '/'

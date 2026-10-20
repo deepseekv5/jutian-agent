@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react'
 import { getSettingsSync, saveSettings } from '../store/storage'
 import type { Settings } from '../types'
+import { fetchCompat } from '../api'
 
 /**
  * ChatGPT / Codex 官方设计系统
@@ -275,7 +276,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const s = getSettingsSync()
     const t = (s as any).theme
     if (t === 'dark' || t === 'light' || t === 'auto') setThemePref(t)
-    fetch('/api/settings').then(r => r.json()).then((server: any) => {
+    fetchCompat('/api/settings').then(r => r.json()).then((server: any) => {
       if (server.theme === 'dark' || server.theme === 'light' || server.theme === 'auto') setThemePref(server.theme)
     }).catch(() => {})
   }, [])

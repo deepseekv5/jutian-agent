@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useNoticeBadge, getNotices, clearNotices, mergeServerNotices, type AppNotice } from '../notify'
 import { dateCN } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 const TYPE_META: Record<AppNotice['type'], { icon: string; label: string }> = {
   swarm: { icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: '集群' },
@@ -148,8 +149,8 @@ function PluginsTab({ c }: { c: any }) {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/mcp/servers').then(r => r.json()).catch(() => []),
-      fetch('/api/remote/tools').then(r => r.json()).then(r => r.tools || []).catch(() => []),
+      fetchCompat('/api/mcp/servers').then(r => r.json()).catch(() => []),
+      fetchCompat('/api/remote/tools').then(r => r.json()).then(r => r.tools || []).catch(() => []),
     ]).then(([m, t]) => { setMcp(Array.isArray(m) ? m : []); setTools(t); setLoading(false) })
   }, [])
 
@@ -158,8 +159,8 @@ function PluginsTab({ c }: { c: any }) {
     setDisabled(next); setDisabledTools(next)
   }
   const toggleMcp = async (s: McpServer) => {
-    await fetch('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
-    const m = await fetch('/api/mcp/servers').then(r => r.json()).catch(() => [])
+    await fetchCompat('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
+    const m = await fetchCompat('/api/mcp/servers').then(r => r.json()).catch(() => [])
     setMcp(Array.isArray(m) ? m : [])
   }
 

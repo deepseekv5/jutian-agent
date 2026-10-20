@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { Fragment } from 'react'
+import { post } from '../api'
+import { planBranch } from '../../shared/branch'
+import { dayBoundaries } from '../utils/chatModel'
+import { analyzeHealth } from '../../shared/chatHealth'
+import { estimateTokens } from '../utils/tokens'
 import type { Message } from '../types'
 import MessageBubble from './MessageBubble'
 import BrandMark from '../app/BrandMark'
@@ -23,10 +29,43 @@ interface Props {
   onOpenBrowser?: (url: string) => void
   onRollback?: (messageIndex: number) => void
   onEditMessage?: (messageIndex: number, newContent: string) => void
+  /** 当前会话 id：分叉需要它定位源会话 */
+  sessionId?: string
 }
 
-export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage }: Props) {
+function dayLabel(ts: unknown): string {
+  const d = new Date(String(ts || ''))
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const same = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  if (same(d, now)) return '今天'
+  const y = new Date(now); y.setDate(y.getDate() - 1)
+  if (same(d, y)) return '昨天'
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage, sessionId }: Props) {
   const { lang } = useLanguage()
+  // 对话健康度（v12.1）：只在"确实该提醒"时出现，好状态下不占位
+  const health = useMemo(() => {
+    const toolCalls = messages.reduce((n, m) => n + ((m as any).tool_calls?.length || 0), 0)
+    const failed = messages.reduce((n, m) => n + ((m as any).tool_calls?.filter((t: any) => t.status === 'error').length || 0), 0)
+    const used = messages.reduce((n, m) => n + estimateTokens(String(m.content || '')), 0)
+    return analyzeHealth({
+      messageCount: messages.length,
+      usedTokens: used,
+      contextLimit: 128000,   // 通用上限；精确值由输入框的 ContextGauge 展示
+      toolCalls,
+      failedToolCalls: failed,
+    })
+  }, [messages])
+
+  // 日期分隔（v12.1）：必须在任何 early return 之前调用，
+  // 否则 hooks 顺序会随条件分支变化（React 会直接报错）
+  const daySeps = useMemo(() => dayBoundaries(messages.map((m) => {
+    const t = new Date((m as any).created_at || Date.now()).getTime()
+    return Number.isFinite(t) ? t : Date.now()
+  })), [messages])
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickToBottomRef = useRef(true)
@@ -44,6 +83,29 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }, [messages.length, onRegenerate, onRegenerateAt])
   const handleRollback = useCallback((idx: number) => onRollback?.(idx), [onRollback])
   const handleEdit = useCallback((idx: number, text: string) => onEditMessage?.(idx, text), [onEditMessage])
+  // 分叉（v12.1）：复制到该消息为止的对话成新会话，原会话不动
+  const handleBranch = useCallback(async (idx: number) => {
+    const target = messages[idx]
+    if (!target) return
+    // 标题与分叉范围由 shared/branch 计算（与纯逻辑测试共用一套规则），
+    // 服务端只负责按 id 复制，不重复实现"该怎么起标题"。
+    const plan = planBranch(
+      messages.map((m) => ({ id: m.id, role: m.role, content: String(m.content || ''), created_at: (m as any).created_at })),
+      target.id,
+    )
+    if (!plan) return
+    try {
+      const r = await post<{ ok?: boolean; sessionId?: string; copied?: number; error?: string }>(
+        '/api/sessions/branch',
+        { sourceId: sessionId, atMessageId: target.id, title: plan.title },
+      )
+      if (r?.sessionId) {
+        window.dispatchEvent(new CustomEvent('session-branched', { detail: { sessionId: r.sessionId, copied: r.copied } }))
+      }
+    } catch (e) {
+      console.warn('[branch] 失败', e)
+    }
+  }, [messages, sessionId])
 
   // 消息内搜索（Cmd/Ctrl+F）
   const [searchOpen, setSearchOpen] = useState(false)
@@ -198,12 +260,43 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         </div>
       )}
 
+      {/* 对话健康提示（v12.1）：只在 notice/warn 时出现；good 状态不打扰 */}
+      {health.level !== 'good' && messages.length > 0 && (
+        <div className="mx-auto px-6 pt-2" style={{ maxWidth: contentWidth }}>
+          <div className="flex items-start gap-2 px-3 py-2 rounded-xl text-[11.5px]"
+            style={{
+              background: health.level === 'warn' ? 'rgba(239,68,68,.07)' : 'rgba(245,158,11,.08)',
+              border: `1px solid ${health.level === 'warn' ? 'rgba(239,68,68,.2)' : 'rgba(245,158,11,.2)'}`,
+              color: c.textSecondary || c.textTertiary,
+            }}>
+            <svg className="mt-0.5 shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke={health.level === 'warn' ? '#ef4444' : '#f59e0b'} strokeWidth={2} strokeLinecap="round">
+              <path d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <span className="font-medium" style={{ color: c.textHead }}>{health.signals[0].title}</span>
+              <span className="ml-1.5">{health.signals[0].detail}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
         {/* aria-live=polite：流式回复增长时让屏幕阅读器跟上；
             aria-busy 标记生成中，避免逐字播报打断用户 */}
         <div className="mx-auto px-6 pt-8 pb-4" style={{ maxWidth: contentWidth }}
           role="log" aria-live="polite" aria-relevant="additions text" aria-busy={isStreaming}>
           {messages.map((msg, idx) => (
+            <Fragment key={`d-${msg.id}`}>
+            {daySeps.includes(idx) && (
+              <div className="flex items-center gap-3 py-3" aria-hidden>
+                <span className="flex-1 h-px" style={{ background: c.borderLight }} />
+                <span className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
+                  {dayLabel(msg.created_at)}
+                </span>
+                <span className="flex-1 h-px" style={{ background: c.borderLight }} />
+              </div>
+            )}
             <div key={msg.id} data-msg-idx={idx} data-msg-id={msg.id}
               style={{
                 // 长对话性能:非尾部消息视口外跳过绘制
@@ -226,9 +319,11 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
                 onOpenBrowser={onOpenBrowser}
                 onRollback={msg.role === 'user' && !isStreaming ? handleRollback : undefined}
                 onEdit={msg.role === 'user' && !isStreaming && onEditMessage ? handleEdit : undefined}
+                onBranch={!isStreaming ? handleBranch : undefined}
                 createdAt={(msg as any).created_at}
               />
             </div>
+            </Fragment>
           ))}
           <div ref={bottomRef} />
         </div>

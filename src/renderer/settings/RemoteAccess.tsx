@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
+import { fetchCompat } from '../api'
 
 interface RemoteInfo { ip: string; port: number; token: string; url: string; model?: string }
 
@@ -19,7 +20,7 @@ export default function RemoteAccess() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch('/api/remote/info')
+      const r = await fetchCompat('/api/remote/info')
       const d = await r.json()
       if (d.error) { setErr(d.error); return }
       setInfo(d)
@@ -32,7 +33,7 @@ export default function RemoteAccess() {
 
   const rotate = async () => {
     try {
-      await fetch('/api/remote/rotate', { method: 'POST' })
+      await fetchCompat('/api/remote/rotate', { method: 'POST' })
       await load()
     } catch (e: any) { setErr(String(e?.message || e)) }
   }

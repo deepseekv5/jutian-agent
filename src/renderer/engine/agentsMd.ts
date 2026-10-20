@@ -3,6 +3,7 @@
  * 工作目录根的 AGENTS.md 自动注入主对话系统提示词。
  * 同步读取走缓存：send 前 refreshAgentsMd(workDir) 刷新一次。
  */
+import { fetchCompat } from '../api'
 
 let cache = { workDir: '', content: '', fetchedAt: 0 }
 
@@ -14,7 +15,7 @@ export async function refreshAgentsMd(workDir: string): Promise<void> {
   cache = { workDir: dir, content: '', fetchedAt: Date.now() }
   for (const name of ['AGENTS.md', 'CLAUDE.md']) {
     try {
-      const res = await fetch(`/api/code/read-file?path=${encodeURIComponent(dir + '/' + name)}`)
+      const res = await fetchCompat(`/api/code/read-file?path=${encodeURIComponent(dir + '/' + name)}`)
       if (!res.ok) continue
       const d = await res.json().catch(() => null)
       const content = String(d?.content || '').trim()

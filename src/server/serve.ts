@@ -3796,6 +3796,35 @@ http.createServer(async (req, res) => {
       }
     }
     // POST /api/sessions
+    // 会话分叉（v12.1）：把某个会话从指定消息处复制成新会话，
+    // 原会话保持不变。用于"保留原方案的同时试另一条路"。
+    if (url.pathname === "/api/sessions/branch" && req.method === "POST") {
+      try {
+        if (!sharedDb) return json(res, { error: "本地数据库不可用" }, 503);
+        const b = await body(req);
+        const sourceId = String(b.sourceId || "");
+        const atMessageId = String(b.atMessageId || "");
+        if (!sourceId) return json(res, { error: "缺少 sourceId" }, 400);
+        const msgs = db.getMessages(sourceId) || [];
+        if (!msgs.length) return json(res, { error: "原会话没有消息" }, 400);
+        // 找到分叉点：找不到就取全部（比直接报错更宽容）
+        let cut = msgs.length;
+        if (atMessageId) {
+          const i = msgs.findIndex((m) => m.id === atMessageId);
+          if (i >= 0) cut = i + 1;
+        }
+        const picked = msgs.slice(0, cut);
+        const newId = db.genId();
+        db.createSession(newId, String(b.title || "分支会话"));
+        for (const m of picked) {
+          db.addMessage(db.genId(), newId, m.role, m.content || "",
+            m.thinking || "",
+            typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []),
+            m.tool_call_id || "");
+        }
+        return json(res, { ok: true, sessionId: newId, copied: picked.length });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     if (url.pathname === "/api/sessions" && req.method === "POST") {
       const s = await body(req);
       if (sharedDb) {
@@ -5115,6 +5144,32 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     }
 
     // ─── 一键备份导出 / 导入 ───
+    // 备份范围与体积预览（v12.1）：让用户在导出前知道"会导出什么、多大"
+    if (url.pathname === "/api/backup/stats" && req.method === "GET") {
+      try {
+        if (!sharedDb) return json(res, { error: "db unavailable" }, 503);
+        const sessions = db.listSessions() || [];
+        let messages = 0;
+        for (const ses of sessions) messages += (db.getMessages(ses.id) || []).length;
+        const settings = (db.getAllSettings() || []).length;
+        const memories = (db.getAllMemories() || []).length;
+        // 知识库与技能按目录条目估算
+        const countDir = (dir) => { try { return fs.readdirSync(dir).length } catch { return 0 } };
+        const knowledge = countDir(path.join(DATA_DIR, "knowledge"));
+        const skills = countDir(path.join(LYCLAW_HOME, "skills"));
+        return json(res, {
+          settings, sessions, messages, memory: memories, knowledge, skills,
+          // 体积按实际 JSON 序列化长度估，别让用户对"预计大小"产生怀疑
+          bytes: {
+            settings: JSON.stringify(db.getAllSettings() || []).length,
+            sessions: JSON.stringify(sessions).length + JSON.stringify(sessions.map(x => db.getMessages(x.id) || [])).length,
+            memory: JSON.stringify(db.getAllMemories() || []).length,
+            knowledge: 0,
+            skills: 0,
+          },
+        });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     if (url.pathname === "/api/backup/export" && req.method === "GET") {
       try {
         if (!sharedDb) return json(res, { error: "db unavailable" }, 500);

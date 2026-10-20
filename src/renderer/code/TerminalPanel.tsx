@@ -1,6 +1,7 @@
 // Terminal Panel
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 interface Props {
   cwd?: string
@@ -34,7 +35,7 @@ export default function TerminalPanel({ cwd }: Props) {
     setRunning(true)
     setInput('')
     try {
-      const res = await fetch('/api/code/terminal', {
+      const res = await fetchCompat('/api/code/terminal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: cmd, cwd }),

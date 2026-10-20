@@ -3,6 +3,7 @@
  * 模块级组件：自带状态与请求逻辑，避免内联组件导致的重挂载丢焦点。
  */
 import React, { useCallback, useEffect, useState } from 'react'
+import { fetchCompat } from '../api'
 
 interface McpServer {
   id: string
@@ -28,8 +29,8 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
   const refresh = useCallback(async (refreshTools = false) => {
     try {
       const [sRes, tRes] = await Promise.all([
-        fetch('/api/mcp/servers').then(r => r.json()),
-        fetch('/api/mcp/tools' + (refreshTools ? '?refresh=1' : '')).then(r => r.json()).catch(() => ({ tools: [], errors: [] })),
+        fetchCompat('/api/mcp/servers').then(r => r.json()),
+        fetchCompat('/api/mcp/tools' + (refreshTools ? '?refresh=1' : '')).then(r => r.json()).catch(() => ({ tools: [], errors: [] })),
       ])
       setServers(Array.isArray(sRes) ? sRes : [])
       setTools(Array.isArray(tRes?.tools) ? tRes.tools : [])
@@ -44,7 +45,7 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
     if (!command.trim()) { setMsg('启动命令不能为空，如：npx -y @modelcontextprotocol/server-filesystem ~/Documents'); return }
     setLoading(true)
     try {
-      const r = await fetch('/api/mcp/servers', {
+      const r = await fetchCompat('/api/mcp/servers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim() || 'mcp-server', command: command.trim(), args: args.trim() }),
       })
@@ -56,11 +57,11 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
   }
 
   const toggle = async (s: McpServer) => {
-    await fetch('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
+    await fetchCompat('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
     refresh(true)
   }
   const del = async (s: McpServer) => {
-    await fetch('/api/mcp/servers/' + s.id, { method: 'DELETE' })
+    await fetchCompat('/api/mcp/servers/' + s.id, { method: 'DELETE' })
     refresh(true)
   }
 

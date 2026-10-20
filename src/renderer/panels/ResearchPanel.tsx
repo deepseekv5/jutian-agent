@@ -18,6 +18,7 @@ import { reportError } from '../app/ErrorToast'
 import { onResearchSeed } from '../engine/researchBridge'
 import { ssePayloads } from '../../shared/sse'
 import { dateCN } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 /* ─── 与服务端 SSE 事件对应的类型 ─── */
 type Phase = 'idle' | 'plan' | 'search' | 'fetch' | 'write' | 'done' | 'error'
@@ -66,7 +67,7 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
 
   const loadHistory = useCallback(async () => {
     try {
-      const r = await fetch('/api/research/history')
+      const r = await fetchCompat('/api/research/history')
       const d = await r.json()
       setHistory(Array.isArray(d?.items) ? d.items : [])
     } catch { /* 历史读取失败不影响主流程 */ }
@@ -103,7 +104,7 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
     const ctrl = new AbortController()
     abortRef.current = ctrl
     try {
-      const res = await fetch('/api/deep-research', {
+      const res = await fetchCompat('/api/deep-research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q }),
@@ -178,7 +179,7 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
 
   const openHistory = useCallback(async (item: HistoryItem) => {
     try {
-      const r = await fetch(`/api/research/history/${encodeURIComponent(item.file)}`)
+      const r = await fetchCompat(`/api/research/history/${encodeURIComponent(item.file)}`)
       const d = await r.json()
       if (d?.error) { reportError(`打开失败：${d.error}`); return }
       setViewing({ file: item.file, title: item.title, content: String(d.content || '') })
@@ -191,7 +192,7 @@ export default function ResearchPanel({ onClose }: { onClose: () => void }) {
 
   const removeHistory = useCallback(async (file: string) => {
     try {
-      await fetch(`/api/research/history/${encodeURIComponent(file)}`, { method: 'DELETE' })
+      await fetchCompat(`/api/research/history/${encodeURIComponent(file)}`, { method: 'DELETE' })
       setHistory(prev => prev.filter(h => h.file !== file))
       if (viewing?.file === file) setViewing(null)
     } catch (e) {

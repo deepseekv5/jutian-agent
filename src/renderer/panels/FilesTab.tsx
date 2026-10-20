@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { Settings } from '../types'
 import { isWindows } from '../utils/platform'
+import { fetchCompat } from '../api'
 
 interface DirEntry {
   name: string
@@ -26,7 +27,7 @@ export default function FilesTab({ settings }: { settings: Settings }) {
   const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/health').then(r => r.json()).then(d => {
+    fetchCompat('/api/health').then(r => r.json()).then(d => {
       const home = d.home || ''
       const dir = getDefaultDir(settings.workDir || '', home)
       setDefaultDir(dir)
@@ -43,7 +44,7 @@ export default function FilesTab({ settings }: { settings: Settings }) {
     setError('')
     setSelected(null)
     try {
-      const res = await fetch('/api/tools/execute', {
+      const res = await fetchCompat('/api/tools/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(settings.workDir ? { 'X-Work-Dir': encodeURIComponent(settings.workDir) } : {}) },
         body: JSON.stringify({ name: 'list_dir', args: { path: dir, showHidden } }),
@@ -76,11 +77,11 @@ export default function FilesTab({ settings }: { settings: Settings }) {
   }, [defaultDir])
 
   const openFile = async (p: string) => {
-    try { await fetch('/api/open-file?path=' + encodeURIComponent(p)) } catch {}
+    try { await fetchCompat('/api/open-file?path=' + encodeURIComponent(p)) } catch {}
   }
   const trashFile = async (p: string) => {
     try {
-      await fetch('/api/trash-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) })
+      await fetchCompat('/api/trash-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) })
       load(path)
     } catch {}
   }

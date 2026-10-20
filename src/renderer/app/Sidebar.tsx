@@ -9,7 +9,9 @@ import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 import { useMetaMap } from '../store/sessionMeta'
 import { filterByTags, tagCloud } from '../../shared/sessionMeta'
+import { tokenize, highlight } from '../../shared/searchIndex'
 import SessionContextMenu from './SessionContextMenu'
+import { fetchCompat } from '../api'
 
 interface Props {
   sessions: Session[]
@@ -56,17 +58,25 @@ function relTime(raw?: string | number): string {
 }
 
 /** 搜索摘要里的关键词高亮（大小写不敏感） */
+/**
+ * 搜索命中高亮（v12.1）
+ *
+ * 旧实现只高亮"第一个完整子串"：搜「部署 脚本」只亮第一个词，
+ * 搜中文时也认不出分词。改用 shared/searchIndex 的分词+区间合并，
+ * 与全局搜索的排序逻辑共用一套规则，避免"高亮的和高分的不一致"。
+ */
 function highlightSnippet(text: string, q: string) {
   const s = String(text || '')
-  const needle = q.trim()
-  if (!needle) return s
-  const i = s.toLowerCase().indexOf(needle.toLowerCase())
-  if (i < 0) return s
+  const tokens = tokenize(q)
+  if (!tokens.length) return s
+  const parts = highlight(s, tokens)
+  if (parts.length === 1 && !parts[0].hit) return s
   return (
     <>
-      {s.slice(0, i)}
-      <mark style={{ background: 'rgba(16,163,127,.28)', color: 'inherit', borderRadius: 3, padding: '0 1px' }}>{s.slice(i, i + needle.length)}</mark>
-      {s.slice(i + needle.length)}
+      {parts.map((p, i) => p.hit
+        ? <mark key={i} style={{ background: 'rgba(16,163,127,.28)', color: 'inherit', borderRadius: 3, padding: '0 1px' }}>{p.text}</mark>
+        : <span key={i}>{p.text}</span>
+      )}
     </>
   )
 }
@@ -183,7 +193,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     window.addEventListener('chat-mode-changed', h)
     return () => window.removeEventListener('chat-mode-changed', h)
   }, [])
-  useEffect(() => { fetch('/api/scheduled-tasks').then(r => r.json()).then(d => { const list = Array.isArray(d?.tasks) ? d.tasks : []; setTaskCount(list.filter((t: any) => t.enabled !== false).length) }).catch(() => {}) }, [])
+  useEffect(() => { fetchCompat('/api/scheduled-tasks').then(r => r.json()).then(d => { const list = Array.isArray(d?.tasks) ? d.tasks : []; setTaskCount(list.filter((t: any) => t.enabled !== false).length) }).catch(() => {}) }, [])
   const onDeleteRef = useRef(onDelete)
   onDeleteRef.current = onDelete
   const batchDelete = async (id: string) => { onDeleteRef.current(id); setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n }) }
@@ -240,7 +250,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     setSearching(true)
     searchTimer.current = setTimeout(() => {
       const ctrl = new AbortController()
-      fetch(`/api/search?q=${encodeURIComponent(q)}&limit=40`, { signal: ctrl.signal })
+      fetchCompat(`/api/search?q=${encodeURIComponent(q)}&limit=40`, { signal: ctrl.signal })
         .then(r => r.json())
         .then(d => {
           setMsgHits(Array.isArray(d?.messages) ? d.messages : [])
@@ -256,7 +266,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const handleStartEdit = (session: Session, e: React.MouseEvent) => { e.stopPropagation(); setEditingId(session.id); setEditTitle(session.title || '新对话') }
   const handleSaveTitle = async (id: string) => {
     if (editTitle.trim()) {
-      try { await fetch(`/api/sessions/${id}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle.trim() }) }) } catch {}
+      try { await fetchCompat(`/api/sessions/${id}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle.trim() }) }) } catch {}
     }
     setEditingId(null)
   }
@@ -665,7 +675,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           {/* WebUI：一键复制手机远程地址（本地模式 · 数据不出本机） */}
           <button onClick={async () => {
             try {
-              const r = await fetch('/api/remote/info')
+              const r = await fetchCompat('/api/remote/info')
               const d = await r.json()
               if (d?.url) {
                 await navigator.clipboard.writeText(d.url)

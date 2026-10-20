@@ -69,6 +69,7 @@ export const SWARM_TEAMS: Record<Exclude<SwarmTeam, 'auto'>, { name: string; age
 
 // 敏感操作判定已收敛到 shared/sensitiveOps（主对话的权限闸门与集群共用同一判据）
 import { checkSensitiveTool } from '../../shared/sensitiveOps'
+import { fetchCompat } from '../api'
 
 // ─── 上下文自动压缩 ───
 // 每个会话的历史摘要（内存缓存 + /api/memories 持久化，跨重启有效）
@@ -77,7 +78,7 @@ const ctxSummaries = new Map<string, string>()
 async function loadCtxSummary(sid: string): Promise<string> {
   if (ctxSummaries.has(sid)) return ctxSummaries.get(sid)!
   try {
-    const res = await fetch('/api/ctx-summary')
+    const res = await fetchCompat('/api/ctx-summary')
     if (res.ok) {
       const map = await res.json()
       const hit = (map && typeof map === 'object' && !Array.isArray(map)) ? map[sid] : null
@@ -160,7 +161,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
       : { base: 'https://api.kilo.ai/api/gateway/v1', key: 'free', model: 'openrouter/free' }
     if (!ep.base) return { done: false, note: '未配置模型，无法评估', ok: false }
     try {
-      const res = await fetch('/api/llm-proxy', {
+      const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': ep.base, 'X-Api-Key': ep.key },
         body: JSON.stringify({
@@ -186,7 +187,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   const generateAiTitle = useCallback(async (sid: string, userContent: string, assistantExcerpt: string) => {
     try {
       if (settings.autoTitle === false) return
-      const res = await fetch('/api/llm-proxy', {
+      const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,7 +280,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       // 工具循环
       for (let round = 0; round < 5; round++) {
         if (signal?.aborted) throw new Error('已停止')
-        const res = await fetch('/api/llm-proxy', {
+        const res = await fetchCompat('/api/llm-proxy', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -362,7 +363,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       } else {
       let raw = ''
       try {
-        const res = await fetch('/api/llm-proxy', {
+        const res = await fetchCompat('/api/llm-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Target-Base': targetBase, 'X-Api-Key': targetKey },
           body: JSON.stringify({
@@ -469,7 +470,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const merged = swarm.agents.map((ag: any) => `【${ag.name}（${ag.role}）】${ag.status === 'error' ? '(失败) ' : ''}${ag.output}`).join('\n\n')
       let final = ''
       try {
-        const res = await fetch('/api/llm-proxy', {
+        const res = await fetchCompat('/api/llm-proxy', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -653,7 +654,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     let finalSystemPrompt = (perMsg ? `${systemPrompt}\n\n${perMsg}` : systemPrompt) + planBlock
     // ─── 知识库引用（RAG）：仅当本条开启「知识库」开关时检索注入 ───
     if (sendOpts?.kb) try {
-      const kbRes = await fetch('/api/kb/search', {
+      const kbRes = await fetchCompat('/api/kb/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: content.slice(0, 500), topK: 4 }),
       })
@@ -707,7 +708,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
             }
             // ③ 磁盘路径 → 后端读 base64
             if (f.path) {
-              const r = await fetch(`/api/file-base64?path=${encodeURIComponent(f.path)}`)
+              const r = await fetchCompat(`/api/file-base64?path=${encodeURIComponent(f.path)}`)
               if (r.ok) {
                 const d = await r.json()
                 if (d?.data) imageParts.push({ type: 'image_url', image_url: { url: `data:${d.mime};base64,${d.data}` } })
@@ -731,7 +732,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       if (plan.shouldCompress && plan.oldChunk.length > 0) {
         let summary = await loadCtxSummary(sessionId)
         try {
-          const res = await fetch('/api/llm-proxy', {
+          const res = await fetchCompat('/api/llm-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
             body: JSON.stringify({
@@ -752,7 +753,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
               // mergeSummary 对总长度封顶：否则长对话里摘要自身会膨胀成新的超长上下文
               summary = mergeSummary(summary, extra)
               ctxSummaries.set(sessionId, summary)
-              fetch('/api/ctx-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: sessionId, value: summary }) }).catch(() => {})
+              fetchCompat('/api/ctx-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: sessionId, value: summary }) }).catch(() => {})
             }
           }
         } catch { /* 压缩失败则照常发送原消息，绝不因为摘要生成失败丢掉历史 */ }
@@ -779,7 +780,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
     // ─── MCP 外部工具（v5.0，学自 Zode 的可插拔工具生态）───
     try {
-      const mcpRes = await fetch('/api/mcp/tools')
+      const mcpRes = await fetchCompat('/api/mcp/tools')
       if (mcpRes.ok) {
         const mcpData = await mcpRes.json()
         for (const t of (mcpData.tools || [])) {
@@ -926,7 +927,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
             let voice = 'zh-CN-XiaoxiaoNeural'
             let speed = '1.0'
             try { const raw = localStorage.getItem('lyclaw_settings'); if (raw) { const ls = JSON.parse(raw); voice = ls.voiceId || voice; speed = ls.ttsSpeed || speed } } catch {}
-            fetch('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice, speed: Number(speed) || 1.0 }) })
+            fetchCompat('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice, speed: Number(speed) || 1.0 }) })
               .then(r => { if (!r.ok) throw new Error(); return r.blob() })
               .then(b => { new Audio(URL.createObjectURL(b)).play().catch(() => {}) })
               .catch(() => {})

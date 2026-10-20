@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme'
 import { buildReport, reportToMarkdown, checkApiConfig, checkWorkDir, checkNodeVersion, checkStorage, checkServer, type CheckResult } from '../../shared/diagnostics'
 import { isPersistent } from '../utils/safeStorage'
 import { APP_VERSION } from '../brand'
+import { fetchCompat } from '../api'
 
 export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
@@ -24,7 +25,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
     let serverOk = false
     let version: string | undefined
     try {
-      const r = await fetch('/api/health', { signal: AbortSignal.timeout(5000) })
+      const r = await fetchCompat('/api/health', { signal: AbortSignal.timeout(5000) })
       if (r.ok) {
         const j = await r.json()
         serverOk = true
@@ -35,12 +36,12 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
 
     // API 配置
     try {
-      const s = await fetch('/api/settings').then((r) => r.json())
+      const s = await fetchCompat('/api/settings').then((r) => r.json())
       out.push(checkApiConfig({ apiBaseUrl: s.apiBaseUrl, apiKey: s.apiKey, model: s.model }))
       // 工作目录：让后端判断存在性，避免前端 file:// 限制误判
       if (s.workDir) {
         try {
-          const r = await fetch('/api/tools/execute', {
+          const r = await fetchCompat('/api/tools/execute', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'get_file_info', args: { path: s.workDir } }),
           }).then((x) => x.json())
@@ -57,7 +58,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
 
     // Node 版本（后端暴露的 system_info 里有）
     try {
-      const r = await fetch('/api/tools/execute', {
+      const r = await fetchCompat('/api/tools/execute', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'system_info', args: {} }),
       }).then((x) => x.json())

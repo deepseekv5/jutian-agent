@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts'
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup'
 
 export interface WorkTab {
   id: string
@@ -45,6 +45,8 @@ export const PAGE_META: Record<PageType, { label: string; labelEn?: string; icon
   usage: { label: '用量', labelEn: 'Usage', icon: 'M3 3v18h18M7 14l4-4 3 3 4-6' },
   diagnostics: { label: '诊断', labelEn: 'Diagnostics', icon: 'M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   shortcuts: { label: '快捷键', labelEn: 'Shortcuts', icon: 'M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6zm4 4h.01M11 10h.01M15 10h.01M7 14h10' },
+  export: { label: '导出', labelEn: 'Export', icon: 'M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
+  backup: { label: '备份', labelEn: 'Backup', icon: 'M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8' },
   newtab: { label: '新建标签页', labelEn: 'New Tab', icon: 'M12 4v16m8-8H4' },
   freemodels: { label: '免费模型', labelEn: 'Free AI', icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z' },
 }

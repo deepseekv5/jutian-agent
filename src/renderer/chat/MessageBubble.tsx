@@ -8,6 +8,7 @@ import { textForSpeech } from '../utils/tts'
 import BrandMark from '../app/BrandMark'
 import DiffCardView from '../app/DiffCardView'
 import { hhmm } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const { c } = useTheme()
@@ -299,12 +300,13 @@ function IconAction({ icon, label, onClick, active }: { icon: string; label: str
 // 回调签名统一带 index：父层因此可以传稳定函数引用（不必为每条消息
 // 新建闭包），memo 才能真正生效——否则流式每 50ms 一次的全量重渲染
 // 会让每条气泡连 ReactMarkdown 都重新解析一遍
-const MessageBubble = memo(function MessageBubble({ content, thinking, role, isStreaming, toolCalls, isLast, index, onRegenerate, onOpenBrowser, onRollback, onEdit, createdAt, variants, msgId, swarm: swarmProp }: {
+const MessageBubble = memo(function MessageBubble({ content, thinking, role, isStreaming, toolCalls, isLast, index, onRegenerate, onOpenBrowser, onRollback, onEdit, onBranch, createdAt, variants, msgId, swarm: swarmProp }: {
   content: string; thinking?: string; role: 'user' | 'assistant'; isStreaming?: boolean;
   toolCalls?: ToolCall[]; isLast?: boolean; index: number;
   onRegenerate?: (index: number) => void;
   onOpenBrowser?: (url: string) => void; onRollback?: (index: number) => void;
   onEdit?: (index: number, newContent: string) => void;
+  onBranch?: (index: number) => void;
   createdAt?: string;
   /** 消息分支：旧回答版本（重新生成时归档），0 号即主内容 */
   variants?: string[];
@@ -391,7 +393,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
       if (raw) { const s = JSON.parse(raw); voice = s.voiceId || voice; speed = s.ttsSpeed || speed }
     } catch {}
     try {
-      const resp = await fetch('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice, speed: Number(speed) || 1.0 }) })
+      const resp = await fetchCompat('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice, speed: Number(speed) || 1.0 }) })
       if (!resp.ok) throw new Error()
       const blob = await resp.blob()
       const audioUrl = URL.createObjectURL(blob)
@@ -453,6 +455,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
                 <>
                   {onEdit && <IconAction label="编辑并重发" icon="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" onClick={() => { setEditText(content); setEditing(true) }} />}
                   <IconAction label="回滚到此处" icon="M3 3v5h5M3.05 13A9 9 0 106 5.3L3 8" onClick={() => setShowRollbackConfirm(true)} />
+                  {/* 分叉（v12.1）：保留原对话，同时从这条消息另开一个分支继续 */}
+                  {onBranch && <IconAction label="从这里分叉" icon="M6 3v12M6 21v-6M18 9v12M6 9h12" onClick={() => onBranch(index)} />}
                 </>
               )}
             </div>
@@ -736,7 +740,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             <IconAction label={speaking ? '停止朗读' : '朗读'} icon={speaking ? 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z' : 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14'} onClick={speakContent} active={speaking} />
             <IconAction label="存入知识库" icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" onClick={async () => {
               try {
-                const r = await fetch('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: shownContent.slice(0, 18).replace(/[#*\n]/g, ' ').trim() || '对话摘录', content: shownContent, tags: ['对话收藏'], source: 'ai' }) })
+                const r = await fetchCompat('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: shownContent.slice(0, 18).replace(/[#*\n]/g, ' ').trim() || '对话摘录', content: shownContent, tags: ['对话收藏'], source: 'ai' }) })
                 const d = await r.json()
                 if (!d.error) { setSavedKb(true); setTimeout(() => setSavedKb(false), 2000) }
               } catch { /* ignore */ }

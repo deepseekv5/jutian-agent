@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { fetchCompat } from '../api'
 
 export interface ToastItem { id: number; text: string }
 
@@ -61,7 +62,7 @@ export function useGlobalErrorListener() {
       reported.set(key, now)
       if (reported.size > 50) reported.clear()
       try {
-        fetch('/api/client-error', {
+        fetchCompat('/api/client-error', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, stack: stack || '', url: location.href }),

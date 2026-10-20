@@ -10,6 +10,7 @@ import type { Message, Settings } from '../types'
 import { estimateTokens, fmtTokens } from '../utils/tokens'
 import { effectiveApiKey } from '../store/storage'
 import { dateTimeCN } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
@@ -173,7 +174,7 @@ function FilesPane({ workDir }: { workDir: string }) {
   useEffect(() => {
     setEntries(null); setError(''); setExpanded({}); setChildren({}); setPreview(null)
     if (!root) { setError('未设置工作目录（在顶栏选择目录后浏览文件）'); return }
-    fetch('/api/code/read-dir?path=' + encodeURIComponent(root))
+    fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(root))
       .then(r => r.json())
       .then((d: any) => {
         if (Array.isArray(d)) setEntries(d)
@@ -188,7 +189,7 @@ function FilesPane({ workDir }: { workDir: string }) {
     if (children[path] === undefined) {
       setChildren(ch => ({ ...ch, [path]: null }))
       try {
-        const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(path))
+        const res = await fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(path))
         const data = await res.json()
         setChildren(ch => ({ ...ch, [path]: Array.isArray(data) ? data : [] }))
       } catch { setChildren(ch => ({ ...ch, [path]: [] })) }
@@ -197,7 +198,7 @@ function FilesPane({ workDir }: { workDir: string }) {
 
   const openFile = useCallback(async (path: string, name: string) => {
     try {
-      const res = await fetch('/api/code/read-file?path=' + encodeURIComponent(path))
+      const res = await fetchCompat('/api/code/read-file?path=' + encodeURIComponent(path))
       const data = await res.json()
       if (data?.success) setPreview({ path, name, content: String(data.content || '').slice(0, 200000) })
       else setPreview({ path, name, content: `（无法预览：${data?.error || '读取失败'}）` })
@@ -289,7 +290,7 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
     const next = [...msgs, { role: 'user' as const, content: text }]
     setMsgs(next)
     try {
-      const res = await fetch('/api/llm-proxy', {
+      const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
         body: JSON.stringify({
@@ -378,11 +379,11 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
       const headers = { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) }
       let res: Response
       try {
-        res = await fetch('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
+        res = await fetchCompat('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
       } catch {
         // 免费档偶发断连：自动重试一次
         await new Promise(r => setTimeout(r, 1500))
-        res = await fetch('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
+        res = await fetchCompat('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
       }
       if (!res.ok) {
         const errText = await res.text().catch(() => '')

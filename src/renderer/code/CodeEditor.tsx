@@ -27,6 +27,7 @@ import { javascript } from '@codemirror/lang-javascript'
 import type { EditorTab, AICompletionEvent, ChangedLine } from '../types/code'
 import type { Settings } from '../types'
 import { useTheme } from '../hooks/useTheme'
+import { fetchCompat } from '../api'
 
 // ============ Ghost Text (AI Inline 补全) ============
 
@@ -183,7 +184,7 @@ async function fetchAICompletion(prompt: AIPrompt, settings: Settings): Promise<
 
     const userPrompt = `Language: ${prompt.language}\nBefore cursor:\n\`\`\`\n${prefix}\n\`\`\`\nAfter cursor:\n\`\`\`\n${suffix}\n\`\`\`\nComplete at cursor:`
 
-    const r = await fetch('/api/llm-proxy', {
+    const r = await fetchCompat('/api/llm-proxy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

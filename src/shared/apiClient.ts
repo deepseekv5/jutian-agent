@@ -174,3 +174,42 @@ export async function apiJson<T = unknown>(url: string, opts: ApiRequestOptions 
     throw new ApiError('parse', '响应不是合法 JSON（服务可能返回了错误页）', { detail: String((e as Error)?.message || e) })
   }
 }
+
+/**
+ * 与 fetch 签名兼容的版本（v12.1）。
+ *
+ * 存在的理由：现有 170+ 处调用点里有 59 处自己判断 `res.ok`、43 处链式
+ * `.then(r => r.json())`——直接换成"非 2xx 就抛错"的 apiFetch 会静默改变
+ * 这些控制流（原本走 else 分支的现在直接抛异常，页面可能空白）。
+ *
+ * 所以这个版本保持"返回 Response、不因状态码抛错"的语义，只补两件事：
+ *   1. 默认超时（原来的裸 fetch 完全没有超时，服务端不响应就永久挂起）
+ *   2. 同源 Origin 头（服务端门卫要求）
+ * 网络层错误（断网/超时）仍然抛 ApiError——这类原本也会抛 TypeError，
+ * 换成带分类的错误只会让上层提示更准确。
+ */
+export async function fetchCompat(input: string, init: RequestInit = {}, opts: { timeoutMs?: number } = {}): Promise<Response> {
+  const headers: Record<string, string> = {}
+  // RequestInit.headers 可能是 Headers 实例、数组或对象，统一摊平成对象
+  const h = init.headers
+  if (h) {
+    if (typeof (h as Headers).forEach === 'function' && !Array.isArray(h)) {
+      ;(h as Headers).forEach((v, k) => { headers[k] = v })
+    } else if (Array.isArray(h)) {
+      for (const [k, v] of h) headers[k] = v
+    } else {
+      Object.assign(headers, h as Record<string, string>)
+    }
+  }
+  if (typeof location !== 'undefined' && location.origin && !headers['Origin'] && !headers['origin']) {
+    headers['Origin'] = location.origin
+  }
+  return fetchOnce(input, {
+    method: init.method,
+    body: init.body as BodyInit | undefined,
+    headers,
+    signal: init.signal || undefined,
+    timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT,
+    retries: 0,  // 与原生 fetch 一致：不自动重试（重试由调用方决定）
+  })
+}

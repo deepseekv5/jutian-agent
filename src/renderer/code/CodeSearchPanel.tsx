@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import type { SearchResult } from '../types/code'
 import { baseName, dirName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 interface Props {
   projectRoot: string
@@ -25,7 +26,7 @@ export default function CodeSearchPanel({ projectRoot, onOpenFile, onClose, init
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/code/search', {
+      const res = await fetchCompat('/api/code/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: kw.trim(), rootPath: projectRoot }),

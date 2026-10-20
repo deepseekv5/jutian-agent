@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
+import { fetchCompat } from '../api'
 
 interface McpServer { id: string; name: string; command: string; enabled: boolean; running?: boolean; toolCount?: number | null }
 interface ToolRow { name: string; description: string }
@@ -26,8 +27,8 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
 
   const load = () => {
     Promise.all([
-      fetch('/api/mcp/servers').then(r => r.json()).catch(() => []),
-      fetch('/api/remote/tools').then(r => r.json()).then(r => r.tools || []).catch(() => []),
+      fetchCompat('/api/mcp/servers').then(r => r.json()).catch(() => []),
+      fetchCompat('/api/remote/tools').then(r => r.json()).then(r => r.tools || []).catch(() => []),
     ]).then(([m, t]) => { setMcp(Array.isArray(m) ? m : []); setTools(t); setLoading(false) })
   }
   useEffect(() => { load() }, [])
@@ -41,11 +42,11 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
     setDisabled(next)
   }
   const toggleMcp = async (s: McpServer) => {
-    await fetch('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
+    await fetchCompat('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
     load()
   }
   const removeMcp = async (s: McpServer) => {
-    await fetch('/api/mcp/servers/' + s.id, { method: 'DELETE' })
+    await fetchCompat('/api/mcp/servers/' + s.id, { method: 'DELETE' })
     load()
   }
 

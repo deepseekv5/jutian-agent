@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import type { Announcement } from '../../shared/announcement'
 import { useTheme } from '../hooks/useTheme'
+import { fetchCompat } from '../api'
 
 const READ_KEY = 'jutian-announcement-read'
 
@@ -59,7 +60,7 @@ export default function AnnouncementBanner() {
 
   useEffect(() => {
     let dead = false
-    fetch('/api/announcement')
+    fetchCompat('/api/announcement')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (dead || !d?.announcement) return

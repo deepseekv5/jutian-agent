@@ -1,11 +1,12 @@
 /**
+import { fetchCompat } from '../api'
  * Tool executor - executes agent tools via a local backend proxy.
  * 
  * Since the frontend can't directly run shell commands (browser sandbox),
  * we use a small Express/Fastify backend that exposes tool execution endpoints.
  * 
  * Architecture:
- *   Frontend → fetch('/api/tools/execute') → Backend server → shell exec → result
+ *   Frontend → fetchCompat('/api/tools/execute') → Backend server → shell exec → result
  */
 
 export interface ToolRequest {

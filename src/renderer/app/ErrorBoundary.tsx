@@ -8,6 +8,7 @@
  * 颜色全部走 index.css 的主题变量，暗色主题下不会变成刺眼的白屏。
  */
 import React from 'react'
+import { fetchCompat } from '../api'
 
 interface State { error: Error | null; stack?: string; componentStack?: string }
 
@@ -43,7 +44,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     this.setState({ stack: (error && error.stack) || '', componentStack: info.componentStack || '' })
     // 上报到服务端（诊断页可见）：用户报障时只写 console 等于没有线索
     try {
-      fetch('/api/client-error', {
+      fetchCompat('/api/client-error', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

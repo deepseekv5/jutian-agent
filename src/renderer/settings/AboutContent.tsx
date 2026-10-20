@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
 import { getAllMemories } from '../store/storage'
 import { hhmm } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 /**
  * AboutContent — 关于页内容(单一来源,设置弹窗与独立关于页共用)
@@ -48,7 +49,7 @@ export default function AboutContent() {
   useEffect(() => {
     ;(async () => {
       try {
-        const sessions = await fetch('/api/sessions').then(r => r.json()).catch(() => [])
+        const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
         const mem = await getAllMemories().catch(() => ({}))
         setStats({ sessions: Array.isArray(sessions) ? sessions.length : 0, memories: Object.keys(mem || {}).length })
       } catch {}

@@ -11,6 +11,7 @@ import PlanCard from './PlanCard'
 import type { Settings } from '../types'
 import { dateTimeCN, hhmmss } from '../utils/datetime'
 import { buildExport, EXPORT_META, type ExportFormat } from '../utils/exportChat'
+import { fetchCompat } from '../api'
 
 const WD_KEY = 'lyclaw_session_workdirs'
 const CP_KEY = 'lyclaw_last_checkpoint'
@@ -153,7 +154,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     const dir = (ownWorkDir || settings.workDir || '').trim()
     if (!dir) return
     const label = `对话 · ${(content || '').replace(/\s+/g, ' ').slice(0, 30) || hhmmss()}`
-    fetch('/api/git/checkpoint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, label }) })
+    fetchCompat('/api/git/checkpoint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, label }) })
       .then(r => r.json())
       .then(r => {
         if (r.success && r.hash) {
@@ -171,7 +172,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (!confirm('撤销本轮对话对工作区文件的更改？\n\n恢复到本轮开始前的检查点；当前未提交的改动会先自动保底提交（可找回）。')) return
     setGitBusy(true)
     try {
-      const r = await fetch('/api/git/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, hash: lastCheckpoint.hash }) }).then(r => r.json())
+      const r = await fetchCompat('/api/git/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, hash: lastCheckpoint.hash }) }).then(r => r.json())
       if (r.success) {
         setLastCheckpoint(null); saveCheckpointLocal(null); setGitRefresh(v => v + 1)
         setGitTip('已撤销本轮更改'); setTimeout(() => setGitTip(''), 2600)
@@ -190,7 +191,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
       // 整个会话存为一篇知识库笔记
       const date = new Date().toISOString().slice(0, 10)
       const md = messages.map(m => m.role === 'user' ? `## ❯ 用户\n\n${m.content}\n` : `## ● 巨天\n\n${m.content}\n`).join('\n')
-      fetch('/api/kb/entry', {
+      fetchCompat('/api/kb/entry', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: `对话摘录 ${date}`, content: md, tags: ['对话导出'], source: 'ai', notebook: '对话' }),
       }).then(() => { setKbSavedTip(true); setTimeout(() => setKbSavedTip(false), 2200) }).catch(() => {})
@@ -425,6 +426,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 onOpenBrowser={onOpenBrowser}
                 onRollback={handleRollback}
                 onEditMessage={handleEditMessage}
+                sessionId={sessionId}
               />
               {goal && goalDismissed !== goal.text + goal.status && (
                 <div className="px-6 pt-1 pb-2 shrink-0">

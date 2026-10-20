@@ -7,6 +7,7 @@
 import { useState, useRef } from 'react'
 import type { ToolCall } from '../types'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 const TEXT_SECONDARY = '#a1a1aa'
 const TEXT_MUTED = '#5b5b60'
@@ -53,7 +54,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
     path = a.path || ''
     const changeId = (tc as any).changeId as string | undefined
     if (changeId && open && !chg) {
-      fetch('/api/diff/changes/' + changeId).then(r => r.json()).then(d => {
+      fetchCompat('/api/diff/changes/' + changeId).then(r => r.json()).then(d => {
         if (d && d.path) setChg({ old: String(d.old || ''), new: String(d.new || '') })
       }).catch(() => {})
     }
@@ -78,7 +79,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
     if (!changeId || busy) return
     setBusy(true); setOpErr('')
     try {
-      const r = await fetch('/api/diff/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId }) })
+      const r = await fetchCompat('/api/diff/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId }) })
       const d = await r.json().catch(() => ({} as any))
       if (r.ok && d.ok) { setState('undone'); onFileMutated?.(path) }
       else setOpErr(d.error || `撤销失败 (HTTP ${r.status})`)
@@ -89,7 +90,7 @@ export default function DiffCardView({ tc, c, onFileMutated }: {
     if (!changeId || busy) return
     setBusy(true); setOpErr('')
     try {
-      const r = await fetch('/api/diff/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId, content: editText }) })
+      const r = await fetchCompat('/api/diff/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: changeId, content: editText }) })
       const d = await r.json().catch(() => ({} as any))
       if (r.ok && d.ok) { setState('applied'); setChg({ old: chg?.old || '', new: editText }); onFileMutated?.(path) }
       else setOpErr(d.error || `应用失败 (HTTP ${r.status})`)

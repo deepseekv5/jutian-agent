@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { relativeShort } from '../utils/datetime'
+import { fetchCompat } from '../api'
 
 interface Props {
   workDir: string
@@ -41,11 +42,11 @@ export default function GitPanel({ workDir, onClose, refreshSignal }: Props) {
   const load = useCallback(async () => {
     if (!workDir) return
     try {
-      const st = await fetch(`/api/git/status?dir=${encodeURIComponent(workDir)}`).then(r => r.json())
+      const st = await fetchCompat(`/api/git/status?dir=${encodeURIComponent(workDir)}`).then(r => r.json())
       setIsRepo(!!st.isRepo)
       setBranch(st.branch || '')
       setChanges(Array.isArray(st.changes) ? st.changes : [])
-      const lg = await fetch(`/api/git/log?dir=${encodeURIComponent(workDir)}&limit=30`).then(r => r.json())
+      const lg = await fetchCompat(`/api/git/log?dir=${encodeURIComponent(workDir)}&limit=30`).then(r => r.json())
       setLog(Array.isArray(lg.items) ? lg.items : [])
     } catch { /* 服务不可用 */ }
   }, [workDir])
@@ -58,7 +59,7 @@ export default function GitPanel({ workDir, onClose, refreshSignal }: Props) {
     if (!workDir || busy) return
     setBusy('checkpoint')
     try {
-      const r = await fetch('/api/git/checkpoint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir: workDir }) }).then(r => r.json())
+      const r = await fetchCompat('/api/git/checkpoint', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir: workDir }) }).then(r => r.json())
       flash(r.skipped ? '无改动，无需检查点' : r.success ? `已创建检查点 ${r.hash}` : (r.error || '创建失败'))
       await load()
     } catch { flash('创建失败') }
@@ -70,7 +71,7 @@ export default function GitPanel({ workDir, onClose, refreshSignal }: Props) {
     if (!confirm(`确定恢复到检查点「${cp.label}」？\n当前未提交的改动会先自动保底提交（可再次撤销找回）。`)) return
     setBusy(cp.hash)
     try {
-      const r = await fetch('/api/git/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir: workDir, hash: cp.hash }) }).then(r => r.json())
+      const r = await fetchCompat('/api/git/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir: workDir, hash: cp.hash }) }).then(r => r.json())
       flash(r.success ? `已恢复到 ${cp.hash}` : (r.error || '恢复失败'))
       await load()
     } catch { flash('恢复失败') }
@@ -82,7 +83,7 @@ export default function GitPanel({ workDir, onClose, refreshSignal }: Props) {
     setShowDiff(v => !v)
     if (!showDiff && !diffText) {
       try {
-        const r = await fetch(`/api/git/diff?dir=${encodeURIComponent(workDir)}`).then(r => r.json())
+        const r = await fetchCompat(`/api/git/diff?dir=${encodeURIComponent(workDir)}`).then(r => r.json())
         setDiffText(String(r.diff || r.stat || '（无未提交改动）'))
       } catch { setDiffText('加载失败') }
     }

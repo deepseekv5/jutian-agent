@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import BrandMark from './BrandMark'
 import { useModalBehavior } from '../hooks/useModalBehavior'
+import { fetchCompat } from '../api'
 
 const FLAG = 'lyclaw_jtcode_prompt'
 
@@ -24,7 +25,7 @@ export default function CliInstallModal({ onClose }: { onClose: () => void }) {
   const install = async () => {
     setState('installing')
     try {
-      const r = await fetch('/api/cli/install', { method: 'POST' }).then((r) => r.json())
+      const r = await fetchCompat('/api/cli/install', { method: 'POST' }).then((r) => r.json())
       if (r.success) { setResult(r); setState('done') }
       else { setErrMsg(r.error || '安装失败'); setState('error') }
     } catch { setErrMsg('服务不可用'); setState('error') }

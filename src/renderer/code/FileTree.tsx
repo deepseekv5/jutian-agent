@@ -4,6 +4,7 @@ import type { FileNode, GitStatusData } from '../types/code'
 import { getLanguage } from '../types/code'
 import { useTheme } from '../hooks/useTheme'
 import { baseName } from '../utils/pathName'
+import { fetchCompat } from '../api'
 
 interface Props {
   nodes: FileNode[]
@@ -85,7 +86,7 @@ function TreeNode({ node, depth, onSelectFile, searchQuery, selectedPath, onCont
         if (!loadedRef.current) {
           loadedRef.current = true
           setLoadingChildren(true)
-          fetch('/api/code/read-dir?path=' + encodeURIComponent(node.path))
+          fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(node.path))
             .then(res => res.ok ? res.json() : null)
             .then((data: FileNode[] | null) => setChildren(data && data.length > 0 ? data : null))
             .catch(() => setChildren(null))
@@ -111,7 +112,7 @@ function TreeNode({ node, depth, onSelectFile, searchQuery, selectedPath, onCont
       if (!loadedRef.current) {
         loadedRef.current = true
         setLoadingChildren(true)
-        fetch('/api/code/read-dir?path=' + encodeURIComponent(node.path))
+        fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(node.path))
           .then(res => res.ok ? res.json() : null)
           .then((data: FileNode[] | null) => setChildren(data && data.length > 0 ? data : null))
           .catch(() => setChildren(null))
@@ -129,7 +130,7 @@ function TreeNode({ node, depth, onSelectFile, searchQuery, selectedPath, onCont
         loadedRef.current = true
         setLoadingChildren(true)
         try {
-          const res = await fetch('/api/code/read-dir?path=' + encodeURIComponent(node.path))
+          const res = await fetchCompat('/api/code/read-dir?path=' + encodeURIComponent(node.path))
           if (res.ok) {
             const data: FileNode[] = await res.json()
             setChildren(data.length > 0 ? data : null)
@@ -412,7 +413,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
     setCreatingFolder(true)
     setNewFolderError('')
     try {
-      const res = await fetch('/api/code/create-folder', {
+      const res = await fetchCompat('/api/code/create-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dirPath: newFolderDir, folderName: name }),
@@ -437,7 +438,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
     setRenaming(true)
     setRenameError('')
     try {
-      const res = await fetch('/api/code/rename', {
+      const res = await fetchCompat('/api/code/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: renamePath, newName: name }),
@@ -458,7 +459,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
   const handleConfirmDelete = useCallback(async () => {
     setDeleting(true)
     try {
-      const res = await fetch('/api/code/file', {
+      const res = await fetchCompat('/api/code/file', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: deletePath }),
@@ -481,7 +482,7 @@ export default function FileTree({ nodes, onSelectFile, loading, onRefresh, sele
     const destDir = targetIsDir ? targetPath : targetPath.substring(0, targetPath.lastIndexOf('/'))
     if (srcPath.startsWith(destDir + '/')) return // can't move into descendant
     try {
-      await fetch('/api/code/move', {
+      await fetchCompat('/api/code/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sourcePath: srcPath, destDir }),
