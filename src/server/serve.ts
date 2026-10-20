@@ -5158,7 +5158,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         const knowledge = countDir(path.join(DATA_DIR, "knowledge"));
         const skills = countDir(path.join(LYCLAW_HOME, "skills"));
         return json(res, {
-          settings, sessions, messages, memory: memories, knowledge, skills,
+          // 注意：这里必须是"数量"而不是数组本身。
+          // sessions 变量是会话数组，直接塞进去会让前端拿到一整个列表当计数用
+          settings, sessions: sessions.length, messages, memory: memories, knowledge, skills,
           // 体积按实际 JSON 序列化长度估，别让用户对"预计大小"产生怀疑
           bytes: {
             settings: JSON.stringify(db.getAllSettings() || []).length,
