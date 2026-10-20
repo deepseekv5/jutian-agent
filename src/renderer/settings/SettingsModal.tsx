@@ -16,6 +16,7 @@ import AboutContent from './AboutContent';
 import { fmtTokens } from '../utils/tokens';
 import { dateTimeCN } from '../utils/datetime';
 import { isWindows } from '../utils/platform';
+import { recommendModels, inferCapability, TASK_LABEL, type TaskKind } from '../../shared/modelCapability';
 
 interface Props {
   settings: Settings;
@@ -217,6 +218,8 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const [showNewProvider, setShowNewProvider] = useState(false);
   const [np, setNp] = useState({ name: '', baseUrl: '', model: '', contextWindow: 128000, multimodal: false });
   const [newModelName, setNewModelName] = useState('');
+  // 模型推荐（v12）：选任务类型后给出 3 个建议
+  const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
   const [storageStats, setStorageStats] = useState<{ sessions: number; messages: number } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const workDirSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -673,6 +676,49 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 <Field c={c} label="API URL"><input type="url" value={form.apiBaseUrl} onChange={e => persistDebounced({ ...form, apiBaseUrl: e.target.value, models: [] })} placeholder="https://api.openai.com/v1" className={inputCls} style={inputStyle} /></Field>
                 <Field c={c} label="API Key"><input type="password" value={form.apiKey} onChange={e => persistDebounced({ ...form, apiKey: e.target.value })} placeholder="sk-..." autoComplete="off" className={inputCls} style={inputStyle} /></Field>
                 <Field c={c} label={t('模型', 'Model')}><input type="text" value={form.model} onChange={e => persistDebounced({ ...form, model: e.target.value })} placeholder="gpt-4o / claude-3.5-sonnet" className={inputCls} style={inputStyle} /></Field>
+                {/* 模型推荐（v12）：按任务类型给 3 个建议，带理由而不是黑箱排名 */}
+                <div className="mb-3">
+                  <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('按任务选模型', 'Pick by task')}</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {(Object.keys(TASK_LABEL) as TaskKind[]).map((k) => (
+                      <button key={k} type="button"
+                        onClick={() => setTaskKind(taskKind === k ? null : k)}
+                        className="px-2 py-1 rounded-full text-[10.5px] transition-colors"
+                        style={taskKind === k
+                          ? { background: `${c.accent}15`, color: c.accent, border: `1px solid ${c.accent}40` }
+                          : { background: c.bgInput, color: c.textTertiary, border: `1px solid ${c.border}` }}>
+                        {TASK_LABEL[k].label}
+                      </button>
+                    ))}
+                  </div>
+                  {taskKind && (() => {
+                    const pool = [...new Set([...(form.models || []), form.model].filter(Boolean))].map((m) => ({ id: m }))
+                    const recs = recommendModels(pool, taskKind, 3)
+                    const cap = inferCapability(form.model || '')
+                    return (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[10.5px]" style={{ color: c.textMuted }}>{TASK_LABEL[taskKind].hint}</div>
+                        {recs.length === 0 && <div className="text-[10.5px]" style={{ color: c.textMuted }}>{t('当前列表里没有明显匹配的模型，可拉取更多模型', 'No obvious match in the list — try fetching more models')}</div>}
+                        {recs.map((r) => (
+                          <button key={r.model.id} type="button"
+                            onClick={() => { const nf = { ...form, model: r.model.id }; setForm(nf); persistAll(nf) }}
+                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 transition-colors"
+                            style={{ background: c.bgInput, color: c.textSecondary }}>
+                            <span className="font-mono truncate flex-1">{r.model.id}</span>
+                            <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{r.reason}</span>
+                          </button>
+                        ))}
+                        {(cap.contextWindow > 0 || cap.vision || cap.reasoning) && (
+                          <div className="text-[10px] pt-0.5 flex flex-wrap gap-1.5" style={{ color: c.textMuted }}>
+                            {cap.contextWindow > 0 && <span>当前模型上下文 {Math.round(cap.contextWindow / 1000)}K</span>}
+                            {cap.vision && <span>· 支持图片</span>}
+                            {cap.reasoning && <span>· 带推理</span>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
                 <div className="space-y-1.5 mb-4">
                   <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('模型列表（快捷切换）', 'Model list (quick switch)')}</label>
                   <div className="flex flex-wrap gap-1.5">

@@ -20,6 +20,10 @@ import { pushNotice } from '../notify'
 import { estimateTokens } from '../utils/tokens'
 import { addUsage } from '../store/usage'
 import { appendUsageRecord } from '../store/usageHistory'
+import { describeError } from '../../shared/errors'
+import { enqueue } from '../../shared/sendQueue'
+import { loadQueue, saveQueue } from '../store/sendQueue'
+import { useSendQueue } from './useSendQueue'
 
 /** 正在流式输出的消息 ID（null = 没有在输出） */
 type StreamingId = string | null
@@ -1002,13 +1006,31 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
       onError: async (err) => {
         console.warn('[stream error]', err)
-        // 保存已累积的部分内容和工具调用
-        await updateMessageContent(assistantMsg.id, sessionId, fullContent || `错误: ${err}`)
+        // 错误归类：把 "TypeError: Failed to fetch" 这类原文翻译成
+        // 用户能做行动的提示（网络/密钥/限流/上下文超限…）
+        const info = describeError(err)
+        // 已产出部分内容就保留（不能让用户白等一场）
+        await updateMessageContent(assistantMsg.id, sessionId, fullContent || `${info.message}${info.hint ? '\n\n' + info.hint : ''}`)
         if (fullThinking) {
           await updateMessageThinking(assistantMsg.id, sessionId, fullThinking)
         }
         if (allToolCalls.length > 0) {
           await updateMessageToolCalls(assistantMsg.id, sessionId, allToolCalls)
+        }
+        // 网络/超时这类"重试可能成功"的失败：入待发队列，恢复后自动重发。
+        // 且 assistant 占位消息要删掉，否则重发后会出现一问两答。
+        if ((info.kind === 'network' || info.kind === 'timeout') && !fullContent.trim()) {
+          try {
+            const q = enqueue(loadQueue(), {
+              id: `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+              sessionId,
+              content: userContent,
+              opts: sendOpts ? { ...sendOpts } : undefined,
+              createdAt: Date.now(),
+            })
+            saveQueue(q)
+            await deleteMessagesAfter(sessionId, assistantMsg.id)  // 清掉空的 assistant 占位
+          } catch { /* 入队失败不阻塞错误提示 */ }
         }
         setStreamingId(null)
         setMessages(await listMessages(sessionId))
@@ -1126,6 +1148,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     setMessages(messages.slice(0, messageIndex))
     setTimeout(() => { send(userMsg.content, lastSkillIdsRef.current) }, 50)
   }, [sessionId, messages, send])
+
+  // 待发队列自动重试：网络恢复后按顺序重发。
+  // 直接复用 send()，保证重发与手动发送走完全相同的链路（权限档位/技能/附件都在 sendOpts 里）。
+  useSendQueue(async (item) => {
+    await send(item.content, undefined, undefined, item.opts as any)
+  })
 
   return {
     messages, 

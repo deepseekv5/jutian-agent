@@ -9,6 +9,7 @@ import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 import { useMetaMap } from '../store/sessionMeta'
 import { filterByTags, tagCloud } from '../../shared/sessionMeta'
+import SessionContextMenu from './SessionContextMenu'
 
 interface Props {
   sessions: Session[]
@@ -146,6 +147,8 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const metaMap = useMetaMap()
   const [activeTags, setActiveTags] = useState<string[]>([])
   const allTags = useMemo(() => tagCloud(Object.values(metaMap)).slice(0, 12), [metaMap])
+  // 右键菜单（v12）：置顶/标签/归档入口
+  const [ctxMenu, setCtxMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
   const [search, setSearch] = useState('')
   const [msgHits, setMsgHits] = useState<SearchHit[]>([])
   const [titleHits, setTitleHits] = useState<{ id: string; title: string }[]>([])
@@ -266,6 +269,12 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     return (
       <div key={session.id}
         onClick={() => onSelect(session.id)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          // 批量管理模式下不弹菜单：此时点击语义是"勾选"
+          if (manageMode) return
+          setCtxMenu({ id: session.id, title, x: e.clientX, y: e.clientY })
+        }}
         onMouseEnter={() => setHoveredId(session.id)}
         onMouseLeave={() => setHoveredId(null)}
         className="group relative flex items-center gap-2 px-2.5 h-9 rounded-lg cursor-pointer transition-colors"
@@ -680,6 +689,17 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           </button>
         </div>
       </div>
+
+      {/* 会话右键菜单（v12）*/}
+      {ctxMenu && (
+        <SessionContextMenu
+          sessionId={ctxMenu.id}
+          title={ctxMenu.title}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </div>
   )
 }
