@@ -140,10 +140,12 @@
 
     if (window.electronAPI) {
       window.electronAPI.onStatus((msg) => { statusEl.textContent = msg })
-      window.electronAPI.onReady(() => {
+      window.electronAPI.onReady((appUrl) => {
         statusEl.textContent = '就绪'
         barEl.style.width = '100%'
-        setTimeout(() => { window.location.href = 'http://localhost:3211' }, 300)
+        // 必须用主进程给的地址：它带本次启动的访问令牌，
+        // 直接跳 localhost:3211 会被服务的 App-only 门卫拦下
+        setTimeout(() => { window.location.href = appUrl || 'http://localhost:3211' }, 300)
       })
       window.electronAPI.onError((msg) => {
         errorMsg.textContent = msg || '服务启动失败'
@@ -151,6 +153,7 @@
         statusEl.textContent = '启动失败'
       })
     } else {
+      // 非 Electron 环境（浏览器直接打开 loading.html）：没有令牌，交给服务端拦截页说明
       setTimeout(() => { window.location.href = 'http://localhost:3211' }, 2500)
     }
   </script>

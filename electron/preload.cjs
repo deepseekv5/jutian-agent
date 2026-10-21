@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('status-update', (_event, msg) => callback(msg))
   },
   onReady: (callback) => {
-    ipcRenderer.on('ready', () => callback())
+    // 回调带上应用地址（含每次启动生成的访问令牌）
+    ipcRenderer.on('ready', (_e, appUrl) => callback(appUrl || ''))
   },
   onError: (callback) => {
     ipcRenderer.on('error', (_event, msg) => callback(msg))

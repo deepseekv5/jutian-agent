@@ -210,6 +210,23 @@ var PERSONA_DISCLAIMER = PERSONA_MOD ? PERSONA_MOD.DISCLAIMER : { disclaimer: []
 // 放在请求 handler 里等于每次请求都重新换取，缓存永不命中
 var qqTokenCache = { key: "", token: "", expiresAt: 0 };
 var PORT = parseInt(process.env.PORT || "3211");
+// ─── 仅限 App 内访问（v12.2）──────────────────────────────────────────────
+// 这个应用本质是"本地网页"，但桌面窗口打开的是 http://localhost:3211，
+// 于是同一台机器上任何浏览器/任何网页都能直接访问它——包括读走 API Key、
+// 调 /api/tools/execute 执行任意命令。
+//
+// 对策：主进程每次启动生成一个随机令牌，注入 APP_UI_TOKEN 环境变量，
+// 并把窗口导航到 http://localhost:3211/?app=<token>。
+// 前端首次带上这个 token 后换成 HttpOnly Cookie 并跳回干净 URL；
+// 没有 token 的浏览器访问（含地址栏手输、其他程序、恶意页面）一律回拦截页。
+//
+// 为什么不用"只绑 127.0.0.1"：那只能挡局域网，挡不住本机浏览器，
+// 而用户要的正是"不要在 App 外面打开"。
+// 为什么还保留 LAN 远程：远程分享走单独配对码门卫，与这条路径互不影响。
+var APP_UI_TOKEN = String(process.env.APP_UI_TOKEN || "");
+// 未注入时（独立跑 node serve.cjs / 测试）不做 App 限制，否则无法调试
+var APP_UI_ONLY = APP_UI_TOKEN.length >= 16;
+var UI_COOKIE = "jt_ui";
 var MAX_OUT = 512 * 1024;
 var DIST = path.join(__dirname, "dist");
 var MIME = {
@@ -360,9 +377,14 @@ var isTrustedOrigin = (origin, host) => {
   var o = String(origin);
   // 注意：`Origin: null` 不可信。sandbox iframe / file:// 页面都能发出这种请求，
   // 足以绕过 CORS 读到密钥，故只放行本机 http(s) 来源。
-  if (/^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(o)) return true;
-  if (/^https?:\/\/localhost(?::\d+)?$/i.test(o)) return true;
-  if (/^https?:\/\/\[::1\](?::\d+)?$/i.test(o)) return true;
+  //
+  // v12.2 收紧：原来 `localhost(?:\d+)?` 放行**任意端口**——用户本机任何
+  // 开发服务器（localhost:3000/8080/…）上跑的页面都能 fetch 到本应用并读走
+  // API Key。现在只认本应用自己的端口（PORT），以及远程配对时与 Host 一致
+  // 的情形（下面两条 host 判断仍保留）。
+  var localRe = new RegExp("^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\]):" + PORT + "$", "i");
+  if (localRe.test(o)) return true;
+  // 无端口写法（http://localhost）只可能指向 80 端口，与 PORT 不同，不再放行
   // 手机远程：页面由本服务经局域网 IP 提供，浏览器 POST 会带
   // Origin: http://<lan-ip>:3211。与 Host 头一致即「同宿主」——恶意页面无法
   // 伪造出与目标 Host 相同的 Origin；DNS-rebinding 由 421（回环 + Host 非本机）兜底。
@@ -2424,7 +2446,29 @@ async function serveStatic(req, res) {
 
     const isHtml = p.endsWith(".html");
     const mime = MIME[path.extname(p)] || "application/octet-stream";
+    // 安全响应头（v12.2）：此前完全没有，应用可被任意网页 iframe 嵌入，
+    // 也能被当成同源页面加载第三方脚本。
+    // frame-ancestors 'none' 是这里最关键的一条——它让"嵌到别人页面里
+    // 点按钮"这类点击劫持在浏览器层直接失效。
+    // 注：应用自身不加载任何外部脚本（前端产物全在 dist/ 内），
+    // 所以 CSP 可以收得比较紧；若将来引入 CDN 需同步放开对应源。
+    const secHeaders = {
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'self'; "
+        + "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "   // CodeMirror/Vite 产物需要 eval
+        + "style-src 'self' 'unsafe-inline'; "
+        + "img-src 'self' data: blob:; "
+        + "font-src 'self' data:; "
+        + "connect-src 'self'; "
+        + "media-src 'self' blob:; "
+        + "frame-ancestors 'none'; "
+        + "base-uri 'none'; "
+        + "form-action 'self'",
+    };
     const head = {
+      ...secHeaders,
       "Content-Type": mime,
       "Cache-Control": isHtml ? "no-cache, no-store, must-revalidate" : "public, max-age=31536000, immutable",
       "Content-Length": ent.size,
@@ -2441,6 +2485,7 @@ async function serveStatic(req, res) {
       }
       if (gz && gz.length < ent.size) {
         res.writeHead(200, {
+          ...secHeaders,
           "Content-Type": mime,
           "Content-Encoding": "gzip",
           "Vary": "Accept-Encoding",
@@ -2667,6 +2712,71 @@ http.createServer(async (req, res) => {
     res.end(JSON.stringify({ error: "跨站请求已拒绝" }));
     return;
   }
+  // ─── 仅限 App 内访问（v12.2）───
+  // 桌面窗口带 token 进来换 Cookie；之后同浏览器内都靠 Cookie。
+  // 没有 Cookie 也没有 token 的请求 = 用户在浏览器里手输地址、或本机其他程序
+  // 在访问 → 返回拦截页，不提供任何 API 与界面。
+  //
+  // 例外（必须放行，否则 App 自己起不来）：
+  //   · /api/health          启动探活
+  //   · LAN 远程路径         由下面的配对码门卫单独负责（__isLocal 为 false 时跳过本段）
+  //   · 带 token 的首次导航   下面合法化后重定向
+  if (APP_UI_ONLY) {
+    const __raUI = String(req.socket.remoteAddress || "");
+    const __fromLoopbackUI = __raUI === "127.0.0.1" || __raUI === "::1" || __raUI === "::ffff:127.0.0.1";
+    if (__fromLoopbackUI && url.pathname !== "/api/health") {
+      const cookies = String(req.headers.cookie || "");
+      const hasCookie = cookies.split(/;\s*/).some((c) => c === `${UI_COOKIE}=${APP_UI_TOKEN}`);
+      // 主通道：Electron 主进程经 webRequest 给每个请求注入 X-App-Token。
+      // 这条路径不依赖任何前端配合，子资源/XHR/重定向全覆盖，最可靠。
+      const headerTok = String(req.headers["x-app-token"] || "");
+      const hasHeader = headerTok.length > 0 && headerTok === APP_UI_TOKEN;
+      const supplied = url.searchParams.get("app") || "";
+      if (hasHeader) {
+        // 头部已证明来自应用窗口，直接放行（不写 Cookie：
+        // 避免本机浏览器里残留一个可被复用的凭据）
+      } else if (supplied && supplied === APP_UI_TOKEN) {
+        // 首次进入：换成 HttpOnly Cookie，并 302 到干净 URL，
+        // 避免 token 留在地址栏/历史记录/截图里
+        const clean = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+        clean.searchParams.delete("app");
+        res.writeHead(302, {
+          "Set-Cookie": `${UI_COOKIE}=${APP_UI_TOKEN}; Path=/; HttpOnly; SameSite=Strict`,
+          Location: clean.pathname + (clean.search || ""),
+        });
+        res.end();
+        return;
+      }
+      if (!hasHeader && !hasCookie) {
+        // 拦截页：明确告诉用户"这是桌面应用，请从 App 打开"，
+        // 不回任何业务数据，也不提供登录入口（本地应用没有账号体系）
+        res.writeHead(403, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        res.end(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>请在应用内打开</title>
+<style>
+:root{color-scheme:light}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f6f4;
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#2c2c33}
+.card{max-width:420px;padding:36px 32px;background:rgba(255,255,255,.72);border:1px solid rgba(0,0,0,.06);
+  border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.06);backdrop-filter:blur(20px);text-align:center}
+h1{margin:0 0 10px;font-size:17px;font-weight:600}
+p{margin:0;color:#8f8f8f;font-size:13px}
+code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px}
+</style></head><body>
+<div class="card">
+  <h1>请从桌面应用打开</h1>
+  <p>巨天agent 是本地桌面应用，界面不对外提供。</p>
+  <p style="margin-top:14px">打开 <code>巨天agent</code> 应用即可使用。</p>
+</div>
+</body></html>`);
+        return;
+      }
+    }
+  }
+
   // DNS-rebinding：攻击者把 evil.com 解析到 127.0.0.1，浏览器带 Host: evil.com 打到这里。
   // 特征是「来源是本机回环，但 Host 却不是本机名」——正常本机访问不会这样。
   // LAN 远程访问（Host 为局域网 IP）由下面的配对码门卫负责，不在此处拦截。
@@ -2846,8 +2956,17 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/tools") return json(res, { tools: Object.keys(TOOLS).map((k) => ({ name: k })) });
     if (url.pathname === "/api/tools/execute" && req.method === "POST") {
       const { name, args = {} } = await body(req);
+      // 工作目录是**全局**状态（影响后续所有请求），不能让任意请求随手改。
+      // 只接受来自本应用窗口的请求（loopback + App 令牌）；LAN 远程即使配对
+      // 成功也不该改桌面端的工作目录。
       const workDirHeader = req.headers["x-work-dir"] || "";
       if (workDirHeader) {
+        const ra = String(req.socket.remoteAddress || "");
+        const fromLoopback = ra === "127.0.0.1" || ra === "::1" || ra === "::ffff:127.0.0.1";
+        const trustedToken = !APP_UI_ONLY || String(req.headers["x-app-token"] || "") === APP_UI_TOKEN;
+        if (!fromLoopback || !trustedToken) {
+          return json(res, { success: false, error: "不允许从远程修改工作目录" }, 403);
+        }
         try { setWorkDir(decodeURIComponent(workDirHeader)); } catch { setWorkDir(workDirHeader); }
       }
       // ─── 安全策略真实强制（设置页实时生效，主对话+集群统一走此入口）───

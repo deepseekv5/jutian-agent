@@ -131,6 +131,15 @@ function ensureEdgeTTS() {
 globalThis.ensureEdgeTTS = ensureEdgeTTS
 
 // Start serve.cjs by requiring it directly (runs in main process, no fork needed)
+// 仅限 App 内访问（v12.2）：每次启动生成随机令牌，
+// serve.cjs 用它校验"请求是否来自本应用窗口"。
+// 放在模块级：startServer 与 loading→app 跳转都要用同一个值。
+const APP_UI_TOKEN = require('crypto').randomBytes(24).toString('hex')
+process.env.APP_UI_TOKEN = APP_UI_TOKEN
+
+// 带令牌的应用地址（loading.html 与任何窗口跳转都必须用它）
+const APP_URL = `http://localhost:3211/?app=${APP_UI_TOKEN}`
+
 async function startServer() {
   const serveJs = path.join(ROOT, 'serve.cjs')
 
@@ -241,7 +250,9 @@ function createWindow() {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const currentURL = mainWindow.webContents.getURL()
     // Only intercept if navigating away from the app (localhost:3211 or file:// loading)
-    if (!url.startsWith('http://localhost:3211') && !url.startsWith('file://')) {
+    // 带令牌的首次导航（?app=…）也算应用内部：它随后会 302 到干净 URL
+    const isAppUrl = url.startsWith('http://localhost:3211') || url.startsWith('file://')
+    if (!isAppUrl) {
       event.preventDefault()
       mainWindow.webContents.send('open-browser-overlay', url)
     }
@@ -435,7 +446,7 @@ async function startAll() {
     if (ready) {
       sendStatus('服务已就绪')
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ready')
+        mainWindow.webContents.send('ready', APP_URL)
       }
     } else {
       throw new Error('服务端口可达但 /api/health 未响应')
@@ -543,7 +554,27 @@ function setupMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// 仅限 App 内访问（v12.2）：给本会话所有发往本服务的请求注入令牌头。
+//
+// 之前试过"窗口导航到 ?app=<token> 换 Cookie"，但 loading.html 依赖 IPC
+// 把地址带过去，时序稍有偏差就整个 App 被自己的门卫拦住（实测窗口显示
+// "请从桌面应用打开"）。改成 webRequest 注入后不再依赖任何前端配合：
+// 主进程在请求层统一加头，子资源/XHR/重定向全都覆盖。
+//
+// 为什么自定义头是安全的：浏览器里跨源的第三方页面无法为请求添加自定义头
+// （会触发 preflight 且被 CORS 拒绝），所以本机其他网页伪造不出这个头。
+function installAppTokenHeader() {
+  const { session } = require('electron')
+  const filter = { urls: [`http://localhost:3211/*`, `http://127.0.0.1:3211/*`] }
+  session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+    callback({
+      requestHeaders: { ...details.requestHeaders, 'X-App-Token': APP_UI_TOKEN },
+    })
+  })
+}
+
 app.whenReady().then(async () => {
+  installAppTokenHeader()
   log('巨天agent 启动中...')
   setupMenu()
   setupIPC()
