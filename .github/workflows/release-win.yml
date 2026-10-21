@@ -86,8 +86,11 @@ jobs:
             && echo "EDGE_TTS_DIR=$RUNNER_TEMP/openai-edge-tts" >> "$GITHUB_ENV" \
             || echo "::warning::edge-tts 克隆失败，本次包不含 TTS 资源"
 
-      - name: 打包 Windows 安装包
-        run: npx electron-builder --win --x64 --config scripts/eb-config.cjs
+      # v12.2 起只要 app.asar（应用内更新用），不再生成 NSIS 安装包：
+      # `--dir` 只产出 win-unpacked（含 app.asar），跳过 NSIS 编译，
+      # 既省 CI 时间，也保证 Release 里不会再出现 exe。
+      - name: 打包（仅产出 app.asar，不打安装包）
+        run: npx electron-builder --win --x64 --dir --config scripts/eb-config.cjs
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -108,14 +111,13 @@ jobs:
       # 用户「只能下载旧的 asar、装不上新版」就是这么来的。
       - name: 列出产物（排障用）
         shell: bash
-        run: ls -la release/*.exe asar-out/*.asar 2>&1 || true
+        run: ls -la asar-out/*.asar 2>&1 || true
 
-      - name: 上传安装包到 Release
+      # v12.2 起只发布 asar 更新包，不再上传 exe 安装包。
+      # 已有用户的更新走 app.asar；新用户由官网/Release 页说明引导。
+      - name: 上传更新包到 Release（仅 asar）
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/*.exe
-            release/*.exe.blockmap
-            release/latest.yml
             asar-out/*.asar
           fail_on_unmatched_files: false
