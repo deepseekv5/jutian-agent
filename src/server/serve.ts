@@ -2753,6 +2753,9 @@ http.createServer(async (req, res) => {
         res.writeHead(403, {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
+          "X-Frame-Options": "DENY",
+          "X-Content-Type-Options": "nosniff",
+          "Referrer-Policy": "no-referrer",
         });
         res.end(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <title>请在应用内打开</title>
