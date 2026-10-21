@@ -116,7 +116,7 @@ jobs:
       # v12.2 起只发布 asar 更新包，不再上传 exe 安装包。
       # 已有用户的更新走 app.asar；新用户由官网/Release 页说明引导。
       - name: 上传更新包到 Release（仅 asar）
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             asar-out/*.asar
