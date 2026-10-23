@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Session } from '../types'
+import { isFestival } from '../../shared/festival1024'
 
 interface CmdItem {
   id: string
@@ -62,6 +63,14 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
       icon: 'M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
       run: () => { onSelectSession(s.id); onClose() },
     }))
+    // 1024 彩蛋（v12.3）：节日窗口内，输入 1024 才能命中，平时不出现在列表
+    if (isFestival() && q.trim() === '1024') {
+      cmds.unshift({
+        id: 'egg1024', label: '1024 · 程序员节彩蛋', hint: '点开看看',
+        icon: 'M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z',
+        run: () => { window.dispatchEvent(new CustomEvent('open-festival-egg')); onClose() },
+      })
+    }
     const all = [...cmds, ...chatCmds]
     const query = q.trim().toLowerCase()
     if (!query) return [...cmds, ...chatCmds.slice(0, 6)]

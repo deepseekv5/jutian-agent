@@ -53,6 +53,7 @@ const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import { isMac as platformIsMac } from '../utils/platform';
 import AnnouncementBanner from './AnnouncementBanner';
+import FestivalEgg from './FestivalEgg';
 import { fetchCompat } from '../api'
 
 /** 标签页加载态：内容区骨架，避免切换时的空白闪烁 */
@@ -207,6 +208,14 @@ function MainApp() {
     window.addEventListener('open-harness', h)
     return () => { window.removeEventListener('open-skills-market', h); window.removeEventListener('open-harness', h) }
   }, [openTab])
+
+  // v12.3：1024 彩蛋（输入框 /1024 或命令面板触发）
+  const [festivalEgg, setFestivalEgg] = useState(false)
+  useEffect(() => {
+    const h = () => setFestivalEgg(true)
+    window.addEventListener('open-festival-egg', h)
+    return () => window.removeEventListener('open-festival-egg', h)
+  }, [])
 
   // v12.1：输入框的 /导出 、/用量 等命令 → 打开对应面板标签
   useEffect(() => {
@@ -574,6 +583,8 @@ function MainApp() {
       {/* 内测欢迎页（每次启动） */}
       {!splashDone && <WelcomeSplash />}
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
+
+      {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}
 
       {/* jtcode CLI 安装邀请 */}
       {cliPrompt && <CliInstallModal onClose={() => setCliPrompt(false)} />}

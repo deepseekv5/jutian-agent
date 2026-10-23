@@ -2,6 +2,9 @@ import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
 import { BUILTIN_TOOLS } from '../types'
+import { useState } from 'react'
+import { festivalBanner, nextTapCount } from '../../shared/festival1024'
+import FestivalEgg from './FestivalEgg'
 
 // 工具数从 schema 派生：新增工具时这里不用跟着改
 // （此前硬编码 "39 个工具"，加工具就得记得改文案，必然漂移）
@@ -68,9 +71,43 @@ export default function NewTabPage({ onPick }: Props) {
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const byType = new Map(CARDS.map(k => [k.type, k]))
+  // 1024 彩蛋（v12.3）：连点徽章 3 次触发；平时完全不出现
+  const [eggOpen, setEggOpen] = useState(false)
+  const [tap, setTap] = useState({ count: 0, lastAt: 0 })
+  const banner = festivalBanner()
+  const onBadgeTap = () => {
+    const r = nextTapCount(tap)
+    setTap({ count: r.count, lastAt: r.lastAt })
+    if (r.fired) { setEggOpen(true); setTap({ count: 0, lastAt: 0 }) }
+  }
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin glass">
       <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* 1024 横幅：10-24 当天连点三次开彩蛋；临近 7 天可直接预览 */}
+        {banner && (
+          <button onClick={banner.active ? onBadgeTap : () => setEggOpen(true)}
+            className="w-full mb-5 flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
+            style={{
+              background: banner.active ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.42)',
+              border: `1px solid ${banner.active ? 'rgba(0,0,0,.08)' : 'rgba(0,0,0,.05)'}`,
+              backdropFilter: 'blur(16px)',
+              cursor: banner.active ? 'pointer' : 'default',
+            }}>
+            <span className="text-[19px] font-bold tabular-nums shrink-0"
+              style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
+              {banner.active ? '1024' : `${1024}`}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12.5px] font-medium" style={{ color: c.textHead }}>{banner.title}</span>
+              <span className="block text-[10.5px] mt-0.5" style={{ color: c.textTertiary }}>{banner.subtitle}</span>
+            </span>
+            {banner.active && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.textTertiary} strokeWidth={1.8} strokeLinecap="round" className="shrink-0">
+                <path d="M9 5l7 7-7 7" />
+              </svg>
+            )}
+          </button>
+        )}
         {/* 定位语 hero */}
         <div className="mb-6">
           <h1 className="text-[22px] font-semibold tracking-tight" style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
@@ -145,6 +182,7 @@ export default function NewTabPage({ onPick }: Props) {
           </div>
         ))}
       </div>
+      {eggOpen && <FestivalEgg onClose={() => setEggOpen(false)} />}
     </div>
   )
 }

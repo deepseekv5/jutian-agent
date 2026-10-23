@@ -19,6 +19,7 @@ import { loadSnippets } from '../store/snippets'
 import { pasteDisposition, pastedFileName, dedupeAttachments, exceedsSizeLimit } from '../../shared/attachments'
 import { readDraft, saveDraft, dropDraft } from '../store/drafts'
 import { inputStats } from '../../shared/drafts'
+import { isFestival } from '../../shared/festival1024'
 import { fetchCompat } from '../api'
 
 interface InstalledSkill { name: string; display_name?: string; description?: string; version?: string }
@@ -103,6 +104,8 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { cmd: '用量', label: '用量与成本', hint: 'Token 趋势 / 花费', key: 'usage' },
   { cmd: '诊断', label: '环境自检', hint: '一键检查并复制报告', key: 'diagnostics' },
   { cmd: '备份', label: '数据备份', hint: '导出/导入', key: 'backup' },
+  // 1024 彩蛋（v12.3）：只在节日窗口出现，平时搜不到
+  ...(isFestival() ? [{ cmd: '1024', label: '1024 彩蛋', hint: '程序员节快乐', key: 'egg1024' }] : []),
 ]
 
 const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false }
@@ -528,6 +531,12 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   useEffect(() => { setSlashIdx(0) }, [slashQuery])
   const applySlash = (sc: SlashCmd) => {
     // v12.1：面板类命令直接派发事件打开对应标签页（不经过模型）
+    if (sc.key === 'egg1024') {
+      window.dispatchEvent(new CustomEvent('open-festival-egg'))
+      setValue('')
+      setSlashIdx(0)
+      return
+    }
     if (['export', 'templates', 'snippets', 'usage', 'diagnostics', 'backup'].includes(sc.key)) {
       window.dispatchEvent(new CustomEvent('open-panel', { detail: sc.key }))
       setValue('')

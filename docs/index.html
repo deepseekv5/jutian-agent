@@ -32,6 +32,7 @@
       <a class="nav__link" href="index.html">首页</a>
       <a class="nav__link" href="highlights.html">亮点</a>
       <a class="nav__link" href="features.html">特性</a>
+      <a class="nav__link" href="activity-1024.html" data-f1024-link hidden>1024 活动</a>
       <a class="nav__link" href="scenarios.html">场景</a>
       <a class="nav__link" href="about.html">关于</a>
       
@@ -396,6 +397,7 @@
         <ul>
           <li><a href="highlights.html">核心亮点</a></li>
           <li><a href="features.html">特性与参数</a></li>
+          <li><a href="activity-1024.html">1024 程序员节</a></li>
           <li><a href="scenarios.html">使用场景</a></li>
           <li><a href="#download">下载</a></li>
         </ul>
@@ -431,5 +433,15 @@
 <script src="assets/js/scroll.js" defer></script>
 <script src="assets/js/interactions.js" defer></script>
 <script src="assets/js/app.js" defer></script>
+<script>
+// 1024 活动入口：只在节日窗口内显示（10-24 当天 + 10-25 凌晨 2 点前），
+// 过完节自动隐藏，避免导航里常年挂着一个过期活动。
+(function () {
+  var now = new Date(), m = now.getMonth() + 1, d = now.getDate(), h = now.getHours();
+  var on = (m === 10 && d === 24) || (m === 10 && d === 25 && h < 2);
+  if (!on) return;
+  document.querySelectorAll('[data-f1024-link]').forEach(function (el) { el.hidden = false; });
+})();
+</script>
 </body>
 </html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>1024 程序员节 · 巨天agent</title>
+<meta name="description" content="1024 程序员节：巨天agent 一年一次的活动页——免费模型、工具清单、以及藏在应用里的彩蛋。">
+<meta name="theme-color" content="#f7f6f4">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/layout.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<link rel="stylesheet" href="assets/css/motion.css">
+<link rel="stylesheet" href="assets/css/pages.css">
+<style>
+/* 1024 活动页专用：只做这一页需要的，不污染全站 token */
+.f1024 { padding: 72px 0 96px; }
+.f1024__hero { text-align: center; max-width: 720px; margin: 0 auto 56px; }
+.f1024__num {
+  font-size: clamp(72px, 16vw, 148px);
+  font-weight: 800;
+  line-height: .92;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #1a1a1f 0%, #6b6b76 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 8px;
+}
+.f1024__sub { font-size: 15px; color: var(--text-secondary); letter-spacing: .14em; text-transform: uppercase; font-family: var(--font-mono); }
+.f1024__lead { margin: 22px auto 0; font-size: 17px; line-height: 1.75; color: var(--text-secondary); max-width: 560px; }
+
+.f1024__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 16px; margin-top: 8px; }
+.f1024__card {
+  padding: 26px 24px; border-radius: 20px;
+  background: rgba(255,255,255,.62);
+  border: 1px solid rgba(0,0,0,.055);
+  backdrop-filter: blur(20px) saturate(1.4);
+  transition: transform .35s cubic-bezier(.22,.61,.36,1), box-shadow .35s, border-color .35s;
+}
+.f1024__card:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(0,0,0,.07); border-color: rgba(0,0,0,.1); }
+.f1024__card h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.f1024__card p { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); }
+.f1024__tag {
+  display: inline-block; margin-bottom: 14px; padding: 3px 9px; border-radius: 999px;
+  font-size: 10.5px; font-family: var(--font-mono); letter-spacing: .06em;
+  background: rgba(0,0,0,.045); color: var(--text-tertiary);
+}
+
+.f1024__egg {
+  margin-top: 56px; padding: 32px; border-radius: 24px; text-align: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.5));
+  border: 1px solid rgba(0,0,0,.06);
+  backdrop-filter: blur(24px);
+}
+.f1024__egg h2 { margin: 0 0 10px; font-size: 19px; font-weight: 600; }
+.f1024__egg p { margin: 0 auto; max-width: 480px; font-size: 13.5px; line-height: 1.75; color: var(--text-secondary); }
+.f1024__code {
+  display: inline-block; margin-top: 18px; padding: 12px 20px; border-radius: 12px;
+  font-family: var(--font-mono); font-size: 13px; letter-spacing: .04em;
+  background: rgba(0,0,0,.045); color: var(--text-head);
+  user-select: all;
+}
+.f1024__hint { margin-top: 12px; font-size: 11.5px; color: var(--text-tertiary); }
+
+.f1024__count { display: flex; justify-content: center; gap: 28px; margin: 44px 0 0; flex-wrap: wrap; }
+.f1024__stat { text-align: center; }
+.f1024__stat b { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.f1024__stat span { font-size: 11.5px; color: var(--text-tertiary); }
+
+@media (max-width: 640px) {
+  .f1024 { padding: 44px 0 64px; }
+  .f1024__egg { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主内容</a>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="巨天agent 首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+      </span>
+      巨天agent
+    </a>
+    <nav class="nav__links" aria-label="主导航">
+      <a href="index.html#features">功能</a>
+      <a href="activity-1024.html" aria-current="page">1024</a>
+      <a href="legal.html">协议</a>
+      <a class="btn btn--sm" href="index.html#download">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="f1024 container">
+    <div class="f1024__hero">
+      <div class="f1024__num">1024</div>
+      <div class="f1024__sub">0x400 · 2¹⁰ · Programmer's Day</div>
+      <p class="f1024__lead">
+        一年里只有这一天，写代码的人可以名正言顺地为自己庆祝。<br>
+        不搞抽奖、不搞裂变、不搞限时折扣——就把工具摊开给你看。
+      </p>
+      <div class="f1024__count">
+        <div class="f1024__stat"><b>50</b><span>内置工具</span></div>
+        <div class="f1024__stat"><b>26</b><span>免费模型档</span></div>
+        <div class="f1024__stat"><b>0</b><span>数据上传</span></div>
+        <div class="f1024__stat"><b>MIT</b><span>开源协议</span></div>
+      </div>
+    </div>
+
+    <div class="f1024__grid">
+      <article class="f1024__card">
+        <span class="f1024__tag">01 / LOCAL</span>
+        <h3>数据不出本机</h3>
+        <p>对话、文件、记忆全部存在你自己的 SQLite 里。没有账号体系，没有云端同步，卸载即清空——这是设计，不是妥协。</p>
+      </article>
+      <article class="f1024__card">
+        <span class="f1024__tag">02 / TOOLS</span>
+        <h3>50 个工具直连真实系统</h3>
+        <p>读文件、跑命令、改代码、查端口、打包 zip、读写剪贴板。它不是"告诉你怎么做"，是自己动手做。</p>
+      </article>
+      <article class="f1024__card">
+        <span class="f1024__tag">03 / FREE</span>
+        <h3>零配置用免费模型</h3>
+        <p>不填 API Key 也能开始：内置免费模型通道，开箱即聊。想用更强的模型随时切换。</p>
+      </article>
+      <article class="f1024__card">
+        <span class="f1024__tag">04 / SAFE</span>
+        <h3>危险操作会先问你</h3>
+        <p>删除、覆盖、高危命令走代码层闸门，不靠模型自觉。改前必读、改后必验写进了工作铁律。</p>
+      </article>
+      <article class="f1024__card">
+        <span class="f1024__tag">05 / CODE</span>
+        <h3>编程工作台</h3>
+        <p>文件树、编辑器、终端、diff 预览一体。AI 改了什么，你能逐行看清楚再决定留不留。</p>
+      </article>
+      <article class="f1024__card">
+        <span class="f1024__tag">06 / OPEN</span>
+        <h3>开源可审计</h3>
+        <p>MIT 协议，代码全在 GitHub。它说要保护你的隐私——你可以自己去看是不是真的。</p>
+      </article>
+    </div>
+
+    <div class="f1024__egg">
+      <h2>还有个小东西</h2>
+      <p>我们在应用里藏了一个彩蛋，只有今天能看到。它不会自己弹出来，也不会打扰你。</p>
+      <div class="f1024__code">/1024</div>
+      <div class="f1024__hint">在应用内的输入框里发送这个命令，或者在主页连点 1024 徽章三次</div>
+    </div>
+
+    <div style="text-align:center;margin-top:44px">
+      <a class="btn" href="index.html#download" data-magnetic="0.2">下载巨天agent</a>
+      <a class="btn btn--ghost" href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener" style="margin-left:10px">看源码</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer dark">
+  <div class="container">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
+          </span>
+          巨天agent
+        </a>
+        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">1024 程序员节 · 一年一次的活动页</p>
+      </div>
+      <div class="footer__col">
+        <h4>产品</h4>
+        <ul>
+          <li><a href="index.html">首页</a></li>
+          <li><a href="index.html#features">功能</a></li>
+          <li><a href="index.html#download">下载</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>资源</h4>
+        <ul>
+          <li><a href="legal.html">用户协议与隐私政策</a></li>
+          <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/js/scroll.js" defer></script>
+<script src="assets/js/interactions.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+</body>
+</html>
