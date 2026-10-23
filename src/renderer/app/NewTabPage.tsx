@@ -5,6 +5,7 @@ import { BUILTIN_TOOLS } from '../types'
 import { useState } from 'react'
 import { festivalBanner, nextTapCount } from '../../shared/festival1024'
 import FestivalEgg from './FestivalEgg'
+import FestivalHome from './FestivalHome'
 
 // 工具数从 schema 派生：新增工具时这里不用跟着改
 // （此前硬编码 "39 个工具"，加工具就得记得改文案，必然漂移）
@@ -71,6 +72,8 @@ export default function NewTabPage({ onPick }: Props) {
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const byType = new Map(CARDS.map(k => [k.type, k]))
+  // 1024 节日主页（v12.3.1）：节日窗口内整页换肤，平时走原版
+  const festivalNow = true   // 用户要求：1024 主页常驻显示，不做日期限定
   // 1024 彩蛋（v12.3）：连点徽章 3 次触发；平时完全不出现
   const [eggOpen, setEggOpen] = useState(false)
   const [tap, setTap] = useState({ count: 0, lastAt: 0 })
@@ -80,6 +83,9 @@ export default function NewTabPage({ onPick }: Props) {
     setTap({ count: r.count, lastAt: r.lastAt })
     if (r.fired) { setEggOpen(true); setTap({ count: 0, lastAt: 0 }) }
   }
+  // 节日整页（hooks 已全部执行完，这里分流是安全的）
+  if (festivalNow) return <FestivalHome onPick={onPick} />
+
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin glass">
       <div className="max-w-4xl mx-auto px-6 py-8">

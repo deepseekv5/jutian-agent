@@ -57,6 +57,7 @@ function NoticeBody({ text }: { text: string }) {
 export default function AnnouncementBanner() {
   const { c } = useTheme()
   const [ann, setAnn] = useState<Announcement | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     let dead = false
@@ -73,23 +74,44 @@ export default function AnnouncementBanner() {
 
   if (!ann) return null
   const s = LEVEL_STYLE[ann.level]
+  const hasBody = !!ann.body.trim()
 
+  // 折叠态只占一行（约 32px）：公告是"告知"，不该长期占据主操作区。
+  // 点击标题行展开全文，再点收起——展开状态不持久化，每次进来都是收起态。
   return (
-    <div className="relative flex items-start gap-3 px-4 py-2.5 border-b" style={{ background: s.bg, borderColor: c.borderLight }}>
-      <span className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: s.bar }} />
-      <svg className="mt-0.5 shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={s.bar} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d={s.icon} />
-      </svg>
-      <div className="min-w-0 flex-1 text-[12.5px]" style={{ color: c.textHead }}>
-        <div className="font-bold">{ann.title}{ann.date && <span className="ml-2 font-normal opacity-50 text-[11px]">{ann.date}</span>}</div>
-        {ann.body && <div className="mt-1 text-[12px] opacity-90" style={{ color: c.textTertiary }}><NoticeBody text={ann.body} /></div>}
+    <div className="border-b" style={{ background: s.bg, borderColor: c.borderLight }}>
+      <div className="flex items-center gap-2 px-4 h-8 cursor-pointer select-none"
+        onClick={() => hasBody && setExpanded(v => !v)}
+        role={hasBody ? 'button' : undefined}
+        aria-expanded={hasBody ? expanded : undefined}
+        title={hasBody ? (expanded ? '收起' : '展开公告') : undefined}>
+        <span className="w-[3px] h-3 rounded-full shrink-0" style={{ background: s.bar }} />
+        <svg className="shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={s.bar} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d={s.icon} />
+        </svg>
+        <span className="text-[11.5px] font-medium truncate min-w-0 flex-1" style={{ color: c.textHead }}>{ann.title}</span>
+        {ann.date && <span className="text-[10px] shrink-0" style={{ color: c.textTertiary }}>{ann.date}</span>}
+        {hasBody && (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={c.textTertiary} strokeWidth={2.2}
+            strokeLinecap="round" strokeLinejoin="round" className="shrink-0 transition-transform"
+            style={{ transform: expanded ? 'rotate(180deg)' : 'none' }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); dismiss(ann.id); setAnn(null) }}
+          className="shrink-0 w-5 h-5 rounded grid place-items-center transition-colors"
+          style={{ color: c.textTertiary }} aria-label="关闭公告"
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,.06)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+        </button>
       </div>
-      <button
-        onClick={() => { dismiss(ann.id); setAnn(null) }}
-        className="shrink-0 w-6 h-6 rounded-md grid place-items-center transition-colors hover:bg-black/5"
-        style={{ color: c.textTertiary }} aria-label="关闭公告">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-      </button>
+      {expanded && hasBody && (
+        <div className="px-4 pb-3 pl-[26px] text-[11.5px] leading-[1.7]" style={{ color: c.textSecondary || c.textTertiary }}>
+          <NoticeBody text={ann.body} />
+        </div>
+      )}
     </div>
   )
 }

@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Session } from '../types'
-import { isFestival } from '../../shared/festival1024'
 
 interface CmdItem {
   id: string
@@ -64,7 +63,7 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
       run: () => { onSelectSession(s.id); onClose() },
     }))
     // 1024 彩蛋（v12.3）：节日窗口内，输入 1024 才能命中，平时不出现在列表
-    if (isFestival() && q.trim() === '1024') {
+    if (q.trim() === '1024') {
       cmds.unshift({
         id: 'egg1024', label: '1024 · 程序员节彩蛋', hint: '点开看看',
         icon: 'M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z',

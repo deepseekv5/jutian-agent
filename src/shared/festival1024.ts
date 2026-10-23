@@ -20,6 +20,13 @@ const GRACE_HOURS = 2
 
 /** 是否处于 1024 节日窗口 */
 export function isFestival(now = new Date()): boolean {
+  // 预览开关：?f1024=1 或 localStorage.jt_f1024_preview=1
+  // 只给开发/验收用——让非节日期间也能看节日主页效果，
+  // 不影响真实判定（默认关闭，用户不会误触）。
+  try {
+    if (typeof location !== 'undefined' && /[?&]f1024=1\b/.test(location.search)) return true
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('jt_f1024_preview') === '1') return true
+  } catch { /* ignore */ }
   const m = now.getMonth() + 1
   const d = now.getDate()
   if (m === FESTIVAL_MONTH && d === FESTIVAL_DAY) return true
