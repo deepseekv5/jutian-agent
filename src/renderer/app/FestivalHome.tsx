@@ -46,20 +46,24 @@ function BinaryRain({ opacity = 0.13 }: { opacity?: number }) {
     }
 
     const draw = () => {
-      const w = cv.clientWidth || 800
-      const h = cv.clientHeight || 600
-      ctx.clearRect(0, 0, w, h)
+      // 页面不可见（切到其他标签/最小化）时跳过绘制但保留 rAF 循环，
+      // 回到前台自动恢复——背景动画不值得在后台烧 GPU
+      if (!document.hidden) {
+        const w = cv.clientWidth || 800
+        const h = cv.clientHeight || 600
+        ctx.clearRect(0, 0, w, h)
       ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
-      for (const c of cols) {
-        c.y += c.speed
-        if (c.y > h + 140) { c.y = -140; c.speed = 0.35 + Math.random() * 0.9 }
-        for (let i = 0; i < c.chars.length; i++) {
-          const y = c.y - i * 14
-          if (y < -14 || y > h + 14) continue
-          // 越靠上越淡：形成拖尾
-          const a = opacity * (1 - i / c.chars.length)
-          ctx.fillStyle = `rgba(180,130,20,${a.toFixed(3)})`
-          ctx.fillText(c.chars[i], c.x, y)
+        for (const c of cols) {
+          c.y += c.speed
+          if (c.y > h + 140) { c.y = -140; c.speed = 0.35 + Math.random() * 0.9 }
+          for (let i = 0; i < c.chars.length; i++) {
+            const y = c.y - i * 14
+            if (y < -14 || y > h + 14) continue
+            // 越靠上越淡：形成拖尾
+            const a = opacity * (1 - i / c.chars.length)
+            ctx.fillStyle = `rgba(180,130,20,${a.toFixed(3)})`
+            ctx.fillText(c.chars[i], c.x, y)
+          }
         }
       }
       raf = requestAnimationFrame(draw)

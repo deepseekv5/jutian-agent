@@ -2537,11 +2537,27 @@ function loadLocalApiConfig() {
     if (!sharedDb) return;
     const rows = db.getAllSettings();
     const get = (k) => { const r = rows.find((x) => x.key === k); return r ? String(r.value) : ""; };
+    // v12.4：本地 API 默认开启。
+    // 之前默认关闭 + 必须手动生成 Key 才真正监听，结果是"看起来有这功能，
+    // 实际从未启动过"（用户反馈：api 访问压根没有启动）。改成：
+    //   · 首次启动（设置里从未写过 local_api_enabled）→ 默认开启
+    //   · Key 不存在 → 自动生成本机 Key 并落库（局域网 Key 仍需手动，默认不对外）
+    const rawEnabled = get("local_api_enabled");
+    const firstBoot = rawEnabled === "";
+    const enabled = firstBoot ? true : rawEnabled === "1";
+    let key = get("local_api_key");
+    if (!key) {
+      key = "ly-" + crypto.randomBytes(32).toString("hex");
+      try { db.setSetting("local_api_key", key); } catch {}
+    }
+    if (firstBoot) {
+      try { db.setSetting("local_api_enabled", "1"); } catch {}
+    }
     localApiConfig = {
-      enabled: get("local_api_enabled") === "1",
+      enabled,
       port: Number(get("local_api_port")) || 18080,
       scope: get("local_api_scope") === "lan" ? "lan" : "local",
-      key: get("local_api_key"),
+      key,
       lanKey: get("local_api_lankey"),
     };
   } catch (e) { console.error("读取本地 API 配置失败:", e.message); }
@@ -2725,6 +2741,16 @@ http.createServer(async (req, res) => {
     const __raUI = String(req.socket.remoteAddress || "");
     const __fromLoopbackUI = __raUI === "127.0.0.1" || __raUI === "::1" || __raUI === "::ffff:127.0.0.1";
     if (__fromLoopbackUI && url.pathname !== "/api/health") {
+      // 保底通道（v12.4）：Electron 自身的 UA 必须放行。
+      // webRequest 注入头在个别机器/时序下可能未生效，一旦失效窗口就会被
+      // 自己的门卫拦住 = 「应用无法启动」（用户在其他电脑上实测踩过）。
+      // 浏览器里的恶意页面无法伪造 User-Agent（fetch 禁改头部），
+      // 所以这条路只放行真正的桌面窗口，不放开外部浏览器。
+      const ua = String(req.headers["user-agent"] || "");
+      const isElectronUA = /Electron\/\d+/.test(ua);
+      if (isElectronUA) {
+        // 放行，继续后续处理（不写 Cookie，不重定向）
+      } else {
       const cookies = String(req.headers.cookie || "");
       const hasCookie = cookies.split(/;\s*/).some((c) => c === `${UI_COOKIE}=${APP_UI_TOKEN}`);
       // 主通道：Electron 主进程经 webRequest 给每个请求注入 X-App-Token。
@@ -2777,6 +2803,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
 </body></html>`);
         return;
       }
+      } // ← 非 Electron UA 的校验结束（保底通道见上方注释）
     }
   }
 

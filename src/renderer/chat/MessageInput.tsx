@@ -405,6 +405,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [])
 
   // ─── 拖拽入图：整个 composer 是拖放区 ───
+  // 免费模型离线兜底：与 src/shared/opencodeZen.ts 的 ZEN_FREE_MODELS 保持一致，
+  // 再加 Pollinations 的 keyless 档。拉不到在线清单时选择器也不能空着。
+  const FREE_FALLBACK = [
+    'big-pickle', 'mimo-v2.6-flash-free', 'nemotron-3.5-lightning-free',
+    'step-5-preview-free', 'longcat-2.5-preview-free', 'space-bunny-free', 'openai-fast',
+  ]
+
   // ─── 模型下拉：显示当前供应商的全部模型，打开时实时拉取 ───
   // 之前只读 settings.models（静态存的一份，来自设置页那一次拉取），
   // 换供应商或上游新增模型后这里不会更新。改为每次展开下拉就重新拉，
@@ -412,6 +419,20 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const [liveModels, setLiveModels] = useState<string[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsErr, setModelsErr] = useState('')
+  // 免费模型（v12.4）：不配置任何供应商也能选——默认就显示全部免费档。
+  // 从 /api/free-models 取（服务端有缓存），失败退回内置离线清单。
+  const [freeModels, setFreeModels] = useState<string[]>(FREE_FALLBACK)
+  useEffect(() => {
+    let dead = false
+    fetchCompat('/api/free-models').then(r => r.json()).then(d => {
+      if (dead || !d?.ok) return
+      const ids: string[] = (d.sources || []).flatMap((s: any) => (s.models || [])
+        .filter((m: any) => !m.unavailable).map((m: any) => String(m.id)))
+      const uniq = [...new Set(ids)].filter(Boolean)
+      if (uniq.length) setFreeModels(uniq)
+    }).catch(() => { /* 离线兜底已在初始值 */ })
+    return () => { dead = true }
+  }, [])
   const fetchLiveModels = useCallback(async () => {
     const base = settings?.apiBaseUrl || ''
     if (!base) return
@@ -1445,7 +1466,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
             {/* 模型：常驻下拉（对应参考 UI 的 "gpt-5.6-sol ▾" 芯片） */}
             {(() => {
-              const modelChoices = [...new Set([...liveModels, ...((settings as any)?.models || []), settings?.model].filter(Boolean))] as string[]
+              // 免费模型置顶（默认可选），用户自定义与上游清单跟在后面
+              const mineSet = [...new Set([...liveModels, ...((settings as any)?.models || []), settings?.model].filter(Boolean))] as string[]
+              const mine = mineSet.filter(m => !freeModels.includes(m))
+              const freeHit = freeModels.filter(m => mineSet.includes(m) || true)
+              const modelChoices = mineSet.length ? mineSet : freeHit
               const cur = currentModel || settings?.model || ''
               if (modelChoices.length === 0) {
                 return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title={modelsErr || '未配置模型（设置 → 推理）'}>{modelsLoading ? '拉取中…' : (cur || '未配置模型')}</span>
@@ -1460,7 +1485,14 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                     onChange={e => onModelChange?.(e.target.value)} aria-label="切换模型"
                     className="bg-transparent outline-none cursor-pointer text-[12px] font-mono appearance-none max-w-[150px] truncate"
                     style={{ color: c.textSecondary }}>
-                    {modelChoices.map(m => <option key={m} value={m}>{m}</option>)}
+                    <optgroup label="免费模型（免 key）">
+                      {freeModels.map(m => <option key={'f_'+m} value={m}>{m}</option>)}
+                    </optgroup>
+                    {mine.length > 0 && (
+                      <optgroup label="我的模型">
+                        {mine.map(m => <option key={m} value={m}>{m}</option>)}
+                      </optgroup>
+                    )}
                   </select>
                   <svg className="w-3 h-3 opacity-60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} style={{ color: c.textTertiary }}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />

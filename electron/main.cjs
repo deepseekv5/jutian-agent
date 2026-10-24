@@ -564,13 +564,23 @@ function setupMenu() {
 // 为什么自定义头是安全的：浏览器里跨源的第三方页面无法为请求添加自定义头
 // （会触发 preflight 且被 CORS 拒绝），所以本机其他网页伪造不出这个头。
 function installAppTokenHeader() {
-  const { session } = require('electron')
-  const filter = { urls: [`http://localhost:3211/*`, `http://127.0.0.1:3211/*`] }
-  session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-    callback({
-      requestHeaders: { ...details.requestHeaders, 'X-App-Token': APP_UI_TOKEN },
+  // 必须永不抛异常：它在 whenReady 最前面调用，一旦抛出整个启动流程中断
+  // （= 用户看到"无法启动"）。注入失败没关系——服务端有 Electron UA 保底通道。
+  try {
+    const { session } = require('electron')
+    const filter = { urls: [`http://localhost:3211/*`, `http://127.0.0.1:3211/*`] }
+    session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+      try {
+        callback({
+          requestHeaders: { ...details.requestHeaders, 'X-App-Token': APP_UI_TOKEN },
+        })
+      } catch (e) {
+        try { callback({ requestHeaders: details.requestHeaders }) } catch {}
+      }
     })
-  })
+  } catch (e) {
+    log(`App token header injection unavailable (UA fallback will cover): ${e.message}`)
+  }
 }
 
 app.whenReady().then(async () => {
