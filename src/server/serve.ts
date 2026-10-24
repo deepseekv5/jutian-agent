@@ -2543,15 +2543,21 @@ function loadLocalApiConfig() {
     //   · 首次启动（设置里从未写过 local_api_enabled）→ 默认开启
     //   · Key 不存在 → 自动生成本机 Key 并落库（局域网 Key 仍需手动，默认不对外）
     const rawEnabled = get("local_api_enabled");
-    const firstBoot = rawEnabled === "";
-    const enabled = firstBoot ? true : rawEnabled === "1";
+    // 一次性迁移：v12.4 之前本地 API 因 want=enabled&&key 的门闩从未真正
+    // 监听过，那个年代落库的 "0" 不是用户的明确选择（功能坏了关它没有意义）。
+    // 用 local_api_migrated 标记保证只迁一次——之后用户手动关就尊重。
+    let enabled = rawEnabled === "1";
+    if (!get("local_api_migrated")) {
+      enabled = true;
+      try {
+        db.setSetting("local_api_enabled", "1");
+        db.setSetting("local_api_migrated", "1");
+      } catch {}
+    }
     let key = get("local_api_key");
     if (!key) {
       key = "ly-" + crypto.randomBytes(32).toString("hex");
       try { db.setSetting("local_api_key", key); } catch {}
-    }
-    if (firstBoot) {
-      try { db.setSetting("local_api_enabled", "1"); } catch {}
     }
     localApiConfig = {
       enabled,
@@ -2617,6 +2623,12 @@ async function localApiHandler(req, res) {
         headers: {
           "Content-Type": "application/json",
           "X-Target-Base": String((db.getSetting ? db.getSetting("apiBaseUrl") : "") || ""),
+          // v12.4.1：内部转发必须显式带令牌。Electron 主进程的 fetch 走
+          // Chromium 网络栈，会带浏览器指纹头（Sec-Fetch-*），按"浏览器"被
+          // 自己的门卫拦成 403——设置里的本地 API /v1/chat/completions
+          // 因此整条挂掉（用户实测）。同进程就有 APP_UI_TOKEN，直接带上，
+          // 门卫的 hasHeader 通道确定性放行，不再依赖任何指纹推断。
+          ...(APP_UI_TOKEN ? { "X-App-Token": APP_UI_TOKEN } : {}),
           // 故意不传 X-Api-Key：GET /api/settings 回显的是掩码(sk-H****)，
           // 拿它当钥匙会被上游 401。llm-proxy 在头缺失或为掩码时会自己
           // 从库里取真钥匙——密钥不出本机，这里交给它处理。
@@ -2773,7 +2785,25 @@ http.createServer(async (req, res) => {
         res.end();
         return;
       }
-      if (!hasHeader && !hasCookie) {
+      // v12.4.1 修正：门卫只拦**浏览器**，不能把本机程序一起拦了。
+      // jtcode CLI / 用户脚本 / curl 用普通 HTTP 客户端访问 /api/*，
+      // 上一版全被 403（用户实测："开放的 api 也无法访问"）。
+      //
+      // 浏览器判据要避开 Node fetch 的坑：undici 默认发
+      // `sec-fetch-mode: cors`（实测），按"有无 sec-fetch-mode"判断会把
+      // 一切 Node 程序误判成浏览器。改用两个真浏览器独有的信号：
+      //   · sec-fetch-site 有值（cross-site / same-site / same-origin）
+      //     ——只有 Chromium 系浏览器网络栈会加；undici 不发它（实测）
+      //   · sec-fetch-mode: navigate ——浏览器地址栏/链接跳转
+      // 对照表（实测）：
+      //   恶意网页跨站 fetch      → site: cross-site        → 拦 ✓
+      //   浏览器地址栏直开        → mode: navigate          → 拦 ✓
+      //   Node fetch / jtcode CLI → mode: cors，无 site     → 放行 ✓
+      //   curl                    → 无 Sec-Fetch-*          → 放行 ✓
+      const __sfSite = String(req.headers["sec-fetch-site"] || "");
+      const __sfMode = String(req.headers["sec-fetch-mode"] || "");
+      const __isBrowserLike = !!__sfSite || __sfMode === "navigate";
+      if (!hasHeader && !hasCookie && __isBrowserLike) {
         // 拦截页：明确告诉用户"这是桌面应用，请从 App 打开"，
         // 不回任何业务数据，也不提供登录入口（本地应用没有账号体系）
         res.writeHead(403, {
