@@ -1,0 +1,79 @@
+# 安卓 APK 构建（GitHub Actions）
+#
+# 仓库是公开的：Actions 对公开仓库免费且不限时长。
+# ubuntu runner 预装 Android SDK 与 JDK，零环境配置。
+#
+# 签名：密钥从 repo secrets 解码（ANDROID_KEYSTORE_B64/STORE_PASS/
+# KEY_ALIAS/KEY_PASS）。签名必须与历史 APK 一致——Android 拒绝用
+# 不同签名的包覆盖安装，换新签等于强逼所有用户卸载重装。
+#
+# 触发：打 tag（v*）后自动跑；也可手动 dispatch。
+# 与 release-win.yml（Windows asar）共用同一个 tag 的 Release，
+# 两个工作流各自上传自己的产物，互不干扰。
+
+name: Release Android
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write     # 要上传 Release 资产
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17    # AGP 8.7 要求 17+
+
+      # 版本号从 tag 同步：build.gradle 里的 versionName/versionCode 是
+      # 手写的，一直停在 11.6.5——发版时必然忘记改，让 tag 当唯一来源。
+      # versionCode 公式与历史一致：major*1e6 + minor*1e4 + patch*100
+      # （11.6.5 = 11060500），保证新包的 versionCode 严格递增。
+      - name: 同步版本号
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          CODE=$(python3 -c "v='$VER'.split('.'); print(int(v[0])*1000000+int(v[1])*10000+int(v[2])*100)")
+          sed -i "s/versionName \".*\"/versionName \"$VER\"/" android/app/build.gradle
+          sed -i "s/versionCode .*/versionCode $CODE/" android/app/build.gradle
+          echo "APK 版本: $VER ($CODE)"
+
+      # 签名密钥从 secret 解码（base64）。文件不入库——入库等于把
+      # 签名权交给任何能看到仓库的人。
+      - name: 解码签名密钥
+        run: |
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > android/jutian-release.keystore
+          printf 'storeFile=jutian-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$ANDROID_STORE_PASS" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASS" > android/keystore.properties
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_STORE_PASS: ${{ secrets.ANDROID_STORE_PASS }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
+
+      - name: 构建 APK（release 签名）
+        run: |
+          cd android
+          gradle assembleRelease --no-daemon
+
+      # 签名核验：apksigner 在 runner 的 build-tools 里。验证失败即失败
+      # ——不带签名的 APK 装不上（覆盖历史签名包），发出去也是废件。
+      - name: 核验签名
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          BT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | head -5
+          echo "签名核验通过: $APK"
+
+      - name: 上传 APK 到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
