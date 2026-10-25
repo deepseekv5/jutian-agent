@@ -1,13 +1,12 @@
-// 巨天agent 安卓壳 —— WebView 加载本机服务提供的手机版界面
+// 巨天agent 安卓壳 —— 两种运行模式
 //
-// 设计取向：**不把 UI 打进 APK**。手机端界面由电脑上的 serve.cjs 提供
-// （/remote.html），APK 只负责连过去。理由：
-//  · 产品是「本地优先」——数据在用户电脑上，不在手机上
-//  · remote.html 与桌面端共用同一套 API，不必维护两份前端
-//  · 更新手机端界面不需要重新发 APK
+// 1) 本机模式（优先探测）：若 Termux 等环境已在手机本机跑起 serve.cjs
+//    （127.0.0.1:3211），直接加载本机完整版界面——手机独立运行，不依赖电脑。
+// 2) 远程模式（回退）：探测失败时进入配对页，连接局域网内电脑的
+//    /remote.html?t=<配对码>（与历史行为一致）。
 //
-// 首次启动要求填「电脑地址 + 配对码」，之后记住。配对码就是桌面端
-// 设置里「复制手机远程地址」给出的那串 t=。
+// 判定逻辑：launch 时异步探测一次本机端口；已保存过配对信息的用户
+// 直接进远程模式（不打断），首次使用（无配对信息）且本机有服务时进本机模式。
 package com.jutian.agent;
 
 import android.annotation.SuppressLint;
@@ -48,10 +47,45 @@ public class MainActivity extends Activity {
         String host = prefs.getString("host", "");
         String token = prefs.getString("token", "");
         if (host.isEmpty() || token.isEmpty()) {
-            showSetup();
+            // 没配对过：先探测本机是否有 serve.cjs（Termux 独立模式），
+            // 有则直接进本机完整版；否则进配对页
+            detectLocalThen(() -> showSetup());
         } else {
             openRemote(host, token);
         }
+    }
+
+    /**
+     * 异步探测 127.0.0.1:3211/api/health。
+     * 有本机服务 → 加载完整版界面（手机独立运行，数据全在本机）；
+     * 无 → 执行 fallback（通常是显示配对页）。
+     * 探测在后台线程做（主线程不允许网络请求），结果回主线程。
+     */
+    private void detectLocalThen(final Runnable fallback) {
+        final android.os.Handler main = new android.os.Handler(getMainLooper());
+        new Thread(() -> {
+            boolean local = false;
+            try {
+                java.net.URL u = new java.net.URL("http://127.0.0.1:3211/api/health");
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                c.setConnectTimeout(800);
+                c.setReadTimeout(800);
+                int code = c.getResponseCode();
+                local = (code == 200);
+                c.disconnect();
+            } catch (Exception e) { /* 连不上 = 无本机服务 */ }
+            final boolean ok = local;
+            main.post(() -> {
+                if (ok) openLocal();
+                else fallback.run();
+            });
+        }, "local-probe").start();
+    }
+
+    /** 本机模式：加载手机本机 serve.cjs 的完整界面 */
+    private void openLocal() {
+        setContentView(web);
+        web.loadUrl("http://127.0.0.1:3211/");
     }
 
     /** 首次配置界面：填电脑地址与配对码 */

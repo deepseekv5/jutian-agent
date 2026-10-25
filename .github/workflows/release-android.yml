@@ -77,3 +77,32 @@ jobs:
         with:
           files: android/app/build/outputs/apk/release/*.apk
           fail_on_unmatched_files: true
+
+  # 手机独立包：Termux 里独立运行完整 agent（不依赖电脑）。
+  # serve.cjs 纯 JS 直跑；better-sqlite3 手机上装不上，serve 自动降级
+  # jsondb（真实落盘），知识库检索诚实降级为空。
+  build-mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建后端与前端
+        run: npm run build
+
+      - name: 打手机独立包
+        run: node scripts/package-mobile.mjs
+
+      - name: 上传手机包到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/mobile-out/jutian-mobile-*.zip
+          fail_on_unmatched_files: true

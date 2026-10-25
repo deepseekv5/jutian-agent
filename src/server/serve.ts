@@ -133,24 +133,34 @@ try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db
  * 并只记录一次警告（避免刷屏）。这样界面能正常打开、功能降级，而不是整片报错。
  */
 function makeDbFallback() {
-  var warned = false;
-  var warnOnce = () => {
-    if (!warned) { warned = true; console.error("[db] 数据库不可用，相关功能已降级。请重启应用；若持续出现请检查 ~/.lyclaw/data.db"); }
-  };
-  return new Proxy({}, {
-    get(_t, prop) {
-      if (prop === "db") { warnOnce(); return { exec: () => {}, prepare: () => ({ run: () => {}, get: () => null, all: () => [] }) }; }
-      if (typeof prop !== "string") return undefined;
-      warnOnce();
-      // 按方法名前缀推断返回形状：get/list/… 读操作给空值，写操作给 undefined
-      if (/^(get|list|search|all|find|has)/i.test(prop)) {
-        return (..._a) => (prop.startsWith("getAll") || prop.startsWith("list") || prop.startsWith("search") ? [] : null);
-      }
-      return () => undefined;
-    },
-  });
+  // v12.9：换 jsondb（真实落盘的完整降级）——better-sqlite3 是原生模块，
+  // Android(Termux/bionic) 等环境加载不了。之前这里是"空读+写丢弃"的
+  // 占位代理：界面能开，但 API Key 存不上、对话全丢，等于不可用。
+  // jsondb 实现了对话核心 API（会话/消息/设置/记忆/代码项目），
+  // 知识库向量检索诚实降级为空集。
+  try {
+    var J = require("./src/shared/jsondb.cjs");
+    console.warn("[db] better-sqlite3 不可用，已切换 JSON 文件存储（对话数据照常保存；知识库检索不可用）");
+    return J.createJsonDb(path.join(DATA_DIR, "data.json"));
+  } catch (e) {
+    console.error("[db] jsondb 初始化失败，功能将严重降级:", e.message);
+    var warned2 = false;
+    return new Proxy({}, {
+      get(_t, prop) {
+        if (typeof prop !== "string") return undefined;
+        if (!warned2) { warned2 = true; }
+        if (/^(get|list|search|all|find|has)/i.test(prop)) {
+          return (..._a) => (prop.startsWith("getAll") || prop.startsWith("list") || prop.startsWith("search") ? [] : null);
+        }
+        return () => undefined;
+      },
+    });
+  }
 }
 var db = sharedDb || makeDbFallback();
+// 数据层可用性：sqlite（桌面）或 jsondb（手机/降级）都视为"有库"。
+// 只有两者皆无（极端故障）才走"数据库不可用"分支。
+var hasDb = !!sharedDb || db.__jsondb === true;
 // 空会话清理模块（判据与选集都有测试）—— 与前端共用 src/shared/sessionCleanup.ts
 var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs"); } catch (e) { console.error("sessionCleanup.cjs load failed:", e.message); return null; } })();
 // 工具参数校验（严格化）：规格表 + 覆盖提醒，见 shared/toolArgs（有测试）
@@ -172,7 +182,7 @@ function runEmptyCleanup(protectIds) {
   try {
     if (!CLEANUP_MOD || !sharedDb || typeof sharedDb.listSessions !== "function") return 0;
     if (typeof sharedDb.messageCounts !== "function") return 0;
-    var all = sharedDb.listSessions() || [];
+    var all = db.listSessions() || [];
     // messageCounts() 只返回"有消息"的会话，零消息的会话不在结果里。
     // 必须按会话列表补齐缺失项为 0，否则它们会被 isEmptySession 的
     // "缺计数不误删"规则判成非空，清理永远删不到东西。
@@ -185,7 +195,7 @@ function runEmptyCleanup(protectIds) {
     var empties = all.filter(function (s) { return counts.get(String(s.id)) === 0; });
     if (!CLEANUP_MOD.shouldCleanup(empties.length)) return 0;
     var ids = CLEANUP_MOD.pickEmptySessions(all, counts, protectIds || new Set(), empties.length);
-    for (var id of ids) { try { sharedDb.deleteSession(id); } catch (e) {} }
+    for (var id of ids) { try { db.deleteSession(id); } catch (e) {} }
     if (ids.length) console.log("已清理空会话:", ids.length);
     return ids.length;
   } catch (e) { console.error("空会话清理失败:", e.message); return 0; }
@@ -1415,7 +1425,7 @@ function memIndex(all) {
     : "(暂无记忆)";
 }
 async function read_memory(args) {
-  if (sharedDb) {
+  if (hasDb) {
     try {
       if (args.key) return { success: true, output: db.getMemory(args.key) || "(无此记忆)" };
       return { success: true, output: memIndex(db.getAllMemories()) };
@@ -1427,7 +1437,7 @@ async function read_memory(args) {
 }
 async function write_memory(args) {
   if (!args.key) return { success: false, error: "缺少 key 参数" };
-  if (sharedDb) { try { sharedDb.setMemory(args.key, args.value || ""); return { success: true, output: `已记住: ${args.key} = ${args.value}` }; } catch {} }
+  if (hasDb) { try { db.setMemory(args.key, args.value || ""); return { success: true, output: `已记住: ${args.key} = ${args.value}` }; } catch {} }
   const mem = loadMem();
   mem[args.key] = args.value || "";
   saveMem(mem);
@@ -1435,7 +1445,7 @@ async function write_memory(args) {
 }
 async function delete_memory(args) {
   if (!args.key) return { success: false, error: "缺少 key 参数" };
-  if (sharedDb) { try { sharedDb.deleteMemory(args.key); return { success: true, output: `已删除记忆: ${args.key}` }; } catch {} }
+  if (hasDb) { try { db.deleteMemory(args.key); return { success: true, output: `已删除记忆: ${args.key}` }; } catch {} }
   const mem = loadMem();
   delete mem[args.key];
   saveMem(mem);
@@ -1444,7 +1454,7 @@ async function delete_memory(args) {
 
 // ─── ly-next：旧 JSON 会话/消息一次性导入 SQLite（仅当 SQLite 为空时）───
 (() => {
-  if (!sharedDb) return;
+  if (!hasDb) return;
   try {
     const dataDir = DATA_DIR;
     const readJson = (name) => {
@@ -2555,7 +2565,7 @@ function localApiFromLoopback(req) {
 // 读取配置：存在 SQLite 的 settings 表，与其它设置同源
 function loadLocalApiConfig() {
   try {
-    if (!sharedDb) return;
+    if (!hasDb) return;
     const rows = db.getAllSettings();
     const get = (k) => { const r = rows.find((x) => x.key === k); return r ? String(r.value) : ""; };
     // v12.4：本地 API 默认开启。
@@ -2931,10 +2941,10 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // 但用户可能想立刻清一次；这个端点也便于诊断自动清理是否生效。
     if (url.pathname === "/api/db/cleanup-empty" && req.method === "POST") {
       try {
-        if (!sharedDb) return json(res, { success: false, error: "数据库不可用（db 未加载）" });
-        const before = (sharedDb.listSessions() || []).length;
+        if (!hasDb) return json(res, { success: false, error: "数据库不可用（db 未加载）" });
+        const before = (db.listSessions() || []).length;
         const removed = runEmptyCleanup(new Set());
-        const after = (sharedDb.listSessions() || []).length;
+        const after = (db.listSessions() || []).length;
         return json(res, { success: true, removed, before, after, output: `已清理 ${removed} 个空会话（${before} → ${after}）` });
       } catch (e) { return json(res, { success: false, error: e.message }); }
     }
@@ -3767,7 +3777,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // GET /api/settings — 统一走 SQLite
     if (url.pathname === "/api/settings" && req.method === "GET") {
       let obj = null;
-      if (sharedDb) {
+      if (hasDb) {
         try {
           const rows = db.getAllSettings();
           obj = {};
@@ -3784,7 +3794,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       if (isMasked(value)) return json(res, { ok: true, skipped: "masked" });
       // 本地 API 的开关/端口/范围/Key 改动后要立刻生效（启停或重启监听）
       const isLocalApiKey = /^local_api_/.test(String(key));
-      if (sharedDb) {
+      if (hasDb) {
         try {
           db.setSetting(key, value == null ? "" : String(value));
           if (key === "keepAwake") syncKeepAwake();
@@ -3963,7 +3973,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // ─── 会话/消息/记忆 — 统一 SQLite（ly-next 单一数据源）───
     // GET /api/sessions
     if (url.pathname === "/api/sessions" && req.method === "GET") {
-      if (sharedDb) { try { return json(res, sharedDb.listSessions()); } catch {} }
+      if (hasDb) { try { return json(res, db.listSessions()); } catch {} }
       return json(res, loadJson("sessions.json").items || []);
     }
     // GET /api/search?q=关键词&limit=40 —— 全局全文搜索（会话标题 + 消息正文，带上下文摘要）
@@ -3984,7 +3994,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
 
         // 2) 正文命中：SQLite 走 LIKE；JSON 回落则逐文件扫描
         let msgHits = [];
-        if (sharedDb) {
+        if (hasDb) {
           try {
             const like = "%" + q.replace(/[%_]/g, (m) => "\\" + m) + "%";
             const rows = db.db.prepare(
@@ -4024,7 +4034,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // 原会话保持不变。用于"保留原方案的同时试另一条路"。
     if (url.pathname === "/api/sessions/branch" && req.method === "POST") {
       try {
-        if (!sharedDb) return json(res, { error: "本地数据库不可用" }, 503);
+        if (!hasDb) return json(res, { error: "本地数据库不可用" }, 503);
         const b = await body(req);
         const sourceId = String(b.sourceId || "");
         const atMessageId = String(b.atMessageId || "");
@@ -4051,7 +4061,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     }
     if (url.pathname === "/api/sessions" && req.method === "POST") {
       const s = await body(req);
-      if (sharedDb) {
+      if (hasDb) {
         try { return json(res, db.createSession(s.id || db.genId(), s.title || "新对话", s.project || "")); } catch {}
       }
       const sessions = loadJson("sessions.json");
@@ -4063,7 +4073,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // DELETE /api/sessions/:id
     if (url.pathname.startsWith("/api/sessions/") && req.method === "DELETE" && !url.pathname.includes("/messages")) {
       const sid = url.pathname.split("/")[3];
-      if (sharedDb) { try { sharedDb.deleteSession(sid); return json(res, { ok: true }); } catch {} }
+      if (hasDb) { try { db.deleteSession(sid); return json(res, { ok: true }); } catch {} }
       const sessions = loadJson("sessions.json");
       if (sessions.items) sessions.items = sessions.items.filter((x) => x.id !== sid);
       saveJson("sessions.json", sessions);
@@ -4073,7 +4083,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (url.pathname.startsWith("/api/sessions/") && req.method === "PUT" && !url.pathname.includes("/messages")) {
       const sid = url.pathname.split("/")[3];
       const patch = await body(req);
-      if (sharedDb) {
+      if (hasDb) {
         try {
           db.updateSession(sid, { title: patch.title, project: patch.project, updated_at: typeof patch.updated_at === "number" ? patch.updated_at : Date.now() });
           return json(res, db.getSession(sid) || { ok: true });
@@ -4093,12 +4103,12 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (msgMatch) {
       const sid = msgMatch[1];
       if (req.method === "GET") {
-        if (sharedDb) { try { return json(res, sharedDb.getMessages(sid)); } catch {} }
+        if (hasDb) { try { return json(res, db.getMessages(sid)); } catch {} }
         return json(res, loadJson(`messages_${sid}.json`).items || []);
       }
       if (req.method === "POST") {
         const m = await body(req);
-        if (sharedDb) {
+        if (hasDb) {
           try {
             db.addMessage(m.id || db.genId(), sid, m.role, m.content || "", m.thinking || "", typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []), m.tool_call_id || "", typeof m.swarm === "string" ? m.swarm : undefined);
             return json(res, db.getMessages(sid).slice(-1)[0]);
@@ -4115,7 +4125,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     const afterMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages\/after\/([^/]+)$/);
     if (afterMatch && req.method === "DELETE") {
       const [, sid, msgId] = afterMatch;
-      if (sharedDb) {
+      if (hasDb) {
         try {
           const anchor = db.db.prepare("SELECT created_at FROM messages WHERE id = ?").get(msgId);
           if (anchor) db.db.prepare("DELETE FROM messages WHERE session_id = ? AND created_at > ?").run(sid, anchor.created_at);
@@ -4135,7 +4145,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (msgSingleMatch && req.method === "PUT") {
       const msgId = msgSingleMatch[1];
       const patch = await body(req);
-      if (sharedDb) {
+      if (hasDb) {
         try {
           db.updateMessage(msgId, { content: patch.content, thinking: patch.thinking, tool_calls: typeof patch.tool_calls === "string" ? patch.tool_calls : undefined, swarm: typeof patch.swarm === "string" ? patch.swarm : undefined, variants: typeof patch.variants === "string" ? patch.variants : undefined });
           return json(res, { ok: true });
@@ -4172,7 +4182,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     var personaMemories = (pid) => {
       const pfx = `persona:${pid}:`;
       const out = [];
-      if (sharedDb) {
+      if (hasDb) {
         try {
           for (const r of db.getAllMemories()) {
             if (String(r.key).startsWith(pfx)) out.push({ key: String(r.key).slice(pfx.length), value: String(r.value || ""), updatedAt: "" });
@@ -4234,7 +4244,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         if (!slug) return json(res, { error: "记忆名不能为空" }, 400);
         const value = String(b.value == null ? "" : b.value).slice(0, 4000);
         const key = `persona:${pid}:${slug}`;
-        if (sharedDb) { try { sharedDb.setMemory(key, value); return json(res, { ok: true }); } catch {} }
+        if (hasDb) { try { db.setMemory(key, value); return json(res, { ok: true }); } catch {} }
         const mem = loadJson("memories.json"); mem[key] = value; saveJson("memories.json", mem);
         return json(res, { ok: true });
       } catch (e) { return json(res, { error: e.message }, 500); }
@@ -4248,7 +4258,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const pid = segs[0] || "";
       const slug = segs[1] || "";
       const pfx = `persona:${pid}:`;
-      if (sharedDb) {
+      if (hasDb) {
         try {
           if (purge) { for (const m of personaMemories(pid)) db.deleteMemory(pfx + m.key); }
           else db.deleteMemory(pfx + slug);
@@ -4298,7 +4308,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // ─── v11 记忆中枢:主对话记忆 + 全部角色记忆聚合（PIPL 查阅/删除权的统一入口）───
     if (url.pathname === "/api/memory-hub" && req.method === "GET") {
       const main = {};
-      if (sharedDb) {
+      if (hasDb) {
         try { for (const r of db.getAllMemories()) if (!String(r.key).startsWith("persona:")) main[r.key] = String(r.value || ""); } catch {}
       } else {
         const mem = loadJson("memories.json");
@@ -4309,7 +4319,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         for (const p of personaAll()) {
           const items = [];
           const pfx = `persona:${p.id}:`;
-          if (sharedDb) {
+          if (hasDb) {
             try { for (const r of db.getAllMemories()) if (String(r.key).startsWith(pfx)) items.push({ key: String(r.key).slice(pfx.length), value: String(r.value || "") }); } catch {}
           } else {
             const mem = loadJson("memories.json");
@@ -4329,7 +4339,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const pid = slash > 0 ? rest.slice(0, slash) : rest;
       const slug = slash > 0 ? rest.slice(slash + 1) : "";
       const pfx = `persona:${pid}:`;
-      if (sharedDb) {
+      if (hasDb) {
         try {
           if (slug) db.deleteMemory(pfx + slug);
           else for (const m of personaMemories(pid)) db.deleteMemory(pfx + m.key);
@@ -4345,7 +4355,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
 
     // --- 长期记忆 API（统一 SQLite）---
     if (url.pathname === "/api/memories" && req.method === "GET") {
-      if (sharedDb) {
+      if (hasDb) {
         try {
           const rows = db.getAllMemories();
           return json(res, Object.fromEntries(rows.map((r) => [r.key, r.value])));
@@ -4369,7 +4379,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (url.pathname === "/api/memories" && req.method === "POST") {
       const { key, value } = await body(req);
       if (!key) return json(res, { error: "缺少 key" }, 400);
-      if (sharedDb) { try { sharedDb.setMemory(key, value == null ? "" : String(value)); return json(res, { ok: true }); } catch {} }
+      if (hasDb) { try { db.setMemory(key, value == null ? "" : String(value)); return json(res, { ok: true }); } catch {} }
       // 分家守卫：知识库条目(kb_/knowledge)与会话摘要(ctx_summary_)不得写入长期记忆
       if (key) {
         const k = String(key)
@@ -4382,7 +4392,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     }
     if (url.pathname.startsWith("/api/memories/") && req.method === "DELETE") {
       const key = decodeURIComponent(url.pathname.split("/api/memories/")[1]);
-      if (sharedDb) { try { sharedDb.deleteMemory(key); return json(res, { ok: true }); } catch {} }
+      if (hasDb) { try { db.deleteMemory(key); return json(res, { ok: true }); } catch {} }
       const mem = loadJson("memories.json");
       delete mem[key];
       saveJson("memories.json", mem);
@@ -5371,7 +5381,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     // 备份范围与体积预览（v12.1）：让用户在导出前知道"会导出什么、多大"
     if (url.pathname === "/api/backup/stats" && req.method === "GET") {
       try {
-        if (!sharedDb) return json(res, { error: "db unavailable" }, 503);
+        if (!hasDb) return json(res, { error: "db unavailable" }, 503);
         const sessions = db.listSessions() || [];
         let messages = 0;
         for (const ses of sessions) messages += (db.getMessages(ses.id) || []).length;
@@ -5398,7 +5408,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     }
     if (url.pathname === "/api/backup/export" && req.method === "GET") {
       try {
-        if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+        if (!hasDb) return json(res, { error: "db unavailable" }, 500);
         const sessions = db.listSessions();
         const messages = {};
         for (const ses of sessions) messages[ses.id] = db.getMessages(ses.id);
@@ -5412,7 +5422,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       try {
         // 数据库不可用时明确报错：此前会抛 TypeError（reading 'listSessions'），
         // 用户看到的是内部错误而不是「数据库没起来，请重启应用」
-        if (!sharedDb) return json(res, { error: "本地数据库不可用，无法导入。请重启应用后重试。" }, 503);
+        if (!hasDb) return json(res, { error: "本地数据库不可用，无法导入。请重启应用后重试。" }, 503);
         const data = await body(req);
         if (!data.sessions) return json(res, { error: "备份文件格式不正确" }, 400);
         let ns = 0, nm = 0, skipped = 0;
@@ -5749,7 +5759,7 @@ let caffeinateProc = null;
 function syncKeepAwake() {
   let on = true; // 默认开启（未设置过该选项视为开启）
   try {
-    if (sharedDb) {
+    if (hasDb) {
       const v = db.getSetting("keepAwake");
       if (v !== undefined && v !== null && v !== "") on = v === "true";
     } else {
