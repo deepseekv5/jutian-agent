@@ -103,6 +103,10 @@ async function startEdgeTTS() {
     // 强制 PORT=5050：主服务先启动时会把 PORT=3211 写进环境，TTS 继承后会与主服务抢端口
     ttsProcess = spawn(PYTHON_BIN, [serverPy], { cwd: EDGE_TTS_DIR, env: { ...process.env, PORT: '5050', PYTHONUNBUFFERED: '1', HF_HOME }, stdio: 'pipe' })
     ttsProcess.stderr?.on('data', d => log(`[TTS] ${d.toString().trim()}`))
+    // stdout 必须消费：pipe 模式下没人读，子进程写满 64KB 缓冲区就会
+    // 永久阻塞（Python HTTP 服务往 stdout 打访问日志即触发，表现为
+    // "TTS 用一阵子就没声音了且进程不退出"）。读了丢弃即可，日志走 stderr。
+    ttsProcess.stdout?.on('data', () => {})
     ttsProcess.on('error', e => log(`TTS error: ${e.message}`))
     // 轮询端口就绪（最长 10s），就绪即返回——不阻塞启动
     const t0 = Date.now()

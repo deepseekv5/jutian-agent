@@ -132,7 +132,7 @@ export default function BrowserOverlay({ initialUrl, onClose }: Props) {
       {/* Webview */}
       <div className="flex-1 relative" style={{ background: '#ffffff' }}>
         {/* webview 无官方类型定义,按 any 处理 */}
-        <webview ref={webviewRef} src={url} className="w-full h-full" style={{ border: 'none', visibility: loadError ? 'hidden' : 'visible' }} />
+        <webview ref={webviewRef} src={url} partition="web-browse" className="w-full h-full" style={{ border: 'none', visibility: loadError ? 'hidden' : 'visible' }} />
         {loadError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6" style={{ background: c.bg }}>
             <svg className="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke={c.textMuted} strokeWidth={1.4}>

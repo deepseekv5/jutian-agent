@@ -7,6 +7,18 @@ interface Props {
 }
 
 /** Lightweight Markdown rendering */
+
+/**
+ * 链接/图片 URL 白名单：只放行 http(s) 与相对/锚点路径。
+ * 转义只能挡 HTML 注入，挡不住协议注入——模型输出
+ * [点我](javascript:throw/onerror=alert(1)//) 这类无括号 payload
+ * 能完整落进 href，在渲染进程执行（该进程能调本机工具 API）。
+ */
+function safeUrl(u: string): string {
+  const t = String(u || '').trim()
+  if (/^(https?:|mailto:|#|\/|\.\/)/i.test(t)) return t
+  return '#'
+}
 function renderMarkdown(md: string): string {
   const html = md
     // 先转义裸 HTML:预览只渲染 Markdown 语法,内联标签一律按文本显示,
@@ -30,9 +42,9 @@ function renderMarkdown(md: string): string {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Image
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" class="cm-md-img" />')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => `<img alt="${alt}" src="${safeUrl(src)}" class="cm-md-img" />`)
     // Link
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="cm-md-link">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, href) => `<a href="${safeUrl(href)}" target="_blank" rel="noopener noreferrer" class="cm-md-link">${txt}</a>`)
     // Horizontal rule
     .replace(/^---+$/gm, '<hr class="cm-md-hr" />')
     // Unordered list

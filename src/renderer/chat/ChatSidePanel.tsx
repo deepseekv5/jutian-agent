@@ -465,6 +465,7 @@ function BrowserPane() {
       <div className="flex-1 min-h-0" style={{ background: c.bgInput }}>
         {current ? (
           <webview
+            partition="web-browse"
             ref={webviewRef}
             src={current}
             style={{ width: '100%', height: '100%' }}

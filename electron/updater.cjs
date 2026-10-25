@@ -102,6 +102,10 @@ async function checkLatest() {
   const current = app.getVersion()
   const available = cmpVer(rel.tag_name, current) > 0
   const asar = (rel.assets || []).find(a => /-app\.asar$/i.test(a.name))
+  // v12.6：官方 SHA-256（GitHub 资产自带）。下载后必须校验——
+  // 镜像站是第三方代理，可返回"格式合法但被篡改"的 asar，
+  // 之前只查 {"files" 头，等于给供应链攻击开门（应用有本机全权限）。
+  const asarDigest = asar && asar.digest ? String(asar.digest).replace(/^sha256:/, '') : ''
   const installer = (rel.assets || []).find(a => /\.(dmg|exe)$/i.test(a.name))
   return {
     available,
@@ -110,13 +114,14 @@ async function checkLatest() {
     notes: String(rel.body || '').slice(0, 4000),
     asarUrl: available && asar ? asar.browser_download_url : null,
     asarSize: asar ? asar.size : 0,
+    asarSha256: asarDigest || null,
     installerUrl: installer ? installer.browser_download_url : null,
     publishedAt: rel.published_at || '',
   }
 }
 
 /** 下载 + 校验 + 备份 + 原子替换;完成后倒计时自动重启 */
-async function applyUpdate(asarUrl) {
+async function applyUpdate(asarUrl, expectedSha256, expectedSize) {
   const target = asarPath()
   if (!target) throw new Error('开发模式下不支持自更新(未打包)')
   sendProgress({ stage: 'download', got: 0, total: 0, pct: 0 })
@@ -140,7 +145,18 @@ async function applyUpdate(asarUrl) {
     }
     const buf = Buffer.concat(chunks)
     sendProgress({ stage: 'verify' })
-    // asar 合法性:JSON 目录从某个 ≤64 字节偏移开始(pickle 多层嵌套),以 {"files" 开头
+    // 完整性校验（v12.6）：优先 SHA-256 对照官方值；API 未提供时退回
+    // 大小精确匹配（镜像改内容必然改大小；同长度碰撞需构造，门槛高得多）。
+    // 仅靠 {"files" 头是格式检查，挡不住"合法但被篡改"的包。
+    if (expectedSha256) {
+      const got = require('crypto').createHash('sha256').update(buf).digest('hex')
+      if (got !== expectedSha256) {
+        throw new Error(`更新包校验失败（SHA-256 不匹配，可能被镜像篡改）\n期望 ${expectedSha256.slice(0, 16)}…\n实际 ${got.slice(0, 16)}…`)
+      }
+    } else if (expectedSize && buf.length !== expectedSize) {
+      throw new Error(`更新包大小不符：期望 ${expectedSize} B，实际 ${buf.length} B（可能被镜像篡改）`)
+    }
+    // asar 格式检查（第二道）：JSON 目录从某个 ≤64 字节偏移开始
     if (buf.length < 100000 || !buf.slice(0, 64).toString('latin1').includes('{"files"')) {
       throw new Error('更新包不是合法的 asar')
     }
@@ -210,8 +226,10 @@ function register() {
       const info = await checkLatest()
       const url = asarUrl || info.asarUrl
       if (!url) throw new Error('该版本未提供 app.asar 更新包')
+      const sha = info.asarSha256 || null
+      const size = info.asarSize || 0
       // 不阻塞:进度与完成经 update-progress 事件推送
-      applyUpdate(url).catch(() => {})
+      applyUpdate(url, sha, size).catch(() => {})
       return { ok: true, started: true, version: info.latest }
     } catch (e) { return { ok: false, error: String(e.message || e) } }
   })
