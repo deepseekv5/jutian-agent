@@ -102,6 +102,8 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { cmd: '片段', label: '代码片段库', hint: '触发器一键展开', key: 'snippets' },
   { cmd: '用量', label: '用量与成本', hint: 'Token 趋势 / 花费', key: 'usage' },
   { cmd: '诊断', label: '环境自检', hint: '一键检查并复制报告', key: 'diagnostics' },
+  { cmd: '待办', label: '待办清单', hint: 'AI 维护的工作清单', key: 'todos' },
+  { cmd: '对比', label: '多模型对比', hint: '同一问题并行生成', key: 'compare' },
   { cmd: '备份', label: '数据备份', hint: '导出/导入', key: 'backup' },
   // 1024 彩蛋（v12.3）：只在节日窗口出现，平时搜不到
   { cmd: '1024', label: '1024 彩蛋', hint: '程序员节快乐', key: 'egg1024' },
@@ -557,7 +559,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
       setSlashIdx(0)
       return
     }
-    if (['export', 'templates', 'snippets', 'usage', 'diagnostics', 'backup'].includes(sc.key)) {
+    if (['export', 'templates', 'snippets', 'usage', 'diagnostics', 'backup', 'todos', 'compare'].includes(sc.key)) {
       window.dispatchEvent(new CustomEvent('open-panel', { detail: sc.key }))
       setValue('')
       setSlashIdx(0)

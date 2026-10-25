@@ -803,6 +803,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       appendUsageRecord({
         ts: Date.now(), model: settings.model, provider: settings.apiBaseUrl,
         promptTokens: estimateTokens(userContent) * 3, completionTokens: estimateTokens(final),
+        ok: true,
       })
       setStreamingId(null)
       setMessages(await listMessages(sessionId))
@@ -898,6 +899,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           ts: Date.now(), model: settings.model, provider: settings.apiBaseUrl,
           promptTokens: sentPromptTokens,
           completionTokens: estimateTokens(fullContent) + estimateTokens(fullThinking),
+          ok: true,
         })
         // 回复完成系统通知（设置开启且窗口在后台时）
         try {
@@ -1007,6 +1009,14 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
       onError: async (err) => {
         console.warn('[stream error]', err)
+        // 失败也记用量（ok:false）——没有失败数据的成功率全是假象
+        try {
+          appendUsageRecord({
+            ts: Date.now(), model: settings.model, provider: settings.apiBaseUrl,
+            promptTokens: estimateTokens(userContent), completionTokens: estimateTokens(fullContent),
+            ok: false,
+          })
+        } catch { /* 统计失败不影响错误处理 */ }
         // 错误归类：把 "TypeError: Failed to fetch" 这类原文翻译成
         // 用户能做行动的提示（网络/密钥/限流/上下文超限…）
         const info = describeError(err)

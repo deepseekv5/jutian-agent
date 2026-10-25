@@ -17,6 +17,7 @@ import { fmtTokens } from '../utils/tokens';
 import { dateTimeCN } from '../utils/datetime';
 import { isWindows } from '../utils/platform';
 import { recommendModels, inferCapability, TASK_LABEL, type TaskKind } from '../../shared/modelCapability';
+import { successRates, type ModelSuccessRate } from '../../shared/usageCost';
 import { fetchCompat } from '../api'
 
 interface Props {
@@ -221,6 +222,13 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const [newModelName, setNewModelName] = useState('');
   // 模型推荐（v12）：选任务类型后给出 3 个建议
   const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
+  // 真实成功率（v12.5）：从用量明细算，样本 <3 不显示
+  const [rates, setRates] = useState<ModelSuccessRate[]>([])
+  useEffect(() => {
+    import('../store/usageHistory').then(({ loadUsageRecords }) => {
+      setRates(successRates(loadUsageRecords().slice(-500)))
+    }).catch(() => {})
+  }, [])
   const [storageStats, setStorageStats] = useState<{ sessions: number; messages: number } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const workDirSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -700,15 +708,26 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       <div className="mt-2 space-y-1">
                         <div className="text-[10.5px]" style={{ color: c.textMuted }}>{TASK_LABEL[taskKind].hint}</div>
                         {recs.length === 0 && <div className="text-[10.5px]" style={{ color: c.textMuted }}>{t('当前列表里没有明显匹配的模型，可拉取更多模型', 'No obvious match in the list — try fetching more models')}</div>}
-                        {recs.map((r) => (
-                          <button key={r.model.id} type="button"
-                            onClick={() => { const nf = { ...form, model: r.model.id }; setForm(nf); persistAll(nf) }}
-                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 transition-colors"
-                            style={{ background: c.bgInput, color: c.textSecondary }}>
-                            <span className="font-mono truncate flex-1">{r.model.id}</span>
-                            <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{r.reason}</span>
-                          </button>
-                        ))}
+                        {recs.map((r) => {
+                          // 真实成功率（v12.5）：有 ≥3 次使用记录才显示，
+                          // 否则只给推断理由——不拿小样本冒充结论
+                          const sr = rates.find((x) => x.model === r.model.id)
+                          return (
+                            <button key={r.model.id} type="button"
+                              onClick={() => { const nf = { ...form, model: r.model.id }; setForm(nf); persistAll(nf) }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center gap-2 transition-colors"
+                              style={{ background: c.bgInput, color: c.textSecondary }}>
+                              <span className="font-mono truncate flex-1">{r.model.id}</span>
+                              {sr?.rate !== null && sr?.rate !== undefined && (
+                                <span className="text-[10px] shrink-0 font-mono"
+                                  style={{ color: (sr?.rate ?? 0) >= 90 ? '#10a37f' : (sr?.rate ?? 0) >= 60 ? '#f59e0b' : '#ef4444' }}>
+                                  {sr?.rate}% ({sr?.total}次)
+                                </span>
+                              )}
+                              <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{r.reason}</span>
+                            </button>
+                          )
+                        })}
                         {(cap.contextWindow > 0 || cap.vision || cap.reasoning) && (
                           <div className="text-[10px] pt-0.5 flex flex-wrap gap-1.5" style={{ color: c.textMuted }}>
                             {cap.contextWindow > 0 && <span>当前模型上下文 {Math.round(cap.contextWindow / 1000)}K</span>}

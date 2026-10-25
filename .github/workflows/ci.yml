@@ -16,8 +16,16 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # v12.5：矩阵跑 ubuntu + windows。
+    # 之前只跑 ubuntu，Windows-only 的 bug（immer 缺失、路径分隔符、
+    # PowerShell 注入、appOnlyAccess 依赖 dist 产物）全部到打 tag 才暴露，
+    # 每次都是发版现场救火。PR 阶段就拦住，便宜得多。
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -35,14 +43,17 @@ jobs:
       # 注意：npm audit 在 registry 不支持 audit 端点时也返回非零，
       # 这里按输出内容区分「真有漏洞」和「registry/网络问题」，
       # 后者只警告不拦，避免基建波动堵住正常 PR
+      # shell: bash 必须显式指定——Windows runner 默认 PowerShell，
+      # 这套 set +e / $? / fi 语法会直接 ParserError（release-win.yml 踩过）
       - name: 依赖漏洞门禁(high/critical)
+        shell: bash
         run: |
           set +e
-          npm audit --audit-level=high > /tmp/audit.log 2>&1
+          npm audit --audit-level=high > "$RUNNER_TEMP/audit.log" 2>&1
           code=$?
           set -e
-          cat /tmp/audit.log
-          if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' /tmp/audit.log; then
+          cat "$RUNNER_TEMP/audit.log"
+          if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' "$RUNNER_TEMP/audit.log"; then
             echo "::error::发现 high/critical 级别依赖漏洞，请先处理"
             exit 1
           fi

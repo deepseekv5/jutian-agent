@@ -43,6 +43,8 @@ const DiagnosticsPanel = lazy(() => import('../panels/DiagnosticsPanel'));
 const ShortcutsPanel = lazy(() => import('../panels/ShortcutsPanel'));
 const ExportPanel = lazy(() => import('../panels/ExportPanel'));
 const BackupPanel = lazy(() => import('../panels/BackupPanel'));
+const TodosPanel = lazy(() => import('../panels/TodosPanel'));
+const ComparePanel = lazy(() => import('../panels/ComparePanel'));
 const EmployeesPanel = lazy(() => import('../agents/EmployeesPanel'));
 const EmployeeChatTab = lazy(() => import('../agents/EmployeeChatTab'));
 const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
@@ -489,6 +491,10 @@ function MainApp() {
         return <ExportPanel sessions={sessions} loadMessages={async (sid) => (await import('../store/storage')).listMessages(sid)} onClose={() => closeTab(tab.id)} />;
       case 'backup':
         return <BackupPanel onClose={() => closeTab(tab.id)} />;
+      case 'todos':
+        return <TodosPanel onClose={() => closeTab(tab.id)} />;
+      case 'compare':
+        return <ComparePanel settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       default:

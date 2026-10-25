@@ -16,6 +16,8 @@ export interface UsageLike {
   promptTokens: number
   completionTokens: number
   costUSD?: number
+  /** 本轮对话是否成功产出回答（v12.5：按模型统计真实成功率） */
+  ok?: boolean
 }
 
 const KEY = 'usage-records'

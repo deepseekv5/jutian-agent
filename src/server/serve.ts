@@ -3835,6 +3835,30 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       pushServerNotice({ type: n.type || "system", title: String(n.title || "").slice(0, 80), body: String(n.body || "").slice(0, 200) });
       return json(res, { ok: true });
     }
+    // ─── 待办清单（v12.5）：模型经 todo_write 写入，界面经此读取 ───
+    // 之前只写不读——模型维护的清单用户根本看不见（半成品）。
+    if (url.pathname === "/api/todos" && req.method === "GET") {
+      try {
+        const raw = fs.readFileSync(path.join(DATA_DIR, "todos.json"), "utf-8");
+        return json(res, JSON.parse(raw));
+      } catch { return json(res, []); }
+    }
+    // 界面手动改状态用（与 todo_write 工具同一份文件、同一套校验）。
+    // 注意语义：模型的 todo_write 是全量覆盖，手改会在模型下次写时被覆盖——
+    // 面板里已向用户说明这一点，这里不做合并。
+    if (url.pathname === "/api/todos/write" && req.method === "POST") {
+      try {
+        const b = await body(req);
+        const clean = (Array.isArray(b.todos) ? b.todos : []).slice(0, 100).map((t) => ({
+          content: String(t?.content || "").slice(0, 200),
+          status: ["pending", "in_progress", "completed"].includes(t?.status) ? t.status : "pending",
+        })).filter((t) => t.content);
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(DATA_DIR, "todos.json"), JSON.stringify(clean, null, 1));
+        return json(res, { ok: true, count: clean.length });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+
     // ─── 应用公告（v11.7）：GitHub 仓库 docs/notice.md，进应用自动读取 ───
     if (url.pathname === "/api/announcement" && req.method === "GET") {
       const fresh = url.searchParams.get("fresh") === "1";

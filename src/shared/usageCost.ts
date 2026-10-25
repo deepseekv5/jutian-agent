@@ -13,6 +13,8 @@ export interface UsageRecord {
   completionTokens: number
   /** 可选：供应商直接返回的金额（优先于本地估算） */
   costUSD?: number
+  /** 本轮是否成功（v12.5：统计真实成功率用） */
+  ok?: boolean
 }
 
 export interface ModelPrice {
@@ -126,6 +128,32 @@ export function dailySeries(records: UsageRecord[], days: number, now = Date.now
     out.push({ date: k, ...v })
   }
   return out
+}
+
+/** 按模型统计真实成功率（v12.5）——推荐不再靠名字猜 */
+export interface ModelSuccessRate {
+  model: string
+  total: number
+  ok: number
+  /** 0-100；total < 3 时返回 null（样本太少，别当结论） */
+  rate: number | null
+  /** 平均耗时（毫秒；无数据 0）——通过 ts 差值算不了，由调用方带 */
+}
+
+export function successRates(records: UsageRecord[]): ModelSuccessRate[] {
+  const map = new Map<string, { total: number; ok: number }>()
+  for (const r of records) {
+    const cur = map.get(r.model) || { total: 0, ok: 0 }
+    cur.total++
+    if (r.ok !== false) cur.ok++
+    map.set(r.model, cur)
+  }
+  return [...map.entries()]
+    .map(([model, v]) => ({
+      model, total: v.total, ok: v.ok,
+      rate: v.total >= 3 ? Math.round((v.ok / v.total) * 100) : null,
+    }))
+    .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || b.total - a.total)
 }
 
 /** 预算判断：返回是否超限与剩余比例 */
