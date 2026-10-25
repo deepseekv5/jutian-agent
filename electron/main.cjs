@@ -170,8 +170,8 @@ async function startServer() {
     throw e
   }
 
-  // Give the server a moment to bind the port
-  await sleep(1000)
+  // 无需固定 sleep：waitForServer 会以 150ms 间隔探测 /api/health，
+  // listen 是同步调用完成后端口立即就绪。原先这里盲等 1 秒纯属浪费。
 }
 
 // Wait for HTTP server to respond

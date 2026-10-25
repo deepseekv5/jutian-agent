@@ -1965,6 +1965,27 @@ async function create_skill(args) {
 async function remember(args) { return write_memory(args); }
 
 // ─── 知识条目 embedding helper（模块级，供工具与 API 共用）───
+// ─── KB 向量缓存（v12.6 性能）──────────────────────────────
+// 之前每次搜索 kbAll() 全表加载 + JSON.parse 全部向量（1000 chunk ≈ 数 MB
+// 字符串解析，每次搜索都做一遍）。索引只在写入/删除时变化，
+// 这里按代数失效：写入/删除时 bump 代数，下次搜索重建缓存。
+var _kbCache = { gen: 0, rows: [] };
+var _kbGen = 0;
+function kbBump() { _kbGen++ }
+function kbRowsCached() {
+  if (_kbCache.gen !== _kbGen) {
+    _kbCache = {
+      gen: _kbGen,
+      rows: db.kbAll().map((r) => {
+        let vec = [];
+        try { vec = JSON.parse(r.vector) } catch {}
+        return { path: r.path, chunk: r.chunk, vec };
+      }),
+    };
+  }
+  return _kbCache.rows;
+}
+
 async function kbEmbedFor(texts) {
   const rows = sharedDb ? db.getAllSettings() : [];
   const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -1995,7 +2016,7 @@ function kbChunkText(text) {
 // 索引整篇笔记：全文切块，逐块嵌入（不是只存开头 800 字）
 async function kbIndexEntry(id, title, content) {
   if (!sharedDb) return 0;
-  db.kbDeleteByPath("entry:" + id);
+  db.kbDeleteByPath("entry:" + id); kbBump();
   const body = (title ? title + "\n" : "") + (content || "");
   const chunks = kbChunkText(body);
   let n = 0;
@@ -2003,7 +2024,7 @@ async function kbIndexEntry(id, title, content) {
     const batch = chunks.slice(i, i + 16);
     let vecs = [];
     try { vecs = await kbEmbedFor(batch) } catch { break }
-    batch.forEach((c, j) => { if (vecs[j]) { db.kbInsert("entry:" + id, c, vecs[j]); n++ } });
+    batch.forEach((c, j) => { if (vecs[j]) { db.kbInsert("entry:" + id, c, vecs[j]); n++ } }); kbBump();
   }
   return n;
 }
@@ -5506,7 +5527,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname.startsWith("/api/kb/entry/") && req.method === "DELETE") {
-      try { db.deleteKbEntry(url.pathname.split("/").pop()); return json(res, { ok: true }); }
+      try { db.deleteKbEntry(url.pathname.split("/").pop()); kbBump(); return json(res, { ok: true }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/status" && req.method === "GET") {
@@ -5517,7 +5538,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     }
     if (url.pathname === "/api/kb/clear" && req.method === "POST") {
       if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
-      db.kbClear();
+      db.kbClear(); kbBump();
       return json(res, { ok: true });
     }
     if (url.pathname === "/api/kb/ingest" && req.method === "POST") {
@@ -5544,7 +5565,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         })(folder, 0);
         let totalChunks = 0;
         for (const fp of files) {
-          db.kbDeleteByPath(fp);
+          db.kbDeleteByPath(fp); kbBump();
           let text = "";
           try { text = fsMod.readFileSync(fp, "utf-8"); } catch { continue; }
           const chunks = kbSplitChunks(text).slice(0, 120);
@@ -5553,6 +5574,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
             const batch = chunks.slice(i, i + 16);
             const vectors = await kbEmbedTexts(batch);
             batch.forEach((ck, j) => { db.kbInsert(fp, ck, vectors[j] || []); totalChunks++; });
+          if (batch.length) kbBump();
           }
         }
         return json(res, { ok: true, files: files.length, chunks: totalChunks });
@@ -5565,8 +5587,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
         if (db.kbCount() === 0) return json(res, { hits: [] });
         const [qv] = await kbEmbedTexts([String(query).slice(0, 1000)]);
-        const hits = db.kbAll()
-          .map((r) => ({ path: r.path, chunk: r.chunk, score: kbCosine(qv, JSON.parse(r.vector)) }))
+        const rows = kbRowsCached();
+        const hits = rows
+          .map((r) => ({ path: r.path, chunk: r.chunk, score: kbCosine(qv, r.vec) }))
           .sort((a, b) => b.score - a.score)
           .slice(0, Math.min(topK || 4, 8));
         return json(res, { hits });

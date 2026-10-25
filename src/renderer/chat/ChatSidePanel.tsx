@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo , lazy, Suspense} from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
 import TerminalPanel from '../code/TerminalPanel'
-import FileViewer from '../code/FileViewer'
+const FileViewer = lazy(() => import('../code/FileViewer'))
 import GitPanel from './GitPanel'
 import SubAgentTracker from '../app/SubAgentTracker'
 import type { Message, Settings } from '../types'
@@ -260,7 +260,9 @@ function FilesPane({ workDir }: { workDir: string }) {
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <FileViewer name={preview.name} content={preview.content} />
+            <Suspense fallback={<div className="flex-1 grid place-items-center text-[11px]" style={{ color: c.textMuted }}>加载预览…</div>}>
+              <FileViewer name={preview.name} content={preview.content} />
+            </Suspense>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center px-4 text-center text-[11px] leading-relaxed" style={{ color: c.textMuted }}>
