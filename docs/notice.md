@@ -1,8 +1,10 @@
 # 巨天agent 公告
 
-<!-- id: 2026-10-25-v1271 -->
+<!-- id: 2026-10-25-v1280 -->
 <!-- level: info -->
 <!-- date: 2026-10-24 -->
+
+v12.8.0：全平台发行版上线——mac（arm64/x64 dmg+zip）、Windows 安装包、Linux（AppImage/deb/tar.gz，x64+arm64）全部由 GitHub 构建服务器自动出品，打 tag 即发版。
 
 v12.7.1：安卓安装包已改由 GitHub 官方构建服务器自动构建（打 tag 即出包，签名与历史版本一致，覆盖安装无损）。
 

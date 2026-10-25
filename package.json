@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "12.7.1",
+  "version": "12.8.0",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -256,5 +256,9 @@
     "vite": "^5.4.11",
     "vitest": "^3.2.7"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "author": {
+    "name": "巨天工作室",
+    "email": "agent@jutian.local"
+  }
 }

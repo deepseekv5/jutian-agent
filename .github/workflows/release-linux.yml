@@ -1,0 +1,71 @@
+# Linux 构建（GitHub Actions）
+#
+# 此前从未构建过 Linux——Electron 应用本体是跨平台的，serve.ts 的
+# POSIX 分支（zsh/grep/lsof）在 Linux 上本来就是对的路。
+#
+# x64 与 arm64 用 matrix 并行：better-sqlite3 对两个架构都有
+# Electron ABI 预编译包，@electron/rebuild 直接下载，无需交叉工具链。
+#
+# 产物：AppImage（通用，免安装）+ deb（Debian/Ubuntu）+ tar.gz（兜底，
+# 部分老发行版缺 FUSE 跑不了 AppImage）。
+
+name: Release Linux
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            ebflag: --x64
+          - arch: arm64
+            ebflag: --arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建后端
+        run: npm run build:server
+
+      - name: 构建前端
+        run: npx vite build
+
+      - name: 重建 better-sqlite3（Electron ABI / ${{ matrix.arch }}）
+        run: npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11 -a ${{ matrix.arch }}
+
+      - name: 打包 Linux（AppImage + deb + tar.gz / ${{ matrix.arch }}）
+        run: npx electron-builder --linux ${{ matrix.ebflag }} --config scripts/eb-config.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: 整理产物名
+        run: |
+          mkdir -p dist-out
+          cp release/*.AppImage dist-out/ 2>/dev/null || true
+          cp release/*.deb dist-out/ 2>/dev/null || true
+          cp release/*.tar.gz dist-out/ 2>/dev/null || true
+          ls -la dist-out/
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-out/*
+          fail_on_unmatched_files: true

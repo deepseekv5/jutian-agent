@@ -1,0 +1,74 @@
+# macOS 构建（GitHub Actions）
+#
+# macos-latest 是 Apple Silicon（arm64）。x64 包在同一台 runner 上交叉
+# 编译：Xcode 原生支持双架构，better-sqlite3 也有 darwin-x64 的
+# Electron ABI 预编译包，@electron/rebuild -a x64 直接下载。
+#
+# 两个架构用 matrix 并行跑，产物各自上传到同一 tag 的 Release。
+# 产物名统一改 ASCII（中文资产名会被编码层吃前缀，实测踩过）。
+
+name: Release macOS
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建后端
+        run: npm run build:server
+
+      - name: 构建前端
+        run: npx vite build
+
+      # better-sqlite3 换 Electron ABI（33.4.11）。预编译包直接下载，
+      # 不触发本地编译（本机的 macOS 27 CLT 头文件坑在 CI 上不存在）
+      - name: 重建 better-sqlite3（Electron ABI / ${{ matrix.arch }}）
+        run: npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11 -a ${{ matrix.arch }}
+
+      # eb-config 会跳过 CI 上不存在的 python-runtime / edge-tts 资源
+      - name: 打包 macOS（dmg + zip / ${{ matrix.arch }}）
+        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --config scripts/eb-config.cjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # 产物名是中文（巨天agent-*），改 ASCII 再上传
+      - name: 整理产物名
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p dist-out
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            mv "release/巨天agent-$VER-arm64.dmg"      "dist-out/jutian-agent-$VER-arm64.dmg"
+            mv "release/巨天agent-$VER-arm64-mac.zip"  "dist-out/jutian-agent-$VER-arm64-mac.zip"
+          else
+            mv "release/巨天agent-$VER.dmg"            "dist-out/jutian-agent-$VER-x64.dmg"
+            mv "release/巨天agent-$VER-mac.zip"        "dist-out/jutian-agent-$VER-x64-mac.zip"
+          fi
+          ls -la dist-out/
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-out/*
+          fail_on_unmatched_files: true

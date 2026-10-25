@@ -137,13 +137,11 @@ describe('release-win workflow', () => {
     expect(wf).toMatch(/electron-builder[^\n]*--config\s+scripts\/eb-config\.cjs/)
   })
 
-  it('只上传 asar，不再发布 exe（v12.2 起的交付要求）', () => {
-    // 用户明确要求"不要再发布 exe"：更新走 app.asar，
-    // 所以工作流既不打包 NSIS，也不上传 exe
-    expect(wf).not.toMatch(/files:[\s\S]*release\/\*\.exe/)
+  it('上传 exe 安装包 + asar 更新包（v12.8 起恢复全平台发行版）', () => {
+    // v12.8 用户要求构建全平台发行版：NSIS 恢复，exe 与 asar 都上传
+    expect(wf).toMatch(/electron-builder --win --x64 --config/)
+    expect(wf).toContain('release/*.exe')
     expect(wf).toContain('asar-out/*.asar')
-    // --dir 跳过 NSIS 编译：不打安装包也省 CI 时间
-    expect(wf).toMatch(/electron-builder[^\n]*--dir/)
   })
 
   it('不再出现 EDGE_TTS_DIR 的命令行兜底 hack', () => {

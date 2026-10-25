@@ -108,6 +108,17 @@ for (const spec of RESOURCE_SPECS) {
 
 const config = { ...base, extraResources }
 
+// Linux 段（v12.8）：此前从未构建过 Linux。deb 需要 author 字段
+// （已补进 package.json），图标用 iconset 里现成的 512 PNG。
+if (!config.linux) {
+  config.linux = {
+    icon: 'electron/icon.iconset/icon_512x512.png',
+    category: 'Development',
+    // AppImage 在部分老发行版缺 FUSE——附带 tar.gz 兜底
+    target: ['AppImage', 'deb', 'tar.gz'],
+  }
+}
+
 // package.json 的 build.win / build.mac 里还各留着一份带 ${env.EDGE_TTS_DIR}
 // 宏的 extraResources。electron-builder 会把平台段与顶层段合并，那份宏配置
 // 会原样回来——未定义时展开成空串，from="" 又变回「项目根」，递归爆盘复发。
