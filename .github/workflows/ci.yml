@@ -89,8 +89,12 @@ jobs:
             if curl -fsS http://127.0.0.1:3219/api/health > /tmp/health.json 2>/dev/null; then break; fi
             sleep 1
           done
-          cat /tmp/health.json
-          node -e "const h=require('/tmp/health.json'); if(!h||h.status!=='ok'){console.error('health 检查失败'); process.exit(1)}"
+          # 用 grep 而不是 node require：Git Bash 的 /tmp 与 Node 的路径解析
+          # 不一致（Windows 实测 MODULE_NOT_FOUND），grep 在同一 shell 里跑没这个问题
+          if ! grep -q '"status":"ok"' /tmp/health.json; then
+            echo "::error::health 检查失败：$(cat /tmp/health.json)"
+            exit 1
+          fi
           kill $SRV 2>/dev/null || true
 
       - name: 上传构建产物(供排查,3 天)
