@@ -81,6 +81,7 @@ jobs:
 
       # 冒烟：serve.cjs 能真起来并答 /api/health，避免"构建过了但服务起不来"
       - name: 冒烟启动 serve.cjs
+        shell: bash
         run: |
           PORT=3219 node serve.cjs > /tmp/serve.log 2>&1 &
           SRV=$!
