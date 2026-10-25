@@ -138,8 +138,8 @@ describe('release-win workflow', () => {
   })
 
   it('上传 exe 安装包 + asar 更新包（v12.8 起恢复全平台发行版）', () => {
-    // v12.8 用户要求构建全平台发行版：NSIS 恢复，exe 与 asar 都上传
-    expect(wf).toMatch(/electron-builder --win --x64 --config/)
+    // v12.8 起矩阵构建 x64 + arm64：NSIS 恢复，exe 与 asar 都上传
+    expect(wf).toMatch(/electron-builder --win \$\{\{ matrix\.ebflag \}\} --config/)
     expect(wf).toContain('release/*.exe')
     expect(wf).toContain('asar-out/*.asar')
   })

@@ -1,10 +1,11 @@
-# Windows 打包（GitHub Actions）
+# Windows 构建（GitHub Actions）
 #
-# 本机（macOS）无 wine，无法交叉打包 win-x64；electron-builder 的 win
-# 打包需要 wine 来生成 nsis 安装包。所以走 CI：在 windows-latest runner 上
-# 原生打包，产物自动挂到 Release。
+# x64 与 arm64 用 matrix 并行。arm64（Snapdragon / Copilot+ PC）：
+# better-sqlite3 没有 electron-v130 的 win-arm64 预编译包，
+# @electron/rebuild 会退回源码编译——runner 自带 ARM64 版 MSVC 工具链。
 #
-# 触发：打 tag（v*）后自动跑；也可手动 dispatch。
+# asar（应用内更新用）架构无关：只从 x64 任务产出上传，避免同名冲突。
+
 name: Release Windows
 
 on:
@@ -19,6 +20,14 @@ jobs:
   build-win:
     runs-on: windows-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            ebflag: --x64
+          - arch: arm64
+            ebflag: --arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -33,17 +42,17 @@ jobs:
 
       # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
       # 只警告不拦，避免基建波动堵住发版。
-      # shell: bash 是必须的——Windows runner 默认 PowerShell，这套 bash 语法
-      # （set +e / $? / fi）会直接 ParserError（实测踩过）。
+      # shell: bash 必须显式指定——Windows runner 默认 PowerShell，
+      # 这套 set +e / $? / fi 语法会直接 ParserError（实测踩过）。
       - name: 依赖漏洞门禁(high/critical)
         shell: bash
         run: |
           set +e
-          npm audit --audit-level=high > /tmp/audit.log 2>&1
+          npm audit --audit-level=high > "$RUNNER_TEMP/audit.log" 2>&1
           code=$?
           set -e
-          cat /tmp/audit.log
-          if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' /tmp/audit.log; then
+          cat "$RUNNER_TEMP/audit.log"
+          if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' "$RUNNER_TEMP/audit.log"; then
             echo "::error::发现 high/critical 级别依赖漏洞，请先处理"
             exit 1
           fi
@@ -67,14 +76,12 @@ jobs:
       - name: 测试
         run: npm test
 
-      # better-sqlite3 原生模块：Windows 上必须换成 Electron 对应的 ABI
-      # （v130），否则 Electron 跑起来时报 NODE_MODULE_VERSION 不匹配。
-      # 包名是 @electron/rebuild（旧名 electron-rebuild 停在 3.2.9；
-      # 之前写 electron-rebuild@3.2.10 会 ETARGET，实测踩过）。
-      - name: 重建 better-sqlite3（Electron ABI）
+      # better-sqlite3 原生模块：换成 Electron 对应 ABI（v130）。
+      # x64 有官方预编译；arm64 无预编译，@electron/rebuild 退回源码编译
+      # （runner 自带 ARM64 版 MSVC 工具链，多花几分钟）。
+      - name: 重建 better-sqlite3（Electron ABI / ${{ matrix.arch }}）
         shell: bash
-        run: |
-          npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11
+        run: npx --yes @electron/rebuild@4.2.1 -f -w better-sqlite3 -v 33.4.11 -a ${{ matrix.arch }}
 
       # Windows 包也要带 TTS：runner 上没有本机的 openai-edge-tts 目录，
       # 直接在 CI 里浅克隆一份，EDGE_TTS_DIR 指过去，eb-config 就会把它
@@ -86,19 +93,19 @@ jobs:
             && echo "EDGE_TTS_DIR=$RUNNER_TEMP/openai-edge-tts" >> "$GITHUB_ENV" \
             || echo "::warning::edge-tts 克隆失败，本次包不含 TTS 资源"
 
-      # v12.8 起恢复 NSIS 安装包（用户要求全平台发行版）：
-      # electron-builder 同时产出安装包与 win-unpacked，
-      # asar 仍从 win-unpacked/resources 取，一个命令两条产物线。
-      - name: 打包 Windows（NSIS 安装包 + win-unpacked）
-        run: npx electron-builder --win --x64 --config scripts/eb-config.cjs
+      # v12.8 起产出 NSIS 安装包；asar 仍从 win-unpacked/resources 取，
+      # 一个命令两条产物线。
+      - name: 打包 Windows（${{ matrix.arch }}）
+        run: npx electron-builder --win ${{ matrix.ebflag }} --config scripts/eb-config.cjs
         env:
           GH_TOKEN: ${{ github.token }}
 
       # app.asar（应用内自更新用）直接取 electron-builder 的打包产物。
       # 之前是 `asar pack .` 现打——那会把整个 node_modules 都塞进去
-      # （实测 565MB，用户端自更新等于下载全仓库）。electron-builder
-      # 已按 files 白名单打好 48MB 量级的 app.asar，原样取用即可。
+      # （实测 565MB，用户端自更新等于下载全仓库）。
+      # asar 架构无关：只从 x64 任务产出上传，arm64 跳过（同名冲突）。
       - name: 取 app.asar（应用内更新用）
+        if: matrix.arch == 'x64'
         shell: bash
         run: |
           mkdir -p asar-out
@@ -107,18 +114,18 @@ jobs:
 
       # 产物目录是 release/（package.json 的 build.directories.output），
       # 不是 dist/——之前这里写 dist/*.exe，glob 一个都匹配不上，
-      # 于是 Release 里永远只有 app.asar、没有任何 Windows 安装包，
-      # 用户「只能下载旧的 asar、装不上新版」就是这么来的。
+      # Release 里就没有任何 Windows 安装包。
       - name: 列出产物（排障用）
         shell: bash
-        run: ls -la asar-out/*.asar 2>&1 || true
+        run: ls -la release/*.exe asar-out/*.asar 2>&1 || true
 
-      - name: 上传到 Release（exe 安装包 + asar 更新包）
+      # latest.yml 与 asar 只属于 x64 任务（arm64 上传会同名冲突）。
+      - name: 上传到 Release（${{ matrix.arch }}）
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.exe
             release/*.exe.blockmap
-            release/latest.yml
-            asar-out/*.asar
+            ${{ matrix.arch == 'x64' && 'release/latest.yml' || 'asar-out/.keep' }}
+            ${{ matrix.arch == 'x64' && 'asar-out/*.asar' || 'asar-out/.keep' }}
           fail_on_unmatched_files: false
