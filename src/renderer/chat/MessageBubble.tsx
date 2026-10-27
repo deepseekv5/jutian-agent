@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback, useEffect, memo, Fragment } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, Fragment, lazy, Suspense } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import type { ToolCall } from '../types'
 import { useTheme } from '../hooks/useTheme'
 import { textForSpeech } from '../utils/tts'
+import { hasMathSyntax, normalizeMathDelimiters, useMathPlugins } from './useMathPlugins'
+import { extractCodeText, isMermaidLang, isPreviewableHtml } from '../utils/richCode'
 import BrandMark from '../app/BrandMark'
 import DiffCardView from '../app/DiffCardView'
 import { hhmm } from '../utils/datetime'
@@ -208,13 +210,27 @@ function ThinkingBlock({ text, label, streaming }: { text: string; label: string
   )
 }
 
-/** 代码块：语言栏 + 复制按钮（ChatGPT 风格） */
+/** Mermaid 图表块：整体留在按需 chunk（组件和 mermaid 都只在出现图表时才加载） */
+const MermaidBlock = lazy(() => import('./MermaidBlock'))
+
+/** 代码块：语言栏 + 复制按钮（ChatGPT 风格）；mermaid 渲染成图，完整 HTML 文档给预览页签 */
 function CodeBlock({ children }: { children?: any }) {
+  const { c } = useTheme()
   const [copied, setCopied] = useState(false)
+  const [view, setView] = useState<'code' | 'preview'>('code')
   const codeEl = Array.isArray(children) ? children[0] : children
   const className: string = codeEl?.props?.className || ''
   const lang = (/language-([\w-]+)/.exec(className)?.[1]) || 'text'
-  const raw = String(codeEl?.props?.children ?? '').replace(/\n$/, '')
+  const raw = extractCodeText(codeEl?.props?.children).replace(/\n$/, '')
+
+  if (isMermaidLang(lang)) {
+    return (
+      <Suspense fallback={<div className="code-block"><div className="code-block-head"><span>mermaid</span></div><pre><code>{raw}</code></pre></div>}>
+        <MermaidBlock code={raw} />
+      </Suspense>
+    )
+  }
+  const htmlPreview = isPreviewableHtml(lang, raw)
 
   const copy = () => {
     navigator.clipboard?.writeText(raw).then(() => {
@@ -226,25 +242,46 @@ function CodeBlock({ children }: { children?: any }) {
     <div className="code-block">
       <div className="code-block-head">
         <span>{lang}</span>
-        <button onClick={copy} title="复制代码">
-          {copied ? (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              已复制
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              复制
-            </>
+        <div className="flex items-center gap-1">
+          {htmlPreview && (
+            <div className="flex mr-1 rounded-md overflow-hidden" style={{ border: `1px solid ${c.border}` }}>
+              <button onClick={() => setView('code')} className="px-2 py-0.5 text-[11px]"
+                style={{ background: view === 'code' ? c.bgInput : 'transparent', color: view === 'code' ? c.text : c.textTertiary }}>代码</button>
+              <button onClick={() => setView('preview')} className="px-2 py-0.5 text-[11px]"
+                style={{ background: view === 'preview' ? c.bgInput : 'transparent', color: view === 'preview' ? c.text : c.textTertiary }}>预览</button>
+            </div>
           )}
-        </button>
+          <button onClick={copy} title="复制代码">
+            {copied ? (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                已复制
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                复制
+              </>
+            )}
+          </button>
+        </div>
       </div>
-      <pre>{children}</pre>
+      {htmlPreview && view === 'preview' ? (
+        // Artifacts 式预览：allow-scripts 且刻意不给 allow-same-origin——
+        // 页面脚本碰不到父窗口的 localStorage/cookie，注入风险被沙箱隔断
+        <iframe
+          title="HTML 预览"
+          sandbox="allow-scripts"
+          srcDoc={raw}
+          style={{ display: 'block', width: '100%', height: 440, border: 0, borderRadius: '0 0 12px 12px', background: '#fff' }}
+        />
+      ) : (
+        <pre>{children}</pre>
+      )}
     </div>
   )
 }
@@ -340,6 +377,11 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
     try { if (variantKey) localStorage.setItem(variantKey, String(clamped)) } catch { /* ignore */ }
   }
   const shownContent = variantIdx > 0 && variants ? (variants[variantIdx - 1] ?? content) : content
+
+  // KaTeX 公式：只在消息真有公式语法时才懒加载（全局单例，整会话只加载一次）
+  const math = useMathPlugins(hasMathSyntax(shownContent) || hasMathSyntax(content || '') || hasMathSyntax(thinking || ''))
+  const mdRemark = math ? [remarkGfm, math.remarkMath] : [remarkGfm]
+  const mdRehype = math ? [rehypeHighlight, math.rehypeKatex] : [rehypeHighlight]
 
   // 消息聚焦阅读模式
   const [focusOpen, setFocusOpen] = useState(false)
@@ -677,10 +719,10 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           const Text = ({ v }: { v: string }) => !v ? null : (
             <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
+                remarkPlugins={mdRemark as any}
+                rehypePlugins={mdRehype as any}
                 components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
-                {v}
+                {normalizeMathDelimiters(v)}
               </ReactMarkdown>
             </div>
           )
@@ -799,8 +841,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               <button onClick={() => setFocusOpen(false)} className="px-2.5 py-1 rounded-md text-[11.5px]" style={{ background: c.surfaceInput, color: c.textSecondary }}>关闭 (Esc)</button>
             </div>
             <div className="markdown-body" style={{ color: c.text, fontSize: '16px' }}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
-                {shownContent}
+              <ReactMarkdown remarkPlugins={mdRemark as any} rehypePlugins={mdRehype as any} components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
+                {normalizeMathDelimiters(shownContent)}
               </ReactMarkdown>
             </div>
           </div>
