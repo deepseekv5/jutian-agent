@@ -1,8 +1,12 @@
 # 巨天agent 公告
 
-<!-- id: 2026-10-25-v1280 -->
+<!-- id: 2026-10-28-v1300 -->
 <!-- level: info -->
-<!-- date: 2026-10-24 -->
+<!-- date: 2026-10-28 -->
+
+v13.0.0：技能市场接入真实来源——直接安装 Anthropic 官方技能库（18 万 star 的 anthropics/skills）与 Superpowers 社区技能集，共 30+ 个专业级技能（PDF/PPT 处理、前端设计、品牌规范、MCP 构建等），安装前可预览完整 SKILL.md 说明，一键装进你的 Agent。消息气泡新增「分享图」：把任意一条回答导出成品牌分享卡片 PNG，可直接发朋友圈/微博/群聊。
+
+v12.9.0：手机独立运行——安卓手机装 Termux 即可跑完整 Agent（不依赖电脑），对话数据本地落盘；安卓 APK 启动时自动探测本机服务。
 
 v12.8.0：全平台发行版上线——mac（arm64/x64 dmg+zip）、Windows 安装包、Linux（AppImage/deb/tar.gz，x64+arm64）全部由 GitHub 构建服务器自动出品，打 tag 即发版。
 

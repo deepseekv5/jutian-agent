@@ -8,6 +8,7 @@ import { textForSpeech } from '../utils/tts'
 import BrandMark from '../app/BrandMark'
 import DiffCardView from '../app/DiffCardView'
 import { hhmm } from '../utils/datetime'
+import { drawShareCard, downloadDataUrl } from '../utils/shareCard'
 import { fetchCompat } from '../api'
 
 export function ToolCallCard({ tool }: { tool: ToolCall }) {
@@ -316,6 +317,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
   const isUser = role === 'user'
   const [copied, setCopied] = useState(false)
   const [savedKb, setSavedKb] = useState(false)
+  const [sharedImg, setSharedImg] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [thinkingOpen, setThinkingOpen] = useState(true)
   const [showRollbackConfirm, setShowRollbackConfirm] = useState(false)
@@ -379,6 +381,19 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
       const ta = document.createElement('textarea'); ta.value = shownContent; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     }
     setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+
+  // 分享卡：这条消息画成品牌卡片导出 PNG（微信/朋友圈可发）
+  const shareAsImage = () => {
+    const dataUrl = drawShareCard({
+      role, content: shownContent,
+      dateText: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      accent: c.accent,
+    })
+    if (dataUrl) {
+      downloadDataUrl(dataUrl, `巨天分享卡-${Date.now()}.png`)
+      setSharedImg(true); setTimeout(() => setSharedImg(false), 2000)
+    }
   }
 
   const speakContent = async () => {
@@ -737,6 +752,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               window.dispatchEvent(new CustomEvent('quote-message', { detail: q }))
             }} />
             <IconAction label={copied ? '已复制' : '复制'} icon={copied ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'} onClick={copyContent} active={copied} />
+            <IconAction label={sharedImg ? '已导出' : '分享图'} icon={sharedImg ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'} onClick={shareAsImage} active={sharedImg} />
             <IconAction label={speaking ? '停止朗读' : '朗读'} icon={speaking ? 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z' : 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14'} onClick={speakContent} active={speaking} />
             <IconAction label="存入知识库" icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" onClick={async () => {
               try {

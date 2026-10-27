@@ -167,6 +167,8 @@ var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs
 var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } catch (e) { console.error("toolArgs.cjs load failed:", e.message); return null; } })();
 // 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
+// 真实技能市场（anthropics/skills 官方 + superpowers 社区）的纯逻辑：frontmatter 解析、白名单、限额
+var SKILL_MARKET_MOD = (() => { try { return require("./src/shared/skillMarket.cjs"); } catch (e) { console.error("skillMarket.cjs load failed:", e.message); return null; } })();
 var TOOL_SPECS = ARGS_MOD ? ARGS_MOD.TOOL_SPECS : {};
 var validateArgs = ARGS_MOD ? ARGS_MOD.validateArgs : () => ({ ok: true });
 var overwriteWarning = ARGS_MOD ? ARGS_MOD.overwriteWarning : () => null;
@@ -1144,6 +1146,44 @@ var SKILL_DIR = path.join(os.homedir(), ".lyclaw", "skills");
 })();
 var TASKS_FILE = path.join(LYCLAW_HOME, "scheduled_tasks.json");
 var MARKET_FILE = path.join(LYCLAW_HOME, "skill_market.json");
+var REMOTE_MARKET_FILE = path.join(DATA_DIR, "skill_market_remote.json");
+var REMOTE_MARKET_TTL = 6 * 3600 * 1000;
+
+// --- 真实市场：GitHub 取数助手（枚举走 Contents API，文件正文走 raw 不占 API 配额） ---
+async function ghApiList(repo, dirPath) {
+  const headers = { "Accept": "application/vnd.github.v3+json", "User-Agent": "JutianAgent/1.0" };
+  if (process.env.GITHUB_TOKEN) headers["Authorization"] = "Bearer " + process.env.GITHUB_TOKEN;
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURI(dirPath)}`, { headers, signal: AbortSignal.timeout(12e3) });
+  if (!r.ok) throw new Error(`GitHub API ${r.status}`);
+  return r.json();
+}
+async function ghRawText(repo, filePath) {
+  const r = await fetch(`https://raw.githubusercontent.com/${repo}/HEAD/${filePath.split("/").map(encodeURIComponent).join("/")}`, {
+    headers: { "User-Agent": "JutianAgent/1.0" }, signal: AbortSignal.timeout(12e3),
+  });
+  if (!r.ok) throw new Error(`raw ${r.status}`);
+  return r.text();
+}
+// 枚举全部市场源 → 归一化条目。单个源失败不影响其他源。
+async function fetchRemoteMarketItems() {
+  const M = SKILL_MARKET_MOD;
+  if (!M) throw new Error("市场模块不可用");
+  const items = [];
+  for (const src of M.SKILL_SOURCES) {
+    try {
+      const dirs = await ghApiList(src.repo, src.dir);
+      if (!Array.isArray(dirs)) continue;
+      const found = await Promise.all(dirs.filter((d) => d.type === "dir").slice(0, 60).map(async (d) => {
+        try { return M.normalizeRemoteSkill({ name: d.name, path: d.path }, src, await ghRawText(src.repo, `${d.path}/SKILL.md`)); }
+        catch { return null; }
+      }));
+      for (const it of found) if (it) items.push(it);
+    } catch (e) {
+      console.error("[skill-market]", src.repo, "拉取失败:", e.message);
+    }
+  }
+  return items;
+}
 
 // 生成标准 SKILL.md（真实技能文件）
 function writeSkillMd(skillDir, meta) {
@@ -3613,6 +3653,114 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           return json(res, { success: true, data: items });
         }
         return json(res, { success: false, error: "GitHub 搜索失败" });
+      } catch (e) {
+        return json(res, { success: false, error: e.message });
+      }
+    }
+    // --- 真实市场：官方/社区仓库技能枚举（磁盘缓存 6h，拉取失败回退陈旧数据） ---
+    if (url.pathname === "/api/skills/remote" && req.method === "GET") {
+      if (!SKILL_MARKET_MOD) return json(res, { success: false, error: "市场模块不可用" });
+      let cache = null;
+      try { if (fs.existsSync(REMOTE_MARKET_FILE)) cache = JSON.parse(fs.readFileSync(REMOTE_MARKET_FILE, "utf-8")); } catch { cache = null; }
+      const fresh = cache && Date.now() - cache.cached_at < REMOTE_MARKET_TTL && Array.isArray(cache.items) && cache.items.length > 0;
+      if (!url.searchParams.get("refresh") && fresh) {
+        return json(res, { success: true, items: cache.items, cached_at: cache.cached_at });
+      }
+      try {
+        const items = await fetchRemoteMarketItems();
+        if (items.length) {
+          const rec = { cached_at: Date.now(), items };
+          try { fs.writeFileSync(REMOTE_MARKET_FILE, JSON.stringify(rec)); } catch { /* 缓存写失败不拦返回 */ }
+          return json(res, { success: true, items, cached_at: rec.cached_at });
+        }
+        // 枚举为空（多半是网络被墙/配额耗尽）：有陈旧就用陈旧
+        if (fresh) return json(res, { success: true, items: cache.items, cached_at: cache.cached_at, stale: true });
+        return json(res, { success: false, error: "市场枚举为空，请稍后重试" });
+      } catch (e) {
+        if (cache && Array.isArray(cache.items) && cache.items.length > 0) {
+          return json(res, { success: true, items: cache.items, cached_at: cache.cached_at, stale: true });
+        }
+        return json(res, { success: false, error: "市场拉取失败：" + e.message });
+      }
+    }
+    // 市场技能文件预览（详情展开时取 SKILL.md 正文）
+    if (url.pathname === "/api/skills/remote-file" && req.method === "GET") {
+      const repo = url.searchParams.get("repo") || "";
+      const fp = url.searchParams.get("path") || "";
+      const M = SKILL_MARKET_MOD;
+      if (!M) return json(res, { success: false, error: "市场模块不可用" });
+      const src = (M.SKILL_SOURCES || []).find((s) => s.repo === repo);
+      // 路径必须落在白名单仓库的市场目录下：防任意仓库读取
+      if (!src || !fp.startsWith(src.dir + "/") || fp.includes("..")) return json(res, { success: false, error: "非法路径" });
+      if (!M.isAllowedSkillFile(fp.split("/").pop() || "")) return json(res, { success: false, error: "不支持的文件类型" });
+      try {
+        const text = await ghRawText(repo, fp);
+        return json(res, { success: true, text: String(text).slice(0, 4e4) });
+      } catch (e) {
+        return json(res, { success: false, error: e.message });
+      }
+    }
+    // 市场直装：从白名单仓库按目录递归拉真实文件（不依赖 git，Termux 上同样可用）
+    if (url.pathname === "/api/skills/install-remote" && req.method === "POST") {
+      const { repo, path: skillPath } = await body(req);
+      const M = SKILL_MARKET_MOD;
+      if (!M) return json(res, { success: false, error: "市场模块不可用" });
+      const src = (M.SKILL_SOURCES || []).find((s) => s.repo === repo);
+      if (!src) return json(res, { success: false, error: "仓库不在市场白名单内" });
+      if (typeof skillPath !== "string" || !skillPath.startsWith(src.dir + "/") || skillPath.includes("..")) {
+        return json(res, { success: false, error: "非法技能路径" });
+      }
+      const id = M.sanitizeSkillId(skillPath.split("/").pop());
+      if (!id) return json(res, { success: false, error: "非法技能名称" });
+      const destDir = resolveWithin(SKILL_DIR, id);
+      if (!destDir) return json(res, { success: false, error: "非法技能名称" });
+      try {
+        const L = M.SKILL_INSTALL_LIMITS;
+        let count = 0, total = 0;
+        const saved = [];
+        await fsp.rm(destDir, { recursive: true, force: true }); // 重装/更新：先清旧目录
+        await fsp.mkdir(destDir, { recursive: true });
+        const walk = async (dirPath, depth) => {
+          if (depth > L.maxDepth || count >= L.maxFiles || total > L.maxTotalBytes) return;
+          const entries = await ghApiList(repo, dirPath);
+          for (const e of Array.isArray(entries) ? entries : []) {
+            if (count >= L.maxFiles || total > L.maxTotalBytes) break;
+            if (e.type === "dir") { await walk(e.path, depth + 1); continue; }
+            if ((e.size || 0) > L.maxFileBytes) continue;
+            if (!M.isAllowedSkillFile(e.name)) continue;
+            const text = await ghRawText(repo, e.path);
+            const rel = e.path.slice(skillPath.length + 1);
+            const dest = path.resolve(destDir, rel);
+            if (!dest.startsWith(destDir + path.sep)) continue; // 防 rel 里藏 ../
+            await fsp.mkdir(path.dirname(dest), { recursive: true });
+            await fsp.writeFile(dest, text, "utf-8");
+            count++; total += Buffer.byteLength(text);
+            saved.push(rel);
+          }
+        };
+        await walk(skillPath, 1);
+        if (!saved.includes("SKILL.md")) {
+          await fsp.rm(destDir, { recursive: true, force: true });
+          return json(res, { success: false, error: "该目录不是有效技能（缺 SKILL.md）" });
+        }
+        const mdMeta = parseSkillMd(destDir) || {};
+        const sourceUrl = `https://github.com/${repo}/tree/HEAD/${skillPath}`;
+        await fsp.writeFile(path.join(destDir, "skill.json"), JSON.stringify({
+          name: id, display_name: mdMeta.name || id, version: mdMeta.version || "1.0.0",
+          author: repo.split("/")[0], description: mdMeta.description || "",
+          source: "market", source_url: sourceUrl, installed_at: (/* @__PURE__ */ new Date()).toISOString(),
+        }, null, 2));
+        // 登记进本地市场列表，市场页签也能看到它
+        const market = loadMarket();
+        if (!market.find((s) => s.id === id)) {
+          market.push({
+            id, name: mdMeta.name || id, version: mdMeta.version || "1.0.0", author: repo.split("/")[0],
+            description: mdMeta.description || "", tags: [src.sourceLabel, "已安装"],
+            tools: [], source_url: sourceUrl,
+          });
+          saveMarket(market);
+        }
+        return json(res, { success: true, id, files: saved.length });
       } catch (e) {
         return json(res, { success: false, error: e.message });
       }

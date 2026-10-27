@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "12.9.0",
+  "version": "13.0.0",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -42,7 +42,7 @@
     "electron:dist": "npm run electron:build",
     "patch": "node scripts/patch-update.mjs",
     "patch:fast": "node scripts/patch-update.mjs --no-build",
-    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs && esbuild src/shared/personas.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/personas.cjs && esbuild src/shared/sessionCleanup.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/sessionCleanup.cjs && esbuild src/shared/opencodeZen.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/opencodeZen.cjs && esbuild src/shared/localApi.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/localApi.cjs && esbuild src/shared/toolArgs.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/toolArgs.cjs && esbuild src/shared/announcement.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/announcement.cjs",
+    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs && esbuild src/shared/personas.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/personas.cjs && esbuild src/shared/sessionCleanup.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/sessionCleanup.cjs && esbuild src/shared/opencodeZen.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/opencodeZen.cjs && esbuild src/shared/localApi.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/localApi.cjs && esbuild src/shared/toolArgs.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/toolArgs.cjs && esbuild src/shared/announcement.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/announcement.cjs && esbuild src/shared/skillMarket.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/skillMarket.cjs",
     "check": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "gen:legal-site": "node scripts/gen-legal-site.mjs",
