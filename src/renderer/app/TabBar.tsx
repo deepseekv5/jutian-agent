@@ -65,9 +65,12 @@ interface Props {
   onOpenSettings: () => void
   onOpenWorkDir?: () => void
   workingSessionIds?: Set<string>
+  /** 手机布局：显示菜单按钮（打开会话抽屉），并收紧内边距 */
+  isMobile?: boolean
+  onToggleSidebar?: () => void
 }
 
-export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenType, toolServerOk, onOpenSettings, onOpenWorkDir, workingSessionIds }: Props) {
+export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenType, toolServerOk, onOpenSettings, onOpenWorkDir, workingSessionIds, isMobile, onToggleSidebar }: Props) {
   const { c } = useTheme()
   const { lang } = useLanguage()
   const isMac = platformIsMac()
@@ -79,9 +82,19 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
     return () => window.removeEventListener('ambient-changed', h)
   }, [])
   return (
-    <div className="h-10 flex items-center shrink-0 border-b px-2 gap-1 glass titlebar-drag" style={{ borderColor: c.border, paddingLeft: isMac ? 14 : 8 }}>
-      {/* 标签条 */}
-      <div className="flex-1 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+    <div className="h-10 flex items-center shrink-0 border-b px-2 gap-1 glass titlebar-drag" style={{ borderColor: c.border, paddingLeft: isMac && !isMobile ? 14 : 8 }}>
+      {/* 手机：会话抽屉入口 */}
+      {isMobile && (
+        <button onClick={onToggleSidebar}
+          className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center titlebar-nodrag"
+          style={{ color: c.textSecondary }} aria-label="会话列表">
+          <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+      {/* 标签条：窄屏横向滚动（隐藏滚动条） */}
+      <div className="tab-strip flex-1 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {tabs.map(tab => {
           const active = tab.id === activeTabId
           const meta = PAGE_META[tab.type]

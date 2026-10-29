@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
+import { useLanguage } from '../hooks/useLanguage'
 import { getAllMemories } from '../store/storage'
 import { hhmm } from '../utils/datetime'
 import { fetchCompat } from '../api'
@@ -27,6 +28,7 @@ interface Prog { stage: string; got?: number; total?: number; pct?: number | nul
 function fmtBytes(n: number) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1024).toFixed(0) + ' KB' }
 
 export default function AboutContent() {
+  const { lang, t } = useLanguage()
   const { c } = useTheme()
   const [stats, setStats] = useState<{ sessions: number; memories: number } | null>(null)
   const [upd, setUpd] = useState<UpdateInfo | null>(null)
@@ -113,8 +115,8 @@ export default function AboutContent() {
             <div>
               <div className="text-[14px] font-semibold" style={{ color: c.textHead }}>巨天agent v{version}</div>
               <div className="text-[11px] font-mono" style={{ color: c.textMuted }}>
-                {hasUpdate ? `可更新至 v${upd?.latest}` : upd?.ok ? '已是最新版本' : checking ? '正在检查…' : '已安装版本'}
-                {lastCheck && !hasUpdate && ` · ${lastCheck} 检查`}
+                {hasUpdate ? (lang === 'en' ? `Update to v${upd?.latest}` : `可更新至 v${upd?.latest}`) : upd?.ok ? t('已是最新版本', 'Up to date') : checking ? t('正在检查…', 'Checking…') : t('已安装版本', 'Installed')}
+                {lastCheck && !hasUpdate && ` · ${lastCheck} ${lang === 'en' ? 'checked' : '检查'}`}
               </div>
             </div>
           </div>
@@ -128,16 +130,14 @@ export default function AboutContent() {
         </div>
         {hasUpdate && upd?.notes && (
           <div className="mt-3 rounded-xl p-3" style={{ background: c.bgInput }}>
-            <div className="text-[11px] font-semibold mb-1.5" style={{ color: c.textSecondary }}>更新说明</div>
+            <div className="text-[11px] font-semibold mb-1.5" style={{ color: c.textSecondary }}>{lang === 'en' ? 'Release notes' : '更新说明'}</div>
             <div className="text-[12px] leading-relaxed max-h-40 overflow-auto markdown-body" style={{ color: c.textSecondary }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{upd.notes}</ReactMarkdown>
             </div>
             <button onClick={apply} disabled={!!updating || !upd.asarUrl}
               className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
-              style={{ background: '#10a37f', color: '#fff' }}>
-              一键更新并重启
-            </button>
-            {!upd.asarUrl && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>(该版本仅有完整安装包)</span>}
+              style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
+            {!upd.asarUrl && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>{lang === 'en' ? '(installer only for this version)' : '(该版本仅有完整安装包)'}</span>}
           </div>
         )}
       </div>

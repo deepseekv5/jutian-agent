@@ -6,6 +6,9 @@ import Sidebar from './Sidebar';
 import ChatTab from '../chat/ChatTab';
 import TabBar, { PAGE_META, SINGLE_INSTANCE, type WorkTab, type PageType } from './TabBar';
 import StatusBar from './StatusBar';
+import MobileTabBar from './MobileTabBar';
+import RuntimeHints from './RuntimeHints';
+import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import BackgroundLayer from './BackgroundLayer';
 import CommandPalette from './CommandPalette';
 import WelcomeSplash from './WelcomeSplash';
@@ -107,6 +110,12 @@ function MainApp() {
   const [toolServerOk, setToolServerOk] = useState<boolean | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(null);
+  // 多端适配（v13.5）：手机侧栏改为抽屉；键盘弹出时把输入区顶上来
+  const vp = useViewport();
+  const kbInset = useKeyboardInset();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 切到桌面宽度时自动收起抽屉，避免抽屉状态残留导致布局错位
+  useEffect(() => { if (!vp.isMobile && mobileNavOpen) setMobileNavOpen(false); }, [vp.isMobile, mobileNavOpen]);
 
   const handleStreamingChange = useCallback((sid: string, streaming: boolean) => {
     setStreamingSessionIds(prev => {
@@ -502,6 +511,7 @@ function MainApp() {
     }
   };
 
+  const mainAreaStyle = { position: 'relative' as const, zIndex: 1, ['--kb-inset' as string]: `${kbInset}px` } as React.CSSProperties;
   return (
     <div className="h-screen overflow-hidden flex relative" style={{ background: bgImage ? "transparent" : "transparent" }}>
       <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
@@ -509,23 +519,30 @@ function MainApp() {
       {/* 氛围模式：全屏氛围光晕（顶栏「氛围」按钮开关，Esc 退出） */}
       {ambient && <div className="ambient-veil" aria-hidden />}
 
-      {/* Sidebar */}
-      <div className="transition-all duration-300 overflow-hidden shrink-0" style={{ width: sidebarCollapsed ? 0 : 280, minWidth: sidebarCollapsed ? 0 : 280, position: 'relative', zIndex: 1 }}>
+      {/* Sidebar：桌面常驻（可折叠），手机为抽屉 */}
+      {vp.isMobile && mobileNavOpen && (
+        <div className="sidebar-scrim" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+      )}
+      <div
+        className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : 'transition-all duration-300 overflow-hidden shrink-0'}
+        style={vp.isMobile
+          ? { background: 'var(--glass-bg, #fff)' }
+          : { width: sidebarCollapsed ? 0 : 280, minWidth: sidebarCollapsed ? 0 : 280, position: 'relative', zIndex: 1 }}>
         <Sidebar
           sessions={sessions}
           activeId={activeId}
           workingIds={streamingSessionIds}
-          onSelect={handleSelectSession}
-          onCreate={handleCreateSession}
+          onSelect={(sid) => { handleSelectSession(sid); setMobileNavOpen(false) }}
+          onCreate={() => { handleCreateSession(); setMobileNavOpen(false) }}
           onDelete={handleDeleteSession}
-          onOpenTab={openTab}
-          onCollapse={() => setSidebarCollapsed(true)}
+          onOpenTab={(t) => { openTab(t); setMobileNavOpen(false) }}
+          onCollapse={() => { setSidebarCollapsed(true); setMobileNavOpen(false) }}
           onJumpToMessage={handleJumpToMessage}
         />
       </div>
 
-      {/* Sidebar toggle */}
-      {sidebarCollapsed && (
+      {/* Sidebar toggle（仅桌面：手机用 TabBar 里的菜单按钮） */}
+      {sidebarCollapsed && !vp.isMobile && (
         <div className="absolute top-2 z-30 titlebar-nodrag" style={{ left: platformIsMac() ? 84 : 8 }}>
           <button onClick={() => setSidebarCollapsed(false)}
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
@@ -541,7 +558,7 @@ function MainApp() {
       )}
 
       {/* Main content: TabBar + tabs */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden" style={{ position: 'relative', zIndex: 1 }}>
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden" style={mainAreaStyle}>
         <TabBar
           tabs={tabs}
           activeTabId={activeTab?.id || ''}
@@ -552,6 +569,8 @@ function MainApp() {
           onOpenSettings={() => openTab('settings')}
           onOpenWorkDir={() => fetchCompat(`/api/sessions/${activeId || ''}/folder`).catch(() => {})}
           workingSessionIds={streamingSessionIds}
+          isMobile={vp.isMobile}
+          onToggleSidebar={() => setMobileNavOpen(v => !v)}
         />
         {/* 应用公告横幅（v11.7）：进应用自动读取 GitHub docs/notice.md；关同条不再打扰 */}
         <AnnouncementBanner />
@@ -582,8 +601,10 @@ function MainApp() {
           />
         )}
 
-        {/* 全局状态栏 */}
-        <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />
+        {/* 全局状态栏（桌面）；手机换成底部导航，省高度 */}
+        {vp.isMobile
+          ? <MobileTabBar activeType={activeTab?.type || null} onPick={(t) => openTab(t)} />
+          : <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />}
       </div>
 
       {/* 内测欢迎页（每次启动） */}
@@ -591,6 +612,9 @@ function MainApp() {
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
 
       {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}
+
+      {/* 断网徽标 + PWA 安装邀请（有事件才出现） */}
+      <RuntimeHints />
 
       {/* jtcode CLI 安装邀请 */}
       {cliPrompt && <CliInstallModal onClose={() => setCliPrompt(false)} />}

@@ -509,7 +509,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   return (
     <div ref={modalRef} role="dialog" aria-modal={embedded ? undefined : true} aria-label="设置" className={embedded ? 'h-full w-full overflow-hidden p-4' : 'fixed inset-0 z-50 flex items-center justify-center p-4'} style={embedded ? {} : { background: c.modalOverlay }}>
       {/* 定高弹窗:左侧分区栏固定不动,仅右侧内容滚动 */}
-      <div className="flex flex-col rounded-2xl border glass overflow-hidden" style={{ border: `1px solid ${c.border}`, height: embedded ? '100%' : 'min(760px, calc(100vh - 88px))', boxShadow: '0 12px 48px rgba(0,0,0,0.14)' }}>
+      <div className="modal-fullscreen-mobile flex flex-col rounded-2xl border glass overflow-hidden" style={{ border: `1px solid ${c.border}`, height: embedded ? '100%' : 'min(760px, calc(100vh - 88px))', boxShadow: '0 12px 48px rgba(0,0,0,0.14)' }}>
         {/* 头部 */}
         <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 shrink-0 border-b" style={{ borderColor: c.borderLight }}>
           <div className="flex-1 min-w-0">

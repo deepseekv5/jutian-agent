@@ -867,3 +867,87 @@ html[data-wallpaper="off"] .glass-strong {
    千条消息的会话滚动与流式重排代价从 O(n) 降到 O(可见)。
    contain-intrinsic-size 给离屏消息一个估算高度，防止滚动条跳动。 */
 .msg-cv { content-visibility: auto; contain-intrinsic-size: auto 140px; }
+
+/* ══════════════════════════════════════════════════════════════
+   多端适配（v13.5）：手机 / 平板 / 桌面
+   约定断点：mobile < 768 ≤ tablet < 1100 ≤ desktop
+   ══════════════════════════════════════════════════════════════ */
+
+/* 安全区：刘海屏/手势条区域不压内容（PWA 全屏与安卓 WebView 都需要） */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+body {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+/* 长内容不撑破布局：表格/代码/图片在窄屏一律横向滚动而不是溢出 */
+.markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
+.markdown-body img { max-width: 100%; height: auto; }
+.markdown-body pre { max-width: 100%; }
+
+/* 触摸设备：所有可点元素的最小高度（44px 是 Apple/Material 的共同下限） */
+@media (pointer: coarse) {
+  button, [role="button"], a[role="button"] { min-height: 44px; }
+  .icon-action-touch { min-width: 44px; min-height: 44px; }
+}
+
+/* ── 手机 ── */
+@media (max-width: 767px) {
+  :root { --chat-font: 16px; }
+  /* 侧栏改为抽屉：默认移出屏幕，由遮罩层控制显隐 */
+  .sidebar-shell { position: fixed; inset: 0 auto 0 0; width: 84vw; max-width: 320px; z-index: 60; transform: translateX(-102%); transition: transform .22s ease; box-shadow: 0 0 40px rgba(0,0,0,.18); }
+  .sidebar-shell.is-open { transform: translateX(0); }
+  .sidebar-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.28); z-index: 55; }
+  /* 顶栏与页签在窄屏收紧 */
+  .tab-strip { overflow-x: auto; scrollbar-width: none; }
+  .tab-strip::-webkit-scrollbar { display: none; }
+  /* 面板内边距收紧，多留内容宽度 */
+  .panel-pad { padding-left: 12px; padding-right: 12px; }
+  /* 弹窗全屏（设置/命令面板/技能市场） */
+  .modal-fullscreen-mobile { position: fixed; inset: 0; width: 100vw !important; height: 100dvh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
+  /* 底部输入区留出手势条 */
+  .composer-dock { padding-bottom: calc(8px + var(--safe-bottom)); }
+  /* 移动端隐藏装饰性光晕，省 GPU */
+  .aurora-orb, .codex-halo { display: none; }
+}
+
+/* ── 平板：侧栏常驻但更窄 ── */
+@media (min-width: 768px) and (max-width: 1099px) {
+  :root { --chat-font: 16px; }
+}
+
+/* ── 横屏手机：压缩纵向留白 ── */
+@media (max-height: 480px) and (orientation: landscape) {
+  .welcome-title { font-size: 20px !important; }
+  .welcome-prompts { display: none; }
+}
+
+/* ── 底部导航（仅手机显示，由组件控制挂载） ── */
+.mobile-tabbar {
+  display: none;
+  padding-bottom: var(--safe-bottom);
+}
+@media (max-width: 767px) {
+  .mobile-tabbar { display: flex; }
+}
+
+/* ── 键盘弹出时的输入区抬升（变量由 useKeyboardInset 注入） ── */
+.composer-lift { transform: translateY(calc(-1 * var(--kb-inset, 0px))); }
+
+/* ── 减少动态效果偏好（无障碍） ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* 手机：聊天内容与输入区左右留白收紧（一屏多显示两三个字宽度） */
+@media (max-width: 767px) {
+  .mobile-px { padding-left: 12px; padding-right: 12px; }
+  .chat-pad { padding-left: 12px !important; padding-right: 12px !important; padding-top: 14px !important; }
+  /* 用户气泡在窄屏占更宽（默认 78% 在手机上太窄） */
+  .bubble-user { max-width: 92% !important; }
+}

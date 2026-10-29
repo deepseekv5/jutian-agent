@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
+import { useLanguage } from '../hooks/useLanguage'
 import { effectiveApiKey } from '../store/storage'
 import PageShell from '../app/PageShell'
 import type { KbEntry } from '../types/kb'
@@ -19,6 +20,7 @@ const R = '10px'
 const softShadow = '0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06)'
 
 export default function KnowledgeBase({ onClose }: { onClose: () => void }) {
+  const { tt: _tt } = useLanguage()
   const { c, theme } = useTheme()
   const [tab, setTab] = useState<Tab>('notes')
   const [entries, setEntries] = useState<KbEntry[]>([])
@@ -86,6 +88,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
   onSelect: (id: string | null) => void; onChanged: () => void; onRemove: (id: string) => void; theme: string
 }) {
   const { c } = useTheme()
+  const { tt } = useLanguage()
   const [query, setQuery] = useState('')
   const [notebook, setNotebook] = useState<string>('__all__')
   const [title, setTitle] = useState('')
@@ -322,7 +325,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
               </div>
             </button>
           ))}
-          {list.length === 0 && <div className="text-center text-[11.5px] py-8" style={{ color: c.textMuted }}>暂无笔记</div>}
+          {list.length === 0 && <div className="text-center text-[11.5px] py-8" style={{ color: c.textMuted }}>{tt('kb.empty')}</div>}
         </div>
       </div>
 

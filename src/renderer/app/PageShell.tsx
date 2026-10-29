@@ -22,7 +22,7 @@ export default function PageShell({ onClose, title, description, actions, childr
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* 页头：面包屑层级 + 标题 + 描述 + 操作区 */}
-      <div className="shrink-0 px-5 pt-4 pb-3 border-b glass" style={{ borderColor: c.borderLight }}>
+      <div className="shrink-0 px-5 pt-4 pb-3 border-b glass mobile-px" style={{ borderColor: c.borderLight }}>
         <div className="flex items-start gap-3">
           {icon && (
             <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"

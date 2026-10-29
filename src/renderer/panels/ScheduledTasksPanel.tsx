@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { useLanguage } from '../hooks/useLanguage'
 import PageShell from '../app/PageShell'
 import { fetchCompat } from '../api'
 
@@ -11,6 +12,7 @@ function saveTasks(tasks: ScheduledTask[]) { localStorage.setItem('lyclaw_schedu
 const TYPE_LABELS: Record<string, string> = { once: '一次性', daily: '每天', weekly: '每周' }
 
 export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { onClose: () => void; embedded?: boolean }) {
+  const { tt } = useLanguage()
   const { c } = useTheme()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
             <svg className="w-10 h-10 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2} style={{ color: c.textMuted }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-[13px]" style={{ color: c.textMuted }}>暂无定时任务</p>
+            <p className="text-[13px]" style={{ color: c.textMuted }}>  {tt('tasks.empty')}</p>
             <button onClick={() => setShowNewForm(true)} className="text-[12px] font-medium mt-1" style={{ color: c.accent }}>创建第一个</button>
           </div>
         ) : (

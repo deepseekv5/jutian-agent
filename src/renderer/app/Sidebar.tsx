@@ -9,6 +9,7 @@ import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 import { useMetaMap } from '../store/sessionMeta'
 import { filterByTags, tagCloud } from '../../shared/sessionMeta'
+import { translate } from '../../shared/i18n'
 import { tokenize, highlight } from '../../shared/searchIndex'
 import SessionContextMenu from './SessionContextMenu'
 import { fetchCompat } from '../api'
@@ -81,16 +82,16 @@ function highlightSnippet(text: string, q: string) {
   )
 }
 
-function groupSessions(list: Session[], _lang: 'zh' | 'en'): { label: string; items: Session[] }[] {
+function groupSessions(list: Session[], lang: 'zh' | 'en'): { label: string; items: Session[] }[] {
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const DAY = 86400000
   const buckets: { label: string; items: Session[] }[] = [
-    { label: '今天', items: [] },
-    { label: '昨天', items: [] },
-    { label: '前 7 天', items: [] },
-    { label: '前 30 天', items: [] },
-    { label: '更早', items: [] },
+    { label: translate(lang, 'chat.today'), items: [] },
+    { label: translate(lang, 'chat.yesterday'), items: [] },
+    { label: translate(lang, 'chat.thisWeek'), items: [] },
+    { label: translate(lang, 'chat.thisMonth'), items: [] },
+    { label: translate(lang, 'chat.earlier'), items: [] },
   ]
   for (const s of list) {
     const raw = s.updated_at || s.created_at

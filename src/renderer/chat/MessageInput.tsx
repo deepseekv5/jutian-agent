@@ -926,7 +926,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const canSend = !!value.trim()
 
   return (
-    <div className="px-6 pt-2 pb-4 shrink-0">
+    <div className="composer-dock composer-lift px-6 pt-2 pb-4 shrink-0 mobile-px">
       <div ref={panelRef} className="mx-auto w-full relative" style={{ maxWidth: wide ? 1100 : 860 }}>
         {/* 工具面板 —— 位于输入框上方 */}
         {showToolbar && (

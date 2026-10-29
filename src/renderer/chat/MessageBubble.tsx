@@ -475,7 +475,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
     return (
       <div className="msg-cv flex justify-end mb-6 animate-fade-in"
         onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowRollbackConfirm(false) }}>
-        <div className="max-w-[78%] flex flex-col items-end">
+        <div className="bubble-user max-w-[78%] flex flex-col items-end">
           {editing ? (
             <div className="w-full rounded-2xl border p-2" style={{ background: c.surfaceInput, borderColor: c.border }}>
               <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={Math.min(8, editText.split('\n').length + 1)} autoFocus
