@@ -116,6 +116,103 @@ function _sttPump() {
 function sttTranscribe(wavPath) {
   return new Promise((resolve, reject) => { _stt.queue.push({ path: wavPath, resolve, reject }); _sttPump(); });
 }
+
+/**
+ * 系统语音兜底（v13.3）：Edge TTS 需要联网，微软服务偶发 403/限流。
+ * 三个桌面平台各有离线合成器，逐平台调用，产出可直接播放的音频。
+ * 手机端没有系统合成器 → 前端自动回退浏览器 speechSynthesis。
+ */
+async function osTtsSynthesize(text, voice, speed) {
+  const tmpDir = path.join(DATA_DIR, "tts-tmp");
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const stamp = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const rate = Math.max(0.5, Math.min(2, Number(speed) || 1));
+  const clean = String(text || "").slice(0, 4000);
+  try {
+    if (process.platform === "darwin") {
+      const aiff = path.join(tmpDir, stamp + ".aiff");
+      const m4a = path.join(tmpDir, stamp + ".m4a");
+      const v = /^zh/i.test(String(voice || "")) ? "Tingting" : "Samantha";
+      await execAsync("say", ["-v", v, "-r", String(Math.round(180 * rate)), "-o", aiff, clean], { timeout: 60e3 });
+      try {
+        await execAsync("afconvert", ["-f", "m4af", "-d", "aac", "-b", "64000", aiff, m4a], { timeout: 60e3 });
+        return { buf: fs.readFileSync(m4a), mime: "audio/mp4", ext: ".m4a" };
+      } catch {
+        return { buf: fs.readFileSync(aiff), mime: "audio/aiff", ext: ".aiff" };
+      }
+    }
+    if (process.platform === "win32") {
+      const wav = path.join(tmpDir, stamp + ".wav");
+      const txt = path.join(tmpDir, stamp + ".txt");
+      fs.writeFileSync(txt, clean, "utf-8");
+      const q = (s) => s.replace(/'/g, "''");
+      const ps = [
+        "Add-Type -AssemblyName System.Speech;",
+        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;",
+        `$s.Rate = ${Math.max(-10, Math.min(10, Math.round((rate - 1) * 10)))};`,
+        `$s.SetOutputToWaveFile('${q(wav)}');`,
+        `$s.Speak([IO.File]::ReadAllText('${q(txt)}', [Text.Encoding]::UTF8));`,
+        "$s.Dispose();",
+      ].join(" ");
+      await execAsync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], { timeout: 90e3 });
+      if (!fs.existsSync(wav)) throw new Error("系统语音未产出音频");
+      return { buf: fs.readFileSync(wav), mime: "audio/wav", ext: ".wav" };
+    }
+    // Linux：espeak-ng → espeak → pico2wave
+    const wav = path.join(tmpDir, stamp + ".wav");
+    const speedArg = String(Math.round(175 * rate));
+    for (const [bin, args] of [
+      ["espeak-ng", ["-v", "zh", "-s", speedArg, "-w", wav]],
+      ["espeak", ["-v", "zh", "-s", speedArg, "-w", wav]],
+      ["pico2wave", ["-l", "zh-CN", "-w", wav]],
+    ] as [string, string[]][]) {
+      try {
+        await execAsync(bin, [...args, clean.slice(0, 2000)], { timeout: 60e3 });
+        if (fs.existsSync(wav) && fs.statSync(wav).size > 1000) {
+          return { buf: fs.readFileSync(wav), mime: "audio/wav", ext: ".wav" };
+        }
+      } catch { /* 试下一个引擎 */ }
+    }
+    throw new Error("没有可用的系统语音引擎（Linux 建议安装 espeak-ng）");
+  } finally {
+    try {
+      for (const f of fs.readdirSync(tmpDir)) if (f.startsWith(stamp)) fs.unlinkSync(path.join(tmpDir, f));
+    } catch { /* 清理失败不影响结果 */ }
+  }
+}
+async function cloudAsr(audioBuf, mime) {
+  let base = "", key = "", model = "";
+  try {
+    for (const r of (sharedDb ? db.getAllSettings() : [])) {
+      if (r.key === "apiBaseUrl") base = String(r.value || "");
+      if (r.key === "apiKey") key = String(r.value || "");
+      if (r.key === "asrModel") model = String(r.value || "");
+    }
+  } catch { /* 设置读不到就走失败分支 */ }
+  if (!base || !key || key.indexOf("****") >= 0 || key === "free" || key === "keyless") {
+    throw new Error("未配置可用的模型服务（云端识别需要 API Key）");
+  }
+  let b = base.trim().replace(/\/+$/, "");
+  if (/\/chat\/completions$/i.test(b)) b = b.replace(/\/chat\/completions$/i, "");
+  const ext = /webm/i.test(mime) ? "webm" : /mp4|m4a|aac/i.test(mime) ? "m4a" : /ogg/i.test(mime) ? "ogg" : /mp3|mpeg/i.test(mime) ? "mp3" : "wav";
+  const form = new FormData();
+  form.append("file", new Blob([audioBuf], { type: mime || "audio/wav" }), "audio." + ext);
+  form.append("model", model || "whisper-1");
+  const r = await fetch(`${b}/audio/transcriptions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+    signal: AbortSignal.timeout(120e3),
+  });
+  if (!r.ok) {
+    const errText = (await r.text().catch(() => "")).slice(0, 300);
+    throw new Error(`云端识别 HTTP ${r.status}${errText ? "：" + errText : ""}`);
+  }
+  const data = await r.json().catch(() => null);
+  const text = String(data?.text || "").trim();
+  if (!text) throw new Error("云端识别未返回文本");
+  return text;
+}
 // SQLite 设置存储（与开发版共用 ~/.lyclaw/data.db，避免 settings.json 双源不一致）
 var PKG = (() => { try { return require("./package.json"); } catch (e) { return { version: "unknown" }; } })();
 var sharedDb = null;
@@ -2974,7 +3071,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       // 诊断级快照：排查环境问题时一个请求看全（v13.2）
       uptime_s: Math.round(process.uptime()),
       memory: { rss_mb: Math.round(process.memoryUsage().rss / 1048576), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576) },
-      db: sharedDb ? "sqlite" : (db && db.__jsondb ? "jsondb" : "none"),
+      db: sharedDb ? (sharedDb.__engine || "sqlite") : (db && db.__jsondb ? "jsondb" : "none"),
       node: process.version,
     });
     // 数据库维护：VACUUM 回收已删除数据占用的空间
@@ -5241,9 +5338,16 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
             const { stdout } = await execAsync(pyBin, [sttScript, wavPath], { timeout: 90000, maxBuffer: 1024 * 1024 })
             text = (stdout || "").trim()
           }
-          return json(res, { success: true, text })
+          return json(res, { success: true, text, engine: "local" })
         } catch (e) {
-          return json(res, { success: false, error: `语音识别失败: ${e.stderr || e.message}` }, 500)
+          // 本地引擎不可用（Windows/Linux/手机常见：没 python 或没模型）
+          // → 云端识别（用户已配置的 OpenAI 兼容端点），让语音输入在所有端可用
+          try {
+            const text = await cloudAsr(audioData, String(ctype));
+            return json(res, { success: true, text, engine: "cloud" });
+          } catch (ce) {
+            return json(res, { success: false, error: `语音识别失败: ${e.stderr || e.message} / 云端: ${ce.message}` }, 500);
+          }
         } finally {
           try { fs.unlinkSync(wavPath) } catch {}
         }
@@ -5295,12 +5399,18 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         if (!spoken) return json(res, { error: "缺少 text" }, 400);
         // v11.0.1:TTS 磁盘缓存 —— 相同文本+音色+语速第二次朗读零等待
         const ttsCacheKey = crypto.createHash("sha1").update(`${spoken}|${voice || ""}|${Number(speed) || 1}`).digest("hex");
-        const ttsCacheFile = path.join(DATA_DIR, "tts-cache", ttsCacheKey + ".mp3");
+        const ttsCacheDir = path.join(DATA_DIR, "tts-cache");
+        const ttsCacheFile = path.join(ttsCacheDir, ttsCacheKey + ".mp3");
+        // 缓存可能是任一台引擎产出的格式（mp3/m4a/wav/aiff），逐个探测
+        const TTS_CACHE_TYPES: [string, string][] = [["mp3", "audio/mpeg"], ["m4a", "audio/mp4"], ["wav", "audio/wav"], ["aiff", "audio/aiff"]];
         try {
-          if (fs.existsSync(ttsCacheFile)) {
-            res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg", "X-TTS-Cache": "hit" });
-            res.end(fs.readFileSync(ttsCacheFile));
-            return;
+          for (const [ext, mime] of TTS_CACHE_TYPES) {
+            const f = path.join(ttsCacheDir, ttsCacheKey + "." + ext);
+            if (fs.existsSync(f)) {
+              res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": mime, "X-TTS-Cache": "hit" });
+              res.end(fs.readFileSync(f));
+              return;
+            }
           }
         } catch {}
         // v10.8：Node 原生 Edge TTS 优先（零 python 依赖，mac-x64/Win 全平台可用，
@@ -5313,7 +5423,22 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           res.end(mp3);
           return;
         } catch (nodeErr) {
-          console.error("[TTS] node-native 失败,回落 python:", nodeErr.message);
+          console.error("[TTS] node-native 失败,回落系统语音:", nodeErr.message);
+        }
+        // 系统语音兜底（离线可用）：Edge TTS 403/断网时保证"至少能读出来"
+        try {
+          const os = await osTtsSynthesize(spoken, voice, speed);
+          if (os && os.buf && os.buf.length > 0) {
+            try {
+              fs.mkdirSync(ttsCacheDir, { recursive: true });
+              fs.writeFileSync(path.join(ttsCacheDir, ttsCacheKey + os.ext), os.buf);
+            } catch {}
+            res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": os.mime, "X-TTS-Engine": "os" });
+            res.end(os.buf);
+            return;
+          }
+        } catch (osErr) {
+          console.error("[TTS] 系统语音不可用:", osErr.message);
         }
         // 惰性启动：首次语音请求时才拉起 Edge TTS python 进程
         try { if (globalThis.ensureEdgeTTS) await Promise.race([globalThis.ensureEdgeTTS(), new Promise((rr) => setTimeout(rr, 12000))]); } catch {}

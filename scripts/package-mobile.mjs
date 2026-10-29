@@ -49,6 +49,11 @@ fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(STAGE, 'package.json'
 for (const f of fs.readdirSync(path.join(ROOT, 'src/shared'))) {
   if (f.endsWith('.cjs')) fs.copyFileSync(path.join(ROOT, 'src/shared', f), path.join(STAGE, 'src/shared', f))
 }
+// 语音合成引擎：serve.cjs 以 ./electron/edge-tts.cjs 相对路径加载。
+// 该模块已做 WebSocket 双实现（有 ws 用 ws，没有就用 Node 22+ 内置），
+// 因此手机包不带 node_modules 也能出声。
+fs.mkdirSync(path.join(STAGE, 'electron'), { recursive: true })
+fs.copyFileSync(path.join(ROOT, 'electron', 'edge-tts.cjs'), path.join(STAGE, 'electron', 'edge-tts.cjs'))
 fs.cpSync(path.join(ROOT, 'dist'), path.join(STAGE, 'dist'), { recursive: true })
 
 // 4) Termux 一键安装脚本
@@ -61,11 +66,20 @@ set -e
 cd "$(dirname "$0")"
 
 echo "[1/3] 安装 Node.js（若已装则跳过）..."
-command -v node >/dev/null || pkg install -y nodejs-lts
+# 用 nodejs 而不是 nodejs-lts：需要 Node 22+ 才有内置 SQLite（真 SQL 存储）
+# 与内置 WebSocket（语音合成）。nodejs-lts 是 20.x，两样都没有。
+if ! command -v node >/dev/null; then
+  pkg install -y nodejs || pkg install -y nodejs-lts
+fi
+NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "提示：当前 Node $NODE_MAJOR.x，低于 22。数据将退到 JSON 存储，语音合成走浏览器。"
+  echo "     建议 pkg install nodejs 升级到 22+ 以获得真 SQL 与原生语音。"
+fi
 
 echo "[2/3] 安装巨天agent到 ~/jutian ..."
 mkdir -p ~/jutian
-cp -r serve.cjs src dist package.json ~/jutian/
+cp -r serve.cjs src dist electron package.json ~/jutian/
 
 echo "[3/3] 启动..."
 echo ""

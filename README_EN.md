@@ -2,15 +2,15 @@
 
 # 巨天agent
 
-**Desktop AI Workbench — Chat · Code · Swarm · Computer Use**
+**Desktop AI Workbench — Chat · Code · Swarm · Skills · Mobile**
 
 One sentence in, finished work out.
 
 **English** | [简体中文](README.md)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v7.0.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
-[![Platform](https://img.shields.io/badge/macOS%20·%20Windows-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Version](https://img.shields.io/badge/v13.3.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Platform](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
 
 [Download](https://github.com/deepseekv5/jutian-agent/releases) · [Documentation](#docs) · [Quick Start](#quick-start) · [FAQ](#faq)
@@ -39,13 +39,21 @@ The browser makes you come to AI. The desktop puts AI where the work already is 
 
 The main agent can dispatch 1–5 parallel sub-agents (worker pool, concurrency 3), each with full tool access. Live progress in the sidebar; stop anytime.
 
-## Computer Use
-
-Give a goal; it screenshots, decides, clicks, types, and verifies in a loop. Every step visible and interruptible — "confirm each step" mode gates every action.
-
 ## Phone Remote
 
 Pair by scanning a QR code on the LAN; chat, tool calls, screenshots, and sub-agent progress sync to your phone. Pairing-gated; no page without the code.
+
+## Skills Market
+
+Install real skills straight from Anthropic's official Agent Skills repository (184k stars) and the Superpowers community set — 30+ professional skills (PDF/PPT, frontend design, brand guidelines, MCP building). Preview the full SKILL.md before installing; installs pull real files recursively from whitelisted repos (no git needed, works on phones too).
+
+## Rich Rendering
+
+Mermaid diagrams render inline (flowcharts, sequence, gantt) with one-click source toggle; KaTeX typesets math (dollar and backslash-paren delimiters both work); complete HTML documents get a sandboxed Preview tab. All lazy-loaded — sessions without diagrams or math pay nothing (main bundle +0.4 KB).
+
+## Phone Standalone
+
+Run the full agent on Android without a computer: install Termux, unzip `jutian-mobile-*.zip`, run `bash install.sh`. Data lives on the phone using the built-in SQLite of Node 22+ (real SQL, knowledge base included); older Node falls back to JSON storage. The Android APK auto-detects a local server and otherwise walks you through both modes.
 
 ## <a id="docs"></a> Documentation
 
@@ -54,7 +62,6 @@ Pair by scanning a QR code on the LAN; chat, tool calls, screenshots, and sub-ag
 | [Install & Run](docs/guide/install.md) | Three install paths, first-run config, troubleshooting |
 | [Model Setup](docs/guide/models.md) | Any OpenAI-compatible endpoint, model fetch, thinking levels |
 | [Swarm](docs/guide/swarm.md) | Employees, group chats, parallel pool, team templates |
-| [Computer Use](docs/guide/computer-use.md) | The loop, step confirmation, permissions |
 | [Phone Remote](docs/guide/remote.md) | Pairing, capabilities, LAN trust model |
 | [LY HARNESS](docs/guide/harness.md) | Per-tool toggles, MCP, Skills |
 | [Knowledge & Memory](docs/guide/knowledge.md) | RAG, embeddings, memory vs knowledge |

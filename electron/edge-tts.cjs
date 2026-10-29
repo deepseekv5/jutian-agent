@@ -14,7 +14,50 @@
  *   Path:audio 的 payload 追加为音频，Path:turn.end 结束
  */
 const crypto = require("crypto");
-const WebSocket = require("ws");
+
+/**
+ * WebSocket 双实现适配（v13.3）：
+ *   桌面端有 node_modules/ws → 用它；
+ *   手机独立包（Termux，无 node_modules）→ 用 Node 22+ 内置 WebSocket。
+ * 两者事件模型不同，这里统一成 ws 风格的 on/send/close。
+ */
+function openSocket(url, opts) {
+  let WsImpl = null;
+  try { WsImpl = require("ws"); } catch { WsImpl = null; }
+  if (WsImpl) {
+    const ws = new WsImpl(url, opts);
+    return {
+      on: (ev, cb) => ws.on(ev, cb),
+      send: (data, cb) => ws.send(data, (e) => cb && cb(e)),
+      close: () => { try { ws.close(); } catch { /* 已关闭 */ } },
+    };
+  }
+  if (typeof WebSocket !== "function") {
+    throw new Error("无可用的 WebSocket 实现（需要 ws 包或 Node 22+）");
+  }
+  const ws = new WebSocket(url, opts);
+  ws.binaryType = "arraybuffer";
+  const handlers = {};
+  const emit = (ev, ...a) => (handlers[ev] || []).forEach((f) => f(...a));
+  ws.addEventListener("open", () => emit("open"));
+  ws.addEventListener("message", (e) => {
+    const d = e.data;
+    if (typeof d === "string") return emit("message", d, false);
+    if (d instanceof ArrayBuffer) return emit("message", Buffer.from(d), true);
+    if (typeof Blob !== "undefined" && d instanceof Blob) {
+      d.arrayBuffer().then((ab) => emit("message", Buffer.from(ab), true));
+      return;
+    }
+    emit("message", Buffer.from(String(d)), true);
+  });
+  ws.addEventListener("error", (e) => emit("error", new Error(e.message || "socket error")));
+  ws.addEventListener("close", () => emit("close"));
+  return {
+    on: (ev, cb) => { (handlers[ev] = handlers[ev] || []).push(cb); },
+    send: (data, cb) => { try { ws.send(data); if (cb) cb(null); } catch (e) { if (cb) cb(e); } },
+    close: () => { try { ws.close(); } catch { /* 已关闭 */ } },
+  };
+}
 
 const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
 const WSS_URL =
@@ -82,7 +125,7 @@ function synthOne(spokenRaw, voice, speed) {
 
     let ws;
     try {
-      ws = new WebSocket(url, {
+      ws = openSocket(url, {
         headers: {
           Pragma: "no-cache",
           "Cache-Control": "no-cache",

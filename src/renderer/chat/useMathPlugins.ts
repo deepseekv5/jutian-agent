@@ -51,7 +51,7 @@ export function hasMathSyntax(text: string): boolean {
  * 只认 $..$ / $$..$$。在 fence 外做一次转换（fence 内的代码不能动）。
  */
 export function normalizeMathDelimiters(text: string): string {
-  if (!text || !/\\[(\[]/.test(text)) return text
+  if (!text || !/\\[([]/.test(text)) return text
   // 按 fenced code 切开：偶数段（fence 外）才转换
   const parts = String(text).split(/(```[\s\S]*?(?:```|$))/g)
   return parts.map((seg, i) => {

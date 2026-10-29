@@ -88,25 +88,67 @@ public class MainActivity extends Activity {
         web.loadUrl("http://127.0.0.1:3211/");
     }
 
-    /** 首次配置界面：填电脑地址与配对码 */
+    /** 首次配置界面：本机模式（Termux）或连接电脑 */
     private void showSetup() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (24 * getResources().getDisplayMetrics().density);
         box.setPadding(pad, pad * 2, pad, pad);
-        box.setGravity(Gravity.CENTER_HORIZONTAL);
 
         TextView title = new TextView(this);
-        title.setText("连接你的电脑");
-        title.setTextSize(22);
+        title.setText("巨天 Agent");
+        title.setTextSize(24);
         box.addView(title);
+
+        TextView ver = new TextView(this);
+        ver.setText("版本 " + versionName() + " · 本机模式与远程模式都支持");
+        ver.setTextSize(12);
+        ver.setTextColor(0xFF888888);
+        ver.setPadding(0, pad / 4, 0, pad);
+        box.addView(ver);
+
+        // 模式一：本机（Termux 独立运行完整 Agent，不需要电脑）
+        TextView localTitle = new TextView(this);
+        localTitle.setText("方式一 · 本机运行（不需要电脑）");
+        localTitle.setTextSize(15);
+        box.addView(localTitle);
+
+        TextView localHint = new TextView(this);
+        localHint.setText("在手机安装 Termux，下载发行版里的 jutian-mobile-*.zip 解压后执行\n"
+                + "  bash install.sh\n"
+                + "启动后点下面的「检测本机服务」即可使用完整功能（数据存在手机本地）。");
+        localHint.setTextSize(12);
+        localHint.setTextColor(0xFF666666);
+        localHint.setPadding(0, pad / 4, 0, pad / 2);
+        box.addView(localHint);
+
+        Button detect = new Button(this);
+        detect.setText("检测本机服务");
+        detect.setOnClickListener(v -> {
+            detect.setEnabled(false);
+            detect.setText("检测中…");
+            detectLocalThen(() -> {
+                detect.setEnabled(true);
+                detect.setText("检测本机服务");
+                showSetup();
+            });
+        });
+        box.addView(detect);
+
+        // 模式二：连接电脑
+        TextView remoteTitle = new TextView(this);
+        remoteTitle.setText("方式二 · 连接电脑");
+        remoteTitle.setTextSize(15);
+        remoteTitle.setPadding(0, pad, 0, 0);
+        box.addView(remoteTitle);
 
         TextView hint = new TextView(this);
         hint.setText("在电脑端「设置 → 复制手机远程地址」得到形如\n"
                 + "http://192.168.1.5:3211/remote.html?t=abc123\n"
                 + "把地址和配对码填在下面。手机与电脑需在同一局域网。");
-        hint.setTextSize(13);
-        hint.setPadding(0, pad / 2, 0, pad);
+        hint.setTextSize(12);
+        hint.setTextColor(0xFF666666);
+        hint.setPadding(0, pad / 4, 0, pad / 2);
         box.addView(hint);
 
         EditText hostInput = new EditText(this);
@@ -143,7 +185,18 @@ public class MainActivity extends Activity {
         });
         box.addView(go);
 
-        setContentView(box);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(box);
+        setContentView(scroll);
+    }
+
+    /** 安装包版本号（欢迎页展示，便于确认装的是不是最新包） */
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "未知";
+        }
     }
 
     /** 加载电脑端的手机版界面 */

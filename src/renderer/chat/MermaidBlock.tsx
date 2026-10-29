@@ -19,8 +19,6 @@ function loadMermaid() {
   return mermaidPromise
 }
 
-let seq = 0
-
 export default function MermaidBlock({ code }: { code: string }) {
   const { c } = useTheme()
   const [svg, setSvg] = useState('')

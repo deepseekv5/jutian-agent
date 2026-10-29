@@ -5,7 +5,9 @@
 
 'use strict'
 
-const Database = require('better-sqlite3')
+// SQLite 三档适配：better-sqlite3（桌面原生）→ node:sqlite（Node 22+ 内置，
+// 手机/Termux 可用）→ 失败由 serve 回退 jsondb。见 sqliteShim.cjs。
+const { open: openSqlite } = require('./sqliteShim.cjs')
 const { join } = require('path')
 const { homedir } = require('os')
 const { mkdirSync, existsSync } = require('fs')
@@ -16,7 +18,7 @@ const DB_PATH = join(DB_DIR, 'data.db')
 
 if (!existsSync(DB_DIR)) mkdirSync(DB_DIR, { recursive: true })
 
-const db = new Database(DB_PATH)
+const db = openSqlite(DB_PATH)
 db.pragma('journal_mode = WAL')
 
 // 知识条目表（AI 与用户可写，支撑图谱连线）
@@ -427,6 +429,8 @@ function kbDeleteByPath(path) {
 
 module.exports = {
   db, genId,
+  // 实际生效的 SQLite 引擎（better-sqlite3 / node:sqlite）——健康检查与诊断用
+  __engine: db.__engine || 'better-sqlite3',
   createSession, getSession, listSessions, updateSession, deleteSession,
   addMessage, getMessages, deleteMessages, updateMessage, getLastMessage, vacuumDb, messageCounts,
   setMemory, getMemory, getAllMemories, deleteMemory,

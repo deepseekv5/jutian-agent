@@ -9,8 +9,8 @@
 [English](README_EN.md) | **简体中文**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v11.6.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
-[![Platform](https://img.shields.io/badge/macOS%20·%20Windows-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Version](https://img.shields.io/badge/v13.3.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Platform](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Docs](https://img.shields.io/badge/docs-12%20篇-8b5cf6?style=for-the-badge&labelColor=0a0a0b)](#docs)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
 
@@ -48,7 +48,7 @@
 
 **01 — 说人话,它动手**
 
-38 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
+50 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
 
 **02 — 代码模式**
 
@@ -64,7 +64,7 @@
 
 **05 — 一切皆插件**
 
-LY HARNESS 插件中心:38 个工具逐个开关、MCP 服务即插即用、Skills 按消息挂载。工具 schema 单一来源,桌面 / 手机 / 服务端三方同步。
+LY HARNESS 插件中心:50 个工具逐个开关、MCP 服务即插即用、Skills 按消息挂载。工具 schema 单一来源,桌面 / 手机 / 服务端三方同步。
 
 **06 — 越用越懂你**
 
@@ -118,6 +118,45 @@ LY HARNESS 插件中心:38 个工具逐个开关、MCP 服务即插即用、Skil
 Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 
 → **完整文档**:[手机远程](docs/guide/remote.md)
+
+<br>
+
+<a id="standalone"></a>
+
+## ✦ 手机独立运行 — 不需要电脑
+
+在手机装 Termux,解压 `jutian-mobile-*.zip` 执行 `bash install.sh`,完整 Agent 就跑在手机上:对话、工具、知识库、语音全部可用,数据存在手机本地。
+
+| 能力 | 手机端实现 |
+|---|---|
+| 数据存储 | Node 22+ 内置 SQLite(真 SQL,含知识库);旧版 Node 自动退 JSON 存储 |
+| 语音合成 | Edge TTS(内置 WebSocket,无 node_modules 也能用);失败退浏览器语音 |
+| 语音输入 | 浏览器识别优先;不可用时云端识别(用你配置的模型服务) |
+| 界面 | 与桌面同一份前端,手机浏览器/APK 都能用 |
+
+安卓 APK 启动时会自动探测本机服务:检测到手机已在跑 Agent 就直接进完整界面,否则进入双模式引导页(本机模式 / 连接电脑)。
+
+<br>
+
+<a id="skills"></a>
+
+## ✦ 技能市场 — 真实来源,一键安装
+
+接入 Anthropic 官方 Agent Skills 仓库(18 万 star)与 Superpowers 社区技能集,30+ 个专业级技能:PDF/PPT 处理、前端设计、品牌规范、MCP 构建、算法艺术、系统化调试……
+
+安装前可预览完整 SKILL.md 说明;安装走白名单仓库目录递归拉取,不依赖 git,手机端同样可用。安全边界:目录名白名单、扩展名白名单(拒绝二进制载荷)、单文件与总量限额。
+
+<br>
+
+<a id="rich"></a>
+
+## ✦ 富文本渲染 — 图表 · 公式 · 网页预览
+
+- **Mermaid 图表**:` ```mermaid ` 块自动渲染成流程图/时序图/甘特图,图形与源码一键切换
+- **数学公式**:KaTeX 排版,同时支持 `$..$` 与 `\(..\)` 两种写法
+- **HTML Artifacts**:Agent 生成的完整网页,代码块头部一键「预览」,iframe 沙箱隔离
+
+三者全部按需加载:不用图表和公式的会话零开销,主程序包仅增 0.4 KB。
 
 <br>
 
