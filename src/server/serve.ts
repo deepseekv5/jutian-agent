@@ -1882,10 +1882,18 @@ async function electronSearch(q) {
   return [];
 }
 
+// 搜索结果缓存（v13.6，10 分钟 TTL）：agent 调研常同词反复搜，命中省 2-5 秒
+const SEARCH_CACHE = new Map();
+const SEARCH_CACHE_TTL = 10 * 60 * 1000;
 async function web_search(args) {
   try {
     const q = args.query || args.q || "";
     if (!q) return { success: false, error: "缺少 query 参数" };
+    const cacheKey = q.trim().toLowerCase();
+    const cached = SEARCH_CACHE.get(cacheKey);
+    if (cached && Date.now() - cached.at < SEARCH_CACHE_TTL) {
+      return { ...cached.result, cached: true };
+    }
     // 策略一(首选):直接抓搜索引擎结果页——零依赖、无需 key、1-2s 出结果。
     // Bing SERP 直抓优先;不足 5 条再补 DuckDuckGo HTML 端点。
     let results = mergeSources([await bingSearch(q), await ddgSearch(q)]);
@@ -1917,7 +1925,10 @@ async function web_search(args) {
     if (results.length === 0) {
       return { success: false, error: "搜索无结果：所有搜索引擎均未返回内容，请稍后重试或换个关键词" };
     }
-    return { success: true, output: JSON.stringify(results.slice(0, 10), null, 2) };
+    const RESULT = { success: true, output: JSON.stringify(results.slice(0, 10), null, 2) };
+    SEARCH_CACHE.set(cacheKey, { at: Date.now(), result: RESULT });
+    if (SEARCH_CACHE.size > 50) SEARCH_CACHE.delete(SEARCH_CACHE.keys().next().value);
+    return RESULT;
   } catch (e) { return { success: false, error: e.message }; }
 }
 
@@ -3529,6 +3540,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         }
         // 流式:实时透传;押后 [DONE],空流自动重试,单上游耗尽后接力下一家
         res.writeHead(200, sseHeaders);
+        // 心跳（v13.6）：上游排队/429 退避期间代理不发任何字节，中间层可能
+        // 按 idle 超时掐断连接。每 15s 发一行 SSE 注释（客户端解析器天然忽略），
+        // 连接关闭时自动清除——覆盖所有退出路径。
+        const heartbeat = setInterval(() => { try { res.write(": ping\n\n"); } catch { /* 已断开 */ } }, 15000);
+        res.on("close", () => clearInterval(heartbeat));
         let payload = basePayload;
         for (let ci = 0; ci <= RELAY_CHAIN.length; ci++) {
           const u = ci === 0 ? { base: targetBase, key: apiKey, name: "primary" } : RELAY_CHAIN[ci - 1];

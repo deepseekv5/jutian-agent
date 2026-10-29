@@ -4,6 +4,7 @@
  */
 import { useMemo } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import NotificationCenter from './NotificationCenter'
 import { summarizeUsage } from '../store/usage'
@@ -18,6 +19,7 @@ interface Props {
 
 export default function StatusBar({ serverOk, model, workDir }: Props) {
   const { c } = useTheme()
+  const { lang, tt } = useLanguage()
   const minuteKey = Math.floor(Date.now() / 60000)
   // minuteKey 只作为「分钟时钟」参与依赖：每分钟变化一次以触发用量重算，回调内不直接引用它
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35,7 +37,7 @@ export default function StatusBar({ serverOk, model, workDir }: Props) {
           background: serverOk === null ? '#d97706' : serverOk ? '#16a34a' : '#dc2626',
           boxShadow: serverOk === true ? '0 0 4px rgba(22,163,74,0.5)' : 'none',
         }} />
-        {serverOk === null ? '服务检测中' : serverOk ? '服务正常' : '服务离线'}
+        {serverOk === null ? tt('state.loading') : serverOk ? tt('state.connected') : tt('state.disconnected')}
       </span>
 
       {/* 工作区 */}
@@ -50,7 +52,7 @@ export default function StatusBar({ serverOk, model, workDir }: Props) {
 
       {/* 今日用量 */}
       <span className="font-mono hidden sm:inline" title="今日对话轮次 / tokens">
-        今日 {usage.msgs} 轮 · {fmtTokens(usedTokens)} tok
+        {lang === 'en' ? `Today ${usage.msgs} turns · ${fmtTokens(usedTokens)} tok` : `今日 ${usage.msgs} 轮 · ${fmtTokens(usedTokens)} tok`}
       </span>
 
       {/* 模型 */}

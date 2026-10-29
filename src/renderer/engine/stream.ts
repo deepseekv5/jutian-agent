@@ -50,6 +50,38 @@ export interface StreamCallbacks {
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
 const CLIENT_TOOLS = new Set(['dispatch_subagents', 'update_plan'])
 
+/**
+ * 只读工具（v13.6）：无副作用、相互独立，可并行执行。
+ * 模型"同时读 3 个文件再回答"是最高频的多调用场景，串行执行是纯等待。
+ * 有副作用的（write/shell/delete/move）严格串行，保持顺序语义。
+ */
+const READONLY_TOOLS = new Set([
+  'read_file', 'list_dir', 'search_files', 'search_content', 'web_search', 'web_fetch',
+  'system_info', 'process_list', 'port_check', 'recall',
+  'text_tools', 'json_process', 'timestamp_tools', 'uuid_generate', 'random_tools',
+  'color_tools', 'hash_tools', 'base64_tools', 'url_tools',
+])
+
+/** 单工具硬超时：任何工具挂死都不能拖死整轮对话（shell 自身有更短超时则先到先生效） */
+const TOOL_TIMEOUT_MS = 180_000
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
+  ])
+}
+
+/**
+ * 工具结果截断（v13.6）：超大输出（list 整个 node_modules、read 大文件）会
+ * 撑爆上下文且拖慢下一轮请求。40K 字符对模型足够做出下一步判断；
+ * 截断说明里告知模型如何分段获取完整内容。
+ */
+function clampToolResult(text: string): string {
+  const MAX = 40_000
+  if (!text || text.length <= MAX) return text
+  return text.slice(0, MAX) + '\n\n[输出过长已截断：原始 ' + text.length + ' 字符，仅保留前 ' + MAX + '。如需完整内容，请用范围参数分段读取。]'
+}
+
 /** OpenAI 兼容的 tool_call 线上格式（随 messages 直接序列化发给上游） */
 interface WireToolCall {
   id: string
@@ -269,7 +301,11 @@ export async function streamChat(
         })),
       })
 
-      // 逐个执行工具并收集结果
+      // 执行工具（v13.6 重构）：
+      // 第一遍串行过权限闸门（弹窗必须一次一个）；
+      // 第二遍把连续的只读工具并行执行，其余严格串行保持顺序语义。
+      type Planned = { tc: typeof toolCalls[number]; obj: ToolCall }
+      const plans: Planned[] = []
       for (const tc of toolCalls) {
         if (signal?.aborted) return
 
@@ -280,9 +316,6 @@ export async function streamChat(
           continue
         }
 
-        let args: Record<string, unknown>
-        try { args = JSON.parse(tc.arguments || '{}') } catch { args = {} }
-
         const toolCallObj: ToolCall = {
           id: tc.id,
           name: tc.name,
@@ -290,10 +323,8 @@ export async function streamChat(
           status: 'running',
           started_at: new Date().toISOString(),
         }
-
         callbacks.onToolStart(toolCallObj)
 
-        let toolResult: string
         // 权限闸门：先问调用方是否允许（「需要我确认」档在这里真正拦截）
         const denial = await callbacks.beforeTool?.(toolCallObj)
         if (denial) {
@@ -304,39 +335,56 @@ export async function streamChat(
           messages.push({ role: 'tool', tool_call_id: tc.id, content: denial })
           continue
         }
-        if (CLIENT_TOOLS.has(tc.name)) {
-          // 客户端工具：由 UI 层处理（如任务清单），并把确认结果回传给模型
-          toolResult = (await callbacks.onClientTool?.(toolCallObj)) || '{"ok":true}'
-          toolCallObj.status = 'done'
-          toolCallObj.result = toolResult
-        } else {
-          // 通过后端代理执行工具（工作区实时生效）；传 signal 让长命令可被用户中止
-          const result = await executeTool({ name: tc.name, args }, settings.workDir || undefined, signal)
-          toolResult = result.success ? result.output : `❌ 错误: ${result.error}`
-          toolCallObj.status = result.success ? 'done' : 'error'
-          toolCallObj.result = toolResult
-          if (result.changeId) toolCallObj.changeId = result.changeId
-        }
-        toolCallObj.finished_at = new Date().toISOString()
-
-        callbacks.onToolEnd(toolCallObj)
-
-        // 添加 tool result 到对话历史
-        // result 必须是有内容的字符串：undefined/空串会让模型以为工具没执行，
-        // 于是声称「我无法调用工具」然后换个方式再试一遍（Windows 上观感极差）
-        const toolResultText = (toolCallObj.result && String(toolCallObj.result).trim())
-          ? String(toolCallObj.result)
-          : (toolCallObj.status === 'error'
-              ? `工具 ${tc.name} 执行失败（未返回具体错误信息）。`
-              : `工具 ${tc.name} 已执行，但返回空结果。`);
-        messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: toolResultText,
-        })
+        plans.push({ tc, obj: toolCallObj })
       }
 
-      // 循环回到顶部，将所有消息（含工具结果）发回 LLM
+      const execOne = async (pl: Planned): Promise<string> => {
+        let toolResult: string
+        if (CLIENT_TOOLS.has(pl.tc.name)) {
+          // 客户端工具：由 UI 层处理（如任务清单），并把确认结果回传给模型
+          toolResult = (await callbacks.onClientTool?.(pl.obj)) || '{"ok":true}'
+          pl.obj.status = 'done'
+        } else {
+          let parsedArgs: Record<string, unknown> = {}
+          try { parsedArgs = JSON.parse(pl.tc.arguments || '{}') } catch { parsedArgs = {} }
+          try {
+            const result = await withTimeout(
+              executeTool({ name: pl.tc.name, args: parsedArgs }, settings.workDir || undefined, signal),
+              TOOL_TIMEOUT_MS,
+              '工具 ' + pl.tc.name + ' 执行超时（180 秒），已中止等待。如确需继续请拆小任务。',
+            )
+            toolResult = result.success ? clampToolResult(result.output) : ('❌ 错误: ' + result.error)
+            pl.obj.status = result.success ? 'done' : 'error'
+            if (result.changeId) pl.obj.changeId = result.changeId
+          } catch (te) {
+            toolResult = '❌ 错误: ' + (te instanceof Error ? te.message : String(te))
+            pl.obj.status = 'error'
+          }
+        }
+        pl.obj.result = toolResult
+        pl.obj.finished_at = new Date().toISOString()
+        callbacks.onToolEnd(pl.obj)
+        // result 必须是有内容的字符串：空结果会让模型以为没执行，换方式空转烧钱
+        return (pl.obj.result && String(pl.obj.result).trim())
+          ? String(pl.obj.result)
+          : (pl.obj.status === 'error'
+              ? ('工具 ' + pl.tc.name + ' 执行失败（未返回具体错误信息）。')
+              : ('工具 ' + pl.tc.name + ' 已执行，但返回空结果。'))
+      }
+
+      let i = 0
+      while (i < plans.length) {
+        // 收集连续的只读批次
+        const group: Planned[] = []
+        while (i < plans.length && READONLY_TOOLS.has(plans[i].tc.name)) { group.push(plans[i]); i++ }
+        if (group.length === 0) { group.push(plans[i]); i++ } // 有副作用/客户端工具：单发串行
+        const results = group.length === 1 ? [await execOne(group[0])] : await Promise.all(group.map(execOne))
+        for (let k = 0; k < group.length; k++) {
+          messages.push({ role: 'tool', tool_call_id: group[k].tc.id, content: results[k] })
+        }
+      }
+
+            // 循环回到顶部，将所有消息（含工具结果）发回 LLM
 
     } catch (err: unknown) {
       const e = err as { name?: string; message?: string }

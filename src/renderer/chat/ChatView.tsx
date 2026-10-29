@@ -33,14 +33,15 @@ interface Props {
   sessionId?: string
 }
 
-function dayLabel(ts: unknown): string {
+function dayLabel(ts: unknown, lang: 'zh' | 'en' = 'zh'): string {
   const d = new Date(String(ts || ''))
   if (Number.isNaN(d.getTime())) return ''
   const now = new Date()
   const same = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-  if (same(d, now)) return '今天'
+  if (same(d, now)) return lang === 'en' ? 'Today' : '今天'
   const y = new Date(now); y.setDate(y.getDate() - 1)
-  if (same(d, y)) return '昨天'
+  if (same(d, y)) return lang === 'en' ? 'Yesterday' : '昨天'
+  if (lang === 'en') return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
@@ -330,7 +331,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
               <div className="flex items-center gap-3 py-3" aria-hidden>
                 <span className="flex-1 h-px" style={{ background: c.borderLight }} />
                 <span className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
-                  {dayLabel(msg.created_at)}
+                  {dayLabel(msg.created_at, lang)}
                 </span>
                 <span className="flex-1 h-px" style={{ background: c.borderLight }} />
               </div>

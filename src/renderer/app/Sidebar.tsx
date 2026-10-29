@@ -173,6 +173,8 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const [colorPickerFor, setColorPickerFor] = useState<string | null>(null)
   // 项目分组折叠状态（持久化）
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(loadCollapsedProjects)
+  // 大量会话分段渲染：每组先渲染 40 条（数百会话时侧栏 DOM 从千级降到百级）
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
   const toggleProject = (key: string) => {
     setCollapsedProjects(prev => {
       const next = new Set(prev)
@@ -656,9 +658,28 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             ) : (
               <div className="sidebar-group-label">{g.label}</div>
             )}
-            {!collapsedProjects.has(g.key) && (
-              <div className="space-y-0.5">{g.items.map(renderItem)}</div>
-            )}
+            {!collapsedProjects.has(g.key) && (() => {
+              const searching = !!search.trim()
+              const cap = 40
+              const items = searching || expandedGroups.has(g.key) || g.items.length <= cap
+                ? g.items
+                : g.items.slice(0, cap)
+              return (
+                <div className="space-y-0.5">
+                  {items.map(renderItem)}
+                  {!searching && !expandedGroups.has(g.key) && g.items.length > cap && (
+                    <button
+                      onClick={() => setExpandedGroups(prev => { const n = new Set(prev); n.add(g.key); return n })}
+                      className="w-full text-left px-3 py-1.5 text-[11px] rounded-lg transition-colors"
+                      style={{ color: c.accent }}
+                      onMouseEnter={e => { e.currentTarget.style.background = c.bgHover }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                      {t('显示全部', 'Show all')} {g.items.length} {t('条', '')}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         ))}
       </div>

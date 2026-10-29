@@ -114,8 +114,22 @@ function MainApp() {
   const vp = useViewport();
   const kbInset = useKeyboardInset();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const drawerTouchX = useRef(0);
   // 切到桌面宽度时自动收起抽屉，避免抽屉状态残留导致布局错位
   useEffect(() => { if (!vp.isMobile && mobileNavOpen) setMobileNavOpen(false); }, [vp.isMobile, mobileNavOpen]);
+  // 抽屉打开时 Esc 关闭
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileNavOpen(false) }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [mobileNavOpen]);
+  // 左滑关闭抽屉（位移超过 60px 判定）
+  const onDrawerTouchStart = useCallback((e: React.TouchEvent) => { drawerTouchX.current = e.touches[0]?.clientX ?? 0 }, []);
+  const onDrawerTouchEnd = useCallback((e: React.TouchEvent) => {
+    const dx = (e.changedTouches[0]?.clientX ?? 0) - drawerTouchX.current
+    if (dx < -60) setMobileNavOpen(false)
+  }, []);
 
   const handleStreamingChange = useCallback((sid: string, streaming: boolean) => {
     setStreamingSessionIds(prev => {
@@ -321,6 +335,14 @@ function MainApp() {
   const activeTabRef = useRef<string>('');
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      // ? 打开快捷键一览（输入框/可编辑区内不抢）
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        e.preventDefault();
+        openTabRef.current('shortcuts');
+        return;
+      }
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       const k = e.key.toLowerCase();
@@ -524,6 +546,8 @@ function MainApp() {
         <div className="sidebar-scrim" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
       )}
       <div
+        onTouchStart={vp.isMobile ? onDrawerTouchStart : undefined}
+        onTouchEnd={vp.isMobile ? onDrawerTouchEnd : undefined}
         className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : 'transition-all duration-300 overflow-hidden shrink-0'}
         style={vp.isMobile
           ? { background: 'var(--glass-bg, #fff)' }
