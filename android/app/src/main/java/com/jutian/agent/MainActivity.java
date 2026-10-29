@@ -46,13 +46,136 @@ public class MainActivity extends Activity {
 
         String host = prefs.getString("host", "");
         String token = prefs.getString("token", "");
-        if (host.isEmpty() || token.isEmpty()) {
-            // 没配对过：先探测本机是否有 serve.cjs（Termux 独立模式），
-            // 有则直接进本机完整版；否则进配对页
-            detectLocalThen(() -> showSetup());
-        } else {
+        boolean preferRemote = "remote".equals(prefs.getString("mode", "")) && !host.isEmpty() && !token.isEmpty();
+        if (preferRemote) {
             openRemote(host, token);
+            return;
         }
+        // 先探测本机 3211：Termux 已启动，或本地版上次启动的 Node 还在跑
+        detectLocalThen(() -> {
+            if (BuildConfig.MODE.equals("local") && prefs.getBoolean("localEnabled", true)) {
+                startLocalThen(this::showSetup);
+            } else {
+                showSetup();
+            }
+        });
+    }
+
+    /**
+     * 本地版：解压内置运行时 → 启动 Node → 等健康检查通过 → 打开本机界面。
+     * 任何一步失败都回落到配置页并说明原因，不让用户面对白屏。
+     */
+    private void startLocalThen(final Runnable fallback) {
+        if (!NodeRuntime.ensureLoaded()) {
+            fallback.run();
+            return;
+        }
+        showStatus("正在启动本机服务…", "首次启动需要解压运行时，约 10-30 秒");
+        new Thread(() -> {
+            String err = null;
+            try {
+                if (!bundleReady()) extractBundle();
+                java.io.File dir = new java.io.File(getFilesDir(), "app");
+                NodeRuntime.startNode(
+                        new java.io.File(dir, "serve.cjs").getAbsolutePath(),
+                        dir.getAbsolutePath(),
+                        getFilesDir().getAbsolutePath());
+            } catch (Exception e) {
+                err = e.getMessage();
+            }
+            final String e2 = err;
+            runOnUiThread(() -> {
+                if (e2 != null) {
+                    showStatus("本机服务启动失败", e2 + "\n可改用「连接电脑」模式");
+                    new android.os.Handler(getMainLooper()).postDelayed(this::showSetup, 2500);
+                }
+            });
+        }, "node-boot").start();
+        waitForHealth(fallback);
+    }
+
+    /** 轮询本机健康检查（Node 冷启动 + 解压需要时间，最多等 60 秒） */
+    private void waitForHealth(final Runnable onTimeout) {
+        final android.os.Handler main = new android.os.Handler(getMainLooper());
+        new Thread(() -> {
+            long deadline = System.currentTimeMillis() + 60000;
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    java.net.URL u = new java.net.URL("http://127.0.0.1:3211/api/health");
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                    c.setConnectTimeout(700);
+                    c.setReadTimeout(700);
+                    int code = c.getResponseCode();
+                    c.disconnect();
+                    if (code == 200) {
+                        main.post(this::openLocal);
+                        return;
+                    }
+                } catch (Exception ignored) { /* 还没起来 */ }
+                try { Thread.sleep(600); } catch (InterruptedException ignored) { }
+            }
+            main.post(onTimeout);
+        }, "node-health").start();
+    }
+
+    /** 内置运行时是否已解压且版本匹配（升级 APK 后自动重新解压） */
+    private boolean bundleReady() {
+        java.io.File dir = new java.io.File(getFilesDir(), "app");
+        java.io.File stamp = new java.io.File(dir, ".bundle-version");
+        if (!new java.io.File(dir, "serve.cjs").isFile() || !stamp.isFile()) return false;
+        try {
+            byte[] buf = new byte[(int) stamp.length()];
+            try (java.io.FileInputStream in = new java.io.FileInputStream(stamp)) { in.read(buf); }
+            return versionName().equals(new String(buf, "UTF-8").trim());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 解压 assets/mobile.zip 到 filesDir/app（含路径穿越防护） */
+    private void extractBundle() throws Exception {
+        java.io.File dir = new java.io.File(getFilesDir(), "app");
+        dir.mkdirs();
+        String base = dir.getCanonicalPath();
+        byte[] buf = new byte[64 * 1024];
+        try (java.util.zip.ZipInputStream zin =
+                     new java.util.zip.ZipInputStream(getAssets().open("mobile.zip"))) {
+            java.util.zip.ZipEntry e;
+            while ((e = zin.getNextEntry()) != null) {
+                java.io.File out = new java.io.File(dir, e.getName());
+                if (!out.getCanonicalPath().startsWith(base + java.io.File.separator)) continue;
+                if (e.isDirectory()) { out.mkdirs(); continue; }
+                java.io.File parent = out.getParentFile();
+                if (parent != null) parent.mkdirs();
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                    int n;
+                    while ((n = zin.read(buf)) > 0) fos.write(buf, 0, n);
+                }
+            }
+        }
+        try (java.io.FileOutputStream fos =
+                     new java.io.FileOutputStream(new java.io.File(dir, ".bundle-version"))) {
+            fos.write(versionName().getBytes("UTF-8"));
+        }
+    }
+
+    /** 启动中的过渡界面 */
+    private void showStatus(String title, String detail) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad * 3, pad, pad);
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(20);
+        box.addView(t);
+        TextView d = new TextView(this);
+        d.setText(detail);
+        d.setTextSize(13);
+        d.setTextColor(0xFF666666);
+        d.setPadding(0, pad / 2, 0, 0);
+        box.addView(d);
+        setContentView(box);
     }
 
     /**
@@ -107,32 +230,44 @@ public class MainActivity extends Activity {
         ver.setPadding(0, pad / 4, 0, pad);
         box.addView(ver);
 
-        // 模式一：本机（Termux 独立运行完整 Agent，不需要电脑）
+        // 模式一：本机（本地版内置运行时；远控版需 Termux）
         TextView localTitle = new TextView(this);
         localTitle.setText("方式一 · 本机运行（不需要电脑）");
         localTitle.setTextSize(15);
         box.addView(localTitle);
 
         TextView localHint = new TextView(this);
-        localHint.setText("在手机安装 Termux，下载发行版里的 jutian-mobile-*.zip 解压后执行\n"
-                + "  bash install.sh\n"
-                + "启动后点下面的「检测本机服务」即可使用完整功能（数据存在手机本地）。");
+        if (BuildConfig.MODE.equals("local")) {
+            localHint.setText("本安装包已内置运行时，点下面的按钮即可在手机上运行完整 Agent。\n"
+                    + "数据保存在手机本地（~/.lyclaw）。");
+        } else {
+            localHint.setText("本安装包是远控版（体积小）。要在手机本地运行完整 Agent，请下载\n"
+                    + "「本地版」APK，或用 Termux + jutian-mobile-*.zip 独立部署。");
+        }
         localHint.setTextSize(12);
         localHint.setTextColor(0xFF666666);
         localHint.setPadding(0, pad / 4, 0, pad / 2);
         box.addView(localHint);
 
         Button detect = new Button(this);
-        detect.setText("检测本机服务");
-        detect.setOnClickListener(v -> {
-            detect.setEnabled(false);
-            detect.setText("检测中…");
-            detectLocalThen(() -> {
-                detect.setEnabled(true);
-                detect.setText("检测本机服务");
-                showSetup();
+        if (BuildConfig.MODE.equals("local")) {
+            detect.setText("启动本机服务");
+            detect.setOnClickListener(v -> {
+                prefs.edit().putString("mode", "local").putBoolean("localEnabled", true).apply();
+                startLocalThen(this::showSetup);
             });
-        });
+        } else {
+            detect.setText("检测本机服务（Termux）");
+            detect.setOnClickListener(v -> {
+                detect.setEnabled(false);
+                detect.setText("检测中…");
+                detectLocalThen(() -> {
+                    detect.setEnabled(true);
+                    detect.setText("检测本机服务（Termux）");
+                    showSetup();
+                });
+            });
+        }
         box.addView(detect);
 
         // 模式二：连接电脑
@@ -180,7 +315,7 @@ public class MainActivity extends Activity {
                 err.setText("地址和配对码都要填");
                 return;
             }
-            prefs.edit().putString("host", h).putString("token", t).apply();
+            prefs.edit().putString("host", h).putString("token", t).putString("mode", "remote").apply();
             openRemote(h, t);
         });
         box.addView(go);

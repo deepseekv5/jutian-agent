@@ -57,3 +57,11 @@ src/shared/announcement.cjs
 
 # lint/cache 临时文件
 .eslintcache
+
+# 安卓本地版构建物：CI 构建前才下载/生成，不进仓库
+# （libnode.so 62MB、Node 头文件 11MB、内置前端包 6MB——入库会让仓库暴涨）
+android/app/src/local/jniLibs/
+android/app/src/main/cpp/include/
+android/app/src/local/assets/
+android/app/build/
+android/app/.cxx/

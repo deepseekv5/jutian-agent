@@ -50,10 +50,14 @@ for (const f of fs.readdirSync(path.join(ROOT, 'src/shared'))) {
   if (f.endsWith('.cjs')) fs.copyFileSync(path.join(ROOT, 'src/shared', f), path.join(STAGE, 'src/shared', f))
 }
 // 语音合成引擎：serve.cjs 以 ./electron/edge-tts.cjs 相对路径加载。
-// 该模块已做 WebSocket 双实现（有 ws 用 ws，没有就用 Node 22+ 内置），
-// 因此手机包不带 node_modules 也能出声。
+// 该模块已做 WebSocket 双实现（有 ws 用 ws，没有就用 Node 22+ 内置）。
 fs.mkdirSync(path.join(STAGE, 'electron'), { recursive: true })
 fs.copyFileSync(path.join(ROOT, 'electron', 'edge-tts.cjs'), path.join(STAGE, 'electron', 'edge-tts.cjs'))
+// ws 包（纯 JS，~200KB，无依赖）：本地版 APK 内置的是 Node 18（nodejs-mobile），
+// 没有内置 WebSocket，语音合成要靠它。Termux 上 Node 22+ 会优先用内置实现，
+// 带上它只是多 200KB，换来所有 Node 版本都能出声。
+fs.mkdirSync(path.join(STAGE, 'node_modules'), { recursive: true })
+fs.cpSync(path.join(ROOT, 'node_modules', 'ws'), path.join(STAGE, 'node_modules', 'ws'), { recursive: true })
 fs.cpSync(path.join(ROOT, 'dist'), path.join(STAGE, 'dist'), { recursive: true })
 
 // 4) Termux 一键安装脚本
@@ -79,7 +83,7 @@ fi
 
 echo "[2/3] 安装巨天agent到 ~/jutian ..."
 mkdir -p ~/jutian
-cp -r serve.cjs src dist electron package.json ~/jutian/
+cp -r serve.cjs src dist electron node_modules package.json ~/jutian/
 
 echo "[3/3] 启动..."
 echo ""

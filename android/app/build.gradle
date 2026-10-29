@@ -3,17 +3,46 @@ plugins {
     id 'com.android.application' version '8.7.2'
 }
 
+// 两个发行形态，用构建参数切换（不用 productFlavors：AGP 8.7 的 flavor 级
+// externalNativeBuild DSL 解析不到，参数化更稳、更好排查）：
+//   gradle assembleRelease                 → 远控版（~60KB，只做界面壳）
+//   gradle assembleRelease -PlocalApk      → 本地版（~40MB，内置 Node 运行时）
+// 两种包 applicationId 相同，装哪个用哪个。
+def localApk = project.hasProperty("localApk")
+
 android {
     namespace 'com.jutian.agent'
     compileSdk 35
+    // 本地版需要 NDK 编译 JNI 桥（node_bridge.cpp）。
+    // 允许用 -PndkVersion=... 覆盖：CI 与本地装着的 NDK 版本不一定相同。
+    ndkVersion project.findProperty("ndkVersion") ?: "26.1.10909125"
 
     defaultConfig {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13030000
-        versionName "13.3.0"
+        versionCode 13040000
+        versionName "13.4.0"
+        buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
+        if (localApk) {
+            ndk { abiFilters "arm64-v8a" }
+        }
     }
+
+    // 本地版才挂原生桥与内置资源；远控版保持 60KB 体量
+    if (localApk) {
+        externalNativeBuild {
+            cmake { path = file("src/main/cpp/CMakeLists.txt") }
+        }
+        sourceSets {
+            main {
+                jniLibs.srcDirs += "src/local/jniLibs"
+                assets.srcDirs += "src/local/assets"
+            }
+        }
+    }
+
+    buildFeatures { buildConfig true }
 
     // 签名配置从 keystore.properties 读（该文件与 keystore 都不入库）。
     // 没有这个文件时（如 CI）跳过签名，仍能产出 debug 包。
