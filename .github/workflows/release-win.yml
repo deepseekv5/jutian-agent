@@ -121,7 +121,7 @@ jobs:
 
       # latest.yml 与 asar 只属于 x64 任务（arm64 上传会同名冲突）。
       - name: 上传到 Release（${{ matrix.arch }}）
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             release/*.exe
