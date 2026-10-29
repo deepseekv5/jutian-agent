@@ -861,3 +861,9 @@ html[data-wallpaper="off"] .glass-strong {
     0 0 0 3.5px rgba(52, 211, 153, 0.22),
     0 4px 14px rgba(0, 0, 0, 0.35);
 }
+
+/* ─── 长会话渲染虚拟化（v13.2）───
+   content-visibility: auto 让浏览器跳过视口外消息的渲染/布局/绘制，
+   千条消息的会话滚动与流式重排代价从 O(n) 降到 O(可见)。
+   contain-intrinsic-size 给离屏消息一个估算高度，防止滚动条跳动。 */
+.msg-cv { content-visibility: auto; contain-intrinsic-size: auto 140px; }

@@ -246,6 +246,7 @@ var MIME = {
   ".js": "application/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
@@ -2967,7 +2968,15 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     } catch {}
   }
   try {
-    if (url.pathname === "/api/health") return json(res, { status: "ok", agent: "巨天agent", version: PKG.version, tools: Object.keys(TOOLS).length, platform: process.platform, workDir: globalWorkDir || null });
+    if (url.pathname === "/api/health") return json(res, {
+      status: "ok", agent: "巨天agent", version: PKG.version, tools: Object.keys(TOOLS).length,
+      platform: process.platform, workDir: globalWorkDir || null,
+      // 诊断级快照：排查环境问题时一个请求看全（v13.2）
+      uptime_s: Math.round(process.uptime()),
+      memory: { rss_mb: Math.round(process.memoryUsage().rss / 1048576), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576) },
+      db: sharedDb ? "sqlite" : (db && db.__jsondb ? "jsondb" : "none"),
+      node: process.version,
+    });
     // 数据库维护：VACUUM 回收已删除数据占用的空间
     if (url.pathname === "/api/db/vacuum" && req.method === "POST") {
       if (!sharedDb?.vacuumDb) return json(res, { success: false, error: "数据库不可用" });

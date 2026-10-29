@@ -1,0 +1,14 @@
+{
+  "name": "巨天agent",
+  "short_name": "巨天agent",
+  "description": "本地优先的 AI 桌面工作台 — 对话、调研、编码、知识库，数据不出本机",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#f6f7f9",
+  "icons": [
+    { "src": "/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
