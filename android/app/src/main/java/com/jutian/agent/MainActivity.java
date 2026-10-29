@@ -63,42 +63,172 @@ public class MainActivity extends Activity {
 
     /**
      * 本地版：解压内置运行时 → 启动 Node → 等健康检查通过 → 打开本机界面。
-     * 任何一步失败都回落到配置页并说明原因，不让用户面对白屏。
+     * 启动页全程可见：三个阶段各自有状态标记，解压有百分比进度，等待有秒数，
+     * 失败时错误详情直接显示在页面上（可选中复制），并提供重试/连电脑出口。
      */
+
+    // 启动页控件（startLocalThen 时构建）
+    private TextView bootStages;
+    private android.widget.ProgressBar bootBar;
+    private TextView bootDetail;
+    private TextView bootError;
+    private LinearLayout bootActions;
+    private int bootCurStage = -1;
+    private boolean bootFailed = false;
+    private static final String[] STAGE_TITLES = { "解压运行时", "启动服务", "等待就绪" };
+
     private void startLocalThen(final Runnable fallback) {
         if (!NodeRuntime.ensureLoaded()) {
-            fallback.run();
+            buildBootView();
+            bootFail("加载运行时库", "libnode.so 无法加载。可能原因：\n· 设备不是 64 位 ARM（本包仅支持 arm64）\n· 安装包不完整，请重新下载");
             return;
         }
-        showStatus("正在启动本机服务…", "首次启动需要解压运行时，约 10-30 秒");
+        buildBootView();
+        bootStage(0);
         new Thread(() -> {
-            String err = null;
             try {
-                if (!bundleReady()) extractBundle();
+                if (!bundleReady()) {
+                    final int total = Math.max(1, countZipEntries());
+                    extractBundle(done -> runOnUiThread(() -> {
+                        if (bootBar == null) return;
+                        bootBar.setIndeterminate(false);
+                        bootBar.setProgress(done * 100 / total);
+                        bootDetail.setText("已解压 " + done + " / " + total + " 个文件");
+                    }));
+                }
+                runOnUiThread(() -> {
+                    bootBar.setIndeterminate(false);
+                    bootBar.setProgress(100);
+                    bootStageDone(0);
+                    bootStage(1);
+                });
                 java.io.File dir = new java.io.File(getFilesDir(), "app");
                 NodeRuntime.startNode(
                         new java.io.File(dir, "serve.cjs").getAbsolutePath(),
                         dir.getAbsolutePath(),
                         getFilesDir().getAbsolutePath());
+                // startNode 阻塞到 Node 退出；退出即服务挂了
+                runOnUiThread(() -> {
+                    if (!bootFailed) bootFail("服务进程退出", "Node 进程已结束。可点「重试」再次启动，或查看 logcat 里 JutianNode 标签的日志。");
+                });
             } catch (Exception e) {
-                err = e.getMessage();
+                final String msg = e.getMessage();
+                runOnUiThread(() -> bootFail("解压或启动", msg == null ? e.getClass().getSimpleName() : msg));
             }
-            final String e2 = err;
-            runOnUiThread(() -> {
-                if (e2 != null) {
-                    showStatus("本机服务启动失败", e2 + "\n可改用「连接电脑」模式");
-                    new android.os.Handler(getMainLooper()).postDelayed(this::showSetup, 2500);
-                }
-            });
         }, "node-boot").start();
-        waitForHealth(fallback);
+        bootStage(2);
+        waitForHealth();
     }
 
-    /** 轮询本机健康检查（Node 冷启动 + 解压需要时间，最多等 60 秒） */
-    private void waitForHealth(final Runnable onTimeout) {
+    /** 在启动页标记当前阶段；note 附加说明可选 */
+    private void bootStage(int idx) {
+        bootCurStage = idx;
+        renderStages(null);
+        if (bootBar != null) bootBar.setIndeterminate(idx != 0); // 解压阶段用真实进度，其余转圈
+        if (bootDetail != null && idx == 1) bootDetail.setText("正在启动内置服务…");
+        if (bootDetail != null && idx == 2) bootDetail.setText("正在等待服务就绪…");
+    }
+
+    private void bootStageDone(int idx) {
+        renderStages(idx < bootCurStage ? "done" : "done");
+        if (idx == bootCurStage) { /* 当前阶段完成由下一阶段的 bootStage 推进 */ }
+    }
+
+    private void renderStages(String forceState) {
+        if (bootStages == null) return;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < STAGE_TITLES.length; i++) {
+            String mark;
+            if (forceState != null && i == bootCurStage) mark = "✕";       // 失败标记当前阶段
+            else if (i < bootCurStage) mark = "✓";
+            else if (i == bootCurStage) mark = "◐";
+            else mark = "○";
+            sb.append(mark).append(' ').append(STAGE_TITLES[i]);
+            if (forceState != null && i == bootCurStage) sb.append("（失败）");
+            sb.append('\n');
+        }
+        bootStages.setText(sb.toString());
+    }
+
+    /** 启动失败：错误详情可见、可复制，给出重试与连电脑两条出路 */
+    private void bootFail(String where, String detail) {
+        bootFailed = true;
+        renderStages("fail");
+        if (bootBar != null) bootBar.setIndeterminate(false);
+        if (bootError != null) {
+            bootError.setVisibility(TextView.VISIBLE);
+            bootError.setText("【" + where + "】\n" + (detail == null || detail.isEmpty() ? "未知错误" : detail));
+            bootError.setTextIsSelectable(true); // 长按可复制，方便反馈
+        }
+        if (bootActions != null) bootActions.setVisibility(LinearLayout.VISIBLE);
+    }
+
+    /** 构建启动页：品牌 + 阶段清单 + 进度条 + 详情 + 错误区 + 操作按钮 */
+    private void buildBootView() {
+        bootFailed = false;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, pad * 3, pad, pad);
+
+        TextView title = new TextView(this);
+        title.setText("巨天 Agent · 本机模式");
+        title.setTextSize(22);
+        box.addView(title);
+
+        TextView ver = new TextView(this);
+        ver.setText("版本 " + versionName() + " · 首次启动需要解压运行时，约 10-30 秒");
+        ver.setTextSize(12);
+        ver.setTextColor(0xFF888888);
+        ver.setPadding(0, pad / 4, 0, pad);
+        box.addView(ver);
+
+        bootStages = new TextView(this);
+        bootStages.setTextSize(15);
+        bootStages.setLineSpacing(4, 1.1f);
+        box.addView(bootStages);
+
+        bootBar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, pad / 2, 0, pad / 2);
+        box.addView(bootBar, lp);
+
+        bootDetail = new TextView(this);
+        bootDetail.setTextSize(12);
+        bootDetail.setTextColor(0xFF888888);
+        box.addView(bootDetail);
+
+        bootError = new TextView(this);
+        bootError.setTextSize(12);
+        bootError.setTextColor(0xFFCC0000);
+        bootError.setVisibility(TextView.GONE);
+        bootError.setPadding(0, pad / 2, 0, 0);
+        box.addView(bootError);
+
+        bootActions = new LinearLayout(this);
+        bootActions.setOrientation(LinearLayout.HORIZONTAL);
+        bootActions.setVisibility(LinearLayout.GONE);
+        Button retry = new Button(this);
+        retry.setText("重试");
+        retry.setOnClickListener(v -> detectLocalThen(() -> startLocalThen(this::showSetup)));
+        Button remote = new Button(this);
+        remote.setText("改用连接电脑");
+        remote.setOnClickListener(v -> showSetup());
+        bootActions.addView(retry, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        bootActions.addView(remote, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        box.addView(bootActions);
+
+        setContentView(box);
+    }
+
+    /** 轮询本机健康检查（最多 90 秒），每秒在启动页报秒数；超时给明确原因与出路 */
+    private void waitForHealth() {
         final android.os.Handler main = new android.os.Handler(getMainLooper());
+        final long startAt = System.currentTimeMillis();
         new Thread(() -> {
-            long deadline = System.currentTimeMillis() + 60000;
+            long deadline = startAt + 90000;
+            long lastTick = 0;
             while (System.currentTimeMillis() < deadline) {
                 try {
                     java.net.URL u = new java.net.URL("http://127.0.0.1:3211/api/health");
@@ -112,10 +242,33 @@ public class MainActivity extends Activity {
                         return;
                     }
                 } catch (Exception ignored) { /* 还没起来 */ }
-                try { Thread.sleep(600); } catch (InterruptedException ignored) { }
+                final long waited = (System.currentTimeMillis() - startAt) / 1000;
+                if (waited != lastTick) {
+                    lastTick = waited;
+                    main.post(() -> {
+                        if (bootDetail != null && bootCurStage == 2 && !bootFailed) {
+                            bootDetail.setText("已等待 " + waited + " 秒（服务冷启动通常 3-10 秒）");
+                        }
+                    });
+                }
+                try { Thread.sleep(500); } catch (InterruptedException ignored) { }
             }
-            main.post(onTimeout);
+            main.post(() -> bootFail("等待服务就绪超时", "90 秒内本机服务未响应。可能原因：\n"
+                    + "· 首次解压较慢，设备存储紧张\n"
+                    + "· 3211 端口被其他应用占用\n"
+                    + "· 设备可用内存不足，进程被系统回收\n\n"
+                    + "可点「重试」再试一次；多次失败请改用「连接电脑」模式，并把本页错误信息反馈给我们。"));
         }, "node-health").start();
+    }
+
+    /** 统计内置包条目数（解压进度分母） */
+    private int countZipEntries() throws Exception {
+        int n = 0;
+        try (java.util.zip.ZipInputStream zin =
+                     new java.util.zip.ZipInputStream(getAssets().open("mobile.zip"))) {
+            while (zin.getNextEntry() != null) n++;
+        }
+        return n;
     }
 
     /** 内置运行时是否已解压且版本匹配（升级 APK 后自动重新解压） */
@@ -132,8 +285,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 解压 assets/mobile.zip 到 filesDir/app（含路径穿越防护） */
-    private void extractBundle() throws Exception {
+    interface ExtractProgress { void onProgress(int filesDone); }
+
+    /** 解压 assets/mobile.zip 到 filesDir/app（含路径穿越防护与逐文件进度） */
+    private void extractBundle(ExtractProgress progress) throws Exception {
         java.io.File dir = new java.io.File(getFilesDir(), "app");
         dir.mkdirs();
         String base = dir.getCanonicalPath();
@@ -141,6 +296,7 @@ public class MainActivity extends Activity {
         try (java.util.zip.ZipInputStream zin =
                      new java.util.zip.ZipInputStream(getAssets().open("mobile.zip"))) {
             java.util.zip.ZipEntry e;
+            int done = 0;
             while ((e = zin.getNextEntry()) != null) {
                 java.io.File out = new java.io.File(dir, e.getName());
                 if (!out.getCanonicalPath().startsWith(base + java.io.File.separator)) continue;
@@ -151,31 +307,15 @@ public class MainActivity extends Activity {
                     int n;
                     while ((n = zin.read(buf)) > 0) fos.write(buf, 0, n);
                 }
+                done++;
+                if (progress != null && done % 5 == 0) progress.onProgress(done);
             }
+            if (progress != null) progress.onProgress(done);
         }
         try (java.io.FileOutputStream fos =
                      new java.io.FileOutputStream(new java.io.File(dir, ".bundle-version"))) {
             fos.write(versionName().getBytes("UTF-8"));
         }
-    }
-
-    /** 启动中的过渡界面 */
-    private void showStatus(String title, String detail) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (24 * getResources().getDisplayMetrics().density);
-        box.setPadding(pad, pad * 3, pad, pad);
-        TextView t = new TextView(this);
-        t.setText(title);
-        t.setTextSize(20);
-        box.addView(t);
-        TextView d = new TextView(this);
-        d.setText(detail);
-        d.setTextSize(13);
-        d.setTextColor(0xFF666666);
-        d.setPadding(0, pad / 2, 0, 0);
-        box.addView(d);
-        setContentView(box);
     }
 
     /**
