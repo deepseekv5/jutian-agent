@@ -17,6 +17,16 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const { c } = useTheme()
   const [open, setOpen] = useState(false)
   const isRunning = tool.status === 'running' || tool.status === 'pending'
+  // 运行中每秒跳动的"已调用 Ns"——慢工具（如 opencode 线路、长命令）不再像卡死
+  const [, bumpTick] = useState(0)
+  useEffect(() => {
+    if (!isRunning) return
+    const t = setInterval(() => bumpTick(n => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [isRunning])
+  const runningSec = isRunning && tool.started_at
+    ? Math.max(0, Math.round((Date.now() - new Date(tool.started_at).getTime()) / 1000))
+    : null
   const isError = tool.status === 'error'
   const isDone = tool.status === 'done'
 
@@ -82,7 +92,7 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
           </svg>
         )}
         <span className="text-[12.5px] font-medium shrink-0" style={{ color: c.textSecondary }}>
-          {displayName}{isRunning ? '…' : ''}
+          {displayName}{isRunning ? '…' : ''}{runningSec !== null ? ` · ${runningSec}s` : ''}
         </span>
         {summary && <span className="text-[11.5px] truncate flex-1 min-w-0 font-mono" style={{ color: c.textTertiary }} title={summary}>{summary}</span>}
         {diffPath && (

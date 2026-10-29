@@ -1055,7 +1055,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     const sentPromptTokens = apiMessages.reduce((s, m) => s + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')) + estimateTokens(m.tool_calls ? JSON.stringify(m.tool_calls) : ''), 0)
 
     try {
-      await streamChat(settings, apiMessages, callbacks, controller.signal, extraTools)
+      const netStatus = (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => {
+        window.dispatchEvent(new CustomEvent('chat-net-status', { detail: { phase, sessionId, attempt: info?.attempt } }))
+      }
+      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus }, controller.signal, extraTools)
     } finally {
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {

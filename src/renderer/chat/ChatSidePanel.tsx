@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo , lazy, Suspense} fro
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
+import { useLanguage } from '../hooks/useLanguage'
 import TerminalPanel from '../code/TerminalPanel'
 const FileViewer = lazy(() => import('../code/FileViewer'))
 import GitPanel from './GitPanel'
@@ -55,6 +56,7 @@ function exportSessionMarkdown(messages: Message[]) {
 /** 对话侧边面板：辅助对话 / 审查 / 文件 / 终端 / 浏览器 / 子Agent */
 export default function ChatSidePanel({ workDir, mainMessages, settings, tab, onTabChange }: Props) {
   const { c } = useTheme()
+  const { lang } = useLanguage()
 
   return (
     <div className="h-full flex flex-col min-h-0 border-l glass" style={{ borderColor: c.borderLight }}>
@@ -71,19 +73,19 @@ export default function ChatSidePanel({ workDir, mainMessages, settings, tab, on
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-5-5l5 5 5-5M4 21h16"/></svg>
         </button>
         {([
-          ['assistant', '辅助'],
-          ['review', '审查'],
-          ['files', '文件'],
-          ['terminal', '终端'],
-          ['browser', '浏览器'],
-          ['subagent', '子Agent'],
-          ['git', 'Git'],
-          ['stats', '统计'],
-        ] as [SideTab, string][]).map(([id, label]) => (
+          ['assistant', '辅助', 'Assist'],
+          ['review', '审查', 'Review'],
+          ['files', '文件', 'Files'],
+          ['terminal', '终端', 'Shell'],
+          ['browser', '浏览器', 'Browser'],
+          ['subagent', '子Agent', 'Agents'],
+          ['git', 'Git', 'Git'],
+          ['stats', '统计', 'Stats'],
+        ] as [SideTab, string, string][]).map(([id, label, labelEn]) => (
           <button key={id} onClick={() => onTabChange(id)}
             className="px-2 py-1 rounded-lg text-[11px] font-medium transition-colors"
             style={{ background: tab === id ? `${c.accent}12` : 'transparent', color: tab === id ? c.accent : c.textTertiary }}>
-            {label}
+            {lang === 'en' ? labelEn : label}
           </button>
         ))}
       </div>

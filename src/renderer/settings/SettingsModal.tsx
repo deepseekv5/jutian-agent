@@ -47,42 +47,42 @@ const PERMISSION_LEVELS: { id: PermissionLevel; label_zh: string; label_en: stri
   { id: 'full', label_zh: '完全访问', label_en: 'Full Access', desc_zh: '无限制访问所有文件和执行任意命令', desc_en: 'Unrestricted access to all files and commands', icon: 'M13 10V3L4 14h7v7l9-11h-7z', color: '#ef4444' },
 ];
 
-const CATEGORIES: { id: TabId; label: string; icon: string }[] = [
-  { id: 'inference', label: '推理', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-  { id: 'workspace', label: '工作区', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
-  { id: 'security', label: '安全', icon: 'M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z' },
-  { id: 'usage', label: '用量', icon: 'M3 13h4v8H3v-8zm7-9h4v17h-4V4zm7 5h4v12h-4V9z' },
-  { id: 'data', label: '数据', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-  { id: 'appearance', label: '外观', icon: 'M4 6h16M4 12h16M4 18h16' },
-  { id: 'language', label: '语言', icon: 'M3 5h12M9 3v2m1.5 0l-3 14m4.5 0h-6m9-3l4-8 4 8m-.5-2h-7' },
-  { id: 'localapi', label: '本地 API', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
-  { id: 'about', label: '关于', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+const CATEGORIES: { id: TabId; label: string; labelEn: string; icon: string }[] = [
+  { id: 'inference', label: '推理', labelEn: 'Inference', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  { id: 'workspace', label: '工作区', labelEn: 'Workspace', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
+  { id: 'security', label: '安全', labelEn: 'Security', icon: 'M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z' },
+  { id: 'usage', label: '用量', labelEn: 'Usage', icon: 'M3 13h4v8H3v-8zm7-9h4v17h-4V4zm7 5h4v12h-4V9z' },
+  { id: 'data', label: '数据', labelEn: 'Data', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
+  { id: 'appearance', label: '外观', labelEn: 'Appearance', icon: 'M4 6h16M4 12h16M4 18h16' },
+  { id: 'language', label: '语言', labelEn: 'Language', icon: 'M3 5h12M9 3v2m1.5 0l-3 14m4.5 0h-6m9-3l4-8 4 8m-.5-2h-7' },
+  { id: 'localapi', label: '本地 API', labelEn: 'Local API', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
+  { id: 'about', label: '关于', labelEn: 'About', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 ]
 
 // 设置搜索索引：label = 呈现名，keywords = 命中关键词（空格分隔）
-const SEARCH_INDEX: { tab: TabId; label: string; desc: string; keywords: string }[] = [
-  { tab: 'inference', label: 'API 地址与密钥', desc: '推理', keywords: 'api base url key 密钥 接口地址 apikey apikey' },
-  { tab: 'inference', label: '模型选择', desc: '推理', keywords: 'model 模型 切换模型 step gpt glm qwen deepseek' },
-  { tab: 'inference', label: '本地模型 (LM Studio)', desc: '推理', keywords: 'local 本地模型 lm studio llama 本地推理' },
-  { tab: 'inference', label: '上下文窗口', desc: '推理', keywords: 'context window 上下文 窗口 tokens' },
-  { tab: 'inference', label: '多模态', desc: '推理', keywords: 'multimodal 多模态 图片 视觉 vision' },
-  { tab: 'workspace', label: '工作目录', desc: '工作区', keywords: 'workdir 工作目录 工作区 目录 文件夹' },
-  { tab: 'security', label: 'AI 权限等级', desc: '安全', keywords: 'permission 权限 受限 标准 完全访问 restricted full' },
-  { tab: 'security', label: 'Shell 命令执行', desc: '安全', keywords: 'shell 命令 执行 终端 命令执行' },
-  { tab: 'security', label: '集群敏感操作拦截', desc: '安全', keywords: 'sensitive 敏感 拦截 删除 集群 高危' },
-  { tab: 'security', label: '可访问文件夹', desc: '安全', keywords: 'folders 授权 文件夹 目录 白名单' },
-  { tab: 'appearance', label: '主题模式', desc: '外观', keywords: 'theme 主题 深色 浅色 dark light 暗色 黑色' },
-  { tab: 'appearance', label: '发送键行为', desc: '外观', keywords: 'enter 发送 回车 换行 enterToSend' },
-  { tab: 'appearance', label: '聊天字号', desc: '外观', keywords: 'font 字号 字体大小 文字大小' },
-  { tab: 'appearance', label: 'AI 自动生成对话标题', desc: '外观', keywords: 'title 标题 自动命名 auto title' },
-  { tab: 'appearance', label: '回复完成系统通知', desc: '外观', keywords: 'notify 通知 提醒 完成 notification' },
-  { tab: 'appearance', label: '上下文自动压缩阈值', desc: '外观', keywords: 'compact 压缩 阈值 上下文 auto compact' },
-  { tab: 'appearance', label: '朗读音色与语速', desc: '外观', keywords: 'tts 朗读 语音 音色 声音 语速 晓晓 云希 试听 voice speed' },
-  { tab: 'appearance', label: '液态玻璃模糊强度', desc: '外观', keywords: 'glass blur 毛玻璃 模糊' },
-  { tab: 'appearance', label: '背景图片与透明度', desc: '外观', keywords: 'background 背景 壁纸 透明度 wallpaper' },
-  { tab: 'language', label: '界面语言', desc: '语言', keywords: 'language 语言 中文 english 中英文' },
-  { tab: 'data', label: '会话数据统计 / 导入导出', desc: '数据', keywords: 'data 数据 导出 导入 备份 统计 清空' },
-  { tab: 'usage', label: 'Token 用量统计', desc: '用量', keywords: 'usage 用量 tokens 统计 消耗' },
+const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string; keywords: string }[] = [
+  { tab: 'inference', label: 'API 地址与密钥', labelEn: 'API base URL & key', desc: '推理', keywords: 'api base url key 密钥 接口地址 apikey apikey' },
+  { tab: 'inference', label: '模型选择', labelEn: 'Model selection', desc: '推理', keywords: 'model 模型 切换模型 step gpt glm qwen deepseek' },
+  { tab: 'inference', label: '本地模型 (LM Studio)', labelEn: 'Local models (LM Studio)', desc: '推理', keywords: 'local 本地模型 lm studio llama 本地推理' },
+  { tab: 'inference', label: '上下文窗口', labelEn: 'Context window', desc: '推理', keywords: 'context window 上下文 窗口 tokens' },
+  { tab: 'inference', label: '多模态', labelEn: 'Multimodal', desc: '推理', keywords: 'multimodal 多模态 图片 视觉 vision' },
+  { tab: 'workspace', label: '工作目录', labelEn: 'Working directory', desc: '工作区', keywords: 'workdir 工作目录 工作区 目录 文件夹' },
+  { tab: 'security', label: 'AI 权限等级', labelEn: 'AI permission level', desc: '安全', keywords: 'permission 权限 受限 标准 完全访问 restricted full' },
+  { tab: 'security', label: 'Shell 命令执行', labelEn: 'Shell command execution', desc: '安全', keywords: 'shell 命令 执行 终端 命令执行' },
+  { tab: 'security', label: '集群敏感操作拦截', labelEn: 'Swarm sensitive-op blocking', desc: '安全', keywords: 'sensitive 敏感 拦截 删除 集群 高危' },
+  { tab: 'security', label: '可访问文件夹', labelEn: 'Allowed folders', desc: '安全', keywords: 'folders 授权 文件夹 目录 白名单' },
+  { tab: 'appearance', label: '主题模式', labelEn: 'Theme mode', desc: '外观', keywords: 'theme 主题 深色 浅色 dark light 暗色 黑色' },
+  { tab: 'appearance', label: '发送键行为', labelEn: 'Send key behavior', desc: '外观', keywords: 'enter 发送 回车 换行 enterToSend' },
+  { tab: 'appearance', label: '聊天字号', labelEn: 'Chat font size', desc: '外观', keywords: 'font 字号 字体大小 文字大小' },
+  { tab: 'appearance', label: 'AI 自动生成对话标题', labelEn: 'Auto-generate chat titles', desc: '外观', keywords: 'title 标题 自动命名 auto title' },
+  { tab: 'appearance', label: '回复完成系统通知', labelEn: 'Reply-complete notification', desc: '外观', keywords: 'notify 通知 提醒 完成 notification' },
+  { tab: 'appearance', label: '上下文自动压缩阈值', labelEn: 'Auto-compact threshold', desc: '外观', keywords: 'compact 压缩 阈值 上下文 auto compact' },
+  { tab: 'appearance', label: '朗读音色与语速', labelEn: 'TTS voice & speed', desc: '外观', keywords: 'tts 朗读 语音 音色 声音 语速 晓晓 云希 试听 voice speed' },
+  { tab: 'appearance', label: '液态玻璃模糊强度', labelEn: 'Glass blur intensity', desc: '外观', keywords: 'glass blur 毛玻璃 模糊' },
+  { tab: 'appearance', label: '背景图片与透明度', labelEn: 'Background image & opacity', desc: '外观', keywords: 'background 背景 壁纸 透明度 wallpaper' },
+  { tab: 'language', label: '界面语言', labelEn: 'Interface language', desc: '语言', keywords: 'language 语言 中文 english 中英文' },
+  { tab: 'data', label: '会话数据统计 / 导入导出', labelEn: 'Session stats / import & export', desc: '数据', keywords: 'data 数据 导出 导入 备份 统计 清空' },
+  { tab: 'usage', label: 'Token 用量统计', labelEn: 'Token usage', desc: '用量', keywords: 'usage 用量 tokens 统计 消耗' },
 ];
 
 
@@ -545,7 +545,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       className="w-full px-2.5 py-2 rounded-lg text-left transition-colors"
                       onMouseEnter={e => e.currentTarget.style.background = c.surfaceHover}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                      <div className="text-[12px] font-medium truncate" style={{ color: c.text }}>{hit.label}</div>
+                      <div className="text-[12px] font-medium truncate" style={{ color: c.text }}>{lang === 'en' && hit.labelEn ? hit.labelEn : hit.label}</div>
                       <div className="text-[10.5px] truncate" style={{ color: c.textMuted }}>{hit.desc}</div>
                     </button>
                   ))}
@@ -561,7 +561,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={cat.icon} />
                     </svg>
-                    {cat.label}
+                    {lang === 'en' && cat.labelEn ? cat.labelEn : cat.label}
                   </button>
                 ))
               )}

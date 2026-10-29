@@ -72,6 +72,33 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   const isStreaming = streamingId !== null
   const { c } = useTheme()
 
+
+  // 网络阶段条（v13.5.2）：免费线路（OpenCode 等）高峰期首字节要排队很久，
+  // 这段时间只显示"正在生成…"是不够的——用户不知道是模型在排队还是卡死了。
+  // useChat 广播 chat-net-status，这里显示"正在连接模型/重试中 + 已等待秒数"。
+  const [netPhase, setNetPhase] = useState<'connecting' | 'retrying' | null>(null)
+  const [netSec, setNetSec] = useState(0)
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null
+    const stop = () => { if (timer) { clearInterval(timer); timer = null } }
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (d.sessionId && d.sessionId !== sessionId) return
+      if (d.phase === 'connecting') {
+        setNetPhase('connecting'); setNetSec(0)
+        stop(); timer = setInterval(() => setNetSec(v => v + 1), 1000)
+      } else if (d.phase === 'retrying') {
+        setNetPhase('retrying')
+      } else if (d.phase === 'first-token') {
+        setNetPhase(null); stop()
+      }
+    }
+    window.addEventListener('chat-net-status', h)
+    return () => { window.removeEventListener('chat-net-status', h); stop() }
+  }, [sessionId])
+  // 流结束/切换会话时兜底清除
+  useEffect(() => { if (!isStreaming) setNetPhase(null) }, [isStreaming])
+
   // 三个操作回调提成稳定引用：MessageBubble 是 memo 组件，若每条消息都传
   // 新建的闭包，memo 永远命中不了——流式期间每 50ms 一次 setMessages 就会
   // 让全部气泡重渲染、连 ReactMarkdown 都重新解析。
@@ -281,6 +308,17 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         </div>
       )}
 
+      {netPhase && (
+        <div className="shrink-0 px-6 py-1.5 text-[11.5px] flex items-center gap-2"
+          style={{ color: c.textTertiary, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">
+          <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
+          {netPhase === 'connecting'
+            ? (lang === 'en' ? 'Connecting to model…' : '正在连接模型…')
+            : (lang === 'en' ? 'Connection reset, retrying…' : '连接被重置，正在重试…')}
+          <span className="font-mono" style={{ color: c.textMuted }}>{netSec}s</span>
+          {netSec >= 5 && <span style={{ color: c.textMuted }}>{lang === 'en' ? '· free tiers can queue at peak hours' : '· 免费线路高峰期会排队'}</span>}
+        </div>
+      )}
       <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>
         {/* aria-live=polite：流式回复增长时让屏幕阅读器跟上；
             aria-busy 标记生成中，避免逐字播报打断用户 */}

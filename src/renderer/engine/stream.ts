@@ -39,6 +39,12 @@ export interface StreamCallbacks {
    * 不依赖模型是否遵守提示词。
    */
   beforeTool?: (tc: ToolCall) => Promise<string | null> | string | null
+  /**
+   * 网络阶段通知（v13.5.2）：免费线路（如 OpenCode）高峰期首字节要等很久，
+   * 这段"看起来什么都没发生"的时间必须有反馈。connecting=已发出请求还没收到
+   * 首字节；first-token=开始出内容；每阶段只发一次。
+   */
+  onNetStatus?: (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => void
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
@@ -94,6 +100,7 @@ export async function streamChat(
       if (!res.body) { callbacks.onError('无法读取响应流'); return }
       let fullContent = ''
       let fullThinking = ''
+      let firstTokenSeen = false
 
       for await (const data of ssePayloads(res.body)) {
         if (signal?.aborted) return
@@ -111,7 +118,8 @@ export async function streamChat(
           }
           // 文本输出
           if (delta.content) {
-            fullContent += delta.content
+            if (!firstTokenSeen) { firstTokenSeen = true; callbacks.onNetStatus?.('first-token') }
+      fullContent += delta.content
             callbacks.onChunk(delta.content)
           }
         } catch { /* 忽略解析错误 */ }
@@ -173,11 +181,13 @@ export async function streamChat(
 
       let res: Response
       try {
+        callbacks.onNetStatus?.('connecting')
         res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
       } catch (e) {
         // 免费档上游偶发重置连接 → 自动重试一次（仅网络错误，非业务错误）
         if (signal?.aborted) throw e
-        await new Promise(r => setTimeout(r, 1200))
+        callbacks.onNetStatus?.('retrying', { attempt: 2 })
+        await new Promise(r => setTimeout(r, 600))
         res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
       }
 
