@@ -130,24 +130,11 @@ jobs:
           gradle assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk "/tmp/out/jutian-remote-$VER.apk"
 
-          # 2) 本地版（每个 ABI 一个包，各约 55MB）：libnode + JNI 桥 + 内置前端
-          #    先清空输出目录——否则上一步 remote 的 app-release.apk 会被
-          #    下面的兜底逻辑误当成"无后缀的本地包"上传（真实踩坑点）
+          # 2) 本地版：单包通用（三个 ABI 全在内，任何设备装同一个包）
           rm -rf app/build/outputs/apk/release
           gradle assembleRelease -PlocalApk --no-daemon
-          shopt -s nullglob
-          for f in app/build/outputs/apk/release/app-*-release.apk; do
-            ABI=$(basename "$f" | sed -E 's/^app-(.+)-release\.apk$/\1/')
-            cp "$f" "/tmp/out/jutian-local-$VER-$ABI.apk"
-          done
-          # 兜底：splits 万一没生效（只有无后缀单包）时才用它，且必须是含运行时的本地包
-          if [ ! -f "/tmp/out/jutian-local-$VER-arm64-v8a.apk" ] && [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            if unzip -l app/build/outputs/apk/release/app-release.apk | grep -q "libnode.so"; then
-              cp app/build/outputs/apk/release/app-release.apk "/tmp/out/jutian-local-$VER-arm64-v8a.apk"
-            else
-              echo "本地版构建未产出带运行时的包"; exit 1
-            fi
-          fi
+          test -f app/build/outputs/apk/release/app-release.apk || { echo "本地版未产出 APK"; exit 1; }
+          cp app/build/outputs/apk/release/app-release.apk "/tmp/out/jutian-local-$VER.apk"
 
           ls -la /tmp/out/
 
@@ -160,13 +147,14 @@ jobs:
             # 本地版必须真的带上运行时与内置包，否则装上去只是个壳
             case "$f" in
               *jutian-local-*)
-                unzip -l "$f" | grep -qE "lib/(arm64-v8a|armeabi-v7a|x86_64)/libnode.so" || { echo "本地版缺少 libnode.so"; exit 1; }
-                unzip -l "$f" | grep -q "assets/mobile.zip" || { echo "本地版缺少内置前端包"; exit 1; }
-                # 每个包只应含一个 ABI 的运行时（分包正确性）
-                COUNT=$(unzip -l "$f" | grep -c "libnode.so" || true)
-                [ "$COUNT" = "1" ] || { echo "分包异常：含 $COUNT 个 libnode.so"; exit 1; }
-                # 依赖必须齐：缺 libc++_shared.so 会 dlopen 失败（真机踩过）
-                unzip -l "$f" | grep -q "libc++_shared.so" || { echo "缺少 libc++_shared.so 依赖"; exit 1; }
+                # 单包通用：三个 ABI 的运行时与依赖必须全部在内
+                for ABI in arm64-v8a armeabi-v7a x86_64; do
+                  unzip -l "$f" | grep -q "lib/$ABI/libnode.so" || { echo "缺少 $ABI/libnode.so"; exit 1; }
+                  unzip -l "$f" | grep -q "lib/$ABI/libc++_shared.so" || { echo "缺少 $ABI/libc++_shared.so"; exit 1; }
+                  unzip -l "$f" | grep -q "lib/$ABI/libnodejs_bridge.so" || { echo "缺少 $ABI/libnodejs_bridge.so"; exit 1; }
+                done
+                unzip -l "$f" | grep -q "assets/mobile.zip" || { echo "缺少内置前端包"; exit 1; }
+                echo "通用包核验通过：3 个 ABI × 3 个原生库 + 内置前端"
                 ;;
             esac
           done

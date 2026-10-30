@@ -86,8 +86,10 @@ public class MainActivity extends Activity {
                     + "本包运行时：" + (apkHasRuntime() ? "存在，但加载失败" : "不包含此架构（装错了包）") + "\n"
                     + "已安装原生库：" + NodeRuntime.nativeLibList(getApplicationInfo().nativeLibraryDir) + "\n\n"
                     + "具体错误：\n" + (NodeRuntime.lastError().isEmpty() ? "(无详细信息)" : NodeRuntime.lastError()) + "\n\n"
-                    + "本地版按架构分包：arm64-v8a / armeabi-v7a / x86_64，请下载与本机一致的 jutian-local 包。\n"
-                    + "若提示 libc++_shared.so 缺失或 PT_LOAD 对齐，请更新到最新版本（v13.6.2 起已修复）。");
+                    + "本次安装包为通用版（含三种架构运行时），若仍失败多为设备页大小限制。\n"
+                    + "3 秒后自动进入配置页，可用「连接电脑」模式继续使用。");
+            // 本机模式起不来也不能让应用不可用：自动降级到配置页
+            new android.os.Handler(getMainLooper()).postDelayed(this::showSetup, 3000);
             return;
         }
         buildBootView();
@@ -375,6 +377,17 @@ public class MainActivity extends Activity {
         title.setText("巨天 Agent");
         title.setTextSize(24);
         box.addView(title);
+
+        // 若本机运行时加载失败过，在配置页明确告知（不让用户以为本机模式是"消失"了）
+        if (!NodeRuntime.lastError().isEmpty()) {
+            TextView warn = new TextView(this);
+            warn.setText("本机模式不可用：" + NodeRuntime.lastError()
+                    + "\n可继续使用下方「连接电脑」模式。");
+            warn.setTextSize(11);
+            warn.setTextColor(0xFFB45309);
+            warn.setPadding(0, pad / 3, 0, pad / 2);
+            box.addView(warn);
+        }
 
         TextView ver = new TextView(this);
         ver.setText("版本 " + versionName() + " · 设备 " + deviceAbi() + " · 本机模式与远程模式都支持");
