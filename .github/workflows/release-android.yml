@@ -79,7 +79,6 @@ jobs:
           unzip -o /tmp/njm.zip 'include/*' -d /tmp/njm-include/
           cp -r /tmp/njm-include/include/* android/app/src/main/cpp/include/
           test -f android/app/src/main/cpp/include/node/node.h
-
       - name: 组装本地版内置包
         run: |
           mkdir -p android/app/src/local/assets
@@ -90,6 +89,26 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;26.1.10909125" > /dev/null
           echo "NDK: $ANDROID_HOME/ndk/26.1.10909125"
+
+      # libnode.so 动态依赖 libc++_shared.so：不打进包会直接 dlopen 失败
+      # （真机实测报错：library "libc++_shared.so" not found）。
+      # NDK sysroot 里按 triple 命名，需要映射到 ABI 目录名。
+      - name: 拷贝 libc++_shared.so（libnode 依赖）
+        run: |
+          SYS=$(dirname "$(find "$ANDROID_HOME/ndk" -name libc++_shared.so -path "*aarch64-linux-android*" | head -1)")
+          echo "NDK libc++ 目录: $SYS"
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            case "$ABI" in
+              arm64-v8a) T=aarch64-linux-android ;;
+              armeabi-v7a) T=arm-linux-androideabi ;;
+              x86_64) T=x86_64-linux-android ;;
+            esac
+            SRC="$SYS/$T/libc++_shared.so"
+            test -f "$SRC" || { echo "找不到 $SRC"; exit 1; }
+            cp "$SRC" "android/app/src/local/jniLibs/$ABI/"
+            ls -la "android/app/src/local/jniLibs/$ABI/"
+          done
+
 
       - name: 解码签名密钥
         run: |
@@ -147,6 +166,8 @@ jobs:
                 # 每个包只应含一个 ABI 的运行时（分包正确性）
                 COUNT=$(unzip -l "$f" | grep -c "libnode.so" || true)
                 [ "$COUNT" = "1" ] || { echo "分包异常：含 $COUNT 个 libnode.so"; exit 1; }
+                # 依赖必须齐：缺 libc++_shared.so 会 dlopen 失败（真机踩过）
+                unzip -l "$f" | grep -q "libc++_shared.so" || { echo "缺少 libc++_shared.so 依赖"; exit 1; }
                 ;;
             esac
           done

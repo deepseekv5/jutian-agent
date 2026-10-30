@@ -21,8 +21,8 @@ android {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13060100
-        versionName "13.6.1"
+        versionCode 13060200
+        versionName "13.6.2"
         buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
     }
 
@@ -51,6 +51,15 @@ android {
                 jniLibs.srcDirs += "src/local/jniLibs"
                 assets.srcDirs += "src/local/assets"
             }
+        }
+    }
+
+    // 原生库解压安装（v13.6.2）：默认会直接从 APK 内 mmap 未压缩的 .so，
+    // 老构建的 4KB 段对齐库在 16KB 页设备上加载会失败；解压到 lib 目录后
+    // 由安装器处理对齐，兼容性更好（代价是安装占用略增）。
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 

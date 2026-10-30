@@ -83,9 +83,11 @@ public class MainActivity extends Activity {
             bootFail("加载运行时库",
                     "内置 Node 运行时无法加载。\n\n"
                     + "设备架构：" + deviceAbisAll() + "\n"
-                    + "本包运行时：" + (apkHasRuntime() ? "存在，但加载失败（可能安装包损坏）" : "不包含此架构（下载了不匹配的安装包）") + "\n\n"
-                    + "本地版按架构分包提供：arm64-v8a（主流手机）、armeabi-v7a（较早设备）、x86_64（模拟器）。\n"
-                    + "请到发行版页面下载与本机架构一致的 jutian-local 安装包。");
+                    + "本包运行时：" + (apkHasRuntime() ? "存在，但加载失败" : "不包含此架构（装错了包）") + "\n"
+                    + "已安装原生库：" + NodeRuntime.nativeLibList(getApplicationInfo().nativeLibraryDir) + "\n\n"
+                    + "具体错误：\n" + (NodeRuntime.lastError().isEmpty() ? "(无详细信息)" : NodeRuntime.lastError()) + "\n\n"
+                    + "本地版按架构分包：arm64-v8a / armeabi-v7a / x86_64，请下载与本机一致的 jutian-local 包。\n"
+                    + "若提示 libc++_shared.so 缺失或 PT_LOAD 对齐，请更新到最新版本（v13.6.2 起已修复）。");
             return;
         }
         buildBootView();
@@ -111,10 +113,15 @@ public class MainActivity extends Activity {
                 NodeRuntime.startNode(
                         new java.io.File(dir, "serve.cjs").getAbsolutePath(),
                         dir.getAbsolutePath(),
-                        getFilesDir().getAbsolutePath());
-                // startNode 阻塞到 Node 退出；退出即服务挂了
+                        getFilesDir().getAbsolutePath(),
+                        nodeLogPath());
+                // startNode 阻塞到 Node 退出；退出即服务挂了——把 Node 日志尾部直接展示
                 runOnUiThread(() -> {
-                    if (!bootFailed) bootFail("服务进程退出", "Node 进程已结束。可点「重试」再次启动，或查看 logcat 里 JutianNode 标签的日志。");
+                    if (!bootFailed) {
+                        bootFail("服务进程退出", "内置服务已退出，日志最后几行：\n\n"
+                                + NodeRuntime.tailLog(nodeLogPath(), 12)
+                                + "\n\n可点「重试」再试，或改用「连接电脑」模式。");
+                    }
                 });
             } catch (Exception e) {
                 final String msg = e.getMessage();
@@ -258,7 +265,8 @@ public class MainActivity extends Activity {
                 }
                 try { Thread.sleep(500); } catch (InterruptedException ignored) { }
             }
-            main.post(() -> bootFail("等待服务就绪超时", "90 秒内本机服务未响应。可能原因：\n"
+            main.post(() -> bootFail("等待服务就绪超时", "90 秒内本机服务未响应。日志最后几行：\n\n"
+                    + NodeRuntime.tailLog(nodeLogPath(), 12) + "\n\n可能原因：\n"
                     + "· 首次解压较慢，设备存储紧张\n"
                     + "· 3211 端口被其他应用占用\n"
                     + "· 设备可用内存不足，进程被系统回收\n\n"
@@ -468,6 +476,11 @@ public class MainActivity extends Activity {
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.addView(box);
         setContentView(scroll);
+    }
+
+    /** Node 运行时日志路径（启动失败时展示尾部内容） */
+    private String nodeLogPath() {
+        return new java.io.File(getFilesDir(), "node.log").getAbsolutePath();
     }
 
     /** 设备主 ABI（如 arm64-v8a）——本地版按 ABI 分包，必须让用户看到装的是哪一档 */

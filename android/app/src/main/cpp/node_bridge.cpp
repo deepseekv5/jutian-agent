@@ -13,6 +13,7 @@
 #include <jni.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -42,10 +43,22 @@ static void* startNodeThread(void* raw) {
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_jutian_agent_NodeRuntime_startNode(JNIEnv* env, jclass, jstring entryPath, jstring projectDir, jstring homeDir) {
+Java_com_jutian_agent_NodeRuntime_startNode(JNIEnv* env, jclass, jstring entryPath, jstring projectDir, jstring homeDir, jstring logPath) {
     const char* entry = env->GetStringUTFChars(entryPath, nullptr);
     const char* proj = env->GetStringUTFChars(projectDir, nullptr);
     const char* home = env->GetStringUTFChars(homeDir, nullptr);
+    const char* logf = env->GetStringUTFChars(logPath, nullptr);
+
+    // Node 的 stdout/stderr 落到日志文件（v13.6.2）：进程崩溃/模块加载失败时
+    // 启动页能读到真实原因，而不是只看到"服务未就绪"。
+    if (logf && logf[0]) {
+        int fd = open(logf, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd >= 0) {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
+    }
 
     setenv("HOME", home, 1);
     setenv("PORT", "3211", 1);
@@ -71,5 +84,6 @@ Java_com_jutian_agent_NodeRuntime_startNode(JNIEnv* env, jclass, jstring entryPa
     env->ReleaseStringUTFChars(entryPath, entry);
     env->ReleaseStringUTFChars(projectDir, proj);
     env->ReleaseStringUTFChars(homeDir, home);
+    env->ReleaseStringUTFChars(logPath, logf);
     return rc;
 }
