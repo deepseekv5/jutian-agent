@@ -21,8 +21,8 @@ android {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13060200
-        versionName "13.6.2"
+        versionCode 13060300
+        versionName "13.6.3"
         buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
     }
 

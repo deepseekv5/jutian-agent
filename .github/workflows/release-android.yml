@@ -95,16 +95,15 @@ jobs:
       # NDK sysroot 里按 triple 命名，需要映射到 ABI 目录名。
       - name: 拷贝 libc++_shared.so（libnode 依赖）
         run: |
-          SYS=$(dirname "$(find "$ANDROID_HOME/ndk" -name libc++_shared.so -path "*aarch64-linux-android*" | head -1)")
-          echo "NDK libc++ 目录: $SYS"
           for ABI in arm64-v8a armeabi-v7a x86_64; do
             case "$ABI" in
               arm64-v8a) T=aarch64-linux-android ;;
               armeabi-v7a) T=arm-linux-androideabi ;;
               x86_64) T=x86_64-linux-android ;;
             esac
-            SRC="$SYS/$T/libc++_shared.so"
-            test -f "$SRC" || { echo "找不到 $SRC"; exit 1; }
+            # 直接 find 该 triple 的文件本身，不做路径拼接（避免层级错一层）
+            SRC=$(find "$ANDROID_HOME/ndk" -name libc++_shared.so -path "*/$T/*" | head -1)
+            test -n "$SRC" || { echo "找不到 $T 的 libc++_shared.so"; exit 1; }
             cp "$SRC" "android/app/src/local/jniLibs/$ABI/"
             ls -la "android/app/src/local/jniLibs/$ABI/"
           done
