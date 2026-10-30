@@ -21,19 +21,17 @@ android {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13060500
-        versionName "13.6.5"
+        versionCode 13060600
+        versionName "13.6.6"
         buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
-    }
-
-    // 本地版：单包通用（v13.6.5）——三个 ABI 的运行时全打进一个 APK，
-    // 任何 Android 设备装同一个包都能跑，不需要用户判断架构。
-    // 代价是体积（约 100MB），但换掉"下错包就报错"的整类问题。
-    if (localApk) {
-        ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        // 本地版：单包通用（v13.6.6）——三个 ABI 的运行时全打进一个 APK，
+        // 任何设备装同一个包都能跑，不需要用户判断架构（体积约 100MB）。
+        if (localApk) {
+            ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
         }
     }
+
+
 
     // 本地版才挂原生桥与内置资源；远控版保持 60KB 体量
     if (localApk) {
