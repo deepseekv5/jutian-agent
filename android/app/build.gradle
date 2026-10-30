@@ -21,11 +21,23 @@ android {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13060000
-        versionName "13.6.0"
+        versionCode 13060100
+        versionName "13.6.1"
         buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
-        if (localApk) {
-            ndk { abiFilters "arm64-v8a" }
+    }
+
+    // 本地版按 ABI 分包（v13.6.1）：nodejs-mobile 对 arm64-v8a / armeabi-v7a /
+    // x86_64 都有预编译运行时。之前只取 arm64 是为体积（单个 libnode.so 50-62MB，
+    // 三个塞一个包会到 150MB+）。现在每个架构出一个 APK（各约 55MB），按设备下载；
+    // AGP 自动给产物加 -<abi> 后缀。
+    if (localApk) {
+        splits {
+            abi {
+                enable true
+                reset()
+                include 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+                universalApk = false   // 不出全架构合并包（150MB+ 不划算）
+            }
         }
     }
 

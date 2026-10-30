@@ -80,7 +80,12 @@ public class MainActivity extends Activity {
     private void startLocalThen(final Runnable fallback) {
         if (!NodeRuntime.ensureLoaded()) {
             buildBootView();
-            bootFail("加载运行时库", "libnode.so 无法加载。可能原因：\n· 设备不是 64 位 ARM（本包仅支持 arm64）\n· 安装包不完整，请重新下载");
+            bootFail("加载运行时库",
+                    "内置 Node 运行时无法加载。\n\n"
+                    + "设备架构：" + deviceAbisAll() + "\n"
+                    + "本包运行时：" + (apkHasRuntime() ? "存在，但加载失败（可能安装包损坏）" : "不包含此架构（下载了不匹配的安装包）") + "\n\n"
+                    + "本地版按架构分包提供：arm64-v8a（主流手机）、armeabi-v7a（较早设备）、x86_64（模拟器）。\n"
+                    + "请到发行版页面下载与本机架构一致的 jutian-local 安装包。");
             return;
         }
         buildBootView();
@@ -177,7 +182,7 @@ public class MainActivity extends Activity {
         box.addView(title);
 
         TextView ver = new TextView(this);
-        ver.setText("版本 " + versionName() + " · 首次启动需要解压运行时，约 10-30 秒");
+        ver.setText("版本 " + versionName() + " · 设备 " + deviceAbi() + " · 首次启动需解压运行时，约 10-30 秒");
         ver.setTextSize(12);
         ver.setTextColor(0xFF888888);
         ver.setPadding(0, pad / 4, 0, pad);
@@ -364,7 +369,7 @@ public class MainActivity extends Activity {
         box.addView(title);
 
         TextView ver = new TextView(this);
-        ver.setText("版本 " + versionName() + " · 本机模式与远程模式都支持");
+        ver.setText("版本 " + versionName() + " · 设备 " + deviceAbi() + " · 本机模式与远程模式都支持");
         ver.setTextSize(12);
         ver.setTextColor(0xFF888888);
         ver.setPadding(0, pad / 4, 0, pad);
@@ -463,6 +468,28 @@ public class MainActivity extends Activity {
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.addView(box);
         setContentView(scroll);
+    }
+
+    /** 设备主 ABI（如 arm64-v8a）——本地版按 ABI 分包，必须让用户看到装的是哪一档 */
+    private String deviceAbi() {
+        try {
+            String[] abis = android.os.Build.SUPPORTED_ABIS;
+            return (abis != null && abis.length > 0) ? abis[0] : "unknown";
+        } catch (Throwable t) { return "unknown"; }
+    }
+
+    private String deviceAbisAll() {
+        try {
+            String[] abis = android.os.Build.SUPPORTED_ABIS;
+            return (abis != null && abis.length > 0) ? android.text.TextUtils.join(" / ", abis) : "unknown";
+        } catch (Throwable t) { return "unknown"; }
+    }
+
+    /** 本安装包是否真的带了当前 ABI 的运行时（装错架构的包会返回 false） */
+    private boolean apkHasRuntime() {
+        try {
+            return new java.io.File(getApplicationInfo().nativeLibraryDir, "libnode.so").isFile();
+        } catch (Throwable t) { return false; }
     }
 
     /** 安装包版本号（欢迎页展示，便于确认装的是不是最新包） */
