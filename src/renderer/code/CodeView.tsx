@@ -11,6 +11,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import FileTree from './FileTree'
 import CodeEditor, { stepEditorFont } from './CodeEditor'
+import OutlinePanel from './OutlinePanel'
+import { EditorStatusBar, Breadcrumbs } from './EditorStatusBar'
 import ChatPanel from './ChatPanel'
 import CodeSearchPanel from './CodeSearchPanel'
 import TerminalPanel from './TerminalPanel'
@@ -32,7 +34,7 @@ import { fetchCompat } from '../api'
 const RUNNABLE_EXTS = new Set(['sh', 'js', 'mjs', 'cjs', 'py', 'bash', 'zsh', 'rb', 'pl', 'php', 'ts', 'go'])
 
 /** 左侧活动栏槽位(互斥,一次只开一个) */
-type SidePanel = 'files' | 'search' | 'todo' | 'snippets' | 'git' | 'stats' | null
+type SidePanel = 'files' | 'search' | 'todo' | 'snippets' | 'git' | 'stats' | 'outline' | null
 /** 底部抽屉(互斥) */
 type BottomPanel = 'terminal' | 'output' | null
 
@@ -95,6 +97,10 @@ export default function CodeView({ settings, onBack }: Props) {
   const [followTarget, setFollowTarget] = useState<FollowTarget | null>(null)
   const [highlightLines, setHighlightLines] = useState<number[]>([])
   const [scrollTargetLine, setScrollTargetLine] = useState<number | undefined>(undefined)
+  const [editorView, setEditorView] = useState<import('@codemirror/view').EditorView | null>(null)
+  // 分屏（v13.7）：右侧再开一个编辑器，可同时看两个文件（VSCode 的 Split Editor）
+  const [splitPath, setSplitPath] = useState<string | null>(null)
+  const splitTab = splitPath ? code.tabs.find(t => t.path === splitPath) || null : null
   const [changedLinesMap, setChangedLinesMap] = useState<Record<string, ChangedLine[]>>({})
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [searchInitial, setSearchInitial] = useState('')
@@ -327,6 +333,8 @@ export default function CodeView({ settings, onBack }: Props) {
             icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
           <RailBtn c={c} label={t2('片段')} title="代码片段" active={sidePanel === 'snippets'} onClick={() => toggleSide('snippets')}
             icon="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5L8 13.8 2 9.2h7.6z" />
+          <RailBtn c={c} label={t2('大纲')} title={t2('代码大纲（函数/类/接口）')} active={sidePanel === 'outline'} onClick={() => toggleSide('outline')}
+            icon="M4 6h16M4 12h10M4 18h7" />
           <RailBtn c={c} label="Git" title="Git 检查点" active={sidePanel === 'git'} onClick={() => toggleSide('git')}
             icon="M12 3v18m-7-9h14" />
           <RailBtn c={c} label={t2('统计')} title="项目代码统计" active={sidePanel === 'stats'} onClick={() => toggleSide('stats')}
@@ -344,7 +352,8 @@ export default function CodeView({ settings, onBack }: Props) {
               <div className="h-8 flex items-center px-2.5 border-b shrink-0" style={{ borderColor: c.borderLight }}>
                 <span className="text-[10.5px] font-semibold tracking-wide" style={{ color: c.textMuted }}>
                   {sidePanel === 'files' ? t2('文件树') : sidePanel === 'search' ? t2('搜索') : sidePanel === 'todo' ? 'TODO / FIXME'
-                    : sidePanel === 'snippets' ? t2('代码片段') : sidePanel === 'git' ? 'Git' : t2('代码统计')}
+                    : sidePanel === 'snippets' ? t2('代码片段') : sidePanel === 'git' ? 'Git'
+                    : sidePanel === 'outline' ? t2('大纲') : t2('代码统计')}
                 </span>
                 <button onClick={() => setSidePanel(null)} title={t2('收起')}
                   className="ml-auto w-5 h-5 rounded flex items-center justify-center" style={{ color: c.textTertiary }}>
@@ -408,6 +417,14 @@ export default function CodeView({ settings, onBack }: Props) {
                     <GitPanel workDir={project.rootPath} onClose={() => setSidePanel(null)} />
                   </div>
                 )}
+                {sidePanel === 'outline' && (
+                  <OutlinePanel
+                    code={code.activeTab?.content || ''}
+                    language={code.activeTab?.language || 'text'}
+                    path={code.activeTab?.path || ''}
+                    onJump={(line) => setScrollTargetLine(line)}
+                  />
+                )}
                 {sidePanel === 'stats' && (
                   <div className="p-3 overflow-auto">
                     <div className="text-[11.5px] font-medium mb-2" style={{ color: c.textHead }}>{t2('项目代码统计')}</div>
@@ -457,6 +474,9 @@ export default function CodeView({ settings, onBack }: Props) {
             <TBtn c={c} title={followMode ? 'Follow mode 开启' : 'Follow mode 关闭'} active={followMode}
               onClick={() => setFollowMode(v => !v)}
               icon="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            <TBtn c={c} title={splitPath ? t2('关闭分屏') : t2('分屏编辑（左右两个文件）')} active={!!splitPath}
+              onClick={() => setSplitPath(splitPath ? null : (code.activeTab?.path || null))}
+              icon="M9 3v18M3 9h18M3 3h18v18H3z" />
             <TBtn c={c} title="保存全部 (Cmd+S)" dirty={code.tabs.some(t => t.modified)}
               onClick={async () => { for (const t of code.tabs.filter(t => t.modified)) await code.saveFile(t.path) }}
               icon="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -467,6 +487,9 @@ export default function CodeView({ settings, onBack }: Props) {
             </div>
           </div>
 
+          <Breadcrumbs path={code.activeTab?.path || ''} />
+          <div className="flex-1 flex min-h-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <CodeEditor
             tab={code.activeTab}
             tabs={code.tabs}
@@ -491,6 +514,7 @@ export default function CodeView({ settings, onBack }: Props) {
             onAICompletionEvent={(event) => setAICompletionEvents(prev => [...prev, event])}
             highlightLines={highlightLines}
             scrollTargetLine={scrollTargetLine}
+            onViewReady={setEditorView}
             changedLines={changedLinesMap[code.activeTab?.path || '']}
             showMarkdownPreview={markdownPreview}
             onToggleMarkdownPreview={handleToggleMarkdownPreview}
@@ -501,6 +525,36 @@ export default function CodeView({ settings, onBack }: Props) {
               <MarkdownPreview content={code.activeTab.content} />
             </div>
           )}
+          {/* 编辑器状态栏（v13.7）：光标行列/选中/总行数/语言/路径 */}
+          <EditorStatusBar view={editorView} path={code.activeTab?.path || ''} language={code.activeTab?.language || 'text'} />
+          </div>
+          {splitTab && (
+            <div className="flex-1 flex flex-col min-w-0 min-h-0 border-l" style={{ borderColor: c.border }}>
+              <div className="h-6 shrink-0 flex items-center px-2 gap-2 text-[10.5px]"
+                style={{ color: c.textMuted, borderBottom: `1px solid ${c.borderLight}`, background: c.bgInput }}>
+                <span className="truncate flex-1" title={splitTab.path}>{splitTab.path}</span>
+                <button onClick={() => setSplitPath(null)} title={t2('关闭分屏')} className="px-1 rounded hover:opacity-70">✕</button>
+              </div>
+              <CodeEditor
+                tab={splitTab}
+                tabs={[splitTab]}
+                activeTabPath={splitTab.path}
+                onSelectTab={() => {}}
+                onCloseTab={() => setSplitPath(null)}
+                onContentChange={(path, content) => code.updateContent(path, content)}
+                onSaveFile={code.saveFile}
+                isRunnable={false}
+                onRun={() => {}}
+                onStop={() => {}}
+                running={false}
+                saving={code.saving}
+                modified={!!splitTab.modified}
+                settings={settings}
+                changedLines={changedLinesMap[splitTab.path]}
+              />
+            </div>
+          )}
+          </div>
           {/* 底部抽屉:运行输出(与终端互斥) */}
           {bottomPanel === 'output' && (
             <div className="border-t shrink-0" style={{ borderColor: c.borderLight }}>

@@ -19,6 +19,7 @@ import { bracketMatching, indentOnInput, foldKeymap, foldGutter } from '@codemir
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import { lintKeymap } from '@codemirror/lint'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
+import { editorProExtensions } from './editorPro'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { html } from '@codemirror/lang-html'
@@ -263,9 +264,11 @@ interface Props {
   highlightLines?: number[]
   scrollTargetLine?: number
   changedLines?: ChangedLine[]
+  /** 编辑器实例就绪/销毁时回调（父层状态栏用它读光标位置） */
+  onViewReady?: (view: EditorView | null) => void
 }
 
-export default function CodeEditor({ tab, tabs, activeTabPath, onSelectTab, onCloseTab, onCloseOtherTabs, onCloseRightTabs, onCloseAllTabs, onContentChange, onSaveFile, isRunnable, onRun, onStop, running, saving, showMarkdownPreview, onToggleMarkdownPreview, modified, settings, onAICompletionEvent, highlightLines, scrollTargetLine, changedLines }: Props) {
+export default function CodeEditor({ tab, tabs, activeTabPath, onSelectTab, onCloseTab, onCloseOtherTabs, onCloseRightTabs, onCloseAllTabs, onContentChange, onSaveFile, isRunnable, onRun, onStop, running, saving, showMarkdownPreview, onToggleMarkdownPreview, modified, settings, onAICompletionEvent, highlightLines, scrollTargetLine, changedLines, onViewReady }: Props) {
   const { c, theme: currentTheme } = useTheme()
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -503,11 +506,14 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
           ...searchKeymap,
         ]),
         EditorView.lineWrapping,
+        // v13.7：可见查找替换面板 + 缩进参考线 + Ctrl+G 跳转行
+        ...editorProExtensions(),
       ],
     })
 
     const view = new EditorView({ state, parent: containerRef.current })
     viewRef.current = view
+    onViewReady?.(view)
 
     // Context menu事件
     const onContextMenu = (e: MouseEvent) => {
@@ -522,6 +528,7 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
       setContextMenu(null)
       view.destroy()
       viewRef.current = null
+      onViewReady?.(null)
     }
     // 编辑器仅按「文件路径/语言」重建：主题走专门的热切换 effect，内容变更走 dispatch；
     // tab/c/回调每次渲染都是新引用，纳入依赖会导致每次输入都销毁重建编辑器
