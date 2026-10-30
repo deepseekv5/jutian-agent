@@ -14,7 +14,6 @@
         android:label="巨天agent"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
-        android:pageSizeCompat="true"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
