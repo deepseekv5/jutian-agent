@@ -851,11 +851,18 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         saveThinkMs()
         toolPreLen[toolCall.id] = fullContent.length
         toolThinkLen[toolCall.id] = fullThinking.length
-        setMessages(prev => prev.map(m =>
-          m.id === assistantMsg.id
-            ? { ...m, tool_calls: [...(m.tool_calls || []), { ...toolCall, status: 'running' as const }] }
-            : m
-        ))
+        setMessages(prev => prev.map(m => {
+          if (m.id !== assistantMsg.id) return m
+          const list = m.tool_calls || []
+          const i = list.findIndex(x => x.id === toolCall.id)
+          // 流式 pending 卡已占位 → 就地转 running；否则新增
+          if (i >= 0) {
+            const next = [...list]
+            next[i] = { ...next[i], ...toolCall, status: 'running' as const }
+            return { ...m, tool_calls: next }
+          }
+          return { ...m, tool_calls: [...list, { ...toolCall, status: 'running' as const }] }
+        }))
         
         // 如果 AI 调用了 load_skill，动态加载该 skill 的工具
         if (toolCall.name === 'load_skill') {
@@ -1060,11 +1067,21 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const netStatus = (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => {
         window.dispatchEvent(new CustomEvent('chat-net-status', { detail: { phase, sessionId, attempt: info?.attempt } }))
       }
-      // 工具参数流式草稿：模型边写参数边通知（v13.8.3）
-      const toolDraft = (draft: { name: string; argsChars: number }) => {
-        window.dispatchEvent(new CustomEvent('chat-tool-draft', { detail: { ...draft, sessionId } }))
+      // 工具调用流式卡片：模型边写参数边把 pending 卡实时写入消息（v13.8.4）
+      const toolPending = (tcP: ToolCall) => {
+        setMessages(prev => prev.map(m => {
+          if (m.id !== assistantMsg.id) return m
+          const list = m.tool_calls || []
+          const i = list.findIndex(x => x.id === tcP.id)
+          if (i >= 0) {
+            const next = [...list]
+            next[i] = { ...next[i], name: tcP.name, arguments: tcP.arguments, status: 'pending' as const }
+            return { ...m, tool_calls: next }
+          }
+          return { ...m, tool_calls: [...list, { ...tcP, status: 'pending' as const }] }
+        }))
       }
-      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft }, controller.signal, extraTools)
+      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolPending: toolPending }, controller.signal, extraTools)
     } finally {
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {

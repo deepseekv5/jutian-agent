@@ -92,7 +92,7 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
           </svg>
         )}
         <span className="text-[12.5px] font-medium shrink-0" style={{ color: c.textSecondary }}>
-          {displayName}{isRunning ? '…' : ''}{runningSec !== null ? ` · ${runningSec}s` : ''}
+          {displayName}{tool.status === 'pending' ? ' · 参数生成中' : isRunning ? '…' : ''}{runningSec !== null ? ` · ${runningSec}s` : ''}
         </span>
         {summary && <span className="text-[11.5px] truncate flex-1 min-w-0 font-mono" style={{ color: c.textTertiary }} title={summary}>{summary}</span>}
         {diffPath && (

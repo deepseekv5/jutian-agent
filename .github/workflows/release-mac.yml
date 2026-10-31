@@ -58,6 +58,12 @@ jobs:
         run: |
           VER="${GITHUB_REF_NAME#v}"
           mkdir -p dist-out
+          # asar 更新包：从 .app 取出 app.asar（纯 JS 代码包，跨平台通用），仅 arm64 传一份
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            ASAR_SRC=$(find release -path "*Contents/Resources/app.asar" | head -1)
+            test -n "$ASAR_SRC" || { echo "no app.asar"; exit 1; }
+            cp "$ASAR_SRC" "dist-out/jutian-agent-$VER-app.asar"
+          fi
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             mv "release/巨天agent-$VER-arm64.dmg"      "dist-out/jutian-agent-$VER-arm64.dmg"
             mv "release/巨天agent-$VER-arm64-mac.zip"  "dist-out/jutian-agent-$VER-arm64-mac.zip"

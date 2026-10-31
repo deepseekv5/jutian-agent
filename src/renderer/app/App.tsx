@@ -316,6 +316,8 @@ function MainApp() {
   useEffect(() => {
     const t = setTimeout(async () => {
             try {
+        // 延后 8 秒：让用户先看到界面，别一进来就被弹窗盖脸
+        await new Promise(r => setTimeout(r, 20000));
         if (!shouldShowCliPrompt()) return;
         const r = await fetchCompat('/api/cli/status').then((x) => x.json());
         if (r && r.installed === false) setCliPrompt(true);

@@ -46,10 +46,11 @@ export interface StreamCallbacks {
    */
   onNetStatus?: (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => void
   /**
-   * 工具参数流式草稿（v13.8.3）：模型边写工具参数边通知，UI 显示
-   * "正在准备调用 X… 参数写入中"。仅在内容变化时触发（增量去抖）。
+   * 工具调用流式卡片（v13.8.4）：模型边写工具参数边把累积中的调用
+   * （status: 'pending'，参数实时增长）交给 UI，按 id 插入/更新卡片。
+   * 仅在内容变化时触发（增量去抖），一轮可能有多个并行草稿。
    */
-  onToolDraft?: (draft: { name: string; argsChars: number }) => void
+  onToolPending?: (tc: ToolCall) => void
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
@@ -138,6 +139,8 @@ export async function streamChat(
       let fullContent = ''
       let fullThinking = ''
       let firstTokenSeen = false
+      // 流式工具草稿去抖：同签名只通知一次（参数长度变化 = 新签名）
+      const draftSigSeen = new Set<string>()
 
       for await (const data of ssePayloads(res.body)) {
         if (signal?.aborted) return
@@ -178,6 +181,8 @@ export async function streamChat(
   const callSignatures = new Map<string, number>()
   // 同工具累计计数（跨轮）：反复用同一工具是隐性空转的主要形态
   const toolUseCounts = new Map<string, number>()
+  // 流式工具草稿去抖（跨轮重置无必要：同签名不重复通知即可）
+  const draftSigSeen = new Set<string>()
   // 思考内容跨轮累积：放在循环外，否则"思考→调工具→再思考"时
   // 只有最后一轮的思考会落库，前面的全丢
   let fullThinking = ''
@@ -272,12 +277,16 @@ export async function streamChat(
           // 工具调用流式累积（解析/合并细节见 toolCallStream，含 id 重发防护）
           const parsedTcs = parseToolCallsFromDelta(delta)
           if (parsedTcs) {
-            let draftChanged = false
-            for (const tc of parsedTcs) { accumulateToolCallDelta(toolCallMap, tc); draftChanged = true }
-            if (draftChanged) {
-              // 取"最后一个"累积中的调用通知（模型串行写参数，最后一个是正在写的）
-              const last = [...toolCallMap.values()].pop()
-              if (last) callbacks.onToolDraft?.({ name: last.name || '…', argsChars: (last.arguments || '').length })
+            for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
+            // 流式工具卡片：把累积中的调用实时回给 UI（参数边写边长）
+            for (const acc of toolCallMap.values()) {
+              const sig = acc.id + '|' + acc.name + '|' + (acc.arguments || '').length
+              if (draftSigSeen.has(sig)) continue
+              draftSigSeen.add(sig)
+              callbacks.onToolPending?.({
+                id: acc.id, name: acc.name || '…', arguments: acc.arguments || '',
+                status: 'pending', started_at: new Date().toISOString(),
+              })
             }
           }
 
