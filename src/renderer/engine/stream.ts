@@ -140,7 +140,6 @@ export async function streamChat(
       let fullThinking = ''
       let firstTokenSeen = false
       // 流式工具草稿去抖：同签名只通知一次（参数长度变化 = 新签名）
-      const draftSigSeen = new Set<string>()
 
       for await (const data of ssePayloads(res.body)) {
         if (signal?.aborted) return

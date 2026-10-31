@@ -108,8 +108,8 @@ export default function EmployeesPanel({ onClose: _onClose, onOpenTab }: {
                   </svg>
                 </span>
                 <div>
-                  <h1 className="text-[18px] font-bold tracking-tight" style={{ color: c.textHead }}>t('集群指挥室', 'Swarm Console')</h1>
-                  <p className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>t('员工可单独对话，也能拉成群聊；群内可指定老板，支持 @ 点名与老板指派', 'Chat 1:1, group them up, pick a boss. @-mention and boss delegation supported.')</p>
+                  <h1 className="text-[18px] font-bold tracking-tight" style={{ color: c.textHead }}>{t('集群指挥室', 'Swarm Console')}</h1>
+                  <p className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('员工可单独对话，也能拉成群聊；群内可指定老板，支持 @ 点名与老板指派', 'Chat 1:1, group them up, pick a boss. @-mention and boss delegation supported.')}</p>
                 </div>
               </div>
             </div>
