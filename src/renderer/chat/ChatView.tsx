@@ -78,6 +78,8 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 这段时间只显示"正在生成…"是不够的——用户不知道是模型在排队还是卡死了。
   // useChat 广播 chat-net-status，这里显示"正在连接模型/重试中 + 已等待秒数"。
   const [netPhase, setNetPhase] = useState<'connecting' | 'retrying' | null>(null)
+  // 工具参数写入中（v13.9.4）：轻状态条，不建伪卡片
+  const [toolDraftName, setToolDraftName] = useState<string | null>(null)
   const [netSec, setNetSec] = useState(0)
 
   useEffect(() => {
@@ -100,7 +102,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }, [sessionId])
 
   // 流结束/切换会话时兜底清除
-  useEffect(() => { if (!isStreaming) setNetPhase(null) }, [isStreaming])
+  useEffect(() => { if (!isStreaming) { setNetPhase(null); setToolDraftName(null) } }, [isStreaming])
 
   // 三个操作回调提成稳定引用：MessageBubble 是 memo 组件，若每条消息都传
   // 新建的闭包，memo 永远命中不了——流式期间每 50ms 一次 setMessages 就会
@@ -311,6 +313,13 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         </div>
       )}
 
+      {!netPhase && toolDraftName && (
+        <div className="shrink-0 px-6 py-1.5 text-[11.5px] flex items-center gap-2"
+          style={{ color: c.textTertiary, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">
+          <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
+          {lang === 'en' ? 'Preparing tool call' : '正在准备调用'} <span className="font-mono" style={{ color: c.textSecondary }}>{toolDraftName}</span>
+        </div>
+      )}
       {netPhase && (
         <div className="shrink-0 px-6 py-1.5 text-[11.5px] flex items-center gap-2"
           style={{ color: c.textTertiary, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">

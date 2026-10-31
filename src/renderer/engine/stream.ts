@@ -47,11 +47,11 @@ export interface StreamCallbacks {
    */
   onNetStatus?: (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => void
   /**
-   * 工具调用流式卡片（v13.8.4）：模型边写工具参数边把累积中的调用
-   * （status: 'pending'，参数实时增长）交给 UI，按 id 插入/更新卡片。
-   * 仅在内容变化时触发（增量去抖），一轮可能有多个并行草稿。
+   * 工具参数写入通知（v13.9.4 重写）：只传工具名，UI 显示轻状态条。
+   * 伪卡片（pending 卡随参数增长实时更新）已废弃——依赖 id 全链路
+   * 一致才能转正，任一环不一致就永远卡在"参数生成中"。
    */
-  onToolPending?: (tc: ToolCall) => void
+  onToolDraft?: (draft: { name: string }) => void
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
@@ -185,8 +185,6 @@ export async function streamChat(
   const callSignatures = new Map<string, number>()
   // 同工具累计计数（跨轮）：反复用同一工具是隐性空转的主要形态
   const toolUseCounts = new Map<string, number>()
-  // 流式工具草稿去抖（跨轮重置无必要：同签名不重复通知即可）
-  const draftSigSeen = new Set<string>()
   // 思考内容跨轮累积：放在循环外，否则"思考→调工具→再思考"时
   // 只有最后一轮的思考会落库，前面的全丢
   let fullThinking = ''
@@ -301,15 +299,11 @@ export async function streamChat(
           const parsedTcs = parseToolCallsFromDelta(delta)
           if (parsedTcs) {
             for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
-            // 流式工具卡片：把累积中的调用实时回给 UI（参数边写边长）
-            for (const acc of toolCallMap.values()) {
-              const sig = acc.id + '|' + acc.name + '|' + (acc.arguments || '').length
-              if (draftSigSeen.has(sig)) continue
-              draftSigSeen.add(sig)
-              callbacks.onToolPending?.({
-                id: acc.id, name: acc.name || '…', arguments: acc.arguments || '',
-                status: 'pending', started_at: new Date().toISOString(),
-              })
+            // 轻通知：首次开始写工具参数时告知一次（UI 显示轻状态条，非卡片）
+            let draftAnnounced = false
+            if (!draftAnnounced) {
+              draftAnnounced = true
+              callbacks.onToolDraft?.({ name: parsedTcs[0]?.function?.name || '…' })
             }
           }
 
