@@ -83,6 +83,8 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   const [netSec, setNetSec] = useState(0)
   // 重试次数（v13.11）：429/5xx 也会重试，告诉用户是第几次尝试
   const [netAttempt, setNetAttempt] = useState(2)
+  // 本次耗时（v13.11）：完成后浮出 6 秒，让「为什么慢」可见
+  const [perfPill, setPerfPill] = useState<{ totalMs: number; rounds: number; llmMs: number; toolMs: number; toolCalls: number; toolErrors: number } | null>(null)
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null
@@ -101,7 +103,23 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
       }
     }
     window.addEventListener('chat-net-status', h)
-    return () => { window.removeEventListener('chat-net-status', h); stop() }
+
+    let perfTimer: ReturnType<typeof setTimeout> | null = null
+    const onPerf = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (d.sessionId && d.sessionId !== sessionId) return
+      setPerfPill({ totalMs: d.totalMs, rounds: d.rounds, llmMs: d.llmMs, toolMs: d.toolMs, toolCalls: d.toolCalls, toolErrors: d.toolErrors })
+      if (perfTimer) clearTimeout(perfTimer)
+      perfTimer = setTimeout(() => setPerfPill(null), 6000)
+    }
+    window.addEventListener('chat-perf', onPerf)
+
+    return () => {
+      window.removeEventListener('chat-net-status', h)
+      window.removeEventListener('chat-perf', onPerf)
+      if (perfTimer) clearTimeout(perfTimer)
+      stop()
+    }
   }, [sessionId])
 
   // 流结束/切换会话时兜底清除
@@ -334,6 +352,17 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
                 : `上游繁忙或连接中断，正在重试（第 ${netAttempt}/3 次）…`)}
           <span className="font-mono" style={{ color: c.textMuted }}>{netSec}s</span>
           {netSec >= 5 && <span style={{ color: c.textMuted }}>{lang === 'en' ? '· free tiers can queue at peak hours' : '· 免费线路高峰期会排队'}</span>}
+        </div>
+      )}
+      {/* 本次耗时（v13.11）：完成后浮出 6 秒——慢在 LLM 还是工具一眼可见 */}
+      {perfPill && (
+        <div className="shrink-0 px-6 py-1 text-[10.5px] flex items-center gap-2"
+          style={{ color: c.textMuted, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">
+          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.accent }} />
+          {lang === 'en'
+            ? `This run ${(perfPill.totalMs / 1000).toFixed(1)}s · ${perfPill.rounds} round(s) · LLM ${(perfPill.llmMs / 1000).toFixed(1)}s · tools ${(perfPill.toolMs / 1000).toFixed(1)}s`
+            : `本次耗时 ${(perfPill.totalMs / 1000).toFixed(1)}s · ${perfPill.rounds} 轮 · 模型 ${(perfPill.llmMs / 1000).toFixed(1)}s · 工具 ${(perfPill.toolMs / 1000).toFixed(1)}s`}
+          {perfPill.toolCalls > 0 && <span style={{ opacity: .75 }}>· {perfPill.toolCalls} {lang === 'en' ? 'calls' : '次调用'}{perfPill.toolErrors ? (lang === 'en' ? `, ${perfPill.toolErrors} failed` : `，失败 ${perfPill.toolErrors}`) : ''}</span>}
         </div>
       )}
       <div ref={scrollRef} className="h-full overflow-y-auto" onScroll={onScroll}>

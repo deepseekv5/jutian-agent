@@ -1071,7 +1071,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const toolDraft = (draft: { name: string }) => {
         window.dispatchEvent(new CustomEvent('chat-tool-draft', { detail: { ...draft, sessionId } }))
       }
-      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft }, controller.signal, extraTools)
+      // 性能报告（v13.11）：完成后在界面右下角浮出本次耗时结构，
+      // 让「这次为什么慢」对用户可见（数据同时已上报 /api/perf-log）
+      const onPerf = (r: { totalMs: number; rounds: number; llmMs: number; toolMs: number; toolCalls: number; toolErrors: number }) => {
+        window.dispatchEvent(new CustomEvent('chat-perf', { detail: { sessionId, ...r } }))
+      }
+      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools)
     } finally {
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {
