@@ -24,6 +24,13 @@ const root = path.resolve(__dirname, '..')
 const pkg = require(path.join(root, 'package.json'))
 const base = pkg.build || {}
 
+// 产物名统一 ASCII：dmg 走 name(jutian-agent)，zip 走同款模板——
+// productName「巨天agent」含 CJK，GitHub Release 上传间歇性炸
+// （Request path contains unescaped characters），v13.10.0 实测。
+base.dmg = { ...(base.dmg || {}), artifactName: 'jutian-agent-${version}-${arch}.${ext}' }
+base.zip = { ...(base.zip || {}), artifactName: 'jutian-agent-${version}-${arch}-mac.${ext}' }
+base.appImage = { ...(base.appImage || {}), artifactName: 'jutian-agent-${version}-${arch}.${ext}' }
+
 /**
  * 随包分发的「大块运行时资源」。每一项都可能不存在，缺了只跳过。
  * 路径写成相对项目根，不写绝对路径：electron-builder 对绝对路径的
