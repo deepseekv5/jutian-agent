@@ -21,8 +21,8 @@ android {
         applicationId "com.jutian.agent"
         minSdk 24          // Android 7.0+，覆盖绝大多数在用设备
         targetSdk 35
-        versionCode 13070000
-        versionName "13.7.0"
+        versionCode 13080000
+        versionName "13.8.0"
         buildConfigField "String", "MODE", localApk ? '"local"' : '"remote"'
         // 本地版：单包通用（v13.6.6）——三个 ABI 的运行时全打进一个 APK，
         // 任何设备装同一个包都能跑，不需要用户判断架构（体积约 100MB）。

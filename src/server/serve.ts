@@ -219,6 +219,35 @@ var sharedDb = null;
 /* ─── MCP（Model Context Protocol）客户端管理器 — v5.0 学自 Zode ─── */
 var mcp = (() => { try { const m = require("./src/shared/mcp.cjs"); m.init(DATA_DIR); return m; } catch (e) { console.error("mcp.cjs load failed:", e.message); return null; } })();
 try { sharedDb = require("./src/shared/db.cjs"); } catch (e) { console.error("db.cjs load failed:", e.message); }
+
+// ─── 文件空间（v13.8）：默认工作区自动就位，用户无需手动创建文件夹 ───
+// 位置：数据目录下的 workspace（桌面 ~/.lyclaw/workspace，手机 filesDir/.lyclaw/workspace）
+// 手机本地版/桌面端统一从这里起步；用户之后可在设置里改成任何目录。
+var DEFAULT_WORKSPACE = path.join(LYCLAW_HOME, "workspace");
+try { fs.mkdirSync(DEFAULT_WORKSPACE, { recursive: true }); } catch (e) { console.error("workspace mkdir:", e.message); }
+// 首次放一个引导文件，打开文件空间不至于空空如也
+try {
+  const welcomeFile = path.join(DEFAULT_WORKSPACE, "开始这里.txt");
+  if (!fs.existsSync(welcomeFile)) {
+    fs.writeFileSync(welcomeFile, [
+      "这是你的文件空间。",
+      "",
+      "· Agent 生成的文件、你让 AI 写的代码、调研产出的报告都在这里",
+      "· 桌面端：代码模式的文件树直接浏览；侧栏「打开工作目录」一键定位",
+      "· 手机端：底部「文件」页就是这里",
+      "· 想换位置：设置 → 工作区，改成任意目录即可",
+      "",
+      "—— 巨天 Agent",
+    ].join("\n"));
+  }
+} catch { /* 只读环境跳过 */ }
+// 一次性迁移：设置里没有 workDir 时写入默认值（前端会自动带上它发请求）
+try {
+  if (sharedDb) {
+    const cur = sharedDb.getSetting("workDir");
+    if (!cur || !String(cur).trim()) sharedDb.setSetting("workDir", DEFAULT_WORKSPACE);
+  }
+} catch (e) { console.error("workDir 迁移:", e.message); }
 /**
  * 数据库不可用时的安全代理。
  *
@@ -3078,7 +3107,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
   try {
     if (url.pathname === "/api/health") return json(res, {
       status: "ok", agent: "巨天agent", version: PKG.version, tools: Object.keys(TOOLS).length,
-      platform: process.platform, workDir: globalWorkDir || null,
+      platform: process.platform, workDir: globalWorkDir || null, defaultWorkDir: DEFAULT_WORKSPACE,
       // 诊断级快照：排查环境问题时一个请求看全（v13.2）
       uptime_s: Math.round(process.uptime()),
       memory: { rss_mb: Math.round(process.memoryUsage().rss / 1048576), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576) },

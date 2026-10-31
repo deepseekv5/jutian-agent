@@ -828,12 +828,20 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
             </>)}
 
             {tab === 'workspace' && (<>
-              <Sub c={c} title={t('AI 工作目录', 'AI Working Directory')}>
+              <Sub c={c} title={t('文件空间', 'File Space')}>
                 <div className="flex gap-2">
-                  <input type="text" value={form.workDir} onChange={e => updateWorkDir(e.target.value)} placeholder={t('留空则使用系统默认目录', 'Leave empty for system default')} className={inputCls + ' font-mono'} style={inputStyle} />
+                  <input type="text" value={form.workDir} onChange={e => updateWorkDir(e.target.value)} placeholder={t('默认：数据目录下的 workspace', 'Default: workspace under data directory')} className={inputCls + ' font-mono'} style={inputStyle} />
                   <button type="button" onClick={browseWorkDir} className="shrink-0 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: c.accent, color: c.accentText }}>{t('浏览', 'Browse')}</button>
+                  <button type="button" onClick={async () => {
+                    // 打开文件空间：优先用用户配置，否则用服务端默认工作区
+                    let dir = (form.workDir || '').trim();
+                    if (!dir) { try { const h = await fetchCompat('/api/health'); dir = (await h.json())?.defaultWorkDir || ''; } catch { /* ignore */ } }
+                    if (dir) fetchCompat('/api/open-finder?path=' + encodeURIComponent(dir)).catch(() => {});
+                  }} className="shrink-0 px-4 py-2 rounded-lg text-xs font-medium" style={{ border: `1px solid ${c.border}` }}>{t('打开文件夹', 'Open folder')}</button>
                 </div>
-                <p className="text-[11px] mt-2" style={{ color: c.textMuted }}>{t('AI 执行命令、读写文件的默认目录，修改后立即生效。', 'Default directory for AI commands and file operations. Takes effect immediately.')}</p>
+                <p className="text-[11px] mt-2" style={{ color: c.textMuted }}>
+                  {t('AI 执行命令、读写文件的默认目录，修改后立即生效。首次启动自动创建，无需手动建文件夹；手机端在底部「文件」页浏览同一目录。', 'Default directory for AI file operations, auto-created on first run. On phone, browse it from the bottom Files tab.')}
+                </p>
               </Sub>
               <Sub c={c} title="本机环境">
                 <div className="p-3 rounded-lg text-[11px] leading-relaxed" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}`, color: c.textTertiary }}>
