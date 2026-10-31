@@ -92,9 +92,21 @@ function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
 /** 旧轮工具响应折叠上限：2KB（Gemini 实测值，比纯字符截断保留更多决策依据） */
 // 折叠/归档/豁免逻辑已迁移至 shared/chatCompression.ts（v13.9.1，含 gemini-cli 语义）
 
-function clampToolResult(text: string): string {
+/** 截断保留策略（v13.11，抄 gemini-cli 反向预算思路）：
+ *  命令/日志类输出把错误堆栈写在**尾部**，只砍尾会让模型看不到真正的失败原因。
+ *  这类工具改为「保头 30% + 保尾 70%」；其余工具（读文件、搜索结果）保持保头。 */
+const TAIL_KEEP_TOOLS = new Set(['shell', 'npm_run', 'git_operation', 'run_tests', 'web_fetch'])
+
+export function clampToolResult(text: string, toolName?: string): string {
   const MAX = 40_000
   if (!text || text.length <= MAX) return text
+  const head = Math.floor(MAX * 0.3)
+  const tail = MAX - head
+  if (toolName && TAIL_KEEP_TOOLS.has(toolName)) {
+    return text.slice(0, head)
+      + '\n\n…[中间 ' + (text.length - MAX) + ' 字符已省略；下方保留末尾 ' + tail + ' 字符（错误堆栈通常在结尾）]…\n\n'
+      + text.slice(-tail)
+  }
   return text.slice(0, MAX) + '\n\n[输出过长已截断：原始 ' + text.length + ' 字符，仅保留前 ' + MAX + '。如需完整内容，请用范围参数分段读取。]'
 }
 
@@ -470,10 +482,10 @@ export async function streamChat(
               try {
                 const fname = 'tool-outputs/' + pl.tc.name + '-' + Date.now() + '.txt'
                 await executeTool({ name: 'write_file', args: { path: fname, content: outText } }, settings.workDir || undefined, signal)
-                outText = clampToolResult(outText) + '\n[完整输出已保存到工作区: ' + fname + ']'
+                outText = clampToolResult(outText, pl.tc.name) + '\n[完整输出已保存到工作区: ' + fname + ']'
               } catch { /* 落盘失败退回纯截断 */ }
             }
-            toolResult = result.success ? clampToolResult(outText) : ('❌ 错误: ' + result.error)
+            toolResult = result.success ? clampToolResult(outText, pl.tc.name) : ('❌ 错误: ' + result.error)
             pl.obj.status = result.success ? 'done' : 'error'
             if (result.changeId) pl.obj.changeId = result.changeId
           } catch (te) {
