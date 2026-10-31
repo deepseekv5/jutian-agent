@@ -14,7 +14,7 @@ import type { Settings, ToolCall, ToolDef } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
-import { compressHistory } from '../../shared/chatCompression'
+import { buildToolsBlock, parseHermesToolCalls, stripToolCallBlocks } from '../../shared/hermesTools'
 import { ssePayloads } from '../../shared/sse'
 import { extractReasoning } from '../../shared/reasoning'
 import {
@@ -212,9 +212,25 @@ export async function streamChat(
         'X-Api-Key': effectiveApiKey(settings.apiKey),
       }
 
+      // Hermes 文本协议注入（v13.9.2）：免费小模型多被 Hermes 格式训练过，
+      // 标准 tool_calls 参数它们用不了；<tools> 注入让它们走文本协议。
+      // 支持标准协议的模型不受影响（仍走标准通道）。
+      const hermesEnabled = allTools.length > 0
+      const wireMessages = (() => {
+        if (!hermesEnabled) return messages
+        const block = buildToolsBlock(allTools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })))
+        if (!block) return messages
+        const copy = [...messages]
+        if (copy[0] && copy[0].role === 'system') {
+          copy[0] = { ...copy[0], content: String(copy[0].content ?? '') + block }
+        } else {
+          copy.unshift({ role: 'system', content: block })
+        }
+        return copy
+      })()
       const makeBody = () => JSON.stringify({
         model: settings.model,
-        messages,
+        messages: wireMessages,
         tools: allTools.map(t => ({
           type: 'function' as const,
           function: {
@@ -229,17 +245,6 @@ export async function streamChat(
         // 小默认值会导致"思考耗尽配额 → content 为空 → 空转重试"
         ...(Number(settings.contextWindow) >= 8000 ? { max_tokens: 16384 } : { max_tokens: 8192 }),
       })
-
-      // 历史压缩（v13.9.1，移植 gemini-cli chatCompressionService，Apache-2.0）：
-      // 折叠旧轮工具响应（2KB 字素安全 + 3 轮保护 + 检索豁免）+ 反向预算归档
-      // （超预算的旧大响应截尾保留最后 30 行——错误堆栈在末尾）。
-      // 压缩只发生在轮次边界且之后文本稳定，前缀缓存仍命中。
-      const slimmed = compressHistory(messages as never)
-      if (slimmed !== (messages as unknown)) {
-        for (let mi = 0; mi < messages.length; mi++) {
-          if (messages[mi].content !== slimmed[mi].content) messages[mi] = slimmed[mi]
-        }
-      }
 
       let res: Response
       try {
@@ -319,10 +324,26 @@ export async function streamChat(
       }
 
       // 将累积的 tool calls 转为数组（按 index 升序，与模型给出的调用顺序一致）
-      const toolCalls = toolCallsToArray(toolCallMap)
+      let toolCalls = toolCallsToArray(toolCallMap)
+
+      // Hermes fallback（v13.9.2）：标准通道没有工具调用时，检查正文里的
+      // <tool_call> 文本协议——免费小模型多按此格式输出
+      if (toolCalls.length === 0 && fullContent.includes('<tool_call>')) {
+        const hermes = parseHermesToolCalls(fullContent)
+        if (hermes.length > 0) {
+          toolCalls = hermes.map((h, i) => ({
+            id: 'hermes_' + i + '_' + Date.now(),
+            name: h.name,
+            arguments: h.arguments,
+          }))
+          // 正文剥离工具调用块（卡片会展示，正文不再重复）
+          fullContent = stripToolCallBlocks(fullContent)
+        }
+      }
 
       // 没有 tool_calls → 完成，返回最终文本（带思考内容，供落库与界面展示）
       if (toolCalls.length === 0) {
+        fullContent = stripToolCallBlocks(fullContent)
         await callbacks.onDone(fullContent, [], fullThinking || undefined)
         return
       }
