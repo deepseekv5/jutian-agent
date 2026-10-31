@@ -372,7 +372,7 @@ export async function streamChat(
           : (pl.obj.status === 'error'
               ? ('工具 ' + pl.tc.name + ' 执行失败（未返回具体错误信息）。')
               : ('工具 ' + pl.tc.name + ' 已执行，但返回空结果。'))
-        const useN = bumpToolUse(toolUseCounts, pl.tc.name)
+        const _useN = bumpToolUse(toolUseCounts, pl.tc.name)
         return base + toolUseHint(toolUseCounts, pl.tc.name)
       }
 
