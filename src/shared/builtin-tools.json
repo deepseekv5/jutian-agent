@@ -183,6 +183,10 @@
     "maxDepth": {
      "type": "number",
      "description": "最大搜索深度（默认5层）"
+    },
+    "includeVendor": {
+     "type": "boolean",
+     "description": "是否包含 node_modules 等依赖目录（默认 false）"
     }
    },
    "required": [
@@ -207,6 +211,10 @@
     "fileType": {
      "type": "string",
      "description": "文件类型过滤，如 \"ts\" 或 \"py\"（可选）"
+    },
+    "includeVendor": {
+     "type": "boolean",
+     "description": "是否搜索 node_modules 等依赖目录（默认 false）"
     }
    },
    "required": [

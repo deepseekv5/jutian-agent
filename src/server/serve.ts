@@ -1094,19 +1094,34 @@ async function search_files(a) {
         { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: d, JT_PATTERN: String(a.pattern || "*") } });
       return { success: true, output: r.stdout.trim().slice(0, MAX_OUT) };
     }
-    const r = await execAsync("find", [d, "-name", a.pattern, "-maxdepth", String(a.maxDepth || 5)], { timeout: 15e3, maxBuffer: MAX_OUT });
+    // v13.11：prune 掉依赖/产物目录（与 search_content 同表），
+    // 否则在项目根搜 * 会把 node_modules 几万个文件全倒出来
+    const pruneArgs = [];
+    if (!a.includeVendor) {
+      pruneArgs.push("(");
+      VENDOR_DIRS.forEach((v, i) => { if (i) pruneArgs.push("-o"); pruneArgs.push("-name", v) });
+      pruneArgs.push(")", "-prune", "-o");
+    }
+    const r = await execAsync("find", [d, "-maxdepth", String(a.maxDepth || 5), ...pruneArgs, "-name", a.pattern, "-print"], { timeout: 15e3, maxBuffer: MAX_OUT });
     return { success: true, output: r.stdout.trim().slice(0, MAX_OUT) };
   } catch (e) {
     return { success: false, error: e.stderr || e.message };
   }
 }
+/** 搜索排除目录（v13.11）：默认跳过依赖/产物/版本库目录。
+ *  不排除时 grep 会搜进 node_modules（几万文件）——慢十倍且结果全是噪音，
+ *  模型还得自己过滤。需要搜依赖源码时传 includeVendor: true。 */
+const VENDOR_DIRS = ["node_modules", ".git", "dist", "build", "release", ".next", "__pycache__", ".venv", "target", "coverage", ".cache", "vendor"];
+
 async function search_content(a) {
   const d = resolveWork(a.path);
   if (!ok(d)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     if (IS_WIN) {
       // 同 search_files：pattern 走 env，不拼进命令文本（见那里的说明）
-      const cmd = "Get-ChildItem -Path $env:JT_DIR -Recurse -File -ErrorAction SilentlyContinue | Select-String -Pattern $env:JT_PATTERN -List | Select-Object -First 20 -ExpandProperty Path";
+      // v13.11：排除依赖/产物目录（同 grep 分支），否则会搜进 node_modules
+      const excl = "$_.FullName -notmatch '\\\\(node_modules|\\.git|dist|build|release|\\.next|__pycache__|\\.venv|target|coverage)\\\\'";
+      const cmd = "Get-ChildItem -Path $env:JT_DIR -Recurse -File -ErrorAction SilentlyContinue | Where-Object { " + excl + " } | Select-String -Pattern $env:JT_PATTERN -List | Select-Object -First 20 -ExpandProperty Path";
       const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", cmd],
         { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: d, JT_PATTERN: String(a.pattern || "") } });
       return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
