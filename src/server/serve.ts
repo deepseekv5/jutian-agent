@@ -1177,10 +1177,26 @@ async function delete_file(a) {
     return { success: false, error: e.message };
   }
 }
+/** 联网工具重试（v13.11）：429/5xx 与网络异常重试一次，
+ *  404/403 这类业务状态直接返回（重试无意义）。等待 600ms 递增。 */
+async function fetchRetrySoft(url, init, attempts = 2) {
+  let last = null;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const r = await fetchGuarded(url, init);
+      if (r.ok || (r.status < 500 && r.status !== 429)) return r;
+      last = r;
+    } catch (e) {
+      if (i === attempts) throw e;
+    }
+    if (i < attempts) await new Promise((res) => setTimeout(res, 600 * i));
+  }
+  return last;
+}
 async function web_fetch(a) {
   try {
     await assertFetchableUrl(a.url);
-    const r = await fetchGuarded(a.url, { headers: { "User-Agent": "LaoyouAgent/1.0" }, signal: AbortSignal.timeout(2e4) });
+    const r = await fetchRetrySoft(a.url, { headers: { "User-Agent": "LaoyouAgent/1.0" }, signal: AbortSignal.timeout(2e4) });
     let t = await r.text();
     t = t.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n").trim();
     return { success: true, output: `[${r.status}]
@@ -1193,7 +1209,7 @@ ${t.slice(0, MAX_OUT)}` };
 async function http_request(a) {
   try {
     await assertFetchableUrl(a.url);
-    const r = await fetchGuarded(a.url, { method: a.method || "GET", headers: { "Content-Type": "application/json" }, body: a.body, signal: AbortSignal.timeout(2e4) });
+    const r = await fetchRetrySoft(a.url, { method: a.method || "GET", headers: { "Content-Type": "application/json" }, body: a.body, signal: AbortSignal.timeout(2e4) });
     return { success: true, output: JSON.stringify({ status: r.status, body: (await r.text()).slice(0, MAX_OUT) }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
