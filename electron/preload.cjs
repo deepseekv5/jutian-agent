@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   isElectron: true,
 
+  // ─── 导出 PDF（v14）───
+  exportPdf: (html, defaultName) => ipcRenderer.invoke('export-pdf', { html, defaultName }),
+
   // ─── 应用内自更新(v8.1)───
   updateCheck: () => ipcRenderer.invoke('update-check'),
   updateApply: (asarUrl) => ipcRenderer.invoke('update-apply', asarUrl),

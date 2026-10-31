@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { buildMultiExport, collectStats, exportFileName, type ExportFilter, type ExportSession } from '../../shared/exportSessions'
+import { markdownToHtml, wrapHtmlDocument } from '../../shared/exportHtml'
 import type { Session } from '../types'
 
 interface Props {
@@ -41,6 +42,61 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
     else n.add(id)
     return n
   })
+
+  /** 收集选中会话（Markdown / HTML / PDF 三种导出共用） */
+  const collect = async (): Promise<ExportSession[]> => {
+    const list: ExportSession[] = []
+    for (const sid of picked) {
+      const s = sessions.find((x) => x.id === sid)
+      const messages = await loadMessages(sid)
+      list.push({
+        id: sid,
+        title: typeof s?.title === 'string' ? s.title : '未命名会话',
+        project: s?.project || undefined,
+        created_at: s?.created_at,
+        messages,
+      })
+    }
+    return list
+  }
+
+  /** 导出 HTML / PDF（v14）：HTML 可直接发给别人看；PDF 走 Electron printToPDF，
+   *  非桌面端退回「打开打印预览」（浏览器里另存为 PDF 效果一致）。 */
+  const runRich = async (kind: 'html' | 'pdf') => {
+    if (!picked.size) { setMsg('先选至少一个会话'); return }
+    setBusy(true); setMsg('')
+    try {
+      const list = await collect()
+      const md = buildMultiExport(list, filter)
+      const title = list.length === 1 ? (list[0].title || '会话') : `会话合集（${list.length} 个）`
+      const html = wrapHtmlDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
+      if (kind === 'html') {
+        const name = exportFileName(title, 'html')
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = name
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+        setMsg(`已导出 HTML → ${name}（浏览器打开可打印为 PDF）`)
+        return
+      }
+      const api = (window as any).electronAPI
+      if (api && typeof api.exportPdf === 'function') {
+        const r = await api.exportPdf(html, exportFileName(title, 'pdf'))
+        if (r && r.ok) setMsg(`已导出 PDF → ${r.path}`)
+        else if (r && r.canceled) setMsg('已取消')
+        else setMsg(`PDF 导出失败：${(r && r.error) || '未知错误'}（可改用 HTML 后打印）`)
+      } else {
+        // 网页端：新窗口打开并唤起打印
+        const w = window.open('', '_blank')
+        if (w) { w.document.write(html); w.document.close(); setTimeout(() => { try { w.print() } catch {} }, 400) }
+        else setMsg('浏览器拦截了新窗口，请改用 HTML 导出')
+      }
+    } catch (e) {
+      setMsg(`导出失败：${(e as Error)?.message || e}`)
+    } finally { setBusy(false) }
+  }
 
   const run = async () => {
     if (!picked.size) { setMsg('先选至少一个会话'); return }
@@ -79,7 +135,7 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
     <div className="h-full flex flex-col min-h-0">
       <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: c.borderLight }}>
         <span className="text-[14px] font-bold" style={{ color: c.textHead }}>导出会话</span>
-        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown · 可多选合并</span>
+        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown / HTML / PDF · 可多选合并</span>
         <span className="flex-1" />
         <button onClick={onClose} className="px-2.5 py-1 rounded-lg text-[11.5px]" style={{ color: c.textTertiary }}>关闭</button>
       </div>
@@ -163,8 +219,18 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
       </div>
 
       <div className="px-5 py-3 border-t flex items-center gap-2" style={{ borderColor: c.borderLight }}>
-        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>导出为 .md，可直接进知识库或发给同事</span>
+        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown 进知识库 · HTML/PDF 发给同事</span>
         <span className="flex-1" />
+        <button onClick={() => runRich('html')} disabled={busy || !picked.size}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+          style={{ background: c.bgInput, color: c.textSecondary }}>
+          HTML
+        </button>
+        <button onClick={() => runRich('pdf')} disabled={busy || !picked.size}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+          style={{ background: c.bgInput, color: c.textSecondary }}>
+          PDF
+        </button>
         <button onClick={run} disabled={busy || !picked.size}
           className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-white disabled:opacity-40"
           style={{ background: c.accent || '#10a37f' }}>

@@ -312,6 +312,47 @@ function setupIPC() {
     try { await startAll() } catch (e) { log(`Retry failed: ${e.message}`) }
   })
 
+  /**
+   * 导出 PDF（v14）：渲染进程把自包含 HTML 传进来，这里用隐藏窗口
+   * printToPDF 落盘。比让用户「打开网页再手动打印」少四步操作。
+   * 失败（无权限/用户取消）返回 { ok:false }，渲染端会退回打印预览。
+   */
+  ipcMain.handle('export-pdf', async (_e, payload) => {
+    const html = String((payload && payload.html) || '')
+    if (!html) return { ok: false, error: '内容为空' }
+    let win = null
+    try {
+      win = new BrowserWindow({
+        show: false,
+        width: 900,
+        height: 1200,
+        webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, javascript: false },
+      })
+      await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+      // 等一帧，确保样式与字体应用
+      await new Promise((r) => setTimeout(r, 350))
+      const pdf = await win.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+        margins: { top: 0.6, bottom: 0.6, left: 0.55, right: 0.55 },
+      })
+      const defaultName = String((payload && payload.defaultName) || 'jutian-export.pdf')
+      const { canceled, filePath } = await dialog.showSaveDialog(mainWindow || undefined, {
+        title: '保存 PDF',
+        defaultPath: path.join(app.getPath('downloads'), defaultName),
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+      if (canceled || !filePath) return { ok: false, canceled: true }
+      fs.writeFileSync(filePath, pdf)
+      return { ok: true, path: filePath, size: pdf.length }
+    } catch (e) {
+      log('export-pdf failed: ' + e.message)
+      return { ok: false, error: e.message }
+    } finally {
+      try { if (win && !win.isDestroyed()) win.destroy() } catch {}
+    }
+  })
+
   // File access security
   ipcMain.handle('get-file-access', () => securityConfig)
 
