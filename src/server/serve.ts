@@ -235,6 +235,7 @@ var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs
 var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } catch (e) { console.error("toolArgs.cjs load failed:", e.message); return null; } })();
 // 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
+var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
 // TTS 域（系统语音兜底 + 多格式缓存）
@@ -714,6 +715,10 @@ function shell_list() {
 
 async function shell(a) {
   if (!a.command) return { success: false, error: "无命令" };
+  // 阻塞命令预检（v13.11）：编辑器/REPL/常驻服务会让 agent 空等到超时，
+  // 命中时直接返回「为什么卡 + 怎么改」，省掉一次 180 秒白等
+  const __bg = SHELL_GUARD ? SHELL_GUARD.checkBlockingCommand(String(a.command)) : { blocked: false };
+  if (__bg.blocked) return { success: false, error: SHELL_GUARD.blockingMessage(__bg) };
   const n = a.command.toLowerCase();
   if (BLOCKED.some((b) => n.includes(b))) return { success: false, error: "已阻止" };
   const cwd = safeCwd(a.workdir);
