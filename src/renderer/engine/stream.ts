@@ -24,6 +24,8 @@ import {
 } from './toolCallStream'
 import { buildHttpErrorMessage } from './httpErrors'
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
+import { createAgentPerf } from './agentPerf'
+import type { PerfReport } from './agentPerf'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -46,6 +48,8 @@ export interface StreamCallbacks {
    * 首字节；first-token=开始出内容；每阶段只发一次。
    */
   onNetStatus?: (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => void
+  /** 性能报告（v13.10.1）：agent 请求完成时回调；同时上报 /api/perf-log 供诊断页查看 */
+  onPerf?: (r: PerfReport) => void
   /**
    * 工具参数写入通知（v13.9.4 重写）：只传工具名，UI 显示轻状态条。
    * 伪卡片（pending 卡随参数增长实时更新）已废弃——依赖 id 全链路
@@ -180,6 +184,17 @@ export async function streamChat(
   // ─── API 模型分支 ───
   const url = '/api/llm-proxy'
 
+  // 性能打点（v13.10.1）：每轮 LLM 首字/流时长 + 工具耗时，完成后上报
+  const perf = createAgentPerf()
+  perf.setModel(settings.model)
+  // 上报：服务端落盘（诊断页数据源），失败静默（打点绝不影响对话）
+  const reportPerf = () => {
+    try {
+      const r = perf.finish()
+      callbacks.onPerf?.(r)
+      fetch('/api/perf-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) }).catch(() => {})
+    } catch {}
+  }
   // 工具循环护栏（判据与文案见 toolLoopGuard）
   let toolRound = 0
   const callSignatures = new Map<string, number>()
@@ -194,6 +209,7 @@ export async function streamChat(
   while (true) {
     if (signal?.aborted) return
     toolRound++
+    perf.roundStart(toolRound)
     const roundCheck = checkRoundLimit(toolRound)
     if (roundCheck.exceeded) {
       await callbacks.onError(roundCheck.message)
@@ -249,6 +265,7 @@ export async function streamChat(
       let res: Response
       try {
         callbacks.onNetStatus?.('connecting')
+        perf.llmRequestStart()
         res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
       } catch (e) {
         // 免费档上游偶发重置连接 → 自动重试一次（仅网络错误，非业务错误）
@@ -287,12 +304,14 @@ export async function streamChat(
           // delta.reasoning，OpenRouter 风格）。
           const think = extractReasoning(delta)
           if (think) {
+            perf.firstToken()
             fullThinking += think
             callbacks.onThinking?.(think)
           }
 
           // 文本流式输出
           if (delta?.content) {
+            perf.firstToken()
             fullContent += delta.content
             callbacks.onChunk(delta.content)
           }
@@ -337,10 +356,13 @@ export async function streamChat(
         }
       }
 
+      perf.llmStreamEnd()
+
       // 没有 tool_calls → 完成，返回最终文本（带思考内容，供落库与界面展示）
       if (toolCalls.length === 0) {
         fullContent = stripToolCallBlocks(fullContent)
         await callbacks.onDone(fullContent, [], fullThinking || undefined)
+        reportPerf()
         return
       }
 
@@ -396,6 +418,7 @@ export async function streamChat(
       }
 
       const execOne = async (pl: Planned): Promise<string> => {
+        const __t0 = Date.now()
         let toolResult: string
         if (CLIENT_TOOLS.has(pl.tc.name)) {
           // 客户端工具：由 UI 层处理（如任务清单），并把确认结果回传给模型
@@ -428,6 +451,7 @@ export async function streamChat(
             pl.obj.status = 'error'
           }
         }
+        perf.addTool(toolRound, pl.tc.name, Date.now() - __t0, pl.obj.status !== 'error')
         pl.obj.result = toolResult
         pl.obj.finished_at = new Date().toISOString()
         callbacks.onToolEnd(pl.obj)

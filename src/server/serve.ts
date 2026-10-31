@@ -4487,6 +4487,23 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const local = loadJson("memories.json");
       return json(res, Object.fromEntries(Object.entries(local).filter(([k]) => isMain(k))));
     }
+    // --- Agent 性能打点（v13.10.1）：渲染端 agent 循环每完成一次请求上报，
+    // 落盘 perf_log.json（上限 100 条，新的在前），设置·性能诊断页读取 ---
+    if (url.pathname === '/api/perf-log' && req.method === 'GET') {
+      return json(res, { items: loadJson('perf_log.json').items || [] });
+    }
+    if (url.pathname === '/api/perf-log' && req.method === 'POST') {
+      try {
+        const r = await body(req);
+        if (!r || typeof r !== 'object' || !r.totalMs) return json(res, { error: '无效报告' }, 400);
+        const store = loadJson('perf_log.json');
+        store.items = store.items || [];
+        store.items.unshift({ ...r, ts: Date.now() });
+        if (store.items.length > 100) store.items.length = 100;
+        saveJson('perf_log.json', store);
+        return json(res, { ok: true });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     // 会话摘要独立存储（与记忆/知识库三分）
     if (url.pathname === "/api/ctx-summary" && (req.method === "GET" || req.method === "POST")) {
       try {
