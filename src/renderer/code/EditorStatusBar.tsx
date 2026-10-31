@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EditorView } from '@codemirror/view'
+import { indentUnit } from '@codemirror/language'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 
@@ -20,6 +21,9 @@ export function EditorStatusBar({ view, path, language }: { view: EditorView | n
   const { c } = useTheme()
   const { lang } = useLanguage()
   const [info, setInfo] = useState<CursorInfo>({ line: 1, col: 1, selected: 0, lines: 1 })
+  // 真实缩进与行尾（v13.11）：原实现写死「Spaces: 2」，与文件实际不符
+  const [indentLabel, setIndentLabel] = useState('Spaces: 2')
+  const [eol, setEol] = useState<'LF' | 'CRLF'>('LF')
 
   useEffect(() => {
     if (!view) return
@@ -32,6 +36,11 @@ export function EditorStatusBar({ view, path, language }: { view: EditorView | n
         selected: Math.abs(sel.to - sel.from),
         lines: view.state.doc.lines,
       })
+      // 缩进：读编辑器实际配置（tab 或 N 空格）
+      const unit = view.state.facet(indentUnit)
+      setIndentLabel(unit === '\t' ? 'Tabs' : `Spaces: ${unit.length}`)
+      // 行尾：只看文件开头 4KB，避免大文件每次全量扫描
+      setEol(view.state.doc.sliceString(0, 4000).includes('\r\n') ? 'CRLF' : 'LF')
     }
     read()
     // 光标/选区变化即刷新（用 updateListener 会与主编辑器重复，这里挂 DOM 事件更轻）
@@ -67,7 +76,11 @@ export function EditorStatusBar({ view, path, language }: { view: EditorView | n
       {sep}
       <span title={lang === 'en' ? 'Language' : '语言'}>{language || 'text'}</span>
       {sep}
-      <span title={lang === 'en' ? 'Indentation' : '缩进'}>Spaces: 2</span>
+      <span title={lang === 'en' ? 'Indentation' : '缩进'}>{indentLabel}</span>
+      {sep}
+      <span title={lang === 'en' ? 'Line ending' : '行尾序列'}>{eol}</span>
+      {sep}
+      <span title={lang === 'en' ? 'Encoding' : '编码'}>UTF-8</span>
       <span className="flex-1" />
       <span className="truncate max-w-[45%]" title={path}>{path || (lang === 'en' ? 'No file' : '未打开文件')}</span>
     </div>

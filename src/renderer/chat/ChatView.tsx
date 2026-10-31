@@ -81,6 +81,8 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 工具参数写入中（v13.9.4）：轻状态条，不建伪卡片
   const [toolDraftName, setToolDraftName] = useState<string | null>(null)
   const [netSec, setNetSec] = useState(0)
+  // 重试次数（v13.11）：429/5xx 也会重试，告诉用户是第几次尝试
+  const [netAttempt, setNetAttempt] = useState(2)
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null
@@ -93,6 +95,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         stop(); timer = setInterval(() => setNetSec(v => v + 1), 1000)
       } else if (d.phase === 'retrying') {
         setNetPhase('retrying')
+        if (typeof d.attempt === 'number') setNetAttempt(d.attempt)
       } else if (d.phase === 'first-token') {
         setNetPhase(null); stop()
       }
@@ -326,7 +329,9 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
           <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
           {netPhase === 'connecting'
             ? (lang === 'en' ? 'Connecting to model…' : '正在连接模型…')
-            : (lang === 'en' ? 'Connection reset, retrying…' : '连接被重置，正在重试…')}
+            : (lang === 'en'
+                ? `Upstream busy or reset, retrying (attempt ${netAttempt}/3)…`
+                : `上游繁忙或连接中断，正在重试（第 ${netAttempt}/3 次）…`)}
           <span className="font-mono" style={{ color: c.textMuted }}>{netSec}s</span>
           {netSec >= 5 && <span style={{ color: c.textMuted }}>{lang === 'en' ? '· free tiers can queue at peak hours' : '· 免费线路高峰期会排队'}</span>}
         </div>
