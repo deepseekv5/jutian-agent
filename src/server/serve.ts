@@ -777,8 +777,13 @@ async function shell(a) {
 // write_file 时如果文件在模型读取后被外部修改，在结果里警告模型——
 // 防止用读到的旧内容覆盖用户的修改。
 const FILE_CONTEXT = new Map<string, number>();
-function noteFileRead(p: string) {
-  try { FILE_CONTEXT.set(p, fs.statSync(p).mtimeMs); } catch {}
+function noteFileRead(p: string): boolean {
+  try {
+    const mt = fs.statSync(p).mtimeMs;
+    const prev = FILE_CONTEXT.get(p);
+    FILE_CONTEXT.set(p, mt);
+    return prev != null && Math.abs(mt - prev) <= 1;
+  } catch { return false }
 }
 function staleReadWarning(p: string): string | null {
   const recorded = FILE_CONTEXT.get(p);
@@ -853,12 +858,14 @@ async function read_file(a) {
       };
     }
     let c = await fsp.readFile(p, "utf-8");
-    noteFileRead(p);
+    const unchanged = noteFileRead(p);
     if (a.offset || a.limit) {
       const ls = c.split("\n");
       c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
     }
-    return { success: true, output: c.slice(0, MAX_OUT) };
+    const repeatNote = unchanged ? "
+（提示：文件自上次读取后未变化，以上内容已在对话上下文中，无需重复读取。）" : "";
+    return { success: true, output: c.slice(0, MAX_OUT) + repeatNote };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -934,6 +941,21 @@ async function edit_file(a) {
       // 精确匹配失败通常有三种原因：文件被外部改动、oldText 抄写有出入
       // （缩进/换行/全角空格）、或需要替换的区域已被前一次编辑改掉。
       // 只回「未找到」模型会反复重试同一参数，这里给出可操作的下一步。
+      // CRLF 容错重试：模型输出 LF、文件是 CRLF 时逐字匹配必失败。
+      // 归一化后命中则整体统一为 LF 写回（注明行尾已转换），仍失败才报错。
+      const crlf = /\r\n/.test(c);
+      if (crlf) {
+        const norm = c.replace(/\r\n/g, "\n");
+        const oldLF = String(a.oldText).replace(/\r\n/g, "\n");
+        const newLF = String(a.newText ?? "").replace(/\r\n/g, "\n");
+        if (norm.includes(oldLF)) {
+          const done = a.replaceAll ? norm.split(oldLF).join(newLF) : norm.replace(oldLF, newLF);
+          await writeFileAtomic(p, done);
+          FILE_CONTEXT.delete(p);
+          const __chgCRLF = recordChange(p, c, done);
+          return { success: true, output: `✅ 已编辑: ${p}（文件为 CRLF 行尾，已统一为 LF 后完成编辑）`, changeId: __chgCRLF };
+        }
+      }
       const firstLine = String(a.oldText || "").split("\n")[0].slice(0, 60);
       return {
         success: false,
