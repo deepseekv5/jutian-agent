@@ -1138,10 +1138,18 @@ async function search_content(a) {
         { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: d, JT_PATTERN: String(a.pattern || "") } });
       return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
     }
-    const r = await execAsync("grep", ["-rn", a.pattern, d, "--max-count=20"], { timeout: 15e3, maxBuffer: MAX_OUT });
-    return { success: true, output: r.stdout.trim() || "(\u65E0\u5339\u914D)" };
+    const args = ["-rn", a.pattern, d, "--max-count=20", "--binary-files=without-match"];
+    if (!a.includeVendor) for (const v of VENDOR_DIRS) args.push("--exclude-dir=" + v);
+    const r = await execAsync("grep", args, { timeout: 15e3, maxBuffer: MAX_OUT });
+    const __out = r.stdout.trim();
+    return { success: true, output: (__out || "(\u65E0\u5339\u914D)") + (__out && !a.includeVendor ? "\n（已跳过 node_modules/.git/dist 等目录；需要时传 includeVendor: true）" : "") };
   } catch (e) {
-    return e.code === 1 ? { success: true, output: "(\u65E0\u5339\u914D)" } : { success: false, error: e.stderr || e.message };
+    if (e.code === 1) return { success: true, output: "(\u65E0\u5339\u914D)" };
+    if (e.stdout) {
+      const lines = String(e.stdout).split("\n").filter(Boolean).slice(0, 50);
+      return { success: true, output: lines.join("\n") + "\n（命中过多，输出已截断；请缩小 path 或提高 pattern 精度）" };
+    }
+    return { success: false, error: e.stderr || e.message };
   }
 }
 async function get_file_info(a) {
