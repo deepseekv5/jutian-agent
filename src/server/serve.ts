@@ -236,6 +236,7 @@ var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } cat
 // 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
+var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
 // TTS 域（系统语音兜底 + 多格式缓存）
@@ -1584,6 +1585,29 @@ function saveMarket(skills) {
   } catch {}
 }
 
+/** 计算任务下次触发时间（v14）：一次性按 delayMinutes，其余按 cron 或默认周期。
+ *  返回 { nextRun } 或 { error }（cron 非法时给用户可操作提示）。 */
+function computeNextRun(task) {
+  const now = new Date();
+  const type = task.type || "once";
+  if (type === "once") {
+    const delay = Math.max(1, Number(task.delayMinutes) || 60);
+    return { nextRun: new Date(now.getTime() + delay * 60000).toISOString() };
+  }
+  const cron = String(task.cron || "").trim();
+  if (cron) {
+    if (!CRON_MOD) return { nextRun: new Date(now.getTime() + 3600e3).toISOString() };
+    const err = CRON_MOD.validateCron(cron);
+    if (err) return { error: err };
+    const next = CRON_MOD.nextCronTime(cron, now);
+    if (!next) return { error: "该 cron 表达式永远不会触发" };
+    return { nextRun: next.toISOString() };
+  }
+  const n = new Date(now);
+  n.setDate(n.getDate() + (type === "daily" ? 1 : 7));
+  return { nextRun: n.toISOString() };
+}
+
 function loadTasks() {
   try {
     if (fs.existsSync(TASKS_FILE)) return JSON.parse(fs.readFileSync(TASKS_FILE, "utf-8"));
@@ -2224,6 +2248,71 @@ function toolPlatformError(name: string): string | null {
   if (allowed.includes(cur)) return null;
   const hint = TOOL_ANDROID_HINTS[name] || "";
   return `该工具需要 ${allowed.join(" / ")} 环境，当前平台（${cur}）不支持。${hint ? "\n" + hint : ""}`;
+}
+
+
+/**
+ * 工具执行核心（v14）
+ *
+ * 此前这段逻辑只存在于 /api/tools/execute 的 handler 里——服务端内部（定时任务的
+ * agent 模式、将来的子代理）想跑工具只能再写一份，两份逻辑必然漂移。
+ * 抽成函数后：MCP 路由 → 工具查找（含相近名建议）→ 参数规格校验 → 180s 超时执行。
+ * 安全策略 / 平台检查 / 工作目录仍留在 HTTP 入口，因为它们与请求上下文相关。
+ */
+async function executeToolCore(name, args = {}) {
+// MCP 外部工具（学自 Zode）：mcp__<server>__<tool> 路由到对应 MCP Server
+if (name.startsWith("mcp__") && mcp) {
+  const rest = name.slice(5);
+  const sep = rest.indexOf("__");
+  const serverName = sep > 0 ? rest.slice(0, sep) : "";
+  const toolName = sep > 0 ? rest.slice(sep + 2) : "";
+  if (!serverName || !toolName) return { success: false, error: "MCP 工具名不合法" };
+  const r = await mcp.callTool(serverName, toolName, args);
+  return r.success ? r : { success: false, error: r.error || r.output };
+}
+const h = TOOLS[name];
+if (!h) {
+  // 工具乱用兜底(v9.0):模型幻觉调用了不存在的工具，不再只报 404——
+  // 返回「相近工具名 + 当前可用清单」，让模型下一轮自己纠正，不空转烧钱
+  let near: string[] = []
+  try {
+    const target = String(name || "").toLowerCase();
+    near = Object.keys(TOOLS)
+      .map((k) => ({ k, s: k.toLowerCase().includes(target) || target.includes(k.toLowerCase()) ? 1 : 0 }))
+      .filter((x) => x.s > 0).slice(0, 5).map((x) => x.k);
+  } catch {}
+  return {
+    success: false,
+    error: `未知工具「${name}」。${near.length ? `你是不是想用: ${near.join("、")}?` : ""}当前可用工具（${Object.keys(TOOLS).length} 个）：${Object.keys(TOOLS).join("、")}`,
+  };
+}
+console.log(`→ ${name}`);
+// ─── 参数校验（严格化）：模型传参是不可信输入，先按规格验一遍 ───
+// 实测踩过的坑：write_file 缺 content → 文件被写成字符串 "undefined"；
+// move_file 目标已存在 → rename 静默覆盖；类型错 → 一路走到 fs 层
+// 才炸成 ENOENT/EISDIR，模型看不懂报错就反复重试同一参数。
+// 规格表见 shared/toolArgs（有测试）。校验不通过直接回错，不进工具。
+let callArgs = args;
+const spec = TOOL_SPECS[name];
+if (spec) {
+  const v = validateArgs(callArgs, spec);
+  if (!v.ok) {
+    return { success: false, error: `【参数错误】${v.error}请修正后重试。` };
+  }
+  callArgs = v.value;
+}
+let r;
+try {
+  // 统一超时（v13.9.5）：任何工具挂死 180 秒后中止，不再无限等待
+  r = await Promise.race([
+    h(callArgs),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("工具执行超时（180 秒），已中止。如需长时间运行请拆分任务。")), 180_000)),
+  ]);
+}
+catch (e) { r = { success: false, error: String((e && e.message) || e || "工具执行异常") }; }
+if (!r || typeof r !== "object") r = { success: true, output: String(r) };
+console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
+  return r;
 }
 
 var TOOLS = {
@@ -3168,64 +3257,15 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       // 多端平台检查（v13.9.5）：安卓上 GUI/桌面专属工具给出明确报错而非 ENOENT
       const platErr = toolPlatformError(name);
       if (platErr) return json(res, { success: false, error: platErr });
-      // MCP 外部工具（学自 Zode）：mcp__<server>__<tool> 路由到对应 MCP Server
-      if (name.startsWith("mcp__") && mcp) {
-        const rest = name.slice(5);
-        const sep = rest.indexOf("__");
-        const serverName = sep > 0 ? rest.slice(0, sep) : "";
-        const toolName = sep > 0 ? rest.slice(sep + 2) : "";
-        if (!serverName || !toolName) return json(res, { success: false, error: "MCP 工具名不合法" });
-        const r = await mcp.callTool(serverName, toolName, args);
-        return json(res, r.success ? r : { success: false, error: r.error || r.output });
-      }
-      const h = TOOLS[name];
-      if (!h) {
-        // 工具乱用兜底(v9.0):模型幻觉调用了不存在的工具，不再只报 404——
-        // 返回「相近工具名 + 当前可用清单」，让模型下一轮自己纠正，不空转烧钱
-        let near: string[] = []
-        try {
-          const target = String(name || "").toLowerCase();
-          near = Object.keys(TOOLS)
-            .map((k) => ({ k, s: k.toLowerCase().includes(target) || target.includes(k.toLowerCase()) ? 1 : 0 }))
-            .filter((x) => x.s > 0).slice(0, 5).map((x) => x.k);
-        } catch {}
-        return json(res, {
-          success: false,
-          error: `未知工具「${name}」。${near.length ? `你是不是想用: ${near.join("、")}?` : ""}当前可用工具（${Object.keys(TOOLS).length} 个）：${Object.keys(TOOLS).join("、")}`,
-        }, 404);
-      }
-      console.log(`→ ${name}`);
-      // ─── 参数校验（严格化）：模型传参是不可信输入，先按规格验一遍 ───
-      // 实测踩过的坑：write_file 缺 content → 文件被写成字符串 "undefined"；
-      // move_file 目标已存在 → rename 静默覆盖；类型错 → 一路走到 fs 层
-      // 才炸成 ENOENT/EISDIR，模型看不懂报错就反复重试同一参数。
-      // 规格表见 shared/toolArgs（有测试）。校验不通过直接回错，不进工具。
-      let callArgs = args;
-      const spec = TOOL_SPECS[name];
-      if (spec) {
-        const v = validateArgs(callArgs, spec);
-        if (!v.ok) {
-          return json(res, { success: false, error: `【参数错误】${v.error}请修正后重试。` });
-        }
-        callArgs = v.value;
-      }
-      let r;
-      try {
-        // 统一超时（v13.9.5）：任何工具挂死 180 秒后中止，不再无限等待
-        r = await Promise.race([
-          h(callArgs),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("工具执行超时（180 秒），已中止。如需长时间运行请拆分任务。")), 180_000)),
-        ]);
-      }
-      catch (e) { r = { success: false, error: String((e && e.message) || e || "工具执行异常") }; }
-      if (!r || typeof r !== "object") r = { success: true, output: String(r) };
-      console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
+      // 统一执行入口（v14）：与定时任务的 agent 模式共用同一条路径
+      const r = await executeToolCore(name, args);
       return json(res, r);
     }
     // --- 定时任务 API ---
-    const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^/]+))?$/);
+    const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^/]+))?(?:\/(run))?$/);
     if (tasksMatch) {
       const taskId = tasksMatch[1];
+      const isRun = tasksMatch[2] === "run";
       if (!taskId) {
         if (req.method === "POST") {
           // POST /api/scheduled-tasks — 创建任务
@@ -3233,6 +3273,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           task.id = "task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
           task.createdAt = (/* @__PURE__ */ new Date()).toISOString();
           task.enabled = task.enabled !== false;
+          task.mode = task.mode === "agent" ? "agent" : "text";
+          // nextRun 计算（v14 修复）：此前这里不算，任务创建后永远不会触发
+          const nr = computeNextRun(task);
+          if (nr.error) return json(res, { error: nr.error }, 400);
+          task.nextRun = nr.nextRun;
           const tasks = loadTasks();
           tasks.push(task);
           saveTasks(tasks);
@@ -3240,6 +3285,43 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         }
         // GET /api/scheduled-tasks
         return json(res, { tasks: loadTasks() });
+      }
+      // 立即执行一次（v14）：手动验证任务配置，不必等到 nextRun
+      if (isRun && taskId && req.method === "POST") {
+        const id = taskId;
+        const task = loadTasks().find((x) => x.id === id);
+        if (!task) return json(res, { error: "未找到任务" }, 404);
+        const rows2 = sharedDb ? db.getAllSettings() : [];
+        const st = Object.fromEntries(rows2.map((r) => [r.key, r.value]));
+        if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
+        try {
+          let result;
+          if (task.mode === "agent") {
+            const r0 = await runTaskAgent(st.apiBaseUrl, st.apiKey, st.model, task);
+            result = r0.result + (r0.trace.length ? "\n\n（工具调用：" + r0.trace.map((x) => x.tool + (x.ok ? "" : "✗")).join("、") + "）" : "");
+          } else {
+            const resp = await fetch(st.apiBaseUrl + "/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + st.apiKey },
+              body: JSON.stringify({
+                model: st.model,
+                messages: [
+                  { role: "system", content: "你是一个自动定时任务执行器。执行用户指定的任务，输出结果（中文，简洁可读）。不要提及自己是 AI。" },
+                  { role: "user", content: String(task.content || "") },
+                ],
+                max_tokens: 1200, stream: false,
+              }),
+              signal: AbortSignal.timeout(120000),
+            });
+            const d = await resp.json().catch(() => null);
+            result = (d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || (d && d.error && d.error.message) || "(无输出)";
+          }
+          finishTask(id, "manual", String(result));
+          return json(res, { ok: true, result: String(result) });
+        } catch (e) {
+          failTask(id, "执行失败：" + String((e && e.message) || e));
+          return json(res, { ok: false, error: String((e && e.message) || e) }, 500);
+        }
       }
       if (req.method === "DELETE") {
         // DELETE /api/scheduled-tasks/:id
@@ -5959,6 +6041,109 @@ async function getAnnouncement(forceFresh) {
   return { ok: true, ...data, cached: false };
 }
 
+/** 定时任务可用的工具白名单（v14）：任务由用户创建，但仍限制在可审计集合内——
+ *  不开 screenshot / 剪贴板这类桌面交互工具（无人值守时点错窗口代价太大）。 */
+const TASK_TOOL_ALLOW = [
+  "read_file", "write_file", "edit_file", "list_dir", "search_content", "search_files",
+  "shell", "web_search", "web_fetch", "http_request", "json_process", "text_tools",
+  "recall", "save_knowledge",
+];
+
+let __taskToolCache = null;
+function loadTaskToolSchemas() {
+  if (__taskToolCache) return __taskToolCache;
+  try {
+    const p = path.join(__dirname, "src/shared/builtin-tools.json");
+    const all = JSON.parse(fs.readFileSync(p, "utf-8"));
+    __taskToolCache = all
+      .filter((t) => TASK_TOOL_ALLOW.includes(t.name))
+      .map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  } catch (e) {
+    console.error("[scheduler] 工具 schema 读取失败:", e.message);
+    __taskToolCache = [];
+  }
+  return __taskToolCache;
+}
+
+/** 任务收尾：写结果、算下次时间、推通知（text / agent 两种模式共用） */
+function finishTask(taskId, type, result) {
+  const list = loadTasks();
+  const item = list.find((x) => x.id === taskId);
+  if (!item) return;
+  item.lastResult = String(result || "").slice(0, 8000);
+  item.status = "done";
+  if (type === "once") item.enabled = false;
+  else {
+    // v14：优先按 cron 算下一次（支持任意表达式），无 cron 时退回周期顺延
+    const cronExpr = String(item.cron || "").trim();
+    const next = cronExpr && CRON_MOD ? CRON_MOD.nextCronTime(cronExpr, new Date()) : null;
+    if (next) item.nextRun = next.toISOString();
+    else {
+      const n = new Date();
+      n.setDate(n.getDate() + (type === "daily" ? 1 : 7));
+      item.nextRun = n.toISOString();
+    }
+  }
+  saveTasks(list);
+  try {
+    pushServerNotice({ type: "system", title: `定时任务完成：${(item.title || item.content || "任务").slice(0, 30)}`, body: String(result || "").slice(0, 120) });
+  } catch {}
+}
+function failTask(taskId, msg) {
+  const list = loadTasks();
+  const item = list.find((x) => x.id === taskId);
+  if (!item) return;
+  item.status = "error";
+  item.lastResult = String(msg || "执行失败").slice(0, 2000);
+  saveTasks(list);
+}
+
+/**
+ * 定时任务 agent 模式（v14）：带工具的小型执行循环（最多 6 轮）。
+ * 以前定时任务只能让模型「说」该做什么，不能真的读写文件/跑命令；
+ * 现在可选 agent 模式，工具走 executeToolCore —— 与主对话完全同一条执行路径。
+ */
+async function runTaskAgent(base, key, model, task) {
+  const tools = loadTaskToolSchemas();
+  const sys = "你是一个自动定时任务执行器。按用户要求完成任务。"
+    + (tools.length
+      ? "你可以调用工具真实执行（读写文件、跑命令、联网搜索），完成后用中文简洁汇报：做了什么、结果如何。"
+      : "只用文字完成任务。")
+    + "不要提及自己是 AI，不要编造未实际执行的结果。";
+  const messages = [
+    { role: "system", content: sys },
+    { role: "user", content: String(task.content || "") },
+  ];
+  const trace = [];
+  for (let round = 0; round < 6; round++) {
+    const reqBody = { model, messages, max_tokens: 2000, stream: false };
+    if (tools.length) { reqBody.tools = tools; reqBody.tool_choice = "auto"; }
+    const r = await fetch(base + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(120000),
+    });
+    const d = await r.json().catch(() => null);
+    const msg = d && d.choices && d.choices[0] && d.choices[0].message;
+    if (!msg) return { result: (d && d.error && d.error.message) || "(无输出)", trace };
+    if (Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+      messages.push({ role: "assistant", content: msg.content || "", tool_calls: msg.tool_calls });
+      for (const tc of msg.tool_calls) {
+        let targs = {};
+        try { targs = JSON.parse(tc.function.arguments || "{}"); } catch {}
+        const out = await executeToolCore(tc.function.name, targs);
+        const text = out.success ? String(out.output == null ? "" : out.output) : ("错误: " + out.error);
+        trace.push({ tool: tc.function.name, ok: !!out.success });
+        messages.push({ role: "tool", tool_call_id: tc.id, content: text.slice(0, 8000) });
+      }
+      continue;
+    }
+    return { result: String(msg.content || "").trim() || "(无输出)", trace };
+  }
+  return { result: "(已达工具轮次上限，任务可能未完成；建议拆分任务)", trace };
+}
+
 function runScheduler() {  try {
     const rows = sharedDb ? db.getAllSettings() : [];
     const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -5980,6 +6165,16 @@ function runScheduler() {  try {
       saveTasks(tasks);
       const taskId = t.id;
       const type = t.type || "once";
+      // v14：agent 模式带工具真实执行；text 模式保持原样（纯文本产出）
+      if (t.mode === "agent") {
+        runTaskAgent(base, key, model, t)
+          .then(({ result, trace }) => {
+            const tail = trace.length ? "\n\n（工具调用：" + trace.map((x) => x.tool + (x.ok ? "" : "✗")).join("、") + "）" : "";
+            finishTask(taskId, type, result + tail);
+          })
+          .catch((e) => failTask(taskId, "执行失败：" + String((e && e.message) || e)));
+        continue;
+      }
       fetch(base + "/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": auth },
