@@ -26,12 +26,11 @@ const base = pkg.build || {}
 
 // 产物名统一 ASCII：productName「巨天agent」含 CJK，GitHub Release 上传
 // 间歇性炸（Request path contains unescaped characters），v13.10.0 实测。
-// 注意：electron-builder 26 根级只认 dmg 等特殊段，zip/appImage 必须放
-// mac/linux 平台段下（根级会 Invalid configuration object，v13.10.1 实测）。
-base.mac = { ...(base.mac || {}), zip: { artifactName: 'jutian-agent-${version}-${arch}-mac.${ext}' } }
-base.mac.dmg = { ...(base.dmg || {}), ...((base.mac && base.mac.dmg) || {}), artifactName: 'jutian-agent-${version}-${arch}.${ext}' }
-delete base.dmg
-base.linux = { ...(base.linux || {}), appImage: { artifactName: 'jutian-agent-${version}-${arch}.${ext}' } }
+// electron-builder 26 的限制（v13.10.1 四轮 CI 实测）：根级 zip/appImage
+// 不存在、TargetConfiguration 也不带 artifactName——per-target 只能写
+// 平台段级 mac.artifactName（dmg/zip 共用，均为 ASCII）。linux 各目标
+// 默认名本就走 package.name（ASCII），无需覆盖。
+base.mac = { ...(base.mac || {}), artifactName: 'jutian-agent-${version}-${arch}-mac.${ext}' }
 
 /**
  * 随包分发的「大块运行时资源」。每一项都可能不存在，缺了只跳过。
