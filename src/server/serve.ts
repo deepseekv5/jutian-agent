@@ -5700,7 +5700,7 @@ const ANNOUNCE_SOURCES = [
   "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/docs/notice.md",
   "https://gh-proxy.com/https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/docs/notice.md",
 ];
-var _announceTtlMs = 6 * 3600 * 1000;
+var _announceTtlMs = 15 * 60 * 1000; // 公告要能及时触达：6h 太长，压到 15 分钟
 function readAnnounceCache() {
   try { return JSON.parse(fs.readFileSync(ANNOUNCE_FILE, "utf-8")); } catch { return null; }
 }

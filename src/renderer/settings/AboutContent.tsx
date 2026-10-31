@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTheme } from '../hooks/useTheme'
+import { APP_VERSION } from '../brand'
 import { useLanguage } from '../hooks/useLanguage'
 import { getAllMemories } from '../store/storage'
 import { hhmm } from '../utils/datetime'
@@ -13,6 +14,7 @@ import { fetchCompat } from '../api'
  */
 
 interface UpdateInfo {
+  installerUrl?: string | null
   ok: boolean
   available?: boolean
   current?: string
@@ -40,12 +42,36 @@ export default function AboutContent() {
 
   const doCheck = () => {
     const a = api()
-    if (!a?.updateCheck) return
+    // 桌面（Electron）：走主进程更新器
+    if (a?.updateCheck) {
+      setChecking(true)
+      a.updateCheck().then((d: UpdateInfo) => {
+        setUpd(d)
+        setLastCheck(hhmm())
+      }).catch(() => {}).finally(() => setChecking(false))
+      return
+    }
+    // 安卓/浏览器：electronAPI 不存在，用 GitHub API 直接查最新版本，
+    // 有更新给出 APK 下载链接（不静默失败——之前安卓进关于页是纯空白检查）
     setChecking(true)
-    a.updateCheck().then((d: UpdateInfo) => {
-      setUpd(d)
-      setLastCheck(hhmm())
-    }).catch(() => {}).finally(() => setChecking(false))
+    fetchCompat('https://api.github.com/repos/deepseekv5/jutian-agent/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      .then(r => r.json())
+      .then((rel: any) => {
+        const latest = String(rel?.tag_name || '').replace(/^v/, '')
+        const apk = (rel?.assets || []).find((x: any) => /-app\.asar$/.test(x.name || ''))
+        const localApk = (rel?.assets || []).find((x: any) => /jutian-local-/.test(x.name || ''))
+        setUpd({
+          ok: true, current: APP_VERSION, latest,
+          available: !!latest && latest !== APP_VERSION,
+          notes: String(rel?.body || '').slice(0, 4000),
+          asarUrl: apk?.browser_download_url || null,
+          installerUrl: localApk?.browser_download_url || null,
+          publishedAt: rel?.published_at || '',
+        } as any)
+        setLastCheck(hhmm())
+      })
+      .catch(() => { setLastCheck(hhmm()) })
+      .finally(() => setChecking(false))
   }
 
   useEffect(() => {
@@ -134,9 +160,15 @@ export default function AboutContent() {
             <div className="text-[12px] leading-relaxed max-h-40 overflow-auto markdown-body" style={{ color: c.textSecondary }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{upd.notes}</ReactMarkdown>
             </div>
-            <button onClick={apply} disabled={!!updating || !upd.asarUrl}
-              className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
-              style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
+            {!api()?.updateApply && upd.installerUrl ? (
+              <a href={upd.installerUrl} target="_blank" rel="noreferrer"
+                className="mt-2.5 inline-block px-4 h-8 leading-8 rounded-full text-[12px] font-semibold"
+                style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Download update' : '下载更新'}</a>
+            ) : (
+              <button onClick={apply} disabled={!!updating || !upd.asarUrl}
+                className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
+                style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
+            )}
             {!upd.asarUrl && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>{lang === 'en' ? '(installer only for this version)' : '(该版本仅有完整安装包)'}</span>}
           </div>
         )}

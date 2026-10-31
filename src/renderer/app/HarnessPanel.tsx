@@ -31,6 +31,12 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
       fetchCompat('/api/remote/tools').then(r => r.json()).then(r => r.tools || []).catch(() => []),
     ]).then(([m, t]) => { setMcp(Array.isArray(m) ? m : []); setTools(t); setLoading(false) })
   }
+  // 安装/卸载技能后立即重载（skills-changed 由 SkillMarket 派发）
+  useEffect(() => {
+    const onChanged = () => load()
+    window.addEventListener('skills-changed', onChanged)
+    return () => window.removeEventListener('skills-changed', onChanged)
+  }, [])
   useEffect(() => { load() }, [])
 
   const toggleTool = (name: string) => {

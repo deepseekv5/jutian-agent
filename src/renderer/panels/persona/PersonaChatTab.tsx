@@ -204,6 +204,10 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
       const reply = res.msgs[res.msgs.length - 1]
       if (res.notice) setNotice(res.notice)
       setMsgs(res.msgs)
+      // 角色自主写入记忆后立刻重载记忆列表（否则编辑区看不到新条目）
+      if (reply.memorySaved?.length) {
+        loadMemories(active.id).then(m => setMemories(m))
+      }
       setStreamText('')
       if (reply.role === 'assistant') saveMessage(active.id, reply)
     } finally {
