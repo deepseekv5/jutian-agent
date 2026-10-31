@@ -773,6 +773,25 @@ async function shell(a) {
     return { success: false, output: out, error: `命令执行失败：\n${detail.slice(0, 4000)}` };
   }
 }
+// FileContextTracker（v13.10，抄 Cline）：跟踪模型读过的文件 mtime。
+// write_file 时如果文件在模型读取后被外部修改，在结果里警告模型——
+// 防止用读到的旧内容覆盖用户的修改。
+const FILE_CONTEXT = new Map<string, number>();
+function noteFileRead(p: string) {
+  try { FILE_CONTEXT.set(p, fs.statSync(p).mtimeMs); } catch {}
+}
+function staleReadWarning(p: string): string | null {
+  const recorded = FILE_CONTEXT.get(p);
+  if (recorded == null) return null;
+  try {
+    const cur = fs.statSync(p).mtimeMs;
+    if (cur > recorded + 1) {
+      return "⚠️ 注意：该文件在你上次读取后被外部修改过。以下内容基于写入前的状态，你的修改已保存，但请确认没有覆盖用户此后的改动。";
+    }
+  } catch {}
+  return null;
+}
+
 async function read_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
@@ -834,6 +853,7 @@ async function read_file(a) {
       };
     }
     let c = await fsp.readFile(p, "utf-8");
+    noteFileRead(p);
     if (a.offset || a.limit) {
       const ls = c.split("\n");
       c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
@@ -894,11 +914,13 @@ async function write_file(a) {
     let existed = false;
     try { __old = await fsp.readFile(p, "utf-8"); existed = true; } catch {}
     await writeFileAtomic(p, a.content);
+    FILE_CONTEXT.delete(p);
     const __chg = recordChange(p, __old, String(a.content || ""));
     // 覆盖提醒：不清空、不阻断（模型常常就是要改文件），只把风险说清楚，
     // 让它有机会在回复里说明改了什么
     const warn = existed ? overwriteWarning(true, __old.length, String(a.content || "").length) : null;
-    return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}${warn ? `\n${warn}` : ""}`, changeId: __chg };
+    const stale = staleReadWarning(p);
+    return { success: true, output: `\u2705 \u5DF2\u5199\u5165: ${p}${warn ? `\n${warn}` : ""}${stale ? `\n${stale}` : ""}`, changeId: __chg };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -926,6 +948,7 @@ async function edit_file(a) {
       ? c.split(a.oldText).join(a.newText)
       : c.replace(a.oldText, a.newText);
     await writeFileAtomic(p, c);
+    FILE_CONTEXT.delete(p);
     const __chg2 = recordChange(p, __oldFull, c);
     return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}`, changeId: __chg2 };
   } catch (e) {
