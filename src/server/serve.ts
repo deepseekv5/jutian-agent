@@ -2052,6 +2052,35 @@ async function searchUnavailableFallback() {
   return { success: false, error: "搜索模块不可用" };
 }
 
+// ─── 工具执行框架（v13.9.5）：多端适配的统一执行层 ───
+// 平台声明表：未列出的平台执行时给出明确报错（而不是 ENOENT 挂掉）。
+// 安卓 = nodejs-mobile（本地版 APK）或 Termux。
+var TOOL_PLATFORMS: Record<string, string[]> = {
+  screenshot: ["mac", "win", "linux"],
+  open_path: ["mac", "win"],
+  clipboard_read: ["mac", "win", "linux"],
+  clipboard_write: ["mac", "win", "linux"],
+  archive: ["mac", "win", "linux"],
+  npm_run: ["mac", "win", "linux"],
+};
+var TOOL_ANDROID_HINTS: Record<string, string> = {
+  screenshot: "截图需要桌面图形环境；手机端可使用系统截图后粘贴到对话。",
+  open_path: "手机端请在底部「文件」页浏览文件空间。",
+  clipboard_read: "手机端剪贴板由前台应用持有，请直接粘贴内容。",
+  archive: "手机端请在电脑端打包后传输。",
+};
+
+// 统一平台检查：工具执行前调用；不支持时返回面向用户的报错
+function toolPlatformError(name: string): string | null {
+  const allowed = TOOL_PLATFORMS[name];
+  if (!allowed) return null;
+  const p = process.platform;
+  const cur = p === "darwin" ? "mac" : p === "win32" ? "win" : IS_ANDROID ? "android" : "linux";
+  if (allowed.includes(cur)) return null;
+  const hint = TOOL_ANDROID_HINTS[name] || "";
+  return `该工具需要 ${allowed.join(" / ")} 环境，当前平台（${cur}）不支持。${hint ? "\n" + hint : ""}`;
+}
+
 var TOOLS = {
   read_file, write_file, edit_file, list_dir, search_files, search_content,
   get_file_info, move_file, delete_file,
@@ -2985,6 +3014,9 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const sec = securityConfig();
       const secError = checkSecurity(name, args, sec);
       if (secError) return json(res, { success: false, error: `【安全策略】${secError}` });
+      // 多端平台检查（v13.9.5）：安卓上 GUI/桌面专属工具给出明确报错而非 ENOENT
+      const platErr = toolPlatformError(name);
+      if (platErr) return json(res, { success: false, error: platErr });
       // MCP 外部工具（学自 Zode）：mcp__<server>__<tool> 路由到对应 MCP Server
       if (name.startsWith("mcp__") && mcp) {
         const rest = name.slice(5);
@@ -3027,7 +3059,13 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         callArgs = v.value;
       }
       let r;
-      try { r = await h(callArgs); }
+      try {
+        // 统一超时（v13.9.5）：任何工具挂死 180 秒后中止，不再无限等待
+        r = await Promise.race([
+          h(callArgs),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("工具执行超时（180 秒），已中止。如需长时间运行请拆分任务。")), 180_000)),
+        ]);
+      }
       catch (e) { r = { success: false, error: String((e && e.message) || e || "工具执行异常") }; }
       if (!r || typeof r !== "object") r = { success: true, output: String(r) };
       console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
