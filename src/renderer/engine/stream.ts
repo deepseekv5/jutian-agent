@@ -14,6 +14,7 @@ import type { Settings, ToolCall, ToolDef } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
+import { compressHistory } from '../../shared/chatCompression'
 import { ssePayloads } from '../../shared/sse'
 import { extractReasoning } from '../../shared/reasoning'
 import {
@@ -82,6 +83,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
  * 撑爆上下文且拖慢下一轮请求。40K 字符对模型足够做出下一步判断；
  * 截断说明里告知模型如何分段获取完整内容。
  */
+// ─── 抄 gemini-cli chatCompressionService（Apache-2.0）───
+/** 旧轮工具响应折叠上限：2KB（Gemini 实测值，比纯字符截断保留更多决策依据） */
+// 折叠/归档/豁免逻辑已迁移至 shared/chatCompression.ts（v13.9.1，含 gemini-cli 语义）
+
 function clampToolResult(text: string): string {
   const MAX = 40_000
   if (!text || text.length <= MAX) return text
@@ -101,7 +106,7 @@ interface WireToolCall {
  */
 export async function streamChat(
   settings: Settings,
-  messages: { role: string; content?: string; tool_calls?: WireToolCall[]; tool_call_id?: string }[],
+  messages: { role: string; content?: string; tool_calls?: WireToolCall[]; tool_call_id?: string; toolNameHint?: string }[],
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
   extraTools?: ToolDef[],  // 来自 Skill 的额外工具
@@ -225,20 +230,14 @@ export async function streamChat(
         ...(Number(settings.contextWindow) >= 8000 ? { max_tokens: 16384 } : { max_tokens: 8192 }),
       })
 
-      // 历史瘦身（v13.9）：把"除最近一轮外"的旧工具大结果（>2K 字符）压缩为
-      // 固定摘要。多轮任务里 40K 级结果会逐轮累积重发，每轮 token 越滚越大，
-      // 首字延迟与费用同步上涨。压缩一次后文本不再变化，前缀缓存仍然命中。
-      let archIdx = -1
-      for (let mi = messages.length - 1; mi >= 0; mi--) {
-        const mm = messages[mi]
-        if (mm && mm.role === 'assistant' && Array.isArray(mm.tool_calls) && mm.tool_calls.length) { archIdx = mi; break }
-      }
-      if (archIdx > 0) {
-        for (let mi = 0; mi < archIdx; mi++) {
-          const m = messages[mi]
-          if (m.role === 'tool' && typeof m.content === 'string' && m.content.length > 2000) {
-            messages[mi] = { ...m, content: m.content.slice(0, 600) + '\n…[历史输出已归档，原始 ' + m.content.length + ' 字符。需要完整内容可重新调用工具或让用户导出。]' }
-          }
+      // 历史压缩（v13.9.1，移植 gemini-cli chatCompressionService，Apache-2.0）：
+      // 折叠旧轮工具响应（2KB 字素安全 + 3 轮保护 + 检索豁免）+ 反向预算归档
+      // （超预算的旧大响应截尾保留最后 30 行——错误堆栈在末尾）。
+      // 压缩只发生在轮次边界且之后文本稳定，前缀缓存仍命中。
+      const slimmed = compressHistory(messages as never)
+      if (slimmed !== (messages as unknown)) {
+        for (let mi = 0; mi < messages.length; mi++) {
+          if (messages[mi].content !== slimmed[mi].content) messages[mi] = slimmed[mi]
         }
       }
 
@@ -394,7 +393,17 @@ export async function streamChat(
               TOOL_TIMEOUT_MS,
               '工具 ' + pl.tc.name + ' 执行超时（180 秒），已中止等待。如确需继续请拆小任务。',
             )
-            toolResult = result.success ? clampToolResult(result.output) : ('❌ 错误: ' + result.error)
+            let outText = result.success ? result.output : ''
+            // 大输出落盘（抄 gemini-cli toolOutputMasking 思路）：>50K 写入
+            // 文件空间 tool-outputs/，上下文只留指针——内容不丢、可随时打开
+            if (outText.length > 50_000 && result.success) {
+              try {
+                const fname = 'tool-outputs/' + pl.tc.name + '-' + Date.now() + '.txt'
+                await executeTool({ name: 'write_file', args: { path: fname, content: outText } }, settings.workDir || undefined, signal)
+                outText = clampToolResult(outText) + '\n[完整输出已保存到工作区: ' + fname + ']'
+              } catch { /* 落盘失败退回纯截断 */ }
+            }
+            toolResult = result.success ? clampToolResult(outText) : ('❌ 错误: ' + result.error)
             pl.obj.status = result.success ? 'done' : 'error'
             if (result.changeId) pl.obj.changeId = result.changeId
           } catch (te) {
