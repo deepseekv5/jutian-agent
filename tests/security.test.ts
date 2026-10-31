@@ -295,3 +295,29 @@ describe('调研历史 API', () => {
     expect(r.status).toBe(404)
   })
 })
+
+describe('Agent 性能打点端点（v13.11）', () => {
+  it('POST 合法报告写入，GET 能读回', async () => {
+    const report = {
+      totalMs: 1234, rounds: 2, llmMs: 1000, toolMs: 200,
+      firstTokenMs: 400, toolCalls: 3, toolErrors: 1,
+      model: 'test-model', ts: Date.now(), roundsDetail: [],
+    }
+    const w = await fetch(`${BASE}/api/perf-log`, {
+      method: 'POST', headers: ORIGIN, body: JSON.stringify(report),
+    }).then(r => r.json())
+    expect(w.ok).toBe(true)
+    const d = await fetch(`${BASE}/api/perf-log`, { headers: ORIGIN }).then(r => r.json())
+    expect(Array.isArray(d.items)).toBe(true)
+    const hit = d.items.find((x: { model?: string }) => x.model === 'test-model')
+    expect(hit).toBeTruthy()
+    expect(hit.totalMs).toBe(1234)
+  })
+
+  it('缺 totalMs 的垃圾报告被拒（400）', async () => {
+    const r = await fetch(`${BASE}/api/perf-log`, {
+      method: 'POST', headers: ORIGIN, body: JSON.stringify({ rounds: 1 }),
+    })
+    expect(r.status).toBe(400)
+  })
+})
