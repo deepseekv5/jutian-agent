@@ -4052,6 +4052,13 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       mcp.removeServer(mcpIdMatch[1]);
       return json(res, { ok: true });
     }
+    // 连通性测试（v14）：不落库，按表单里的配置直接握手 + 列工具，
+    // 让用户在保存前就知道「地址对不对、能拿到几个工具、哪些是只读」
+    if (url.pathname === "/api/mcp/test" && req.method === "POST") {
+      if (!mcp) return json(res, { ok: false, error: "MCP 模块未加载" }, 500);
+      try { return json(res, await mcp.testServer(await body(req))); }
+      catch (e) { return json(res, { ok: false, error: String(e.message || e) }); }
+    }
     if (url.pathname === "/api/mcp/tools" && req.method === "GET") {
       if (!mcp) return json(res, { tools: [], errors: [] });
       const force = url.searchParams.get("refresh") === "1";
