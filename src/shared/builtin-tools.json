@@ -1078,6 +1078,10 @@
     "maxResults": {
      "type": "number",
      "description": "最多返回多少条，默认 50"
+    },
+    "includeVendor": {
+     "type": "boolean",
+     "description": "是否搜索 node_modules 等依赖目录（默认 false）"
     }
    },
    "required": [

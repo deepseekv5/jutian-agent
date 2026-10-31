@@ -2352,6 +2352,8 @@ async function find_in_files(a) {
   }
   const args = ["-rn", "--max-count=1", a.pattern, dir];
   if (a.include) args.push(`--include=${a.include}`);
+  // v13.11：与 search_content 同款排除，避免搜进 node_modules 几万文件
+  if (!a.includeVendor) for (const v of VENDOR_DIRS) args.push("--exclude-dir=" + v);
   try {
     const r = await execAsync("grep", args, { timeout: 20e3, maxBuffer: MAX_OUT, env: shellEnv() });
     const lines = String(r.stdout || "").split("\n").filter(Boolean).slice(0, limit);
