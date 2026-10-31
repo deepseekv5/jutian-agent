@@ -885,6 +885,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       },
 
       onDone: async (_full, _toolCalls) => {
+        // 流真正结束：清掉"工具参数写入中"等瞬时状态条
+        window.dispatchEvent(new CustomEvent('chat-stream-done', { detail: { sessionId } }))
         await updateMessageContent(assistantMsg.id, sessionId, fullContent)
         await flushPendingVariants(assistantMsg.id)
         if (fullThinking) {
@@ -1058,7 +1060,11 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const netStatus = (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => {
         window.dispatchEvent(new CustomEvent('chat-net-status', { detail: { phase, sessionId, attempt: info?.attempt } }))
       }
-      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus }, controller.signal, extraTools)
+      // 工具参数流式草稿：模型边写参数边通知（v13.8.3）
+      const toolDraft = (draft: { name: string; argsChars: number }) => {
+        window.dispatchEvent(new CustomEvent('chat-tool-draft', { detail: { ...draft, sessionId } }))
+      }
+      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft }, controller.signal, extraTools)
     } finally {
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {
@@ -1211,6 +1217,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     approvePlan,
     exitPlanMode,
     pendingPlanResume,
+    planApproved: pmState.approved,
     /** 手动加载 Skill */
     loadSkill: loadSkillTools,
     /** 已加载的 Skill 列表 */

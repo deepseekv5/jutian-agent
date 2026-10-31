@@ -106,7 +106,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
     if (dirs?.length) setSessionWorkDir(dirs[0])
   }, [setSessionWorkDir])
 
-  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal, plan, clearPlan, planMode, setPlanMode: enterPlanMode, approvePlan, exitPlanMode, pendingPlanResume } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
+  const { messages, streamingId, error, send, abort, rollbackTo, editMessage, regenerateMessage, goal, stopGoal, plan, clearPlan, planMode, setPlanMode: enterPlanMode, approvePlan, exitPlanMode, pendingPlanResume, planApproved } = useChat(sessionId, chatSettings, (firstMsg: string) => onTitleGenerated(sessionId, firstMsg), onAiTitle)
   const sendRef = useRef(send)
   sendRef.current = send
   // 同理给消息操作用 ref 包一层：下面传给 ChatView 的回调因此是全稳定引用，
@@ -437,6 +437,7 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 <div className="px-6 pt-1 pb-2 shrink-0">
                   <PlanCard plan={plan} onClear={clearPlan}
                     planModeOn={planMode}
+                    planApproved={planApproved}
                     onApprove={(fb?: string) => approvePlan(fb)}
                     onExitPlanMode={exitPlanMode} />
                 </div>

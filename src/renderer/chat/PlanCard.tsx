@@ -17,11 +17,13 @@ import { useLanguage } from '../hooks/useLanguage'
 import type { Plan } from '../../shared/planTool'
 import { planProgress } from '../../shared/planTool'
 
-export default function PlanCard({ plan, onClear, planModeOn = false, onApprove, onExitPlanMode }: {
+export default function PlanCard({ plan, onClear, planModeOn = false, planApproved = false, onApprove, onExitPlanMode }: {
   plan: Plan
   onClear: () => void
   /** 计划模式且未批准：显示批准/反馈按钮 */
   planModeOn?: boolean
+  /** 已批准：按钮区换成"正在执行"状态条（修复点击后无反馈、可重复点的问题） */
+  planApproved?: boolean
   onApprove?: (feedback?: string) => void
   onExitPlanMode?: () => void
 }) {
@@ -98,7 +100,16 @@ export default function PlanCard({ plan, onClear, planModeOn = false, onApprove,
       </div>
 
       {/* 计划模式下的确认操作：批准即解除只读门禁；反馈让模型重出方案 */}
-      {planModeOn && (
+      {planModeOn && planApproved && (
+        <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${c.border}` }}>
+          <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: '#10a37f' }}>
+            <span className="inline-block w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin"
+              style={{ borderColor: '#10a37f', borderTopColor: 'transparent' }} />
+            {t('已批准 · 正在按计划执行', 'Approved · executing plan')}
+          </div>
+        </div>
+      )}
+      {planModeOn && !planApproved && (
         <div className="mt-3 pt-3 space-y-2" style={{ borderTop: `1px solid ${c.border}` }}>
           {showFeedback ? (
             <>

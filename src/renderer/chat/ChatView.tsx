@@ -79,6 +79,8 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // useChat 广播 chat-net-status，这里显示"正在连接模型/重试中 + 已等待秒数"。
   const [netPhase, setNetPhase] = useState<'connecting' | 'retrying' | null>(null)
   const [netSec, setNetSec] = useState(0)
+  // 工具参数写入草稿（v13.8.3）：模型边生成工具参数边显示
+  const [toolDraft, setToolDraft] = useState<{ name: string; argsChars: number } | null>(null)
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null
     const stop = () => { if (timer) { clearInterval(timer); timer = null } }
@@ -96,6 +98,17 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
     }
     window.addEventListener('chat-net-status', h)
     return () => { window.removeEventListener('chat-net-status', h); stop() }
+  }, [sessionId])
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (d.sessionId && d.sessionId !== sessionId) return
+      setToolDraft({ name: String(d.name || ''), argsChars: Number(d.argsChars || 0) })
+    }
+    window.addEventListener('chat-tool-draft', h)
+    const off = () => setToolDraft(null)
+    window.addEventListener('chat-stream-done', off)
+    return () => { window.removeEventListener('chat-tool-draft', h); window.removeEventListener('chat-stream-done', off) }
   }, [sessionId])
   // 流结束/切换会话时兜底清除
   useEffect(() => { if (!isStreaming) setNetPhase(null) }, [isStreaming])
@@ -309,6 +322,15 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         </div>
       )}
 
+      {/* 工具参数写入中：模型正在生成工具调用参数（与连接等待条互斥显示） */}
+      {!netPhase && toolDraft && (
+        <div className="shrink-0 px-6 py-1.5 text-[11.5px] flex items-center gap-2"
+          style={{ color: c.textTertiary, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">
+          <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
+          {lang === 'en' ? 'Preparing tool call' : '正在准备调用'} <span className="font-mono" style={{ color: c.textSecondary }}>{toolDraft.name}</span>
+          <span className="font-mono" style={{ color: c.textMuted }}>{lang === 'en' ? 'args ' + toolDraft.argsChars + ' chars' : '参数 ' + toolDraft.argsChars + ' 字符'}</span>
+        </div>
+      )}
       {netPhase && (
         <div className="shrink-0 px-6 py-1.5 text-[11.5px] flex items-center gap-2"
           style={{ color: c.textTertiary, borderBottom: '1px solid ' + c.borderLight, background: c.bgInput }} role="status">

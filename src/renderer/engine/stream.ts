@@ -45,6 +45,11 @@ export interface StreamCallbacks {
    * 首字节；first-token=开始出内容；每阶段只发一次。
    */
   onNetStatus?: (phase: 'connecting' | 'first-token' | 'retrying', info?: { attempt?: number }) => void
+  /**
+   * 工具参数流式草稿（v13.8.3）：模型边写工具参数边通知，UI 显示
+   * "正在准备调用 X… 参数写入中"。仅在内容变化时触发（增量去抖）。
+   */
+  onToolDraft?: (draft: { name: string; argsChars: number }) => void
 }
 
 /** 客户端处理的工具名（无服务端副作用，仅更新 UI 状态） */
@@ -267,7 +272,13 @@ export async function streamChat(
           // 工具调用流式累积（解析/合并细节见 toolCallStream，含 id 重发防护）
           const parsedTcs = parseToolCallsFromDelta(delta)
           if (parsedTcs) {
-            for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
+            let draftChanged = false
+            for (const tc of parsedTcs) { accumulateToolCallDelta(toolCallMap, tc); draftChanged = true }
+            if (draftChanged) {
+              // 取"最后一个"累积中的调用通知（模型串行写参数，最后一个是正在写的）
+              const last = [...toolCallMap.values()].pop()
+              if (last) callbacks.onToolDraft?.({ name: last.name || '…', argsChars: (last.arguments || '').length })
+            }
           }
 
           // 兼容：检查 finish_reason 是否为 tool_calls（非流式模式）
