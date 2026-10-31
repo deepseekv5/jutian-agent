@@ -53,7 +53,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # 产物名是中文（巨天agent-*），改 ASCII 再上传
+      # v13.10.1 起 eb-config 已把产物名统一为 ASCII（jutian-agent-*），
+      # 这里只做归档重命名（asar 更新包仅 arm64 传一份）
       - name: 整理产物名
         run: |
           VER="${GITHUB_REF_NAME#v}"
@@ -65,11 +66,11 @@ jobs:
             cp "$ASAR_SRC" "dist-out/jutian-agent-$VER-app.asar"
           fi
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            mv "release/巨天agent-$VER-arm64.dmg"      "dist-out/jutian-agent-$VER-arm64.dmg"
-            mv "release/巨天agent-$VER-arm64-mac.zip"  "dist-out/jutian-agent-$VER-arm64-mac.zip"
+            mv "release/jutian-agent-$VER-arm64-mac.dmg" "dist-out/jutian-agent-$VER-arm64.dmg"
+            mv "release/jutian-agent-$VER-arm64-mac.zip" "dist-out/jutian-agent-$VER-arm64-mac.zip"
           else
-            mv "release/巨天agent-$VER.dmg"            "dist-out/jutian-agent-$VER-x64.dmg"
-            mv "release/巨天agent-$VER-mac.zip"        "dist-out/jutian-agent-$VER-x64-mac.zip"
+            mv "release/jutian-agent-$VER-x64-mac.dmg"   "dist-out/jutian-agent-$VER-x64.dmg"
+            mv "release/jutian-agent-$VER-x64-mac.zip"   "dist-out/jutian-agent-$VER-x64-mac.zip"
           fi
           ls -la dist-out/
 
