@@ -9,8 +9,11 @@
 /** 单次请求允许的最大工具轮次 */
 export const MAX_TOOL_ROUNDS = 12
 
-/** 同一工具+同一参数允许的重复次数（前两次放行，第三次起视为空转） */
-export const MAX_REPEAT_CALLS = 3
+/** 软阈值：第 3 次重复起在工具结果里注入恢复提示（不阻断，模型可自行纠偏）——
+ *  抄 Cline 的 soft/hard 两级设计：硬拦会打断"模型快要做对了"的场景 */
+export const SOFT_REPEAT_THRESHOLD = 3
+/** 硬阈值：第 5 次重复起阻断调用并升级为用户可见提示 */
+export const HARD_REPEAT_THRESHOLD = 5
 
 /**
  * 调用签名（v13.8.1 归一化）：工具名 + 规范化参数。
@@ -69,20 +72,35 @@ export interface RepeatCheck {
 }
 
 /**
- * 重复调用检查（就地累加计数）。
- * 放行前 MAX_REPEAT_CALLS-1 次：模型重试一次是合理的（比如第一次读取失败）。
+ * 重复调用检查（就地累加计数，软硬两级 —— 抄 Cline）：
+ *   第 3 次（soft）→ 放行，但结果里注入强恢复提示（模型可自行纠偏）；
+ *   第 5 次（hard）→ 阻断，升级为明确失败让模型必须换路。
+ * 旧版第 3 次直接硬拦，会打断"模型正在逐步逼近正确参数"的过程。
  */
 export function checkRepeatCall(counter: Map<string, number>, signature: string): RepeatCheck {
   const seen = (counter.get(signature) || 0) + 1
   counter.set(signature, seen)
-  if (seen <= MAX_REPEAT_CALLS) return { blocked: false, message: '' }
   const toolName = signature.split('::')[0]
+  if (seen < HARD_REPEAT_THRESHOLD) {
+    const soft = seen >= SOFT_REPEAT_THRESHOLD
+    return {
+      blocked: false,
+      message: soft
+        ? JSON.stringify({
+            ok: false,
+            soft: true,
+            error: `【重复提醒 · 第 ${seen} 次】「${toolName}」以相同参数重复调用且结果不会变化。`
+              + `请立即改变方法：换参数/换工具/换思路，或直接基于已有信息回答用户。`,
+          })
+        : '',
+    }
+  }
   return {
     blocked: true,
     message: JSON.stringify({
       ok: false,
-      error: `【重复调用】「${toolName}」以完全相同的参数已被调用 ${seen - 1} 次，结果不会变化。`
-        + `请改用不同参数、换一个工具，或直接基于已有结果回答用户。`,
+      error: `【重复调用已拦截】「${toolName}」以完全相同的参数已被调用 ${seen - 1} 次，结果不会变化。`
+        + `请改用不同参数、换一个工具，或直接基于已有结果回答用户。若任务本身需要重复操作，请说明原因并请用户确认。`,
     }),
   }
 }

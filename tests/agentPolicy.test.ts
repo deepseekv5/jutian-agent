@@ -20,13 +20,18 @@ describe('重复空转防护', () => {
   it('归一化签名：键序不同的调用同签', () => {
     expect(callSignature('f', '{"a":1,"b":2}')).toBe(callSignature('f', '{"b":2,"a":1}'))
   })
-  it('前 3 次放行，第 4 次阻断', () => {
+  it('软硬两级：第 3 次软提醒（不阻断），第 5 次才阻断', () => {
     const c = new Map()
     const sig = callSignature('web_search', '{"query":"x"}')
-    expect(checkRepeatCall(c, sig).blocked).toBe(false)
-    expect(checkRepeatCall(c, sig).blocked).toBe(false)
-    expect(checkRepeatCall(c, sig).blocked).toBe(false)
-    expect(checkRepeatCall(c, sig).blocked).toBe(true)
+    expect(checkRepeatCall(c, sig).blocked).toBe(false) // 1
+    const r2 = checkRepeatCall(c, sig)
+    expect(r2.blocked).toBe(false) // 2
+    const r3 = checkRepeatCall(c, sig)
+    expect(r3.blocked).toBe(false) // 3 = soft
+    expect(r3.message).toContain('重复提醒')
+    const r4 = checkRepeatCall(c, sig)
+    expect(r4.blocked).toBe(false) // 4 = 仍放行（最后一次机会）
+    expect(checkRepeatCall(c, sig).blocked).toBe(true) // 5 = hard
   })
   it('同工具 6 次出提示', () => {
     const c = new Map()

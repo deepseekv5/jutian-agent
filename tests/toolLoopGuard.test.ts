@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   checkRoundLimit, checkRepeatCall, callSignature,
-  MAX_TOOL_ROUNDS, MAX_REPEAT_CALLS,
+  MAX_TOOL_ROUNDS, HARD_REPEAT_THRESHOLD,
 } from '../src/renderer/engine/toolLoopGuard'
 
 describe('轮次上限', () => {
@@ -41,23 +41,30 @@ describe('重复调用检测', () => {
     expect(checkRepeatCall(counter(), sig).blocked).toBe(false)
   })
 
-  it(`前 ${MAX_REPEAT_CALLS} 次放行（模型重试一次是合理的）`, () => {
+  it(`前 ${HARD_REPEAT_THRESHOLD - 1} 次放行（软区间只提醒），第 ${HARD_REPEAT_THRESHOLD} 次阻断`, () => {
     const c = counter()
-    for (let i = 1; i <= MAX_REPEAT_CALLS; i++) {
-      expect(checkRepeatCall(c, sig).blocked, `第 ${i} 次应放行`).toBe(false)
+    for (let i = 1; i < HARD_REPEAT_THRESHOLD; i++) {
+      const r = checkRepeatCall(c, sig)
+      expect(r.blocked, `第 ${i} 次应放行`).toBe(false)
+      if (i >= 3) expect(r.message).toContain('重复提醒')
     }
+    expect(checkRepeatCall(c, sig).blocked, '第 5 次应阻断').toBe(true)
   })
 
-  it('超过阈值后拦截', () => {
+  it('超过硬阈值后拦截（软阈值只提醒不拦）', () => {
     const c = counter()
-    for (let i = 1; i <= MAX_REPEAT_CALLS; i++) checkRepeatCall(c, sig)
-    expect(checkRepeatCall(c, sig).blocked).toBe(true)
+    for (let i = 1; i < HARD_REPEAT_THRESHOLD; i++) {
+      const r = checkRepeatCall(c, sig)
+      expect(r.blocked, `第 ${i} 次应放行`).toBe(false)
+    }
+    expect(checkRepeatCall(c, sig).blocked, '第 5 次应阻断').toBe(true)
   })
 
   it('拦截信息里带工具名与已调用次数，便于模型理解', () => {
     const c = counter()
-    for (let i = 1; i <= MAX_REPEAT_CALLS + 1; i++) checkRepeatCall(c, sig)
+    for (let i = 1; i <= HARD_REPEAT_THRESHOLD + 2; i++) checkRepeatCall(c, sig)
     const r = checkRepeatCall(c, sig)
+    expect(r.blocked).toBe(true)
     expect(r.message).toContain('read_file')
     expect(r.message).toMatch(/重复调用/)
     // 必须是合法 JSON——它要作为 tool result 回传给模型
@@ -66,7 +73,7 @@ describe('重复调用检测', () => {
 
   it('参数不同视为不同调用，不误判为空转', () => {
     const c = counter()
-    for (let i = 0; i < MAX_REPEAT_CALLS + 2; i++) {
+    for (let i = 0; i < HARD_REPEAT_THRESHOLD + 2; i++) {
       const other = callSignature('read_file', `{"path":"file${i}.txt"}`)
       expect(checkRepeatCall(c, other).blocked).toBe(false)
     }
@@ -76,7 +83,7 @@ describe('重复调用检测', () => {
     const c = counter()
     const a = callSignature('read_file', '{}')
     const b = callSignature('list_dir', '{}')
-    for (let i = 0; i <= MAX_REPEAT_CALLS; i++) checkRepeatCall(c, a)
+    for (let i = 0; i <= HARD_REPEAT_THRESHOLD; i++) checkRepeatCall(c, a)
     expect(checkRepeatCall(c, b).blocked).toBe(false)
   })
 
@@ -84,7 +91,7 @@ describe('重复调用检测', () => {
     const c = counter()
     const a = callSignature('shell', '{"command":"ls"}')
     const b = callSignature('shell', '{"command":"pwd"}')
-    for (let i = 0; i <= MAX_REPEAT_CALLS + 1; i++) checkRepeatCall(c, a)
+    for (let i = 0; i <= HARD_REPEAT_THRESHOLD + 1; i++) checkRepeatCall(c, a)
     expect(checkRepeatCall(c, b).blocked).toBe(false)
   })
 })

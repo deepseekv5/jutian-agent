@@ -350,7 +350,7 @@ export async function streamChat(
       for (const tc of toolCalls) {
         if (signal?.aborted) return
 
-        // 重复调用检测（判据见 toolLoopGuard）
+        // 重复调用检测（软硬两级，判据见 toolLoopGuard）
         const repeat = checkRepeatCall(callSignatures, callSignature(tc.name, tc.arguments))
         if (repeat.blocked) {
           messages.push({ role: 'tool', tool_call_id: tc.id, content: repeat.message })
