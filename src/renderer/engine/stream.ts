@@ -25,7 +25,7 @@ import {
 import { buildHttpErrorMessage } from './httpErrors'
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
 import { createAgentPerf } from './agentPerf'
-import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from './retry'
+import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from '../../shared/retry'
 import type { PerfReport } from './agentPerf'
 
 export interface StreamCallbacks {

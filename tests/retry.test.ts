@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   shouldRetryHttp, backoffMs, parseRetryAfter, MAX_ATTEMPTS, BACKOFF_CAP_MS, RETRY_AFTER_CAP_MS,
-} from '../src/renderer/engine/retry'
+} from '../src/shared/retry'
 
 // LLM 瞬时错误重试（v13.11）：免费线路高峰 429/502/503 很常见，
 // 旧实现直接报错打断对话。判据必须是纯函数，边界要钉死。

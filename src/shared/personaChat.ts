@@ -13,6 +13,7 @@ import {
   detectCrisis, crisisReply, detectExitIntent, EXIT_REPLY,
   minorGuardPrompt, type PersonaIdentity,
 } from './personaSafety'
+import { fetchWithRetry } from './retry'
 
 export interface PersonaMsg {
   role: 'user' | 'assistant'
@@ -124,7 +125,9 @@ export async function sendPersonaTurn(
   let sawFirst = false
 
   try {
-    const res = await fetch('/api/llm-proxy', {
+    // 带重试（v13.11）：角色聊天走独立请求路径，此前 429/503 直接失败；
+    // 与主对话同一套退避策略（shared/retry，纯函数有测试）
+    const res = await fetchWithRetry('/api/llm-proxy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -139,7 +142,7 @@ export async function sendPersonaTurn(
         temperature: 0.85,
       }),
       signal,
-    })
+    }, { signal })
     if (!res.ok || !res.body) {
       const data = await res.json().catch(() => null) as UpstreamReply | null
       const err = data?.error

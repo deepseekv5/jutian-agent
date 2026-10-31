@@ -86,3 +86,48 @@ export function shouldRetryHttp(
 export function retryNotice(attempt: number, reason: string): string {
   return `第 ${attempt}/${MAX_ATTEMPTS} 次尝试：${reason}`
 }
+
+/** 可中止的等待 */
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }, { once: true })
+  })
+}
+
+/**
+ * 带重试的 fetch（v13.11）：网络异常与 429/5xx 按退避重试，
+ * 重试耗尽时返回**最后一次响应**（不抛错），让调用方沿用原有错误处理与文案。
+ * 只重试「响应头已到、还没读 body」的阶段，已开始的流不会被重发。
+ */
+export async function fetchWithRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  opts?: { signal?: AbortSignal | null; maxAttempts?: number },
+): Promise<Response> {
+  const max = Math.max(1, opts?.maxAttempts ?? MAX_ATTEMPTS)
+  let lastRes: Response | null = null
+  let lastErr: unknown = null
+  for (let attempt = 1; attempt <= max; attempt++) {
+    try {
+      const res = await fetch(input, init)
+      if (res.ok) return res
+      const decision = shouldRetryHttp(res.status, attempt, res.headers.get('retry-after'))
+      if (!decision.retry) return res
+      lastRes = res
+      // 丢弃本次响应体，避免连接悬挂
+      try { await res.body?.cancel() } catch { /* 忽略 */ }
+      await sleep(decision.delayMs, opts?.signal)
+    } catch (e) {
+      if (opts?.signal?.aborted) throw e
+      lastErr = e
+      if (attempt >= max) throw e
+      await sleep(backoffMs(attempt), opts?.signal)
+    }
+  }
+  if (lastRes) return lastRes
+  throw lastErr ?? new Error('请求失败：未知原因')
+}
