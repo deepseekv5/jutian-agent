@@ -20,7 +20,7 @@ export default function MobileTabBar({ activeType, onPick }: { activeType: PageT
   const { c } = useTheme()
   const { tt } = useLanguage()
   return (
-    <nav className="mobile-tabbar items-stretch shrink-0 border-t" style={{ borderColor: c.border, background: c.bg }} aria-label={tt('mobile.menu')}>
+    <nav className="jt-in-bottom mobile-tabbar items-stretch shrink-0 border-t" style={{ borderColor: c.border, background: c.bg }} aria-label={tt('mobile.menu')}>
       {ITEMS.map(it => {
         const active = activeType === it.type
         return (

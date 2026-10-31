@@ -11,7 +11,6 @@ import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import BackgroundLayer from './BackgroundLayer';
 import CommandPalette from './CommandPalette';
-import WelcomeSplash from './WelcomeSplash';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
 import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
@@ -311,15 +310,12 @@ function MainApp() {
     return () => window.removeEventListener('open-screenshot-crop', h);
   }, []);
 
-  // 内测欢迎页（每次启动）+ jtcode 安装邀请（欢迎页结束后、未安装且未选"不再提醒"时弹出）
-  const [splashDone, setSplashDone] = useState(false);
   // 首次启动强制同意门：同意后置 true 移除 gate（localStorage 版本化，协议更新会重新征求）
   const [legalOk, setLegalOk] = useState(hasLegalConsent)
   const [cliPrompt, setCliPrompt] = useState(false);
   useEffect(() => {
     const t = setTimeout(async () => {
-      setSplashDone(true);
-      try {
+            try {
         if (!shouldShowCliPrompt()) return;
         const r = await fetchCompat('/api/cli/status').then((x) => x.json());
         if (r && r.installed === false) setCliPrompt(true);
@@ -548,7 +544,7 @@ function MainApp() {
       <div
         onTouchStart={vp.isMobile ? onDrawerTouchStart : undefined}
         onTouchEnd={vp.isMobile ? onDrawerTouchEnd : undefined}
-        className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : 'transition-all duration-300 overflow-hidden shrink-0'}
+        className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : 'jt-in-left transition-all duration-300 overflow-hidden shrink-0'}
         style={vp.isMobile
           ? { background: 'var(--glass-bg, #fff)' }
           : { width: sidebarCollapsed ? 0 : 280, minWidth: sidebarCollapsed ? 0 : 280, position: 'relative', zIndex: 1 }}>
@@ -582,7 +578,7 @@ function MainApp() {
       )}
 
       {/* Main content: TabBar + tabs */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden" style={mainAreaStyle}>
+      <div className="jt-in-fade jt-d1 flex-1 flex flex-col min-w-0 h-screen overflow-hidden" style={mainAreaStyle}>
         <TabBar
           tabs={tabs}
           activeTabId={activeTab?.id || ''}
@@ -631,8 +627,6 @@ function MainApp() {
           : <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />}
       </div>
 
-      {/* 内测欢迎页（每次启动） */}
-      {!splashDone && <WelcomeSplash />}
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
 
       {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}

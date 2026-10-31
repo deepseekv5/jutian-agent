@@ -82,7 +82,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
     return () => window.removeEventListener('ambient-changed', h)
   }, [])
   return (
-    <div className="h-10 flex items-center shrink-0 border-b px-2 gap-1 glass titlebar-drag" style={{ borderColor: c.border, paddingLeft: isMac && !isMobile ? 14 : 8 }}>
+    <div className="jt-in-top h-10 flex items-center shrink-0 border-b px-2 gap-1 glass titlebar-drag" style={{ borderColor: c.border, paddingLeft: isMac && !isMobile ? 14 : 8 }}>
       {/* 手机：会话抽屉入口 */}
       {isMobile && (
         <button onClick={onToggleSidebar}

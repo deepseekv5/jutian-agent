@@ -951,3 +951,19 @@ body {
   /* 用户气泡在窄屏占更宽（默认 78% 在手机上太窄） */
   .bubble-user { max-width: 92% !important; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   启动「元素归位」编排（v13.8.4）：各区域从不同方向飞入自己的位置，
+   错峰 70ms，只在元素首次挂载时播放一次（替代旧的开屏海报页）。
+   ══════════════════════════════════════════════════════════════ */
+@keyframes jt-in-left   { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes jt-in-top    { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+@keyframes jt-in-bottom { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes jt-in-fade   { from { opacity: 0; transform: translateY(6px) scale(.996); } to { opacity: 1; transform: none; } }
+.jt-in-left   { animation: jt-in-left   .55s cubic-bezier(.2,.8,.3,1) backwards; }
+.jt-in-top    { animation: jt-in-top    .5s  cubic-bezier(.2,.8,.3,1) backwards; }
+.jt-in-bottom { animation: jt-in-bottom .55s cubic-bezier(.2,.8,.3,1) backwards; }
+.jt-in-fade   { animation: jt-in-fade   .6s  cubic-bezier(.2,.8,.3,1) backwards; }
+.jt-d1 { animation-delay: .07s }
+.jt-d2 { animation-delay: .14s }
+.jt-d3 { animation-delay: .21s }

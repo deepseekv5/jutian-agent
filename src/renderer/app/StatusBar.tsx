@@ -27,7 +27,7 @@ export default function StatusBar({ serverOk, model, workDir }: Props) {
   const usedTokens = usage.prompt + usage.completion
 
   return (
-    <div className="group/status h-6 shrink-0 flex items-center gap-4 px-3 text-[11px] select-none transition-opacity glass"
+    <div className="jt-in-bottom group/status h-6 shrink-0 flex items-center gap-4 px-3 text-[11px] select-none transition-opacity glass"
       style={{ color: c.textMuted, opacity: 0.85 }}
       onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
       onMouseLeave={e => { e.currentTarget.style.opacity = '0.55' }}>
