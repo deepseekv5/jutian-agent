@@ -72,8 +72,10 @@ export default function NewTabPage({ onPick }: Props) {
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const byType = new Map(CARDS.map(k => [k.type, k]))
-  // 1024 节日主页（v12.3.1）：节日窗口内整页换肤，平时走原版
-  const festivalNow = true   // 用户要求：1024 主页常驻显示，不做日期限定
+  // 1024 节日主页（v12.3.1）：仅在 10/24 前后的活动窗口内整页换肤
+  // （v13.9.1 应用户要求下架常驻展示——活动已过）
+  const now = new Date()
+  const festivalNow = now.getMonth() === 9 && now.getDate() >= 20 && now.getDate() <= 28
   // 1024 彩蛋（v12.3）：连点徽章 3 次触发；平时完全不出现
   const [eggOpen, setEggOpen] = useState(false)
   const [tap, setTap] = useState({ count: 0, lastAt: 0 })

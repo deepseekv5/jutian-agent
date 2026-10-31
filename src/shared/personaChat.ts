@@ -250,7 +250,7 @@ export async function saveMessage(personaId: string, m: PersonaMsg): Promise<voi
     await fetch(`/api/persona-sessions/${encodeURIComponent(personaId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: m.role, content: m.content }),
+      body: JSON.stringify({ role: m.role, content: m.content, thinking: m.thinking, crisis: m.crisis }),
     })
   } catch { /* 本地持久化失败不阻断对话 */ void 0 }
 }

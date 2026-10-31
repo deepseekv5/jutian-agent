@@ -1569,7 +1569,7 @@ async function read_memory(args) {
   if (hasDb) {
     try {
       if (args.key) return { success: true, output: db.getMemory(args.key) || "(无此记忆)" };
-      return { success: true, output: memIndex(db.getAllMemories()) };
+      return { success: true, output: memIndex(db.getAllMemories().filter((r) => !r.key.startsWith("persona:"))) };
     } catch {}
   }
   const mem = loadMem();
@@ -4315,7 +4315,10 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       try {
         const pid = decodeURIComponent(url.pathname.split("/api/persona-sessions/")[1]);
         const b = await body(req);
-        const msg = { role: b.role === "user" ? "user" : "assistant", content: String(b.content || "").slice(0, 8000), ts: Date.now() };
+        const msg: Record<string, unknown> = { role: b.role === "user" ? "user" : "assistant", content: String(b.content || "").slice(0, 8000), ts: Date.now() };
+        // 思考过程随会话保存（历史可回看）；crisis 标记同理
+        if (b.thinking) msg.thinking = String(b.thinking).slice(0, 40000);
+        if (b.crisis) msg.crisis = true;
         if (!msg.content.trim()) return json(res, { error: "空消息" }, 400);
         const all = loadJson("persona-sessions.json");
         all.sessions = all.sessions || {};
@@ -4389,13 +4392,17 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
 
     // --- 长期记忆 API（统一 SQLite）---
     if (url.pathname === "/api/memories" && req.method === "GET") {
+      // 角色记忆（persona: 前缀）是独立域，走 /api/memory-hub 分角色展示；
+      // 混进主对话记忆列表会让两边看起来互相污染（用户实测反馈）
+      const isMain = (k: string) => !k.startsWith("persona:");
       if (hasDb) {
         try {
-          const rows = db.getAllMemories();
+          const rows = db.getAllMemories().filter((r) => isMain(r.key));
           return json(res, Object.fromEntries(rows.map((r) => [r.key, r.value])));
         } catch {}
       }
-      return json(res, loadJson("memories.json"));
+      const local = loadJson("memories.json");
+      return json(res, Object.fromEntries(Object.entries(local).filter(([k]) => isMain(k))));
     }
     // 会话摘要独立存储（与记忆/知识库三分）
     if (url.pathname === "/api/ctx-summary" && (req.method === "GET" || req.method === "POST")) {
