@@ -1009,7 +1009,14 @@ async function edit_file(a) {
     FILE_CONTEXT.delete(p);
     toolCacheInvalidate(p);
     const __chg2 = recordChange(p, __oldFull, c);
-    return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}`, changeId: __chg2 };
+    // 多处匹配提醒（v13.11）：默认只改第一处，但模型常以为改全了。
+    // 明确告知出现次数，模型可决定是否补一次 replaceAll。
+    let __occNote = "";
+    if (!a.replaceAll) {
+      const __occ = __oldFull.split(a.oldText).length - 1;
+      if (__occ > 1) __occNote = "\n\u26A0\uFE0F oldText 在文件中出现 " + __occ + " 次，本次只替换了第 1 处。如需全部替换请传 replaceAll: true。";
+    }
+    return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}${__occNote}`, changeId: __chg2 };
   } catch (e) {
     return { success: false, error: e.message };
   }
