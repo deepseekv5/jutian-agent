@@ -14,7 +14,7 @@ import type { Settings, ToolCall, ToolDef } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { BUILTIN_TOOLS } from '../types'
 import { executeTool } from './tools'
-import { buildToolsBlock, parseHermesToolCalls, stripToolCallBlocks } from '../../shared/hermesTools'
+import { buildToolsBlock, parseHermesToolCalls, stripToolCallBlocks, shouldInjectHermes } from '../../shared/hermesTools'
 import { ssePayloads } from '../../shared/sse'
 import { extractReasoning } from '../../shared/reasoning'
 import {
@@ -231,10 +231,12 @@ export async function streamChat(
       // Hermes 文本协议注入（v13.9.2）：免费小模型多被 Hermes 格式训练过，
       // 标准 tool_calls 参数它们用不了；<tools> 注入让它们走文本协议。
       // 支持标准协议的模型不受影响（仍走标准通道）。
-      const hermesEnabled = allTools.length > 0
+      // Hermes 按需注入（v13.10.1）：auto 只对免费/小模型线路注入——
+      // 大模型走标准 tool_calls，全量 <tools> 块是每请求 ~20KB 的纯浪费。
+      const hermesEnabled = allTools.length > 0 && shouldInjectHermes(settings.model, settings.apiBaseUrl, settings.hermesProtocol)
       const wireMessages = (() => {
         if (!hermesEnabled) return messages
-        const block = buildToolsBlock(allTools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })))
+        const block = buildToolsBlock(allTools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true })
         if (!block) return messages
         const copy = [...messages]
         if (copy[0] && copy[0].role === 'system') {

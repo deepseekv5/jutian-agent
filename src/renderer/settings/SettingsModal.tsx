@@ -784,6 +784,18 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: form.multimodal ? 'calc(100% - 18px)' : '2px' }} />
                     </button>
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Hermes 工具协议', 'Hermes tool protocol')}</label>
+                    <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
+                      {([['auto', '自动'], ['on', '开'], ['off', '关']] as const).map(([v, zh]) => (
+                        <button key={v} type="button" onClick={() => persistNow({ hermesProtocol: v })}
+                          className="flex-1 px-2 py-1 text-[10.5px] transition-colors"
+                          style={{ background: (form.hermesProtocol || 'auto') === v ? (c.accent || '#10a37f') : 'transparent', color: (form.hermesProtocol || 'auto') === v ? '#fff' : c.textTertiary }}>
+                          {t(zh, zh === '自动' ? 'Auto' : zh === '开' ? 'On' : 'Off')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <button type="button" onClick={testConnection} disabled={testingConn === null && false}

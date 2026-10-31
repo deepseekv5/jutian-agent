@@ -19,13 +19,24 @@ export interface HermesToolDef {
   parameters: unknown
 }
 
-/** 工具 schema → Hermes <tools> 注入块（JSON schema 数组） */
-export function buildToolsBlock(tools: HermesToolDef[]): string {
+export function buildToolsBlock(tools: HermesToolDef[], opts?: { compact?: boolean }): string {
   if (!tools.length) return ''
+  const paramsCompact = (parameters: unknown): Record<string, string> => {
+    const out: Record<string, string> = {}
+    const props = (parameters && typeof parameters === 'object' ? (parameters as { properties?: Record<string, { type?: unknown }> }).properties : null) || {}
+    for (const k of Object.keys(props)) {
+      const ty = props[k]?.type
+      out[k] = Array.isArray(ty) ? ty.join('|') : String(ty || 'any')
+    }
+    return out
+  }
   const defs = tools.map(t => JSON.stringify({
     type: 'function',
-    function: { name: t.name, description: t.description, parameters: t.parameters },
+    function: opts?.compact
+      ? { name: t.name, description: t.description, parameters: { type: 'object', properties: paramsCompact(t.parameters) } }
+      : { name: t.name, description: t.description, parameters: t.parameters },
   })).join('\n')
+
   return [
     '',
     '# Tools',
@@ -90,4 +101,18 @@ export function parseHermesToolCalls(text: string): ParsedToolCall[] {
 export function stripToolCallBlocks(text: string): string {
   if (!text || !text.includes('<tool_call>')) return text
   return text.replace(/<tool_call>\s*[\s\S]*?\s*<\/tool_call>/g, '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Hermes 注入判定（v13.10.1）：mode=off 不注入；on 恒注入；
+ * auto（默认）只在免费/小模型线路上注入——这些模型多被 Hermes 格式训练过、
+ * 标准 tool_calls 用不了；大模型走标准通道，注入块是纯浪费（~20KB/请求）。
+ */
+export function shouldInjectHermes(model: string, apiBase: string, mode?: string): boolean {
+  const m = String(mode || 'auto')
+  if (m === 'off') return false
+  if (m === 'on') return true
+  const id = String(model || '')
+  const base = String(apiBase || '')
+  return /(:free|[-_.]free($|[-_/])|gpt-oss|hermes|pollinations|kilo\.)/i.test(id + ' ' + base)
 }

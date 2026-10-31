@@ -66,6 +66,8 @@ export interface Settings {
   sensitiveBlock: boolean
   // 合盖保持运行（默认开启）
   keepAwake?: boolean
+  /** Hermes 文本协议注入（v13.10.1）：auto=免费/小模型线路自动注入（默认）；on=恒注入；off=关闭 */
+  hermesProtocol?: 'auto' | 'on' | 'off'
   // 提供商与模型能力
   providerName?: string
   contextWindow?: number
