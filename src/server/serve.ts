@@ -891,8 +891,7 @@ async function read_file(a) {
       const ls = c.split("\n");
       c = ls.slice((a.offset || 1) - 1, a.limit ? (a.offset || 1) - 1 + a.limit : ls.length).join("\n");
     }
-    const repeatNote = unchanged ? "
-（提示：文件自上次读取后未变化，以上内容已在对话上下文中，无需重复读取。）" : "";
+    const repeatNote = unchanged ? "\n（提示：文件自上次读取后未变化，以上内容已在对话上下文中，无需重复读取。）" : "";
     const __out = c.slice(0, MAX_OUT) + repeatNote;
     toolCacheSet(__ck, st.mtimeMs, __out);
     return { success: true, output: __out };
