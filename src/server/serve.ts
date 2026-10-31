@@ -2360,6 +2360,10 @@ async function find_in_files(a) {
     return { success: true, output: lines.join("\n") || "(无匹配)" };
   } catch (e) {
     if (e.code === 1) return { success: true, output: "(无匹配)" };
+    if (e.stdout) {
+      const lines = String(e.stdout).split("\n").filter(Boolean).slice(0, limit);
+      return { success: true, output: lines.join("\n") + "\n（命中过多，输出已截断；请缩小 path 或提高 pattern 精度）" };
+    }
     return { success: false, error: e.stderr || e.message };
   }
 }
