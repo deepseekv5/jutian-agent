@@ -68,6 +68,8 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
   const [usageTip, setUsageTip] = useState(false)
   // 流式：当前正在逐字生成的回复 + 思考耗时
   const [streamText, setStreamText] = useState('')
+  const [streamThinking, setStreamThinking] = useState('')
+  const [thinkingOpen, setThinkingOpen] = useState(false)
   const [thinkingMs, setThinkingMs] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -158,7 +160,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
   const send = useCallback(async () => {
     const text = input.trim()
     if (!text || !active || busy) return
-    setInput(''); setBusy(true); setThinkingMs(null); setStreamText('')
+    setInput(''); setBusy(true); setThinkingMs(null); setStreamText(''); setStreamThinking(''); setThinkingOpen(true)
     const userMsg: PersonaMsg = { role: 'user', content: imageOn ? `🎨 画一幅：${text}` : text, ts: Date.now() }
     const base = [...msgs, userMsg]
     setMsgs(base)
@@ -197,6 +199,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
         signal: ctrl.signal,
         onTiming: (ms) => setThinkingMs(ms),
         onDelta: (chunk) => setStreamText(prev => prev + chunk),
+        onThinking: (chunk) => setStreamThinking(prev => prev + chunk),
       })
       const reply = res.msgs[res.msgs.length - 1]
       if (res.notice) setNotice(res.notice)
@@ -510,6 +513,17 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
               {msgs.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[86%] ${m.role === 'user' ? '' : 'min-w-0'}`}>
+                    {m.role === 'assistant' && m.thinking && (
+                      <details className="mb-1 group">
+                        <summary className="text-[10.5px] cursor-pointer select-none" style={{ color: c.textMuted }}>
+                          思考过程（{m.thinking.length} 字）
+                        </summary>
+                        <div className="mt-1 px-2.5 py-1.5 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap max-h-40 overflow-auto"
+                          style={{ border: `1px dashed ${c.borderLight}`, color: c.textMuted }}>
+                          {m.thinking}
+                        </div>
+                      </details>
+                    )}
                     <div className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${m.role === 'user' ? 'whitespace-pre-wrap break-words' : ''}`}
                       style={m.role === 'user'
                         ? { background: c.bgInput, color: c.text }
@@ -522,6 +536,16 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
                         ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                         : m.content}
                     </div>
+                    {m.role === 'assistant' && m.memorySaved && m.memorySaved.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {m.memorySaved.map((mm) => (
+                          <span key={mm.key} className="text-[10px] px-1.5 py-0.5 rounded"
+                            style={{ background: 'rgba(16,163,127,0.1)', color: '#0d9d73' }}>
+                            已记住：{mm.key}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {m.role === 'assistant' && (
                       <div className="mt-1 flex items-center gap-1.5">
                         <span className="text-[9.5px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textMuted }}>{AI_LABEL}</span>
@@ -557,6 +581,22 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
                           {[0, 1, 2].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: c.textMuted, animationDelay: `${i * 0.15}s` }} />)}
                         </span>
                         {genImage ? '正在作画…' : `${active.name} 正在思考…`}
+                      </div>
+                    )}
+                    {busy && streamThinking && (
+                      <div className="mb-1.5">
+                        <button onClick={() => setThinkingOpen(v => !v)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] w-full"
+                          style={{ border: `1px dashed ${c.borderLight}`, color: c.textTertiary }}>
+                          <span className={`transition-transform ${thinkingOpen ? 'rotate-90' : ''}`}>▸</span>
+                          思考中…（{streamThinking.length} 字）
+                        </button>
+                        {thinkingOpen && (
+                          <div className="mt-1 px-3 py-2 rounded-xl text-[11.5px] leading-relaxed whitespace-pre-wrap max-h-44 overflow-auto"
+                            style={{ border: `1px dashed ${c.borderLight}`, color: c.textMuted, background: c.bgInput }}>
+                            {streamThinking}
+                          </div>
+                        )}
                       </div>
                     )}
                     {streamText && (

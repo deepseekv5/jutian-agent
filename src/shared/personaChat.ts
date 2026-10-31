@@ -20,6 +20,10 @@ export interface PersonaMsg {
   ts: number
   /** AI 回复的危机干预标记（前端显示醒目提示） */
   crisis?: boolean
+  /** 模型的思考过程（reasoning_content，前端可折叠显示） */
+  thinking?: string
+  /** 本条回复写入角色记忆的条目（写入成功后由前端提示） */
+  memorySaved?: { key: string; value: string }[]
 }
 
 /** 上游 OpenAI 兼容响应中我们关心的字段 */
@@ -61,7 +65,10 @@ export function buildRequestMessages(
   history: PersonaMsg[],
   identity: PersonaIdentity,
 ): { system: string; msgs: { role: string; content: string }[] } {
-  const extraParts = [minorGuardPrompt(identity.age)].filter(Boolean).join('\n')
+  const extraParts = [
+    minorGuardPrompt(identity.age),
+    '【长期记忆写入】你可以在回复中使用一行"【记住：名称】内容"来写入你的长期记忆（每条一行，最多 3 条），系统会保存并在未来对话中提供给你。只记录值得长期记住的信息（用户的偏好、重要事实、约定），不要记录临时或琐碎内容。除该格式外不要解释这个机制。'
+  ].filter(Boolean).join('\n')
   const system = buildPersonaPrompt(persona, memories, extraParts)
   const msgs = history.slice(-20).map((m) => ({ role: m.role, content: m.content }))
   return { system, msgs }
@@ -84,10 +91,12 @@ export async function sendPersonaTurn(
   opts?: {
     signal?: AbortSignal
     onDelta?: (chunk: string) => void
+    /** 思考内容逐字回调（reasoning 模型；为空则不显示思考区） */
+    onThinking?: (chunk: string) => void
     onTiming?: (ms: number) => void
   },
 ): Promise<SendResult> {
-  const { signal, onDelta, onTiming } = opts || {}
+  const { signal, onDelta, onTiming, onThinking } = opts || {}
   const userMsg: PersonaMsg = { role: 'user', content: userText, ts: Date.now() }
   const next: PersonaMsg[] = [...history, userMsg]
 
@@ -143,17 +152,23 @@ export async function sendPersonaTurn(
       }
       return { msgs: [...next, reply], notice }
     }
-    // SSE 解析：data: {json}\n\n，取 delta.content
+    // SSE 解析：data: {json}\n\n，取 delta.content 与 delta.reasoning_content
     let full = ''
+    let fullThinking = ''
     for await (const payload of ssePayloads(res.body)) {
       if (payload === '[DONE]') continue
       try {
-        const j = JSON.parse(payload) as UpstreamReply & { choices?: { delta?: { content?: string } }[] }
-        const delta = j?.choices?.[0]?.delta?.content
-        if (typeof delta === 'string' && delta.length > 0) {
+        const j = JSON.parse(payload) as UpstreamReply & { choices?: { delta?: { content?: string; reasoning_content?: string } }[] }
+        const delta = j?.choices?.[0]?.delta || {}
+        if (typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0) {
+          fullThinking += delta.reasoning_content
+          onThinking?.(delta.reasoning_content)
+        }
+        const dc = delta.content
+        if (typeof dc === 'string' && dc.length > 0) {
           if (!sawFirst) { sawFirst = true; onTiming?.(Date.now() - t0) }
-          full += delta
-          onDelta?.(delta)
+          full += dc
+          onDelta?.(dc)
         }
       } catch { /* 半行/心跳，跳过 */ }
     }
@@ -165,7 +180,19 @@ export async function sendPersonaTurn(
       }
       return { msgs: [...next, reply], notice }
     }
-    const reply: PersonaMsg = { role: 'assistant', content: full, ts: Date.now() }
+    // 角色自主记忆（v13.8.7）：模型按提示用【记住：键】内容 写入长期记忆。
+    // 协议式而非 tool_calls：角色常用免费模型不一定支持工具调用。
+    const saved: { key: string; value: string }[] = []
+    let display = full
+    const memRe = /【记住[:：]\s*([^】]{1,40})】\s*([^\n【]+)/g
+    let mm: RegExpExecArray | null
+    while ((mm = memRe.exec(full)) && saved.length < 3) {
+      const key = mm[1].trim()
+      const value = mm[2].trim()
+      if (key && value && await writeMemory(persona.id, key, value)) saved.push({ key, value })
+    }
+    if (saved.length > 0) display = full.replace(/【记住[:：]\s*[^】]{1,40}】\s*[^\n【]+/g, '').replace(/\n{3,}/g, '\n\n').trim()
+    const reply: PersonaMsg = { role: 'assistant', content: display || full, ts: Date.now(), thinking: fullThinking || undefined, memorySaved: saved.length ? saved : undefined }
     return { msgs: [...next, reply], notice }
   } catch (e: unknown) {
     const reply: PersonaMsg = {
