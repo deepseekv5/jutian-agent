@@ -66,6 +66,22 @@ export function toolUseHint(counter: Map<string, number>, name: string): string 
   return `\n\n[系统提示] ${name} 已被累计调用 ${n} 次。如果进展不大，请换一种方法，或直接基于已有信息给用户结论。`
 }
 
+/** 连续失败提醒阈值 —— 抄 Cline 的 consecutiveMistakeCount：连续 3 次工具失败
+ *  说明模型在用同一种错误方式撞墙，注入恢复提示打断（成功一次即清零） */
+export const CONSECUTIVE_FAIL_THRESHOLD = 3
+
+/** 连续失败计数（成功清零）：failed=true 累加，false 归零 */
+export function bumpToolFail(counter: { n: number }, failed: boolean): number {
+  counter.n = failed ? counter.n + 1 : 0
+  return counter.n
+}
+
+export function toolFailHint(n: number, lastName: string): string {
+  if (n < CONSECUTIVE_FAIL_THRESHOLD) return ''
+  return `\n\n[系统提示] 已连续 ${n} 个工具调用失败（最近：${lastName}）。请先停下检查：错误原因是否相同？`
+    + `先读相关文件/重新确认环境状态再行动，或换一种方法——不要以同样方式重试。`
+}
+
 export interface RepeatCheck {
   blocked: boolean
   message: string

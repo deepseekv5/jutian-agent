@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { callSignature, checkRepeatCall, bumpToolUse, toolUseHint } from '../src/renderer/engine/toolLoopGuard'
+import { callSignature, checkRepeatCall, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from '../src/renderer/engine/toolLoopGuard'
 import { hasMathSyntax, normalizeMathDelimiters } from '../src/renderer/chat/useMathPlugins'
 
 // agent 执行策略（v13.9，抄 Cline/OpenHands 的 rule-based truncation）：
@@ -48,5 +48,19 @@ describe('公式与归一化（agent 输出侧）', () => {
   })
   it('hasMathSyntax 不误判价格', () => {
     expect(hasMathSyntax('价格 $19.9 打折')).toBe(false)
+  })
+})
+
+describe('连续失败计数（Cline consecutiveMistakeCount）', () => {
+  it('连续失败累加、成功清零、达 3 次出提示', () => {
+    const c = { n: 0 }
+    bumpToolFail(c, true); bumpToolFail(c, true)
+    expect(toolFailHint(c.n, 'shell')).toBe('')
+    bumpToolFail(c, true)
+    expect(toolFailHint(c.n, 'shell')).toContain('连续 3')
+    expect(toolFailHint(c.n, 'shell')).toContain('shell')
+    bumpToolFail(c, false)
+    expect(c.n).toBe(0)
+    expect(toolFailHint(c.n, 'shell')).toBe('')
   })
 })

@@ -23,7 +23,7 @@ import {
   type ToolCallAccum,
 } from './toolCallStream'
 import { buildHttpErrorMessage } from './httpErrors'
-import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint } from './toolLoopGuard'
+import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void
@@ -185,6 +185,8 @@ export async function streamChat(
   const callSignatures = new Map<string, number>()
   // 同工具累计计数（跨轮）：反复用同一工具是隐性空转的主要形态
   const toolUseCounts = new Map<string, number>()
+  // 连续失败计数（成功清零，Cline consecutiveMistakeCount）
+  const failCounter = { n: 0 }
   // 思考内容跨轮累积：放在循环外，否则"思考→调工具→再思考"时
   // 只有最后一轮的思考会落库，前面的全丢
   let fullThinking = ''
@@ -436,7 +438,8 @@ export async function streamChat(
               ? ('工具 ' + pl.tc.name + ' 执行失败（未返回具体错误信息）。')
               : ('工具 ' + pl.tc.name + ' 已执行，但返回空结果。'))
         const _useN = bumpToolUse(toolUseCounts, pl.tc.name)
-        return base + toolUseHint(toolUseCounts, pl.tc.name)
+        const failN = bumpToolFail(failCounter, pl.obj.status === 'error')
+        return base + toolUseHint(toolUseCounts, pl.tc.name) + toolFailHint(failN, pl.tc.name)
       }
 
       let i = 0
