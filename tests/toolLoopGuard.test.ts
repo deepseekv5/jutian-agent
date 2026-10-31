@@ -99,3 +99,48 @@ describe('callSignature', () => {
     expect(callSignature('shell', undefined)).not.toContain('undefined')
   })
 })
+
+
+// v13.8.1：签名归一化（键序/空白不再绕过检测）+ 同工具累计提示
+import { callSignature as sig, bumpToolUse, toolUseHint, SAME_TOOL_HINT_EVERY } from '../src/renderer/engine/toolLoopGuard'
+
+describe('callSignature 归一化（v13.8.1）', () => {
+  it('JSON 键顺序不同 → 同一签名', () => {
+    expect(sig('read_file', '{"path":"a.txt","limit":5}'))
+      .toBe(sig('read_file', '{"limit":5,"path":"a.txt"}'))
+  })
+  it('空白差异 → 同一签名', () => {
+    expect(sig('shell', '{ "command": "ls  -la" }'))
+      .toBe(sig('shell', '{"command":"ls -la"}'))
+  })
+  it('参数值不同 → 不同签名（放行模型尝试别的路子）', () => {
+    expect(sig('read_file', '{"path":"a.txt"}'))
+      .not.toBe(sig('read_file', '{"path":"b.txt"}'))
+  })
+  it('非 JSON 参数：空白折叠后比较', () => {
+    expect(sig('run', 'ls   -la')).toBe(sig('run', 'ls -la'))
+  })
+  it('工具名不同 → 不同签名', () => {
+    expect(sig('a', '{"x":1}')).not.toBe(sig('b', '{"x":1}'))
+  })
+})
+
+describe('同工具累计提示（v13.8.1）', () => {
+  it('未达阈值不提示', () => {
+    const c = new Map()
+    for (let i = 0; i < SAME_TOOL_HINT_EVERY - 1; i++) bumpToolUse(c, 'web_search')
+    expect(toolUseHint(c, 'web_search')).toBe('')
+  })
+  it('达到 6 的倍数时提示换策略', () => {
+    const c = new Map()
+    for (let i = 0; i < SAME_TOOL_HINT_EVERY; i++) bumpToolUse(c, 'web_search')
+    const hint = toolUseHint(c, 'web_search')
+    expect(hint).toContain('6 次')
+    expect(hint).toContain('换一种方法')
+  })
+  it('12 次（第二个倍数）再提示一次', () => {
+    const c = new Map()
+    for (let i = 0; i < SAME_TOOL_HINT_EVERY * 2; i++) bumpToolUse(c, 'shell')
+    expect(toolUseHint(c, 'shell')).toContain('12 次')
+  })
+})

@@ -12,10 +12,24 @@ export const MAX_TOOL_ROUNDS = 12
 /** 同一工具+同一参数允许的重复次数（前两次放行，第三次起视为空转） */
 export const MAX_REPEAT_CALLS = 3
 
-/** 调用签名：工具名 + 原始参数串。参数顺序由模型生成，此处不做规范化——
- *  完全相同的串才是真正的空转；参数不同说明模型在尝试别的路子，应放行 */
+/**
+ * 调用签名（v13.8.1 归一化）：工具名 + 规范化参数。
+ * 旧版要求参数串逐字符相同，模型把键顺序或空白换一下就能绕过检测继续空转。
+ * 现在：JSON 参数按键排序重建、空白折叠——语义相同的调用同样计数。
+ * 参数"值"不同仍然放行（模型在尝试别的路子是合理的）。
+ */
 export function callSignature(name: string, args: string | undefined): string {
-  return `${name}::${args || ''}`
+  let norm = String(args || '').trim()
+  try {
+    const parsed = JSON.parse(norm)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const sorted: Record<string, unknown> = {}
+      for (const k of Object.keys(parsed).sort()) sorted[k] = parsed[k]
+      norm = JSON.stringify(sorted)
+    }
+  } catch { /* 非 JSON 参数：按原文 */ }
+  norm = norm.replace(/\s+/g, ' ')
+  return name + '::' + norm
 }
 
 export interface RoundCheck {
@@ -31,6 +45,22 @@ export function checkRoundLimit(round: number): RoundCheck {
     message: `已达单次请求的工具调用上限（${MAX_TOOL_ROUNDS} 轮）。任务可能过于复杂或模型陷入循环——`
       + `请把任务拆成更小的步骤重试，或直接告诉我当前进展。`,
   }
+}
+
+/** 同一工具累计调用提示阈值：达 6 的倍数时在工具结果后附"换策略"提示（不阻断） */
+export const SAME_TOOL_HINT_EVERY = 6
+
+/** 工具名维度计数（跨轮累计）：检测"反复用同一工具但参数不同"的隐性空转 */
+export function bumpToolUse(counter: Map<string, number>, name: string): number {
+  const n = (counter.get(name) || 0) + 1
+  counter.set(name, n)
+  return n
+}
+
+export function toolUseHint(counter: Map<string, number>, name: string): string {
+  const n = counter.get(name) || 0
+  if (n === 0 || n % SAME_TOOL_HINT_EVERY !== 0) return ''
+  return `\n\n[系统提示] ${name} 已被累计调用 ${n} 次。如果进展不大，请换一种方法，或直接基于已有信息给用户结论。`
 }
 
 export interface RepeatCheck {

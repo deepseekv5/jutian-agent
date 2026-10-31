@@ -380,6 +380,16 @@ var MIME = {
   ".woff2": "font/woff2"
 };
 var IS_WIN = process.platform === "win32";
+
+// 安卓判定（v13.8.1）：linux 内核 + /system/bin 是 Android 特征。
+// 安卓没有 zsh/bash（本地版 APK 里也没有 Termux），只有系统 toybox sh。
+var IS_ANDROID = process.platform === "linux" && (function () { try { return fs.existsSync("/system/bin/sh"); } catch { return false; } })();
+// 各平台执行命令的 shell：安卓 sh（toybox）、mac/linux zsh、win powershell
+var SHELL_BIN = IS_ANDROID ? "sh" : (IS_WIN ? "powershell.exe" : "zsh");
+function shellArgs(command) {
+  if (IS_WIN) return ["-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + command];
+  return ["-c", command];
+}
 var USER_HOME = process.env.HOME || process.env.USERPROFILE || (IS_WIN ? "C:\\Users" : os.homedir());
 // macOS 的 os.tmpdir() 是 /var/folders/…，不在原来的白名单里——工具读临时
 // 文件会被"路径不允许"挡住（写测试时才暴露：原先用硬编码 /tmp 碰巧能过）。
@@ -663,7 +673,7 @@ function startBackgroundShell(command, cwd, label) {
   const id = `sh_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const [bin, args] = IS_WIN
     ? ["powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${command}`]]
-    : ["zsh", ["-c", command]]
+    : [SHELL_BIN, shellArgs(command)]
   let child
   try {
     // PATH 必须用补全后的 env：后台进程同样是 GUI 启动的 Electron 子进程，
@@ -785,7 +795,7 @@ async function shell(a) {
         { ...shellExecOpts(timeoutSec), cwd });
     } else {
       // zsh 分支保留 TERM=dumb（去掉颜色控制符），但用补全后的 env
-      r = await execAsync("zsh", ["-c", a.command], { ...shellExecOpts(timeoutSec), env: { ...shellEnv(), TERM: "dumb" }, cwd });
+      r = await execAsync(SHELL_BIN, shellArgs(a.command), { ...shellExecOpts(timeoutSec), env: { ...shellEnv(), TERM: "dumb" }, cwd });
     }
     const outStr = String(r.stdout ?? "");
     const errStr = String(r.stderr ?? "");
@@ -1186,13 +1196,13 @@ async function system_info() {
         if (k && v) tools[k.trim()] = v.trim() === "yes";
       }
     } else {
-      const r = await execAsync("zsh", ["-c", 'for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'], { timeout: 5e3, maxBuffer: 65536 });
+      const r = await execAsync(SHELL_BIN, shellArgs('for t in node npm python3 pip3 git brew docker rustc go java ruby; do which $t 2>/dev/null && echo "$t=yes" || echo "$t=no"; done'), { timeout: 5e3, maxBuffer: 65536 });
       for (const l of r.stdout.trim().split("\n")) {
         const [k, v] = l.split("=");
         if (k && v) tools[k.trim()] = v.trim() === "yes";
       }
     }
-    return { success: true, output: JSON.stringify({ os: `${os.platform()} ${os.release()}`, arch: os.arch, cpu: `${os.cpus().length} 核`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: os.homedir(), tools }, null, 2) };
+    return { success: true, output: JSON.stringify({ os: (IS_ANDROID ? "Android " : "") + `${os.platform()} ${os.release()}`, isAndroid: IS_ANDROID, arch: os.arch, cpu: `${os.cpus().length} 核`, memory: `${mu}GB / ${mt}GB`, node: process.version, home: os.homedir(), tools }, null, 2) };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -1210,10 +1220,14 @@ async function process_list(a) {
       r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
         `[Console]::OutputEncoding=[Text.Encoding]::UTF8; ${ps}`],
         { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
+    } else if (IS_ANDROID) {
+      // 安卓 toybox 的 ps 不支持 aux，用 ps -A + grep（参数同样走 env 防注入）
+      const cmd = a.filter ? 'ps -A | grep -i -- "$JT_FILTER" | head -30' : "ps -A | head -40";
+      r = await execAsync(SHELL_BIN, shellArgs(cmd), { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
     } else {
       // POSIX 侧同样不拼字符串：filter 里带 " 或 $() 会被 shell 展开
       const cmd = a.filter ? 'ps aux | grep -i -- "$JT_FILTER" | head -30' : "ps aux | head -40";
-      r = await execAsync("zsh", ["-c", cmd], { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
+      r = await execAsync(SHELL_BIN, shellArgs(cmd), { timeout: 1e4, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_FILTER: String(a.filter || "") } });
     }
     return { success: true, output: r.stdout.trim() || "(无匹配)" };
   } catch (e) {
@@ -1233,6 +1247,19 @@ async function port_check(a) {
       const r = await execAsync("cmd.exe", ["/c", `netstat -ano | findstr :${port}`], { timeout: 5000, maxBuffer: 65536, encoding: "utf8" });
       const out = r.stdout.trim();
       return { success: true, output: out ? `端口 ${a.port}: 被占用\n${out}` : `端口 ${a.port} 空闲 ✅` };
+    }
+    if (IS_ANDROID) {
+      // 安卓无 lsof：toybox netstat -tlnp 列监听端口（部分设备无 -p 权限，降级仅列端口）
+      const port = Number(a.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        return { success: false, error: `端口号非法：${a.port}` };
+      }
+      let out = "";
+      try {
+        const r = await execAsync("netstat", ["-tln"], { timeout: 5e3, maxBuffer: 65536 });
+        out = (r.stdout || "").split("\n").filter(l => l.includes(":" + port + " ")).join("\n");
+      } catch { out = ""; }
+      return { success: true, output: out ? `端口 ${a.port}: 疑似被占用\n${out}` : `端口 ${a.port} 空闲 ✅` };
     }
     const r = await execAsync("lsof", ["-ti", `:${a.port}`], { timeout: 5e3 });
     const pid = r.stdout.trim();
@@ -2508,6 +2535,10 @@ async function file_stats(a) {
 
 async function clipboard_read() {
   try {
+    if (IS_ANDROID) {
+      // 安卓没有命令行剪贴板接口（剪贴板由前台应用持有，且需要 Java 层访问）
+      return { success: false, error: "安卓端不支持剪贴板读取（系统限制，剪贴板由前台应用持有）。可以直接把内容粘贴到输入框。" };
+    }
     if (IS_WIN) {
       const r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"], { timeout: 5000, maxBuffer: 1024 * 512, encoding: "utf8", env: shellEnv() });
       return { success: true, output: String(r.stdout || "").slice(0, MAX_OUT) || "(剪贴板为空)" };
@@ -4944,7 +4975,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           return json(res, { success: true, files });
         }
         const excludeDirs = ["node_modules", ".git", "dist", "build", "__pycache__", ".next", "target"].map((d) => `-path '*/${d}' -prune -o`).join(" ");
-        const r = await execAsync("zsh", ["-c", `find "$JT_DIR" ${excludeDirs} -type f -print0 | xargs -0 grep -Il "$JT_QUERY" | head -50`],
+        const r = await execAsync(SHELL_BIN, shellArgs(`find "$JT_DIR" ${excludeDirs} -type f -print0 | xargs -0 grep -Il "$JT_QUERY" | head -50`),
           { timeout: 15e3, maxBuffer: MAX_OUT, env: { ...shellEnv(), JT_DIR: target, JT_QUERY: String(query || "") } });
         const files = r.stdout.trim().split("\n").filter(Boolean);
         return json(res, { success: true, files });
@@ -4999,7 +5030,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         if (IS_WIN) {
           r = await execAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command || "Write-Output ready"], { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024, env: shellEnv() });
         } else {
-          r = await execAsync("zsh", ["-c", command || "echo ready"], { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024 });
+          r = await execAsync(SHELL_BIN, shellArgs(command || "echo ready"), { timeout: 10e3, cwd: safeCwd(cwd), maxBuffer: 512 * 1024 });
         }
         return json(res, { success: true, output: r.stdout.slice(0, MAX_OUT) + (r.stderr ? "\n[stderr]\n" + r.stderr.slice(0, MAX_OUT) : "") });
       } catch (e) { return json(res, { success: false, error: e.message, output: e.stdout || "" }); }
