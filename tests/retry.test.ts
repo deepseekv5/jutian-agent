@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  shouldRetryHttp, backoffMs, parseRetryAfter, MAX_ATTEMPTS, BACKOFF_CAP_MS, RETRY_AFTER_CAP_MS,
+  shouldRetryHttp, backoffMs, parseRetryAfter, MAX_ATTEMPTS, BACKOFF_CAP_MS, RETRY_AFTER_CAP_MS, fetchWithRetry,
 } from '../src/shared/retry'
 
 // LLM 瞬时错误重试（v13.11）：免费线路高峰 429/502/503 很常见，
@@ -60,5 +60,54 @@ describe('shouldRetryHttp', () => {
     expect(shouldRetryHttp(429, 1, '3').delayMs).toBe(3000)
     expect(shouldRetryHttp(429, 1, null).delayMs).toBe(800)
     expect(shouldRetryHttp(429, 2).delayMs).toBe(1600)
+  })
+})
+
+describe('fetchWithRetry（角色聊天与主对话共用）', () => {
+  const mkRes = (status: number, retryAfter?: string) =>
+    new Response('{}', { status, headers: retryAfter ? { 'retry-after': retryAfter } : {} })
+
+  it('成功即返回，不额外重试', async () => {
+    const orig = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return mkRes(200) }) as typeof fetch
+    try {
+      const res = await fetchWithRetry('/x', {})
+      expect(res.status).toBe(200)
+      expect(calls).toBe(1)
+    } finally { globalThis.fetch = orig }
+  })
+
+  it('429 后重试成功（Retry-After 极短）', async () => {
+    const orig = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return calls === 1 ? mkRes(429, '0.001') : mkRes(200) }) as typeof fetch
+    try {
+      const res = await fetchWithRetry('/x', {}, { maxAttempts: 3 })
+      expect(res.status).toBe(200)
+      expect(calls).toBe(2)
+    } finally { globalThis.fetch = orig }
+  })
+
+  it('不可重试状态（401）立即返回给调用方处理', async () => {
+    const orig = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return mkRes(401) }) as typeof fetch
+    try {
+      const res = await fetchWithRetry('/x', {})
+      expect(res.status).toBe(401)
+      expect(calls).toBe(1)
+    } finally { globalThis.fetch = orig }
+  })
+
+  it('重试耗尽返回最后一次响应（不抛错，沿用调用方文案）', async () => {
+    const orig = globalThis.fetch
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return mkRes(503, '0.001') }) as typeof fetch
+    try {
+      const res = await fetchWithRetry('/x', {}, { maxAttempts: 2 })
+      expect(res.status).toBe(503)
+      expect(calls).toBe(2)
+    } finally { globalThis.fetch = orig }
   })
 })

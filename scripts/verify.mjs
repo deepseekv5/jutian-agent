@@ -199,5 +199,32 @@ try {
   }
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+// ─── 7. Agent 执行质量契约 ───
+// 这些是「体感类」优化的承重结构：打点、重试、截断策略、循环防护。
+// 模块被删或接线被摘掉，功能会静默退化（无报错、只是变慢变笨），
+// 发布前用静态检查钉住。
+section('Agent 执行质量契约')
+try {
+  const retrySrc = fs.readFileSync(path.join(ROOT, 'src/shared/retry.ts'), 'utf-8')
+  if (retrySrc.includes('shouldRetryHttp') && retrySrc.includes('fetchWithRetry')) ok('重试策略模块在列(退避 + Retry-After)')
+  else bad('shared/retry.ts 缺少 shouldRetryHttp / fetchWithRetry')
+
+  const streamSrc = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/stream.ts'), 'utf-8')
+  if (streamSrc.includes('shouldRetryHttp') && streamSrc.includes('MAX_ATTEMPTS')) ok('主对话接入重试循环')
+  else bad('stream.ts 未接入重试策略 — 429/5xx 会直接失败')
+  if (streamSrc.includes('TAIL_KEEP_TOOLS')) ok('命令类输出保头+保尾(错误堆栈不丢)')
+  else bad('clampToolResult 丢失尾部保留策略')
+  if (streamSrc.includes('createAgentPerf') && streamSrc.includes('/api/perf-log')) ok('性能打点上报在列')
+  else bad('agent 性能打点未接线')
+
+  const personaSrc = fs.readFileSync(path.join(ROOT, 'src/shared/personaChat.ts'), 'utf-8')
+  if (personaSrc.includes('fetchWithRetry')) ok('角色聊天接入统一重试')
+  else bad('personaChat 未接入重试 — 角色聊天遇 429 会直接失败')
+
+  const guardSrc = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/toolLoopGuard.ts'), 'utf-8')
+  if (guardSrc.includes('HARD_REPEAT_THRESHOLD') && guardSrc.includes('CONSECUTIVE_FAIL_THRESHOLD')) ok('循环防护软硬两级 + 连续失败计数在列')
+  else bad('toolLoopGuard 阈值缺失')
+} catch (e) { bad(`读取失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)

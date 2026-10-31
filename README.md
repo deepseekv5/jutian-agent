@@ -9,7 +9,7 @@
 [English](README_EN.md) | **简体中文**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v13.3.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Version](https://img.shields.io/badge/v13.11.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Platform](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Docs](https://img.shields.io/badge/docs-12%20篇-8b5cf6?style=for-the-badge&labelColor=0a0a0b)](#docs)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
@@ -305,7 +305,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 
 ## ✦ 数据一览
 
-| **38** | **5+** | **6** | **0** |
+| **51** | **5+** | **6** | **0** |
 |:---:|:---:|:---:|:---:|
 | 内置工具 | 数字员工 | 核心界面 | 字节上云 |
 
@@ -321,6 +321,11 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 - [x] 手机远程(配对码 + 子代理 + 截图)
 - [x] LY HARNESS 插件中心
 - [x] screenshot 工具(多模态回喂)
+- [x] 安卓本地版(单 APK 内含 Node 运行时,离线可用)
+- [x] Agent 性能打点(每轮首字/工具耗时,诊断面板可查)
+- [x] 瞬时错误指数退避重试(429/5xx + Retry-After)
+- [x] 文件上下文追踪(防旧内容覆盖外部修改)
+- [x] 代码编辑器 VSCode 化(大纲/面包屑/查找替换/移动行/状态栏)
 - [ ] MCP SSE / streamable-http
 - [ ] MCP 服务级权限开关
 - [ ] 定时任务 × 集群编排
