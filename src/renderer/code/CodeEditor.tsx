@@ -14,12 +14,13 @@ import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { effectiveApiKey } from '../store/storage'
 import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers, Decoration, DecorationSet, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view'
 import { EditorState, StateField, StateEffect, Compartment, type Range } from '@codemirror/state'
-import { defaultKeymap, history, historyKeymap, undo, toggleComment, indentMore } from '@codemirror/commands'
+import { defaultKeymap, history, historyKeymap, undo, toggleComment, indentMore, moveLineUp, moveLineDown, copyLineUp, copyLineDown } from '@codemirror/commands'
 import { bracketMatching, indentOnInput, foldKeymap, foldGutter } from '@codemirror/language'
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import { lintKeymap } from '@codemirror/lint'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { editorProExtensions } from './editorPro'
+import { extractSymbols, breadcrumbAt, kindGlyph } from './outline'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { html } from '@codemirror/lang-html'
@@ -308,6 +309,8 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+  // 面包屑（v13.11）：光标所在符号链，VSCode breadcrumbs 同款
+  const [cursorLine, setCursorLine] = useState(1)
   const tabRef = useRef(tab)
   tabRef.current = tab
 
@@ -424,6 +427,11 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
       if (update.docChanged) {
         onContentChange(tab.path, update.state.doc.toString())
       }
+      // 光标移动时更新面包屑（只在行号真的变了时 setState，避免每次输入都重渲染）
+      if (update.selectionSet || update.docChanged) {
+        const ln = update.state.doc.lineAt(update.state.selection.main.head).number
+        setCursorLine(prev => (prev === ln ? prev : ln))
+      }
     })
 
     const tabKeymap = keymap.of([{
@@ -496,6 +504,13 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
         highlightSelectionMatches(),
         autocompletion(),
         ghostCompRef.current.of([]),
+        // VSCode 同款行操作（v13.11）：Alt+↑/↓ 移动行、Shift+Alt+↑/↓ 复制行
+        keymap.of([
+          { key: 'Alt-ArrowUp', run: moveLineUp, preventDefault: true },
+          { key: 'Alt-ArrowDown', run: moveLineDown, preventDefault: true },
+          { key: 'Shift-Alt-ArrowUp', run: copyLineUp, preventDefault: true },
+          { key: 'Shift-Alt-ArrowDown', run: copyLineDown, preventDefault: true },
+        ]),
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,
@@ -740,6 +755,13 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
     preventDefault: true,
   }]), [tab, onCloseTab])
 
+  // 面包屑数据：符号链随内容变化重算（文件不大，正则提取成本可忽略）
+  const breadcrumbs = useMemo(() => {
+    if (!tab) return []
+    return breadcrumbAt(extractSymbols(tab.content || '', tab.language), cursorLine)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tab 对象每渲染新建，按字段依赖
+  }, [tab?.path, tab?.content, tab?.language, cursorLine])
+
   if (!tab) {
     return (
       <div className="flex-1 flex items-center justify-center" style={{ background: c.bg }}>
@@ -751,6 +773,15 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
         </div>
       </div>
     )
+  }
+
+  const jumpToLine = (line: number) => {
+    const view = viewRef.current
+    if (!view) return
+    const target = Math.min(Math.max(1, line), view.state.doc.lines)
+    const pos = view.state.doc.line(target).from
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+    view.focus()
   }
 
   return (
@@ -863,6 +894,24 @@ const ghostCompRef = useRef<Compartment>(new Compartment())
           </div>
         )}
       </div>
+
+      {/* 面包屑导航（v13.11）：文件 → 外层符号 → 内层符号，点击可跳转 */}
+      {tab && breadcrumbs.length > 0 && (
+        <div className="h-6 shrink-0 flex items-center gap-0.5 px-3 overflow-x-auto text-[10.5px] border-b"
+          style={{ background: c.bgCard, borderColor: c.borderLight, color: c.textTertiary }}>
+          {breadcrumbs.map((sym, i) => (
+            <span key={sym.line + '-' + sym.name} className="flex items-center gap-0.5 shrink-0">
+              {i > 0 && <span style={{ opacity: 0.45 }}>›</span>}
+              <button onClick={() => jumpToLine(sym.line)}
+                className="px-1 rounded hover:underline"
+                style={{ color: i === breadcrumbs.length - 1 ? c.text : c.textTertiary }}>
+                <span style={{ opacity: 0.7, marginRight: 2 }}>{kindGlyph(sym.kind)}</span>
+                {sym.name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* CodeMirror Container */}
       <div className="flex-1 relative" style={{ background: c.bg }}>

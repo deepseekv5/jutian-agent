@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractSymbols, kindLabel, kindGlyph } from '../src/renderer/code/outline'
+import { extractSymbols, kindLabel, kindGlyph, breadcrumbAt } from '../src/renderer/code/outline'
 
 // 代码大纲提取：正则实现覆盖主流语言高频符号。
 // 错判会把注释当符号（噪声），漏判则大纲空着没用。
@@ -103,5 +103,45 @@ describe('kindLabel / kindGlyph', () => {
     expect(kindLabel('function', 'en')).toBe('fn')
     expect(kindGlyph('class')).toBe('C')
     expect(kindGlyph('interface')).toBe('I')
+  })
+})
+
+describe('面包屑（v13.11）', () => {
+  const code = [
+    'class Foo {',            // 1 depth 0
+    '  bar() {',              // 2 depth 1
+    '    return 1',           // 3
+    '  }',
+    '  baz() {',              // 5 depth 1
+    '    return 2',           // 6
+    '  }',
+    '}',
+    'function top() {',       // 9 depth 0
+    '  return 3',             // 10
+    '}',
+  ].join('\n')
+
+  it('光标在方法体内 → [类, 方法]', () => {
+    const syms = extractSymbols(code, 'typescript')
+    const chain = breadcrumbAt(syms, 3)
+    expect(chain.map(c => c.name)).toEqual(['Foo', 'bar'])
+  })
+  it('闭括号行仍归属上一个符号（正则提取无 AST 结束行，已知边界）', () => {
+    const syms = extractSymbols(code, 'typescript')
+    // 第 4 行是 bar 的闭括号：按「起始行」推断仍算在 bar 内。
+    // 精确结束行需要 AST，正则方案不做这个推断——宁可多显示一级也不误删。
+    expect(breadcrumbAt(syms, 4).map(c => c.name)).toEqual(['Foo', 'bar'])
+  })
+  it('切到下一个方法 → 同级替换而非嵌套', () => {
+    const syms = extractSymbols(code, 'typescript')
+    expect(breadcrumbAt(syms, 6).map(c => c.name)).toEqual(['Foo', 'baz'])
+  })
+  it('光标在文件顶层 → 空链', () => {
+    const syms = extractSymbols(code, 'typescript')
+    expect(breadcrumbAt(syms, 0)).toEqual([])
+  })
+  it('顶层函数内部 → 只有函数（类已出栈）', () => {
+    const syms = extractSymbols(code, 'typescript')
+    expect(breadcrumbAt(syms, 10).map(c => c.name)).toEqual(['top'])
   })
 })

@@ -25,6 +25,7 @@ import {
 import { buildHttpErrorMessage } from './httpErrors'
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
 import { createAgentPerf } from './agentPerf'
+import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from './retry'
 import type { PerfReport } from './agentPerf'
 
 export interface StreamCallbacks {
@@ -264,24 +265,51 @@ export async function streamChat(
         ...(Number(settings.contextWindow) >= 8000 ? { max_tokens: 16384 } : { max_tokens: 8192 }),
       })
 
-      let res: Response
-      try {
-        callbacks.onNetStatus?.('connecting')
-        perf.llmRequestStart()
-        res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
-      } catch (e) {
-        // 免费档上游偶发重置连接 → 自动重试一次（仅网络错误，非业务错误）
-        if (signal?.aborted) throw e
-        callbacks.onNetStatus?.('retrying', { attempt: 2 })
-        await new Promise(r => setTimeout(r, 600))
-        res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
-      }
+      // 重试循环（v13.11）：网络异常与 429/5xx 都按指数退避重试，
+      // 判据与等待时长见 engine/retry（纯函数，有测试）。
+      // 只在「响应头到手、还没开始读流」时重试——流开始后不重发，避免重复输出。
+      const sleepAbortable = (ms: number) => new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms)
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timer)
+          reject(new DOMException('Aborted', 'AbortError'))
+        }, { once: true })
+      })
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        // 状态码 → 可操作中文提示（映射表在 httpErrors，含 402/403/5xx 等）
-        throw new Error(buildHttpErrorMessage(res.status, errText))
+      let res: Response | null = null
+      let lastErr: Error | null = null
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        callbacks.onNetStatus?.(attempt === 1 ? 'connecting' : 'retrying', attempt > 1 ? { attempt } : undefined)
+        // 每次尝试重置计时：首字延迟反映成功那次请求的真实等待
+        perf.llmRequestStart()
+
+        let netErr: Error | null = null
+        try {
+          res = await fetch(url, { method: 'POST', headers, body: makeBody(), signal })
+        } catch (e) {
+          if (signal?.aborted) throw e
+          netErr = e instanceof Error ? e : new Error(String(e))
+        }
+
+        if (netErr) {
+          lastErr = netErr
+          if (attempt >= MAX_ATTEMPTS) throw netErr
+          await sleepAbortable(backoffMs(attempt))
+          continue
+        }
+
+        if (res && res.ok) break
+
+        // 业务层错误：先判断是否值得重试（限流/上游过载），否则立即给出可操作提示
+        const errText = await res!.text().catch(() => '')
+        const msg = buildHttpErrorMessage(res!.status, errText)
+        const decision = shouldRetryHttp(res!.status, attempt, res!.headers.get('retry-after'))
+        if (!decision.retry) throw new Error(msg)
+        lastErr = new Error(msg)
+        res = null
+        await sleepAbortable(decision.delayMs)
       }
+      if (!res) throw lastErr ?? new Error('请求失败：未知原因')
 
       if (!res.body) throw new Error('No response body')
 

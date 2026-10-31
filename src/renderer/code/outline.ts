@@ -128,3 +128,18 @@ export function extractSymbols(code: string, language: string): CodeSymbol[] {
   }
   return out.slice(0, 500)
 }
+
+/**
+ * 面包屑（v13.11）：光标所在行的符号链。
+ * 按行号顺序压栈、遇到同级或更浅的符号就出栈，得到「最内层包裹」的祖先链。
+ * 例如光标在某个方法体内 → [类, 方法]；在文件顶层 → []。
+ */
+export function breadcrumbAt(symbols: CodeSymbol[], cursorLine: number): CodeSymbol[] {
+  const chain: CodeSymbol[] = []
+  for (const sym of symbols) {
+    if (sym.line > cursorLine) break
+    while (chain.length > 0 && chain[chain.length - 1].depth >= sym.depth) chain.pop()
+    chain.push(sym)
+  }
+  return chain
+}
