@@ -785,6 +785,28 @@ function noteFileRead(p: string): boolean {
     return prev != null && Math.abs(mt - prev) <= 1;
   } catch { return false }
 }
+// 会话内工具结果缓存（v13.10.1）：mtime 守卫——文件/目录未变才命中，
+// 写入路径(write_file/edit_file)主动失效。只缓存确定性检索（读文件/列目录）。
+const TOOL_CACHE = new Map<string, { mtimeMs: number; out: string }>();
+function toolCacheGet(key: string, mtimeMs: number): string | null {
+  const hit = TOOL_CACHE.get(key);
+  if (!hit || hit.mtimeMs !== mtimeMs) return null;
+  TOOL_CACHE.delete(key);
+  TOOL_CACHE.set(key, hit);
+  return hit.out;
+}
+function toolCacheSet(key: string, mtimeMs: number, out: string) {
+  TOOL_CACHE.set(key, { mtimeMs, out });
+  if (TOOL_CACHE.size > 50) {
+    const oldest = TOOL_CACHE.keys().next().value;
+    if (oldest != null) TOOL_CACHE.delete(oldest);
+  }
+}
+function toolCacheInvalidate(p: string) {
+  const prefixes = ['read_file::' + p + '::', 'list_dir::' + p];
+  for (const k of [...TOOL_CACHE.keys()]) if (prefixes.some((pf) => k.startsWith(pf))) TOOL_CACHE.delete(k);
+}
+
 function staleReadWarning(p: string): string | null {
   const recorded = FILE_CONTEXT.get(p);
   if (recorded == null) return null;
@@ -857,6 +879,12 @@ async function read_file(a) {
           + (lines ? `\n（文件首 64KB 约 ${lines} 行）` : ""),
       };
     }
+    const __ck = 'read_file::' + p + '::' + JSON.stringify([a.offset || null, a.limit || null]);
+    const __cached = toolCacheGet(__ck, st.mtimeMs);
+    if (__cached != null) {
+      noteFileRead(p);
+      return { success: true, output: __cached, note: '（缓存命中：文件未变化）' };
+    }
     let c = await fsp.readFile(p, "utf-8");
     const unchanged = noteFileRead(p);
     if (a.offset || a.limit) {
@@ -865,7 +893,9 @@ async function read_file(a) {
     }
     const repeatNote = unchanged ? "
 （提示：文件自上次读取后未变化，以上内容已在对话上下文中，无需重复读取。）" : "";
-    return { success: true, output: c.slice(0, MAX_OUT) + repeatNote };
+    const __out = c.slice(0, MAX_OUT) + repeatNote;
+    toolCacheSet(__ck, st.mtimeMs, __out);
+    return { success: true, output: __out };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -922,6 +952,7 @@ async function write_file(a) {
     try { __old = await fsp.readFile(p, "utf-8"); existed = true; } catch {}
     await writeFileAtomic(p, a.content);
     FILE_CONTEXT.delete(p);
+    toolCacheInvalidate(p);
     const __chg = recordChange(p, __old, String(a.content || ""));
     // 覆盖提醒：不清空、不阻断（模型常常就是要改文件），只把风险说清楚，
     // 让它有机会在回复里说明改了什么
@@ -952,6 +983,7 @@ async function edit_file(a) {
           const done = a.replaceAll ? norm.split(oldLF).join(newLF) : norm.replace(oldLF, newLF);
           await writeFileAtomic(p, done);
           FILE_CONTEXT.delete(p);
+    toolCacheInvalidate(p);
           const __chgCRLF = recordChange(p, c, done);
           return { success: true, output: `✅ 已编辑: ${p}（文件为 CRLF 行尾，已统一为 LF 后完成编辑）`, changeId: __chgCRLF };
         }
@@ -971,6 +1003,7 @@ async function edit_file(a) {
       : c.replace(a.oldText, a.newText);
     await writeFileAtomic(p, c);
     FILE_CONTEXT.delete(p);
+    toolCacheInvalidate(p);
     const __chg2 = recordChange(p, __oldFull, c);
     return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}`, changeId: __chg2 };
   } catch (e) {
@@ -981,8 +1014,25 @@ async function list_dir(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
-    let e = await fsp.readdir(p, { withFileTypes: true });
-    if (!a.showHidden) e = e.filter((x) => !x.name.startsWith("."));
+    const __dck = 'list_dir::' + p + '::' + String(!!a.showHidden);
+    try {
+      const __dm = (await fsp.stat(p)).mtimeMs;
+      const __dc = toolCacheGet(__dck, __dm);
+      if (__dc != null) return { success: true, output: __dc, note: '（缓存命中：目录未变化）' };
+      let e = await fsp.readdir(p, { withFileTypes: true });
+      if (!a.showHidden) e = e.filter((x) => !x.name.startsWith("."));
+      const l = e.map((x) => `${x.isDirectory() ? "[目录]" : "[文件]"} ${x.name}${x.isDirectory() ? "/" : ""}`);
+      const __dout = l.join("\n") + `
+${l.length} 项`;
+      toolCacheSet(__dck, __dm, __dout);
+      return { success: true, output: __dout };
+    } catch {
+      let e = await fsp.readdir(p, { withFileTypes: true });
+      if (!a.showHidden) e = e.filter((x) => !x.name.startsWith("."));
+      const l = e.map((x) => `${x.isDirectory() ? "[目录]" : "[文件]"} ${x.name}${x.isDirectory() ? "/" : ""}`);
+      return { success: true, output: l.join("\n") + `
+${l.length} 项` };
+    }
     const l = e.map((x) => `${x.isDirectory() ? "[目录]" : "[文件]"} ${x.name}${x.isDirectory() ? "/" : ""}`);
     return { success: true, output: l.join("\n") + `
 ${l.length} \u9879` };
