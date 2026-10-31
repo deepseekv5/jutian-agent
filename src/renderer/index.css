@@ -967,3 +967,32 @@ body {
 .jt-d1 { animation-delay: .12s }
 .jt-d2 { animation-delay: .24s }
 .jt-d3 { animation-delay: .36s }
+
+/* ══════════════════════════════════════════════════════════════
+   强调色全局渗透（v13.8.9）：种子色改一处，全界面跟着变。
+   变量由 useTheme 注入（--accent / --accent-soft / --accent-bg ...），
+   消费点从各自的硬编码色改为 var()，覆盖此前"改了种子色只有发送键变"的问题。
+   ══════════════════════════════════════════════════════════════ */
+
+/* 文本选中：强调色软底 */
+::selection { background: var(--accent-soft, rgba(16,163,127,.2)); }
+
+/* 输入光标 */
+textarea, input { caret-color: var(--accent); }
+
+/* 滚动条滑块 hover：强调色 */
+::-webkit-scrollbar-thumb:hover { background: var(--accent-soft2, rgba(127,127,127,.4)); }
+
+/* 焦点环：键盘导航时用强调色 */
+:focus-visible { outline: 2px solid var(--accent-soft2, rgba(16,163,127,.5)); outline-offset: 1px; }
+
+/* 输入框聚焦边框：textarea/输入框聚焦描一圈强调色细边 */
+textarea:focus, input[type=text]:focus, input[type=search]:focus {
+  border-color: var(--accent-soft2, var(--accent-border)) !important;
+}
+
+/* Markdown 链接：正文里的链接用强调色 */
+.markdown-body a, .cm-content a { color: var(--accent); }
+
+/* 原生复选框/单选/滑块 */
+input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(--accent); }

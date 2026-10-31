@@ -220,7 +220,27 @@ export async function streamChat(
         })),
         tool_choice: 'auto',
         stream: true,
+        // 显式给足：部分网关默认值很小，推理模型的思考也计入 max_tokens，
+        // 小默认值会导致"思考耗尽配额 → content 为空 → 空转重试"
+        ...(Number(settings.contextWindow) >= 8000 ? { max_tokens: 16384 } : { max_tokens: 8192 }),
       })
+
+      // 历史瘦身（v13.9）：把"除最近一轮外"的旧工具大结果（>2K 字符）压缩为
+      // 固定摘要。多轮任务里 40K 级结果会逐轮累积重发，每轮 token 越滚越大，
+      // 首字延迟与费用同步上涨。压缩一次后文本不再变化，前缀缓存仍然命中。
+      let archIdx = -1
+      for (let mi = messages.length - 1; mi >= 0; mi--) {
+        const mm = messages[mi]
+        if (mm && mm.role === 'assistant' && Array.isArray(mm.tool_calls) && mm.tool_calls.length) { archIdx = mi; break }
+      }
+      if (archIdx > 0) {
+        for (let mi = 0; mi < archIdx; mi++) {
+          const m = messages[mi]
+          if (m.role === 'tool' && typeof m.content === 'string' && m.content.length > 2000) {
+            messages[mi] = { ...m, content: m.content.slice(0, 600) + '\n…[历史输出已归档，原始 ' + m.content.length + ' 字符。需要完整内容可重新调用工具或让用户导出。]' }
+          }
+        }
+      }
 
       let res: Response
       try {

@@ -269,8 +269,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     const preset = ACCENT_PRESETS[accentKey]
     if (!preset || accentKey === 'graphite') return cRaw
-    return { ...cRaw, accent: theme === 'dark' ? preset.dark : preset.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }
+    const base = { ...cRaw, accent: theme === 'dark' ? preset.dark : preset.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }
+    // 种子色渗透（v13.8.9）：激活态底色带强调色调（选中会话/激活面板等高频视觉点）
+    const hex = base.accent.replace('#', '')
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16)
+    const soft = theme === 'dark' ? `rgba(${r},${g},${b},0.2)` : `rgba(${r},${g},${b},0.13)`
+    return { ...base, sidebarActiveBg: soft, bgActive: soft, surfaceActive: soft }
   }, [cRaw, accentKey, theme])
+
+  // 强调色全局渗透（v13.8.9）：种子色变化即同步 CSS 变量，
+  // 全局消费点（选中文字/光标/滚动条/焦点环/开关等）用 var() 取色
+  useEffect(() => {
+    try {
+      const root = document.documentElement
+      root.style.setProperty('--accent', c.accent)
+      root.style.setProperty('--accent-bg', c.accentBg)
+      root.style.setProperty('--accent-border', c.accentBorder)
+      root.style.setProperty('--accent-text', c.accentText)
+      // 透明度派生：选中文字背景 / 焦点环
+      const hex = c.accent.replace('#', '')
+      const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16)
+      root.style.setProperty('--accent-soft', `rgba(${r},${g},${b},0.16)`)
+      root.style.setProperty('--accent-soft2', `rgba(${r},${g},${b},0.32)`)
+    } catch { /* 测试环境无 document */ }
+  }, [c.accent, c.accentBg, c.accentBorder, c.accentText])
 
   useEffect(() => {
     const s = getSettingsSync()
