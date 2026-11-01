@@ -241,7 +241,7 @@
     "esbuild": "^0.21.5",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
-    "globals": "^15.14.0",
+    "globals": "^17.13.0",
     "immer": "^11.1.21",
     "katex": "^0.19.1",
     "mermaid": "^12.2.0",
