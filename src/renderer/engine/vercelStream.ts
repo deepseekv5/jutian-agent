@@ -23,6 +23,7 @@ import { executeTool } from './tools'
 import type { StreamCallbacks } from './stream'
 import { checkRepeatCall, callSignature } from '../../shared/toolLoopGuard'
 import { filterTools, repairToolCallJson, stepToolFilter } from '../../shared/toolFilter'
+import { truncateForBudget, microcompact, totalTokens } from '../../shared/contextBudget'
 
 /** 单次请求的最大工具轮次（SDK 的 stepCountIs 语义：一轮 = 一次模型调用 + 其工具执行） */
 const MAX_STEPS = 12
@@ -116,8 +117,21 @@ export async function streamChatVercel(
     fetch: proxyFetch as typeof fetch,
   })
 
+  // 上下文预算（v15.1）：超限时先清老工具结果，再按 token 裁剪
+  const budget = Math.floor((Number(settings.contextWindow) || 0) * 0.8) || 0
+  let sendMessages = messages as unknown as { role: string; content?: unknown; tool_calls?: unknown; tool_call_id?: string }[]
+  if (budget > 0) {
+    if (totalTokens(sendMessages) > budget * 0.8) {
+      const mc = microcompact(sendMessages)
+      if (mc.cleared > 0) sendMessages = mc.messages
+    }
+    if (totalTokens(sendMessages) > budget) {
+      sendMessages = truncateForBudget(sendMessages, budget).messages
+    }
+  }
+
   // system 消息 → instructions（AI SDK v7 强制要求，不能混进 messages）
-  const systemText = messages.filter((m) => m.role === 'system')
+  const systemText = (sendMessages as unknown as OpenAIMsg[]).filter((m) => m.role === 'system')
     .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')))
     .join('\n\n')
 
@@ -197,10 +211,22 @@ export async function streamChatVercel(
     const result = (streamText as any)({
       model: provider(settings.model),
       ...(systemText ? { instructions: systemText } : {}),
-      messages: toModelMessages(messages) as never,
+      messages: toModelMessages(sendMessages as unknown as OpenAIMsg[]) as never,
       tools: tools as never,
       stopWhen: stepCountIs(MAX_STEPS),
+      // 重试（v15.1）：网络抖动/429/5xx 由 SDK 自动退避重试，不再自己写重试循环
+      maxRetries: 3,
+      // 流中断重试：上游在流式过程中断开时重连
+      streamRetries: 2,
+      // 工具调用修复：模型产出坏 JSON 时先尝试修，修不好才报错
+      repairToolCall: ({ toolCall }: { toolCall: { toolName: string; input: string } }) => {
+        const fixed = repairToolCallJson(toolCall.input)
+        if (!fixed) return null
+        return { ...toolCall, input: JSON.stringify(fixed) }
+      },
       // 智能步骤控制（v15.1）：第一步只给只读工具，防止模型没读文件就直接写
+      // 并发控制：只读工具可以并行（快），写工具必须串行（安全）
+      toolCallConcurrency: 4,
       prepareStep: ({ stepNumber }: { stepNumber: number }) => {
         const readonly = stepToolFilter(stepNumber)
         if (!readonly) return {}
