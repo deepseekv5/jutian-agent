@@ -221,7 +221,7 @@ try {
   if (personaSrc.includes('fetchWithRetry')) ok('角色聊天接入统一重试')
   else bad('personaChat 未接入重试 — 角色聊天遇 429 会直接失败')
 
-  const guardSrc = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/toolLoopGuard.ts'), 'utf-8')
+  const guardSrc = fs.readFileSync(path.join(ROOT, 'src/shared/toolLoopGuard.ts'), 'utf-8')
   if (guardSrc.includes('HARD_REPEAT_THRESHOLD') && guardSrc.includes('CONSECUTIVE_FAIL_THRESHOLD')) ok('循环防护软硬两级 + 连续失败计数在列')
   else bad('toolLoopGuard 阈值缺失')
 } catch (e) { bad(`读取失败: ${e.message}`) }
@@ -250,6 +250,15 @@ try {
   else bad('定时任务 agent 模式未接线')
   if (serveSrc.includes('scheduled-tasks') && serveSrc.includes('isRun')) ok('任务立即执行端点已接')
   else bad('任务立即执行端点缺失')
+
+  const loopSrc = fs.readFileSync(path.join(ROOT, 'src/shared/agentLoop.ts'), 'utf-8')
+  if (loopSrc.includes('runAgentLoop') && loopSrc.includes('NeedsClientError')) ok('Agent 主循环在 shared（服务端/渲染层共用）')
+  else bad('shared/agentLoop.ts 缺失或结构被改')
+  if (serveSrc.includes('/api/agent/run') && serveSrc.includes('AGENT_LOOP')) ok('服务端 agent 端点已接')
+  else bad('服务端 agent 端点未接 — 内核迁移失效')
+  const srvStream = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/serverStream.ts'), 'utf-8')
+  if (srvStream.includes('streamChatViaServer') && srvStream.includes('needs_client')) ok('渲染层服务端循环客户端在列')
+  else bad('serverStream 客户端缺失')
 
   const exportSrc = fs.readFileSync(path.join(ROOT, 'src/shared/exportHtml.ts'), 'utf-8')
   if (exportSrc.includes('markdownToHtml') && exportSrc.includes('@media print')) ok('HTML/PDF 导出模块在列')
