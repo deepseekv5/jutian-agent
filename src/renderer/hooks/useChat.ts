@@ -851,6 +851,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         saveThinkMs()
         toolPreLen[toolCall.id] = fullContent.length
         toolThinkLen[toolCall.id] = fullThinking.length
+        // preLen/thinkLen 必须在流式卡片上就带上（v14.2.2 修复）：
+        // 此前只在 onToolEnd 的 allToolCalls 里带，流式期间 hasThink=false，
+        // 时间线不切分 → 第二轮思考全部粘进顶部思考卡，看起来「没有填入新的思考」
+        const marks = { preLen: toolPreLen[toolCall.id] ?? 0, thinkLen: toolThinkLen[toolCall.id] ?? 0 }
         setMessages(prev => prev.map(m => {
           if (m.id !== assistantMsg.id) return m
           const list = m.tool_calls || []
@@ -858,10 +862,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           // 流式 pending 卡已占位 → 就地转 running；否则新增
           if (i >= 0) {
             const next = [...list]
-            next[i] = { ...next[i], ...toolCall, status: 'running' as const }
+            next[i] = { ...next[i], ...toolCall, status: 'running' as const, ...marks }
             return { ...m, tool_calls: next }
           }
-          return { ...m, tool_calls: [...list, { ...toolCall, status: 'running' as const }] }
+          return { ...m, tool_calls: [...list, { ...toolCall, status: 'running' as const, ...marks }] }
         }))
         
         // 如果 AI 调用了 load_skill，动态加载该 skill 的工具
