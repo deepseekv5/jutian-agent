@@ -9,6 +9,7 @@ import StatusBar from './StatusBar';
 import MobileTabBar from './MobileTabBar';
 import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
+import { useAndroid } from '../hooks/useAndroid';
 import BackgroundLayer from './BackgroundLayer';
 import CommandPalette from './CommandPalette';
 import PermissionPrompt from './PermissionPrompt';
@@ -113,6 +114,7 @@ function MainApp() {
   const [pendingScreenshot, setPendingScreenshot] = useState<string | null>(null);
   // 多端适配（v13.5）：手机侧栏改为抽屉；键盘弹出时把输入区顶上来
   const vp = useViewport();
+  const isAndroid = useAndroid();
   const kbInset = useKeyboardInset();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const drawerTouchX = useRef(0);
@@ -600,6 +602,16 @@ function MainApp() {
         />
         {/* 应用公告横幅（v11.7）：进应用自动读取 GitHub docs/notice.md；关同条不再打扰 */}
         <AnnouncementBanner />
+        {isAndroid && (
+          <div className="px-4 py-3 text-center" style={{ background: '#7f1d1d', color: '#fecaca' }}>
+            <div style={{ font: '700 15px/1.4 -apple-system,sans-serif', color: '#fca5a5' }}>
+              安卓版仍在开发中
+            </div>
+            <div style={{ font: '400 12px/1.5 -apple-system,sans-serif', color: '#fecaca99', marginTop: 4 }}>
+              语音、部分工具、快捷键等功能尚不可用。建议优先使用桌面端。
+            </div>
+          </div>
+        )}
         {tabs.map(tab => {
           const isActive = tab.id === activeTab?.id;
           // 从未激活过的标签不挂载：其懒加载 chunk 不会下载，首屏只加载对话核心
