@@ -360,6 +360,94 @@ function shouldInjectHermes(model, apiBase, mode) {
   return /(:free|[-_.]free($|[-_/])|gpt-oss|hermes|pollinations|kilo\.)/i.test(id + " " + base);
 }
 
+// src/shared/contextBudget.ts
+function estimateTokens(text) {
+  if (!text) return 0;
+  let cjk = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    if (code >= 12288 && code <= 40959 || code >= 65280 && code <= 65519) cjk++;
+  }
+  const other = text.length - cjk;
+  return Math.ceil(cjk + other / 4);
+}
+function messageTokens(m) {
+  const c = typeof m.content === "string" ? m.content : m.content == null ? "" : JSON.stringify(m.content);
+  let n = estimateTokens(c);
+  if (m.tool_calls) n += estimateTokens(JSON.stringify(m.tool_calls));
+  return n;
+}
+function totalTokens(messages) {
+  let n = 0;
+  for (const m of messages) n += messageTokens(m);
+  return n;
+}
+var MICROCOMPACT_KEEP_RECENT = 6;
+var CLEARED_PLACEHOLDER = "[\u65E7\u5DE5\u5177\u7ED3\u679C\u5DF2\u6E05\u7A7A\u4EE5\u91CA\u653E\u4E0A\u4E0B\u6587\u3002\u5173\u952E\u4FE1\u606F\u5E94\u5DF2\u4F53\u73B0\u5728\u540E\u7EED\u56DE\u590D\u91CC\uFF1B\u9700\u8981\u65F6\u91CD\u65B0\u8C03\u7528\u8BE5\u5DE5\u5177\u5373\u53EF\u3002]";
+function microcompact(messages, opts = {}) {
+  const keep = Math.max(1, opts.keepRecent ?? MICROCOMPACT_KEEP_RECENT);
+  const minChars = opts.minChars ?? 800;
+  const toolIdx = [];
+  for (let i = 0; i < messages.length; i++) if (messages[i].role === "tool") toolIdx.push(i);
+  if (toolIdx.length <= keep) return { messages, cleared: 0 };
+  const protectedFrom = toolIdx[toolIdx.length - keep];
+  let cleared = 0;
+  const out = messages.map((m, i) => {
+    if (i >= protectedFrom || m.role !== "tool") return m;
+    const text = typeof m.content === "string" ? m.content : "";
+    if (text.length < minChars) return m;
+    if (text === CLEARED_PLACEHOLDER) return m;
+    cleared++;
+    return { ...m, content: CLEARED_PLACEHOLDER };
+  });
+  return cleared > 0 ? { messages: out, cleared } : { messages, cleared: 0 };
+}
+function truncateForBudget(messages, budgetTokens) {
+  if (!budgetTokens || budgetTokens <= 0) return { messages, dropped: 0, tokens: totalTokens(messages) };
+  if (totalTokens(messages) <= budgetTokens) {
+    return { messages, dropped: 0, tokens: totalTokens(messages) };
+  }
+  const systemCount = messages.findIndex((m) => m.role !== "system");
+  const sysEnd = systemCount === -1 ? messages.length : systemCount;
+  const system = messages.slice(0, sysEnd);
+  const rest = messages.slice(sysEnd);
+  let used = system.reduce((a, m) => a + messageTokens(m), 0);
+  let cut = rest.length;
+  for (let i = rest.length - 1; i >= 0; i--) {
+    const t = messageTokens(rest[i]);
+    if (used + t > budgetTokens && rest.length - i >= 4) {
+      cut = i + 1;
+      break;
+    }
+    used += t;
+  }
+  while (cut < rest.length && rest[cut].role === "tool") {
+    const prev = cut > 0 ? rest[cut - 1] : null;
+    if (prev && prev.role === "assistant" && prev.tool_calls) {
+      cut--;
+      continue;
+    }
+    cut++;
+  }
+  while (cut < rest.length) {
+    const m = rest[cut];
+    if (m.role === "assistant" && m.tool_calls) {
+      const ids = m.tool_calls.map((tc) => tc.id).filter(Boolean);
+      const next = rest[cut + 1];
+      if (next && next.role === "tool" && ids.includes(String(next.tool_call_id || ""))) break;
+      cut++;
+      continue;
+    }
+    break;
+  }
+  const kept = [...system, ...rest.slice(cut)];
+  return { messages: kept, dropped: cut, tokens: totalTokens(kept) };
+}
+var CONTEXT_OVERFLOW_PATTERN = /context length|prompt is too long|too many tokens|maximum context|context_length_exceeded|request too large|exceed[s]? the (maximum )?context|context window|输入过长|上下文超长/i;
+function isContextOverflowError(message) {
+  return CONTEXT_OVERFLOW_PATTERN.test(String(message || ""));
+}
+
 // src/shared/agentLoop.ts
 var NeedsClientError = class extends Error {
   kind;
@@ -427,6 +515,8 @@ async function runAgentLoop(messages, deps) {
   const perf = createAgentPerf();
   perf.setModel(deps.model);
   let toolRound = 0;
+  let wrapUp = false;
+  let overflowRetried = false;
   const callSignatures = /* @__PURE__ */ new Map();
   const toolUseCounts = /* @__PURE__ */ new Map();
   const failCounter = { n: 0 };
@@ -490,8 +580,12 @@ async function runAgentLoop(messages, deps) {
     perf.roundStart(toolRound);
     const roundCheck = checkRoundLimit(toolRound);
     if (roundCheck.exceeded) {
-      events.onPerf?.(perf.finish());
-      return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "round-limit", error: roundCheck.message };
+      if (!wrapUp) {
+        wrapUp = true;
+      } else {
+        events.onPerf?.(perf.finish());
+        return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "round-limit", error: roundCheck.message };
+      }
     }
     const disabled = new Set(deps.disabledTools || []);
     const tools = deps.tools.filter((t) => !disabled.has(t.name));
@@ -508,14 +602,32 @@ async function runAgentLoop(messages, deps) {
       }
       return copy;
     })();
+    const budget = deps.contextBudget || Math.floor((Number(deps.contextWindow) || 0) * 0.8) || 0;
+    let sendMessages = wireMessages;
+    if (budget > 0) {
+      const used = totalTokens(sendMessages);
+      if (used > budget * 0.8 && deps.microcompact !== false) {
+        const mc = microcompact(sendMessages);
+        if (mc.cleared > 0) sendMessages = mc.messages;
+      }
+      if (totalTokens(sendMessages) > budget) {
+        sendMessages = truncateForBudget(sendMessages, budget).messages;
+      }
+    }
+    if (wrapUp) {
+      sendMessages = [...sendMessages, {
+        role: "user",
+        content: "\u3010\u7CFB\u7EDF\u3011\u5DE5\u5177\u8C03\u7528\u8F6E\u6B21\u5DF2\u7528\u5C3D\u3002\u8BF7\u7ACB\u523B\u57FA\u4E8E\u5DF2\u6709\u4FE1\u606F\u7528\u6587\u5B57\u7ED9\u51FA\u6700\u7EC8\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u4EFB\u4F55\u5DE5\u5177\u3002"
+      }];
+    }
     const makeBody = () => JSON.stringify({
       model: deps.model,
-      messages: wireMessages,
-      tools: tools.map((t) => ({
+      messages: sendMessages,
+      tools: wrapUp ? [] : tools.map((t) => ({
         type: "function",
         function: { name: t.name, description: t.description, parameters: t.parameters }
       })),
-      tool_choice: "auto",
+      tool_choice: wrapUp ? "none" : "auto",
       stream: true,
       max_tokens: maxTokens
     });
@@ -539,6 +651,14 @@ async function runAgentLoop(messages, deps) {
       }
       if (res && res.ok) break;
       const errText = await res.text().catch(() => "");
+      if (isContextOverflowError(errText) && !overflowRetried) {
+        overflowRetried = true;
+        const cur = budget || totalTokens(sendMessages);
+        const tighter = Math.max(2e3, Math.floor(cur * 0.5));
+        sendMessages = truncateForBudget(sendMessages, tighter).messages;
+        attempt--;
+        continue;
+      }
       const msg = buildUpstreamError(res.status, errText);
       const decision = shouldRetryHttp(res.status, attempt, res.headers.get("retry-after"));
       if (!decision.retry) throw new Error(msg);

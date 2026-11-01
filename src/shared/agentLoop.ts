@@ -27,6 +27,7 @@ import {
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
 import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from './retry'
 import { buildToolsBlock, parseHermesToolCalls, stripToolCallBlocks, shouldInjectHermes } from './hermesTools'
+import { truncateForBudget, microcompact, totalTokens, isContextOverflowError, type BudgetMessage } from './contextBudget'
 
 /* ─── 对外类型 ─── */
 
@@ -124,6 +125,10 @@ export interface AgentLoopDeps {
   apiBase: string
   /** 上下文窗口（决定 max_tokens） */
   contextWindow?: number
+  /** 输入 token 预算（缺省按 contextWindow 的 80% 估算）；超出时裁剪历史 */
+  contextBudget?: number
+  /** 是否启用老工具结果清空（默认开） */
+  microcompact?: boolean
   /** Hermes 注入模式：auto / on / off */
   hermesMode?: string
   /** 已关闭的工具名（插件开关） */
@@ -192,6 +197,8 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
   perf.setModel(deps.model)
 
   let toolRound = 0
+  let wrapUp = false
+  let overflowRetried = false
   const callSignatures = new Map<string, number>()
   const toolUseCounts = new Map<string, number>()
   const failCounter = { n: 0 }
@@ -250,8 +257,13 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
     perf.roundStart(toolRound)
     const roundCheck = checkRoundLimit(toolRound)
     if (roundCheck.exceeded) {
-      events.onPerf?.(perf.finish())
-      return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'round-limit', error: roundCheck.message }
+      // 硬停会丢掉整个 run 的成果。改为：禁用工具再问一轮，让它把已有信息
+      // 总结成最终答复；收尾提示**只进本次请求**，不写回 messages——
+      // 落库的幽灵指令会污染后续所有轮次（模型会一直以为「用户要求别调工具」）。
+      if (!wrapUp) { wrapUp = true } else {
+        events.onPerf?.(perf.finish())
+        return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'round-limit', error: roundCheck.message }
+      }
     }
 
     const disabled = new Set(deps.disabledTools || [])
@@ -272,14 +284,36 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
       return copy
     })()
 
+    // 上下文预算（v14.5）：超预算先清老工具结果，再按 token 裁剪，
+    // 切点会修复成合法历史（不以 tool 开头、不留悬空 tool_calls）
+    const budget = deps.contextBudget || Math.floor((Number(deps.contextWindow) || 0) * 0.8) || 0
+    let sendMessages = wireMessages as BudgetMessage[]
+    if (budget > 0) {
+      const used = totalTokens(sendMessages)
+      if (used > budget * 0.8 && deps.microcompact !== false) {
+        const mc = microcompact(sendMessages)
+        if (mc.cleared > 0) sendMessages = mc.messages
+      }
+      if (totalTokens(sendMessages) > budget) {
+        sendMessages = truncateForBudget(sendMessages, budget).messages
+      }
+    }
+
+    if (wrapUp) {
+      sendMessages = [...sendMessages, {
+        role: 'user',
+        content: '【系统】工具调用轮次已用尽。请立刻基于已有信息用文字给出最终答复，不要再调用任何工具。',
+      }]
+    }
+
     const makeBody = () => JSON.stringify({
       model: deps.model,
-      messages: wireMessages,
-      tools: tools.map((t) => ({
+      messages: sendMessages,
+      tools: wrapUp ? [] : tools.map((t) => ({
         type: 'function' as const,
         function: { name: t.name, description: t.description, parameters: t.parameters },
       })),
-      tool_choice: 'auto',
+      tool_choice: wrapUp ? 'none' : 'auto',
       stream: true,
       max_tokens: maxTokens,
     })
@@ -305,6 +339,16 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
       }
       if (res && res.ok) break
       const errText = await res!.text().catch(() => '')
+      // 上下文溢出（上游 400）：重试无用，必须裁剪后重放。
+      // 只重放一次，避免和「模型确实超长」互相拉扯。
+      if (isContextOverflowError(errText) && !overflowRetried) {
+        overflowRetried = true
+        const cur = budget || totalTokens(sendMessages)
+        const tighter = Math.max(2000, Math.floor(cur * 0.5))
+        sendMessages = truncateForBudget(sendMessages, tighter).messages
+        attempt--
+        continue
+      }
       const msg = buildUpstreamError(res!.status, errText)
       const decision = shouldRetryHttp(res!.status, attempt, res!.headers.get('retry-after'))
       if (!decision.retry) throw new Error(msg)
