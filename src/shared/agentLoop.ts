@@ -27,7 +27,7 @@ import {
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
 import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from './retry'
 import { buildToolsBlock, parseHermesToolCalls, stripToolCallBlocks, shouldInjectHermes } from './hermesTools'
-import { truncateForBudget, microcompact, totalTokens, isContextOverflowError, type BudgetMessage } from './contextBudget'
+import { truncateForBudget, microcompact, totalTokens, isContextOverflowError, CLEARABLE_TOOLS, type BudgetMessage } from './contextBudget'
 
 /* ─── 对外类型 ─── */
 
@@ -198,6 +198,8 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
 
   let toolRound = 0
   let wrapUp = false
+  // 哪些工具结果可以安全清空（可重跑的只读类）；按 tool_call_id 记
+  const clearableIds = new Set<string>()
   let overflowRetried = false
   const callSignatures = new Map<string, number>()
   const toolUseCounts = new Map<string, number>()
@@ -291,7 +293,7 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
     if (budget > 0) {
       const used = totalTokens(sendMessages)
       if (used > budget * 0.8 && deps.microcompact !== false) {
-        const mc = microcompact(sendMessages)
+        const mc = microcompact(sendMessages, { clearableIds })
         if (mc.cleared > 0) sendMessages = mc.messages
       }
       if (totalTokens(sendMessages) > budget) {
@@ -517,6 +519,7 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
           : ('工具 ' + pl.tc.name + ' 已执行，但返回空结果。'))
       const useN = bumpToolUse(toolUseCounts, pl.tc.name)
       void useN
+      if (CLEARABLE_TOOLS.has(pl.tc.name)) clearableIds.add(pl.tc.id)
       const failN = bumpToolFail(failCounter, pl.obj.status === 'error')
       return base + toolUseHint(toolUseCounts, pl.tc.name) + toolFailHint(failN, pl.tc.name)
     }

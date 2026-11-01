@@ -56,7 +56,7 @@ export function totalTokens(messages: BudgetMessage[]): number {
 export const MICROCOMPACT_KEEP_RECENT = 6
 
 /** 可清空的工具：输出大且可重跑。编辑/子代理/交互结果小而关键，不清。 */
-const CLEARABLE = new Set([
+export const CLEARABLE_TOOLS = new Set([
   'read_file', 'list_dir', 'search_files', 'search_content', 'web_search', 'web_fetch',
   'system_info', 'process_list', 'port_check', 'shell_output',
 ])
@@ -71,7 +71,7 @@ export const CLEARED_PLACEHOLDER =
  */
 export function microcompact<T extends BudgetMessage>(
   messages: T[],
-  opts: { keepRecent?: number; minChars?: number } = {},
+  opts: { keepRecent?: number; minChars?: number; clearableIds?: Set<string> } = {},
 ): { messages: T[]; cleared: number } {
   const keep = Math.max(1, opts.keepRecent ?? MICROCOMPACT_KEEP_RECENT)
   const minChars = opts.minChars ?? 800
@@ -86,9 +86,10 @@ export function microcompact<T extends BudgetMessage>(
     const text = typeof m.content === 'string' ? m.content : ''
     if (text.length < minChars) return m
     if (text === CLEARED_PLACEHOLDER) return m
-    // 判断这条结果对应哪个工具：tool 消息上没有工具名，只能看内容特征——
-    // 保守起见只要够长就清（可重跑的判断由调用方在生成时打标更准，
-    // 这里用长度阈值 + 保留最近 N 条来兜住关键结果）
+    // 给了「可清空 id 集合」就严格按它判断（循环里知道工具名，最准）；
+    // 没给则退化为按长度阈值——只清大块输出，风险可控
+    if (opts.clearableIds && !opts.clearableIds.has(String(m.tool_call_id || ''))) return m
+    // tool 消息上没有工具名，靠调用方传 clearableIds 精确判断（agentLoop 会传）
     cleared++
     return { ...m, content: CLEARED_PLACEHOLDER }
   })

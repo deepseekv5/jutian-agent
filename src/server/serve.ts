@@ -3584,6 +3584,79 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       return json(res, { error: "不支持的方法" }, 405);
     }
 
+    /**
+     * 清除数据（v14.5）：一次清干净**所有**存储层。
+     *
+     * 用户反馈「清除数据清不掉」的根因：数据其实有四层——
+     *   1. SQLite（data.db）
+     *   2. jsondb 降级文件（data.json，原生模块不可用时）
+     *   3. 旧版逐会话 JSON（data/messages_*.json，早期版本写的）
+     *   4. 渲染层 localStorage 缓存（会话侧车、任务旧缓存）
+     * 以前只删第 1 层，后三层原样留着；一旦降级或读旧缓存，数据就"复活"。
+     *
+     * scope=chats 只清对话；scope=all 连记忆/知识库/任务/工作流/性能日志/
+     * 变更留底/日记/通知一起清（设置与密钥保留，它们有单独的恢复默认）。
+     */
+    if (url.pathname === "/api/data/reset" && req.method === "POST") {
+      const { scope } = await body(req);
+      const all = scope === "all";
+      const cleared = { sessions: 0, messages: 0, memories: 0, kb: 0, jsonFiles: 0, jsondb: false };
+      try {
+        // 1) 数据库层（SQLite 或 jsondb，取决于当前运行模式）
+        if (hasDb) {
+          try {
+            const sessions = db.listSessions() || [];
+            for (const s of sessions) { try { db.deleteSession(s.id) } catch {} }
+            cleared.sessions = sessions.length;
+          } catch (e) { console.error("[reset] sessions:", e.message) }
+          if (all) {
+            try {
+              const mems = db.getAllMemories() || [];
+              for (const m of mems) { try { db.deleteMemory(m.key) } catch {} }
+              cleared.memories = mems.length;
+            } catch {}
+            try { if (db.kbClear) db.kbClear(); cleared.kb = 1 } catch {}
+          }
+          // jsondb 是防抖落盘：立刻 flush，否则重启后数据又回来
+          try { if (typeof db.flush === "function") db.flush() } catch {}
+        }
+
+        // 2) 旧版逐会话 JSON + 会话索引
+        try {
+          for (const f of fs.readdirSync(DATA_DIR)) {
+            if (/^messages_.*\.json$/.test(f) || f === "sessions.json") {
+              try { fs.unlinkSync(path.join(DATA_DIR, f)); cleared.jsonFiles++ } catch {}
+            }
+          }
+        } catch {}
+
+        // 3) 全部数据模式：清其他 JSON 存储
+        if (all) {
+          const files = ["memories.json", "diary.json", "diff_changes.json", "ctx-summaries.json", "perf_log.json", "announcement.json"];
+          for (const f of files) {
+            const fp = path.join(DATA_DIR, f);
+            if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); cleared.jsonFiles++ } catch {} }
+          }
+          for (const fp of [TASKS_FILE, path.join(LYCLAW_HOME, "workflows.json")]) {
+            if (fs.existsSync(fp)) { try { fs.unlinkSync(fp); cleared.jsonFiles++ } catch {} }
+          }
+          // 内存态也要清，否则当前进程还会把旧数据写回去
+          try { if (typeof DIFF_CHANGES !== "undefined" && Array.isArray(DIFF_CHANGES)) DIFF_CHANGES.length = 0 } catch {}
+        }
+
+        // 4) jsondb 文件：当前没在用就删掉（在用的话上面已经通过 API 清空并 flush）
+        try {
+          const jp = path.join(DATA_DIR, "data.json");
+          if (!db.__jsondb && fs.existsSync(jp)) { fs.unlinkSync(jp); cleared.jsondb = true }
+        } catch {}
+
+        console.log("[reset] 清除完成:", JSON.stringify(cleared), "scope=" + (all ? "all" : "chats"));
+        return json(res, { ok: true, scope: all ? "all" : "chats", cleared });
+      } catch (e) {
+        return json(res, { ok: false, error: String(e.message || e) }, 500);
+      }
+    }
+
     // --- 定时任务 API ---
     const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^/]+))?(?:\/(run))?$/);
     if (tasksMatch) {

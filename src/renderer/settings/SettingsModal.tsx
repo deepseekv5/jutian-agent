@@ -417,13 +417,46 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     } catch (e: any) { alert(`备份失败: ${e.message}`) }
   }
 
+  /** 清 localStorage 里的会话侧车（首字耗时/目标/元数据）——它们不属于数据库，
+   *  只清库的话这些缓存会让旧会话"看起来还在" */
+  const clearLocalCaches = () => {
+    try {
+      const keys = Object.keys(localStorage)
+      for (const k of keys) {
+        if (k.startsWith('lyclaw_msg_') || k.startsWith('lyclaw_sessions') || k.startsWith('lyclaw_session_meta') || k === 'lyclaw_scheduled_tasks') localStorage.removeItem(k)
+      }
+    } catch { /* 隐私模式下不可用 */ }
+  }
+
   const handleClearChats = async () => {
-    if (!confirm('确定清空所有对话？此操作不可恢复，建议先导出备份。')) return
-    const sessions = await fetchCompat('/api/sessions').then(r => r.json()).catch(() => [])
-    for (const s of (Array.isArray(sessions) ? sessions : [])) {
-      await fetchCompat(`/api/sessions/${s.id}`, { method: 'DELETE' }).catch(() => {})
-    }
-    location.reload()
+    if (!confirm('确定清空所有对话？\n\n会同时清理：数据库、降级存储文件、旧版逐会话文件、界面缓存。此操作不可恢复，建议先导出备份。')) return
+    try {
+      const r = await fetchCompat('/api/data/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'chats' }),
+      }).then(x => x.json())
+      if (!r.ok) { alert('清除失败：' + (r.error || '未知错误')); return }
+      clearLocalCaches()
+      const c = r.cleared || {}
+      alert(`已清除 ${c.sessions || 0} 个会话${c.jsonFiles ? `、${c.jsonFiles} 个旧存储文件` : ''}。界面将重新加载。`)
+      location.reload()
+    } catch (e: any) { alert('清除失败：' + e.message) }
+  }
+
+  /** 清除全部数据：对话 + 记忆 + 知识库 + 任务 + 工作流 + 性能日志 + 变更留底。
+   *  设置与密钥保留（它们有单独的「恢复默认设置」）。 */
+  const handleClearAllData = async () => {
+    if (!confirm('确定清除全部数据？\n\n包括：对话、长期记忆、知识库、定时任务、工作流、性能日志、变更留底、日记。\n设置与 API 密钥会保留。此操作不可恢复！')) return
+    if (!confirm('再确认一次：全部数据将永久删除，无法恢复。')) return
+    try {
+      const r = await fetchCompat('/api/data/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'all' }),
+      }).then(x => x.json())
+      if (!r.ok) { alert('清除失败：' + (r.error || '未知错误')); return }
+      clearLocalCaches()
+      const c = r.cleared || {}
+      alert(`已清除：${c.sessions || 0} 个会话、${c.memories || 0} 条记忆、${c.jsonFiles || 0} 个存储文件。界面将重新加载。`)
+      location.reload()
+    } catch (e: any) { alert('清除失败：' + e.message) }
   }
 
   const handleResetSettings = () => {
@@ -1124,6 +1157,15 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
                   <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('清空所有对话', 'Clear All Chats')}</div><div className="text-[11px] mt-0.5" style={{ color: c.toolErr }}>{t('删除全部会话与消息，不可恢复', 'Deletes all sessions and messages, irreversible')}</div></div>
                   <button type="button" onClick={handleClearChats} className="px-3 py-1.5 rounded-lg text-[11px] font-medium shrink-0" style={{ background: c.toolErr, color: '#fff' }}>清空</button>
+                </div>
+                <div className="flex items-center gap-3 py-2.5 border-t" style={{ borderColor: c.borderLight }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('清除全部数据', 'Clear all data')}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: c.toolErr }}>
+                      {t('对话 + 记忆 + 知识库 + 任务 + 工作流 + 日志（保留设置与密钥）', 'Chats + memories + KB + tasks + workflows + logs (keeps settings & keys)')}
+                    </div>
+                  </div>
+                  <button type="button" onClick={handleClearAllData} className="px-3 py-1.5 rounded-lg text-[11px] font-medium shrink-0" style={{ background: 'transparent', color: c.toolErr, border: `1px solid ${c.toolErr}55` }}>{t('全部清除', 'Clear all')}</button>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
                   <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('恢复默认设置', 'Reset Settings')}</div><div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('清除本地设置并重新载入', 'Clears local settings and reloads')}</div></div>
