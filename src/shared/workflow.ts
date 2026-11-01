@@ -227,3 +227,55 @@ export function summarizeRun(results: StepResult[]): string {
   const ms = results.reduce((a, r) => a + (r.ms || 0), 0)
   return `${done} 成功${failed ? ` / ${failed} 失败` : ''}${skipped ? ` / ${skipped} 跳过` : ''} · ${(ms / 1000).toFixed(1)}s`
 }
+
+/* ─── 示例工作流（v14.2）：新建时的起点，改改就能用 ─── */
+
+export const WORKFLOW_EXAMPLES: { key: string; label: string; description: string; build: () => Workflow }[] = [
+  {
+    key: 'web-digest',
+    label: '网页摘要入库',
+    description: '抓取网页 → 总结要点 → 存入知识库',
+    build: () => ({
+      id: '',
+      name: '网页摘要入库',
+      description: '抓取指定网页并总结成要点，存入知识库',
+      inputs: [{ key: 'url', label: '网页地址', required: true, placeholder: 'https://example.com' }],
+      steps: [
+        { id: 'fetch', type: 'tool', title: '抓取网页', tool: 'web_fetch', args: '{"url":"{{input.url}}"}' },
+        { id: 'digest', type: 'prompt', title: '总结要点', prompt: '把下面的网页内容总结成 3-5 条要点（每条一行，中文）：\n\n{{prev.output}}' },
+        { id: 'save', type: 'tool', title: '存入知识库', tool: 'save_knowledge', args: '{"key":"web-digest-{{input.url}}","value":"{{step.digest.output}}"}' },
+      ],
+    }),
+  },
+  {
+    key: 'dir-report',
+    label: '目录体检报告',
+    description: '列出目录 → 分析 → 写成报告文件',
+    build: () => ({
+      id: '',
+      name: '目录体检报告',
+      description: '扫描指定目录并生成一份结构分析报告',
+      inputs: [{ key: 'dir', label: '目录', required: true, placeholder: '.' }],
+      steps: [
+        { id: 'ls', type: 'tool', title: '列出目录', tool: 'list_dir', args: '{"path":"{{input.dir}}"}' },
+        { id: 'analyze', type: 'prompt', title: '分析结构', prompt: '分析下面的目录清单：文件类型分布、最大的疑似冗余、整理建议（中文，简短）：\n\n{{prev.output}}' },
+        { id: 'report', type: 'tool', title: '写报告', tool: 'write_file', args: '{"path":"reports/dir-report.md","content":"# 目录体检\\n\\n{{step.analyze.output}}"}' },
+      ],
+    }),
+  },
+  {
+    key: 'daily-note',
+    label: '每日速记',
+    description: '记录当天要点 → 追加到日记文件',
+    build: () => ({
+      id: '',
+      name: '每日速记',
+      description: '把输入的要点整理成一段话，追加到当日笔记',
+      inputs: [{ key: 'note', label: '要点', required: true, placeholder: '今天做了什么' }],
+      steps: [
+        { id: 'polish', type: 'prompt', title: '整理成段', prompt: '把下面的要点整理成一段通顺的话（中文，不超过 120 字）：\n\n{{input.note}}' },
+        { id: 'append', type: 'tool', title: '写入笔记', tool: 'write_file', args: '{"path":"notes/daily.md","content":"{{prev.output}}"}' },
+      ],
+    }),
+  },
+]

@@ -114,3 +114,19 @@ describe('summarizeRun', () => {
     expect(s).toContain('1.0s')
   })
 })
+
+describe('示例工作流（v14.2）', () => {
+  it('每个示例都能通过校验（改之前就先保证能跑）', async () => {
+    const { WORKFLOW_EXAMPLES, validateWorkflow } = await import('../src/shared/workflow')
+    for (const ex of WORKFLOW_EXAMPLES) {
+      const wf = ex.build()
+      expect(validateWorkflow(wf), ex.key).toBeNull()
+      for (const st of wf.steps) {
+        if (st.type === 'tool' && st.args) {
+          const r = renderToolArgs(st.args, { inputs: Object.fromEntries(wf.inputs.map(i => [i.key, i.default || 'x'])), steps: {}, prev: '' })
+          expect(r.error, ex.key + '/' + st.id).toBeUndefined()
+        }
+      }
+    }
+  })
+})

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageShell from '../app/PageShell'
 import { useTheme } from '../hooks/useTheme'
 import { fetchCompat } from '../api'
+import { WORKFLOW_EXAMPLES } from '../../shared/workflow'
 import type { Workflow, WorkflowStep, WorkflowInput, StepResult } from '../../shared/workflow'
 
 const STEP_TYPES: { id: 'prompt' | 'tool'; zh: string }[] = [
@@ -147,6 +148,13 @@ export default function WorkflowPanel({ onClose }: { onClose: () => void }) {
           style={{ background: `${c.accent}18`, color: c.accent }}>
           AI 生成
         </button>
+        <select value="" onChange={e => {
+          const ex = WORKFLOW_EXAMPLES.find(x => x.key === e.target.value)
+          if (ex) { setEditing(ex.build()); setMsg('已载入示例，改改就能用') }
+        }} className="h-9 px-2 rounded-lg text-[12.5px] outline-none" style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>
+          <option value="">从示例开始…</option>
+          {WORKFLOW_EXAMPLES.map(ex => <option key={ex.key} value={ex.key}>{ex.label}</option>)}
+        </select>
         <span className="text-[11px]" style={{ color: c.textMuted }}>
           步骤可用 {'{{input.x}}'} / {'{{step.id.output}}'} / {'{{prev.output}}'} 传值
         </span>
