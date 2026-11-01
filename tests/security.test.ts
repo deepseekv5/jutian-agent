@@ -321,3 +321,24 @@ describe('Agent 性能打点端点（v13.11）', () => {
     expect(r.status).toBe(400)
   })
 })
+
+describe('全局搜索端点（v14.1）', () => {
+  it('返回四组结果（会话/记忆/知识库/文件）', async () => {
+    const d = await fetch(`${BASE}/api/search/global?q=test&limit=3`, { headers: ORIGIN }).then(r => r.json())
+    expect(Array.isArray(d.sessions)).toBe(true)
+    expect(Array.isArray(d.memories)).toBe(true)
+    expect(Array.isArray(d.kb)).toBe(true)
+    expect(Array.isArray(d.files)).toBe(true)
+  })
+
+  it('空查询返回空分组（不报错）', async () => {
+    const d = await fetch(`${BASE}/api/search/global?q=`, { headers: ORIGIN }).then(r => r.json())
+    expect(d.sessions).toEqual([])
+    expect(d.files).toEqual([])
+  })
+
+  it('正则元字符按字面处理（不 500）', async () => {
+    const r = await fetch(`${BASE}/api/search/global?q=${encodeURIComponent('.*+?[]')}&limit=2`, { headers: ORIGIN })
+    expect(r.status).toBe(200)
+  })
+})

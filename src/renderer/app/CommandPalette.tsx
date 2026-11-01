@@ -32,6 +32,8 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
   const { c } = useTheme()
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState(0)
+  // 全局搜索（v14.1）：Cmd+K 里就地查会话正文/记忆/知识库/文件
+  const [remote, setRemote] = useState<{ sessions: any[]; memories: any[]; kb: any[]; files: any[] }>({ sessions: [], memories: [], kb: [], files: [] })
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { if (open) { setQ(''); setCursor(0) } }, [open])
@@ -76,11 +78,57 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
         run: () => { window.dispatchEvent(new CustomEvent('open-festival-egg')); onClose() },
       })
     }
-    const all = [...cmds, ...chatCmds]
+    // 全局搜索结果（分组前缀区分来源，避免与命令项混淆）
+    const hitIcon = 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z'
+    const remoteCmds: CmdItem[] = [
+      ...remote.sessions.map((h: any) => ({
+        id: 'gs_s_' + h.id + (h.snippet ? '_c' : ''),
+        label: h.title || '未命名会话',
+        hint: (h.snippet ? '会话正文：' : '会话标题：') + (h.snippet || ''),
+        icon: 'M8 10h8M8 14h5M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+        run: () => { onSelectSession(h.id); onClose() },
+      })),
+      ...remote.memories.map((h: any) => ({
+        id: 'gs_m_' + h.id,
+        label: h.title,
+        hint: '长期记忆：' + (h.snippet || ''),
+        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+        run: () => { onOpenTab('memory'); onClose() },
+      })),
+      ...remote.kb.map((h: any) => ({
+        id: 'gs_k_' + h.id,
+        label: h.title,
+        hint: '知识库：' + (h.snippet || ''),
+        icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+        run: () => { onOpenTab('kb'); onClose() },
+      })),
+      ...remote.files.map((h: any) => ({
+        id: 'gs_f_' + h.id + '_' + h.line,
+        label: h.title.split('/').pop(),
+        hint: '文件第 ' + h.line + ' 行：' + (h.snippet || ''),
+        icon: hitIcon,
+        run: () => { onOpenTab('files'); onClose() },
+      })),
+    ]
+    const all = [...cmds, ...chatCmds, ...remoteCmds]
     const query = q.trim().toLowerCase()
     if (!query) return [...cmds, ...chatCmds.slice(0, 6)]
     return all.filter(i => i.label.toLowerCase().includes(query) || (i.hint || '').toLowerCase().includes(query)).slice(0, 12)
-  }, [q, sessions, onOpenTab, onSelectSession, onCreateSession, onClose])
+  }, [q, sessions, remote, onOpenTab, onSelectSession, onCreateSession, onClose])
+
+  // 输入 ≥2 字时查全局（防抖 250ms）；短查询不打扰后端
+  useEffect(() => {
+    const query = q.trim()
+    if (!open || query.length < 2) { setRemote({ sessions: [], memories: [], kb: [], files: [] }); return }
+    let alive = true
+    const timer = setTimeout(() => {
+      fetch('/api/search/global?limit=4&q=' + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(d => { if (alive && d && !d.error) setRemote({ sessions: d.sessions || [], memories: d.memories || [], kb: d.kb || [], files: d.files || [] }) })
+        .catch(() => {})
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [q, open])
 
   useEffect(() => { setCursor(0) }, [q])
 

@@ -6039,6 +6039,104 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       try { return json(res, { notebooks: db.kbNotebooks() }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
+/** 截取命中位置附近的片段（全局搜索专用，避免与既有 snippetAround 重名） */
+function gsSnippet(text, idx, len, span = 60) {
+  const a = Math.max(0, idx - span);
+  const b = Math.min(text.length, idx + len + span);
+  const prefix = a > 0 ? "…" : "";
+  const suffix = b < text.length ? "…" : "";
+  return prefix + text.slice(a, b).replace(/\s+/g, " ").trim() + suffix;
+}
+
+/**
+ * 全局搜索（v14.1）：会话标题/正文、长期记忆、知识库、工作区文件一次查完。
+ * 结果分组返回，前端在 Cmd+K 里就地展示——比「先想清楚内容在哪再换页面」快得多。
+ * 扫描有上限（会话 300 个 / 消息 8000 条 / 每组 8 条），避免大库把 UI 拖住。
+ */
+async function globalSearch(q, limit = 8) {
+  const needle = String(q || "").trim();
+  const out = { sessions: [], memories: [], kb: [], files: [] };
+  if (!needle) return out;
+  const lower = needle.toLowerCase();
+
+  // 1) 会话：标题命中优先，其次正文
+  try {
+    const sessions = hasDb ? db.listSessions() : (loadJson("sessions.json").items || []);
+    let scanned = 0;
+    for (const s of sessions.slice(0, 300)) {
+      if (out.sessions.length >= limit) break;
+      const title = String(s.title || "");
+      if (title.toLowerCase().includes(lower)) {
+        out.sessions.push({ id: s.id, title: title || "未命名会话", snippet: "", ts: s.updated_at || s.created_at, by: "title" });
+        continue;
+      }
+      if (!hasDb) continue;
+      let msgs = [];
+      try { msgs = db.getMessages(s.id) || [] } catch { continue }
+      for (const m of msgs) {
+        scanned++;
+        const c = typeof m.content === "string" ? m.content : "";
+        const i = c.toLowerCase().indexOf(lower);
+        if (i >= 0) {
+          out.sessions.push({ id: s.id, title: title || "未命名会话", snippet: gsSnippet(c, i, needle.length), ts: m.created_at || s.updated_at, by: "content" });
+          break;
+        }
+      }
+      if (scanned > 8000) break;
+    }
+  } catch {}
+
+  // 2) 长期记忆（角色记忆是独立域，不混进来）
+  try {
+    const rows = hasDb ? db.getAllMemories() : Object.entries(loadJson("memories.json")).map(([key, value]) => ({ key, value }));
+    for (const r of rows) {
+      if (out.memories.length >= limit) break;
+      if (String(r.key).startsWith("persona:")) continue;
+      const k = String(r.key), v = String(r.value || "");
+      if ((k + " " + v).toLowerCase().includes(lower)) out.memories.push({ id: k, title: k, snippet: v.slice(0, 160) });
+    }
+  } catch {}
+
+  // 3) 知识库
+  try {
+    if (hasDb && db.kbAll) {
+      const rows = db.kbAll() || [];
+      for (const r of rows) {
+        if (out.kb.length >= limit) break;
+        const text = String(r.chunk || "");
+        const path0 = String(r.path || "");
+        const i = (path0 + " " + text).toLowerCase().indexOf(lower);
+        if (i >= 0) out.kb.push({ id: String(r.id || path0), title: path0 || "知识库", snippet: gsSnippet(text, Math.max(0, i - path0.length), needle.length) });
+      }
+    }
+  } catch {}
+
+  // 4) 工作区文件：复用 search_content（已带依赖目录排除与截断保护）
+  try {
+    // 转义正则元字符，用户输入按字面搜索（回调形式：避免替换串里的特殊符号被展开）
+    const safe = needle.replace(/[.*+?^${}()|[\]\\]/g, (ch) => "\\" + ch);
+    const root = globalWorkDir || DEFAULT_WORKSPACE;
+    const r = await executeToolCore("search_content", { path: root, pattern: safe });
+    if (r && r.success && r.output) {
+      for (const line of String(r.output).split("\n")) {
+        if (out.files.length >= limit) break;
+        const m = line.match(/^(.*?):(\d+):(.*)$/);
+        if (!m) continue;
+        out.files.push({ id: m[1], title: m[1], snippet: m[3].trim().slice(0, 160), line: Number(m[2]) });
+      }
+    }
+  } catch {}
+
+  return out;
+}
+
+    // 全局搜索（v14.1）：Cmd+K 里就地查会话/记忆/知识库/文件
+    if (url.pathname === "/api/search/global" && req.method === "GET") {
+      const q = url.searchParams.get("q") || "";
+      const limit = Math.min(20, Math.max(1, Number(url.searchParams.get("limit")) || 8));
+      try { return json(res, { q, ...(await globalSearch(q, limit)) }); }
+      catch (e) { return json(res, { error: e.message }, 500); }
+    }
     if (url.pathname === "/api/kb/search-notes" && req.method === "GET") {
       if (!sharedDb) return json(res, { results: [] });
       const q = (url.searchParams.get("q") || "").trim();
@@ -6249,6 +6347,10 @@ function failTask(taskId, msg) {
   item.status = "error";
   item.lastResult = String(msg || "执行失败").slice(0, 2000);
   saveTasks(list);
+  // 失败必须可见（v14.1）：无人值守的任务失败后，用户只有翻列表才会发现
+  try {
+    pushServerNotice({ type: "system", title: "任务失败：" + String(item.title || item.content || "任务").slice(0, 30), body: String(msg || "").slice(0, 160) });
+  } catch {}
 }
 
 /**
