@@ -18,6 +18,7 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var workflow_exports = {};
 __export(workflow_exports, {
+  WORKFLOW_EXAMPLES: () => WORKFLOW_EXAMPLES,
   collectInputs: () => collectInputs,
   renderTemplate: () => renderTemplate,
   renderToolArgs: () => renderToolArgs,
@@ -154,8 +155,58 @@ function summarizeRun(results) {
   const ms = results.reduce((a, r) => a + (r.ms || 0), 0);
   return `${done} \u6210\u529F${failed ? ` / ${failed} \u5931\u8D25` : ""}${skipped ? ` / ${skipped} \u8DF3\u8FC7` : ""} \xB7 ${(ms / 1e3).toFixed(1)}s`;
 }
+const WORKFLOW_EXAMPLES = [
+  {
+    key: "web-digest",
+    label: "\u7F51\u9875\u6458\u8981\u5165\u5E93",
+    description: "\u6293\u53D6\u7F51\u9875 \u2192 \u603B\u7ED3\u8981\u70B9 \u2192 \u5B58\u5165\u77E5\u8BC6\u5E93",
+    build: () => ({
+      id: "",
+      name: "\u7F51\u9875\u6458\u8981\u5165\u5E93",
+      description: "\u6293\u53D6\u6307\u5B9A\u7F51\u9875\u5E76\u603B\u7ED3\u6210\u8981\u70B9\uFF0C\u5B58\u5165\u77E5\u8BC6\u5E93",
+      inputs: [{ key: "url", label: "\u7F51\u9875\u5730\u5740", required: true, placeholder: "https://example.com" }],
+      steps: [
+        { id: "fetch", type: "tool", title: "\u6293\u53D6\u7F51\u9875", tool: "web_fetch", args: '{"url":"{{input.url}}"}' },
+        { id: "digest", type: "prompt", title: "\u603B\u7ED3\u8981\u70B9", prompt: "\u628A\u4E0B\u9762\u7684\u7F51\u9875\u5185\u5BB9\u603B\u7ED3\u6210 3-5 \u6761\u8981\u70B9\uFF08\u6BCF\u6761\u4E00\u884C\uFF0C\u4E2D\u6587\uFF09\uFF1A\n\n{{prev.output}}" },
+        { id: "save", type: "tool", title: "\u5B58\u5165\u77E5\u8BC6\u5E93", tool: "save_knowledge", args: '{"key":"web-digest-{{input.url}}","value":"{{step.digest.output}}"}' }
+      ]
+    })
+  },
+  {
+    key: "dir-report",
+    label: "\u76EE\u5F55\u4F53\u68C0\u62A5\u544A",
+    description: "\u5217\u51FA\u76EE\u5F55 \u2192 \u5206\u6790 \u2192 \u5199\u6210\u62A5\u544A\u6587\u4EF6",
+    build: () => ({
+      id: "",
+      name: "\u76EE\u5F55\u4F53\u68C0\u62A5\u544A",
+      description: "\u626B\u63CF\u6307\u5B9A\u76EE\u5F55\u5E76\u751F\u6210\u4E00\u4EFD\u7ED3\u6784\u5206\u6790\u62A5\u544A",
+      inputs: [{ key: "dir", label: "\u76EE\u5F55", required: true, placeholder: "." }],
+      steps: [
+        { id: "ls", type: "tool", title: "\u5217\u51FA\u76EE\u5F55", tool: "list_dir", args: '{"path":"{{input.dir}}"}' },
+        { id: "analyze", type: "prompt", title: "\u5206\u6790\u7ED3\u6784", prompt: "\u5206\u6790\u4E0B\u9762\u7684\u76EE\u5F55\u6E05\u5355\uFF1A\u6587\u4EF6\u7C7B\u578B\u5206\u5E03\u3001\u6700\u5927\u7684\u7591\u4F3C\u5197\u4F59\u3001\u6574\u7406\u5EFA\u8BAE\uFF08\u4E2D\u6587\uFF0C\u7B80\u77ED\uFF09\uFF1A\n\n{{prev.output}}" },
+        { id: "report", type: "tool", title: "\u5199\u62A5\u544A", tool: "write_file", args: '{"path":"reports/dir-report.md","content":"# \u76EE\u5F55\u4F53\u68C0\\n\\n{{step.analyze.output}}"}' }
+      ]
+    })
+  },
+  {
+    key: "daily-note",
+    label: "\u6BCF\u65E5\u901F\u8BB0",
+    description: "\u8BB0\u5F55\u5F53\u5929\u8981\u70B9 \u2192 \u8FFD\u52A0\u5230\u65E5\u8BB0\u6587\u4EF6",
+    build: () => ({
+      id: "",
+      name: "\u6BCF\u65E5\u901F\u8BB0",
+      description: "\u628A\u8F93\u5165\u7684\u8981\u70B9\u6574\u7406\u6210\u4E00\u6BB5\u8BDD\uFF0C\u8FFD\u52A0\u5230\u5F53\u65E5\u7B14\u8BB0",
+      inputs: [{ key: "note", label: "\u8981\u70B9", required: true, placeholder: "\u4ECA\u5929\u505A\u4E86\u4EC0\u4E48" }],
+      steps: [
+        { id: "polish", type: "prompt", title: "\u6574\u7406\u6210\u6BB5", prompt: "\u628A\u4E0B\u9762\u7684\u8981\u70B9\u6574\u7406\u6210\u4E00\u6BB5\u901A\u987A\u7684\u8BDD\uFF08\u4E2D\u6587\uFF0C\u4E0D\u8D85\u8FC7 120 \u5B57\uFF09\uFF1A\n\n{{input.note}}" },
+        { id: "append", type: "tool", title: "\u5199\u5165\u7B14\u8BB0", tool: "write_file", args: '{"path":"notes/daily.md","content":"{{prev.output}}"}' }
+      ]
+    })
+  }
+];
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  WORKFLOW_EXAMPLES,
   collectInputs,
   renderTemplate,
   renderToolArgs,
