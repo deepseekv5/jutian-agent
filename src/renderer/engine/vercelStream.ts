@@ -136,6 +136,10 @@ export async function streamChatVercel(
     .join('\n\n')
 
   const toolCallLog: ToolCall[] = []
+  // 步内去重（v15.1）：模型常在同一轮并行发出多个完全相同的调用
+  // （实测 spark-x2.6 会把 list_dir 连发 3 次）。相同签名只执行一次，
+  // 其余直接复用结果——省时间也避免重复副作用。每步开始清空。
+  const inflightTools = new Map<string, Promise<string>>()
   // 跨轮累计：同一签名调用次数（软提醒/硬拦截）
   const callSignatures = new Map<string, number>()
   const tools = Object.fromEntries(activeTools.map((t) => [
@@ -144,6 +148,11 @@ export async function streamChatVercel(
       description: t.description,
       inputSchema: jsonSchema(t.parameters as never),
       execute: async (input: Record<string, unknown>, { abortSignal }: { abortSignal?: AbortSignal }) => {
+        // 步内去重：同一签名的调用共享同一个 Promise
+        const dedupeKey = t.name + '::' + JSON.stringify(input ?? {})
+        const running = inflightTools.get(dedupeKey)
+        if (running) return running
+        const task = (async (): Promise<string> => {
         // 空转防护（自研内核保留下来的一件好东西）：相同工具+相同参数
         // 第 3 次起注入提醒，第 5 次直接拦截——SDK 的循环本身不做这个判断。
         const sig = callSignature(t.name, JSON.stringify(input ?? {}))
@@ -197,6 +206,9 @@ export async function streamChatVercel(
           toolCallLog.push(tc)
           return msg
         }
+        })()
+        inflightTools.set(dedupeKey, task)
+        return task
       },
     }) as never,
   ])) as Record<string, never>
@@ -227,6 +239,7 @@ export async function streamChatVercel(
       // 智能步骤控制（v15.1）：第一步只给只读工具，防止模型没读文件就直接写
       // 并发控制：只读工具可以并行（快），写工具必须串行（安全）
       toolCallConcurrency: 4,
+      onStepStart: () => { inflightTools.clear() },
       prepareStep: ({ stepNumber }: { stepNumber: number }) => {
         const readonly = stepToolFilter(stepNumber)
         if (!readonly) return {}
