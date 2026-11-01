@@ -22,7 +22,7 @@ import { effectiveApiKey } from '../store/storage'
 import { executeTool } from './tools'
 import type { StreamCallbacks } from './stream'
 import { checkRepeatCall, callSignature } from '../../shared/toolLoopGuard'
-import { filterTools, repairToolCallJson, stepToolFilter } from '../../shared/toolFilter'
+import { filterTools, repairToolCallJson } from '../../shared/toolFilter'
 import { truncateForBudget, microcompact, totalTokens } from '../../shared/contextBudget'
 
 /** 单次请求的最大工具轮次（SDK 的 stepCountIs 语义：一轮 = 一次模型调用 + 其工具执行） */
@@ -85,6 +85,44 @@ function toModelMessages(messages: OpenAIMsg[]): unknown[] {
   return out
 }
 
+/**
+ * 历史清洗（v15.1 关键修复）
+ *
+ * 中断的对话（用户点停止 / App 崩溃 / 网络断开）会在历史里留下
+ * 「assistant 有 tool_calls，但没有对应 tool 结果」的悬空记录。
+ * AI SDK 遇到这种历史会直接抛 MissingToolResultsError，导致这个会话
+ * 之后每一次请求都失败——用户看到的就是「发生未知错误」。
+ *
+ * 清洗规则：
+ *   1. 只保留「有对应 tool 结果」的 tool_calls
+ *   2. 丢掉没有 tool_calls 的 assistant 消息（清完变空）
+ *   3. 丢掉没有对应 assistant 调用的孤儿 tool 消息
+ */
+export function sanitizeHistory(messages: OpenAIMsg[]): OpenAIMsg[] {
+  const resultIds = new Set<string>()
+  for (const m of messages) if (m.role === 'tool' && m.tool_call_id) resultIds.add(String(m.tool_call_id))
+
+  const out: OpenAIMsg[] = []
+  for (const m of messages) {
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+      const kept = m.tool_calls.filter((tc) => resultIds.has(String(tc.id)))
+      const hasText = typeof m.content === 'string' && m.content.trim().length > 0
+      if (kept.length === 0 && !hasText) continue          // 全是悬空调用且无正文：整条丢弃
+      out.push({ ...m, tool_calls: kept.length ? kept : undefined })
+      continue
+    }
+    if (m.role === 'tool') {
+      // 孤儿 tool（前面没有对应调用）：丢弃
+      const hasCall = out.some((x) => Array.isArray(x.tool_calls) && x.tool_calls.some((tc) => String(tc.id) === String(m.tool_call_id)))
+      if (!hasCall) continue
+      out.push(m)
+      continue
+    }
+    out.push(m)
+  }
+  return out
+}
+
 export async function streamChatVercel(
   settings: Settings,
   messages: OpenAIMsg[],
@@ -107,7 +145,16 @@ export async function streamChatVercel(
     const headers = new Headers(init?.headers || {})
     headers.set('X-Target-Base', settings.apiBaseUrl || '')
     headers.set('X-Api-Key', effectiveApiKey(settings.apiKey))
-    return fetch('/api/llm-proxy', { ...init, headers })
+    const res = await fetch('/api/llm-proxy', { ...init, headers })
+    // 上游接力可见化（v15.2）：主模型失败时代理会自动降级到免费模型，
+    // 以前完全静默——用户只会觉得「agent 变笨了」。这里把降级事实告诉界面。
+    const relay = res.headers.get('X-Relay-Used')
+    if (relay) {
+      try {
+        window.dispatchEvent(new CustomEvent('chat-relay-fallback', { detail: { relay } }))
+      } catch { /* 非浏览器环境忽略 */ }
+    }
+    return res
   }
 
   const provider = createOpenAICompatible({
@@ -136,10 +183,6 @@ export async function streamChatVercel(
     .join('\n\n')
 
   const toolCallLog: ToolCall[] = []
-  // 步内去重（v15.1）：模型常在同一轮并行发出多个完全相同的调用
-  // （实测 spark-x2.6 会把 list_dir 连发 3 次）。相同签名只执行一次，
-  // 其余直接复用结果——省时间也避免重复副作用。每步开始清空。
-  const inflightTools = new Map<string, Promise<string>>()
   // 跨轮累计：同一签名调用次数（软提醒/硬拦截）
   const callSignatures = new Map<string, number>()
   const tools = Object.fromEntries(activeTools.map((t) => [
@@ -148,11 +191,6 @@ export async function streamChatVercel(
       description: t.description,
       inputSchema: jsonSchema(t.parameters as never),
       execute: async (input: Record<string, unknown>, { abortSignal }: { abortSignal?: AbortSignal }) => {
-        // 步内去重：同一签名的调用共享同一个 Promise
-        const dedupeKey = t.name + '::' + JSON.stringify(input ?? {})
-        const running = inflightTools.get(dedupeKey)
-        if (running) return running
-        const task = (async (): Promise<string> => {
         // 空转防护（自研内核保留下来的一件好东西）：相同工具+相同参数
         // 第 3 次起注入提醒，第 5 次直接拦截——SDK 的循环本身不做这个判断。
         const sig = callSignature(t.name, JSON.stringify(input ?? {}))
@@ -206,9 +244,6 @@ export async function streamChatVercel(
           toolCallLog.push(tc)
           return msg
         }
-        })()
-        inflightTools.set(dedupeKey, task)
-        return task
       },
     }) as never,
   ])) as Record<string, never>
@@ -223,7 +258,7 @@ export async function streamChatVercel(
     const result = (streamText as any)({
       model: provider(settings.model),
       ...(systemText ? { instructions: systemText } : {}),
-      messages: toModelMessages(sendMessages as unknown as OpenAIMsg[]) as never,
+      messages: toModelMessages(sanitizeHistory(sendMessages as unknown as OpenAIMsg[])) as never,
       tools: tools as never,
       stopWhen: stepCountIs(MAX_STEPS),
       // 重试（v15.1）：网络抖动/429/5xx 由 SDK 自动退避重试，不再自己写重试循环
@@ -236,15 +271,8 @@ export async function streamChatVercel(
         if (!fixed) return null
         return { ...toolCall, input: JSON.stringify(fixed) }
       },
-      // 智能步骤控制（v15.1）：第一步只给只读工具，防止模型没读文件就直接写
       // 并发控制：只读工具可以并行（快），写工具必须串行（安全）
       toolCallConcurrency: 4,
-      onStepStart: () => { inflightTools.clear() },
-      prepareStep: ({ stepNumber }: { stepNumber: number }) => {
-        const readonly = stepToolFilter(stepNumber)
-        if (!readonly) return {}
-        return { activeTools: readonly }
-      },
       // 工具审批（v15）：高风险工具需要用户确认。
       // SDK 内置审批机制：toolApproval 配置决定哪些工具需要审批，
       // 审批通过后才执行 execute。
@@ -291,8 +319,16 @@ export async function streamChatVercel(
 
     await callbacks.onDone(fullText, toolCallLog, fullThinking || undefined)
   } catch (e) {
-    const err = e as { name?: string; message?: string }
+    const err = e as { name?: string; message?: string; stack?: string }
     if (err.name === 'AbortError' || signal?.aborted) return
-    await callbacks.onError(err.message || '模型请求失败')
+    // 上报真实错误（设置 → 诊断可查），避免只显示「未知错误」
+    try {
+      fetch('/api/client-error', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '[vercel] ' + (err.message || String(e)), stack: err.stack || '', url: location.href }),
+      }).catch(() => {})
+    } catch { /* 忽略 */ }
+    const detail = err.message || String(e)
+    await callbacks.onError(detail && detail !== 'undefined' ? detail : '模型请求失败（无错误详情）')
   }
 }

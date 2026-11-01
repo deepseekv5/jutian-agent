@@ -84,6 +84,19 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 重试次数（v13.11）：429/5xx 也会重试，告诉用户是第几次尝试
   const [netAttempt, setNetAttempt] = useState(2)
   // 本次耗时（v13.11）：完成后浮出 6 秒，让「为什么慢」可见
+  // 上游降级提示（v15.2）：主模型失败自动切免费模型时告知用户
+  const [relayHint, setRelayHint] = useState<string | null>(null)
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (d.relay) {
+        setRelayHint(String(d.relay))
+        setTimeout(() => setRelayHint(null), 15000)
+      }
+    }
+    window.addEventListener('chat-relay-fallback', h)
+    return () => window.removeEventListener('chat-relay-fallback', h)
+  }, [])
   const [perfPill, setPerfPill] = useState<{ totalMs: number; rounds: number; llmMs: number; toolMs: number; toolCalls: number; toolErrors: number } | null>(null)
 
   useEffect(() => {
@@ -352,6 +365,16 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
                 : `上游繁忙或连接中断，正在重试（第 ${netAttempt}/3 次）…`)}
           <span className="font-mono" style={{ color: c.textMuted }}>{netSec}s</span>
           {netSec >= 5 && <span style={{ color: c.textMuted }}>{lang === 'en' ? '· free tiers can queue at peak hours' : '· 免费线路高峰期会排队'}</span>}
+        </div>
+      )}
+      {/* 上游降级提示（v15.2） */}
+      {relayHint && (
+        <div className="shrink-0 px-6 py-1 text-[10.5px] flex items-center gap-2"
+          style={{ color: '#b45309', background: '#f59e0b14', borderBottom: '1px solid #f59e0b33' }} role="status">
+          <span>⚠</span>
+          <span>{lang === 'en'
+            ? `Primary model unavailable — fell back to free route (${relayHint}). Tool calling may be weaker.`
+            : `主模型不可用，已自动降级到免费线路（${relayHint}）。工具调用能力可能较弱，建议到设置检查密钥。`}</span>
         </div>
       )}
       {/* 本次耗时（v13.11）：完成后浮出 6 秒——慢在 LLM 还是工具一眼可见 */}

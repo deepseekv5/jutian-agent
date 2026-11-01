@@ -88,3 +88,38 @@ describe('stepToolFilter（智能步骤控制）', () => {
     expect(stepToolFilter(5)).toBeUndefined()
   })
 })
+
+import { sanitizeHistory } from '../src/renderer/engine/vercelStream'
+
+// 历史清洗（v15.1）：中断的对话会留下悬空 tool_calls，
+// AI SDK 遇到会抛 MissingToolResultsError，导致会话永久不可用。
+describe('sanitizeHistory（悬空工具调用清洗）', () => {
+  const asst = (id: string, text = '') => ({ role: 'assistant', content: text, tool_calls: [{ id, function: { name: 'list_dir', arguments: '{}' } }] })
+  const tool = (id: string) => ({ role: 'tool', tool_call_id: id, content: 'ok' })
+
+  it('完整的一问一答一工具链原样保留', () => {
+    const msgs: any[] = [{ role: 'user', content: 'hi' }, asst('a1'), tool('a1')]
+    expect(sanitizeHistory(msgs).length).toBe(3)
+  })
+  it('悬空的 assistant tool_calls 被丢弃（无正文时整条删）', () => {
+    const msgs: any[] = [{ role: 'user', content: 'hi' }, asst('a1'), asst('a2'), tool('a2')]
+    const out = sanitizeHistory(msgs)
+    expect(out.filter(m => m.role === 'assistant').length).toBe(1)
+    expect(out.find(m => m.role === 'assistant')!.tool_calls![0].id).toBe('a2')
+  })
+  it('有正文的 assistant 保留正文，只去掉悬空调用', () => {
+    const msgs: any[] = [{ role: 'user', content: 'hi' }, asst('a1', '我先看看')]
+    const out = sanitizeHistory(msgs)
+    const a = out.find(m => m.role === 'assistant')!
+    expect(a.content).toBe('我先看看')
+    expect(a.tool_calls).toBeUndefined()
+  })
+  it('孤儿 tool 消息被丢弃', () => {
+    const msgs: any[] = [{ role: 'user', content: 'hi' }, tool('ghost')]
+    expect(sanitizeHistory(msgs).filter(m => m.role === 'tool').length).toBe(0)
+  })
+  it('user/system 消息不受影响', () => {
+    const msgs: any[] = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }]
+    expect(sanitizeHistory(msgs)).toEqual(msgs)
+  })
+})

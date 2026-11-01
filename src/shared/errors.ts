@@ -86,8 +86,12 @@ function extractText(input: unknown): string {
 export function describeError(input: unknown, opts: { keepDetail?: boolean } = {}): ErrorInfo {
   const kind = classifyError(input)
   const base = INFO[kind]
-  if (!opts.keepDetail) return { kind, ...base }
   const raw = extractText(input).slice(0, 300)
+  // unknown 一律附原始信息：归类不了还藏原因，等于让用户和开发者都瞎
+  if (kind === 'unknown' && raw) {
+    return { kind, ...base, hint: `${base.hint}｜原始信息：${raw}` }
+  }
+  if (!opts.keepDetail) return { kind, ...base }
   return { kind, ...base, hint: raw ? `${base.hint}${base.hint ? '｜' : ''}详情：${raw}` : base.hint }
 }
 
