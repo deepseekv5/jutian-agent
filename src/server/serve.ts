@@ -5894,6 +5894,43 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }
     }
 
+    /**
+     * Google 翻译 TTS 兜底（v14.4.2）
+     *
+     * edge-tts 被微软 403 拦掉时（2026-11 起实测：bing / msedgeservices 两个域名、
+     * 两种 DRM 版本全部 403），旧链路直接掉到系统语音——音色生硬、不像产品。
+     * 这里补一层自然度明显更好的兜底，音色仍按 tl=zh-CN 走中文。
+     * 单次请求上限约 200 字，按句切分后拼 mp3（mp3 帧可安全拼接）。
+     */
+    async function googleTtsSynthesize(text) {
+      const chunks = [];
+      let rest = String(text || "").trim();
+      while (rest.length > 170) {
+        let cut = -1;
+        for (let i = 170; i >= 100; i--) { if ("。！？；，,.!?;".includes(rest[i - 1])) { cut = i; break } }
+        if (cut <= 0) cut = 170;
+        chunks.push(rest.slice(0, cut));
+        rest = rest.slice(cut);
+      }
+      if (rest) chunks.push(rest);
+      const bufs = [];
+      for (const c of chunks) {
+        const u = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=" + encodeURIComponent(c);
+        const r = await fetch(u, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            "Referer": "https://translate.google.com/",
+          },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!r.ok) throw new Error("google tts " + r.status);
+        const b = Buffer.from(await r.arrayBuffer());
+        if (b.length < 1000) throw new Error("google tts 返回过短");
+        bufs.push(b);
+      }
+      return Buffer.concat(bufs);
+    }
+
     if (url.pathname === "/api/edge-tts" && req.method === "POST") {
       try {
         const { text, input, voice, speed } = await body(req);
@@ -5934,6 +5971,16 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           }
         } catch (osErr) {
           console.error("[TTS] 系统语音不可用:", osErr.message);
+        }
+        // Google 兜底（v14.4.2）：edge-tts 全域名 403 时，系统语音太生硬
+        try {
+          const g = await googleTtsSynthesize(spoken);
+          try { TTS_MOD && TTS_MOD.cacheStore(ttsCacheDir, ttsKey, "mp3", g) } catch {}
+          res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg", "X-TTS-Engine": "google" });
+          res.end(g);
+          return;
+        } catch (gErr) {
+          console.error("[TTS] Google 兜底失败:", gErr.message);
         }
         // 惰性启动：首次语音请求时才拉起 Edge TTS python 进程
         try { if (globalThis.ensureEdgeTTS) await Promise.race([globalThis.ensureEdgeTTS(), new Promise((rr) => setTimeout(rr, 12000))]); } catch {}

@@ -64,10 +64,10 @@ const WSS_URL =
   "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=" +
   TRUSTED_CLIENT_TOKEN;
 const VOICES_URL =
-  "https://api.msedgeservices.com/tts/cognitiveservices/voices/list?TrustedClientToken=" +
+  "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=" +
   TRUSTED_CLIENT_TOKEN;
 const CHROMIUM_FULL_VERSION = "143.0.3650.75";
-const SEC_MS_GEC_VERSION = `1-${CHROMIUM_FULL_VERSION}`;
+const SEC_MS_GEC_VERSION = `2-${CHROMIUM_FULL_VERSION}`;
 const WIN_EPOCH = 11644473600;
 const S_TO_NS = 1e9;
 
