@@ -171,6 +171,12 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
   return (
     <div className="thinking-card my-2">
       <div className="thinking-header" onClick={collapsible ? () => { userToggled.current = true; onToggle() } : undefined} style={collapsible ? undefined : { cursor: 'default' }}>
+        {isStreaming && (
+          <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" style={{ color: c.accent }}>
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )}
         {collapsible && (
           <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -191,11 +197,11 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
  *  与顶部 ThinkingCard 的区别：ThinkingCard 把整条消息的思考堆在一起，
  *  而工具循环里模型会「想一段→做个动作→再想一段」，这里按动作边界切开，
  *  让阅读顺序跟真实推理顺序一致。
- *  展开状态自管理：流式进行中默认展开（让人看到它在想），
- *  结束后自动收起——否则长思考会把正文和工具卡全挤到屏幕外。 */
+ *  展开状态自管理：流式期间同样默认折叠（v14.2 统一要求——输出中一律一行状态），
+ *  点击可展开；结束后保持折叠。 */
 function ThinkingBlock({ text, label, streaming }: { text: string; label: string; streaming?: boolean }) {
   const { c } = useTheme()
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const touched = useRef(false)   // 用户手动开合过就不再自动收
   const bodyRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -210,6 +216,12 @@ function ThinkingBlock({ text, label, streaming }: { text: string; label: string
   return (
     <div className="thinking-card my-2">
       <div className="thinking-header" onClick={() => { touched.current = true; setOpen(v => !v) }}>
+        {streaming && (
+          <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" style={{ color: c.accent }}>
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )}
         <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
@@ -366,7 +378,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
   const [savedKb, setSavedKb] = useState(false)
   const [sharedImg, setSharedImg] = useState(false)
   const [speaking, setSpeaking] = useState(false)
-  const [thinkingOpen, setThinkingOpen] = useState(true)
+  // 流式期间也默认折叠（v14.2 用户要求）：思考/工具都只留一行状态，点开才展开
+  const [thinkingOpen, setThinkingOpen] = useState(false)
   const [showRollbackConfirm, setShowRollbackConfirm] = useState(false)
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null)
   const [hovered, setHovered] = useState(false)
