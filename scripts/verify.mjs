@@ -226,5 +226,42 @@ try {
   else bad('toolLoopGuard 阈值缺失')
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+// ─── 8. v14 能力契约（远程 MCP / cron / 导出 / 定时任务）───
+// 这四项都是「接线型」能力：模块存在但没接进入口时功能静默失效，
+// 发布前用静态检查钉住调用点。
+section('v14 能力契约')
+try {
+  const mcpSrc = fs.readFileSync(path.join(ROOT, 'src/shared/mcp.cjs'), 'utf-8')
+  for (const [name, needle] of [
+    ['Streamable HTTP 传输', 'class McpHttpClient'],
+    ['旧版 SSE 传输', 'class McpSseClient'],
+    ['服务级权限判定', 'function checkPermission'],
+    ['连通性测试', 'async function testServer'],
+  ]) {
+    if (mcpSrc.includes(needle)) ok(name + '在列')
+    else bad(name + '缺失')
+  }
+  const serveSrc = fs.readFileSync(path.join(ROOT, 'src/server/serve.ts'), 'utf-8')
+  if (serveSrc.includes('/api/mcp/test')) ok('MCP 测试端点已接')
+  else bad('MCP 测试端点未接')
+  if (serveSrc.includes('CRON_MOD') && serveSrc.includes('computeNextRun')) ok('cron 解析与 nextRun 计算在列')
+  else bad('cron/nextRun 未接线 — 定时任务将永不触发')
+  if (serveSrc.includes('runTaskAgent') && serveSrc.includes('executeToolCore')) ok('定时任务 agent 模式复用工具执行核心')
+  else bad('定时任务 agent 模式未接线')
+  if (serveSrc.includes('scheduled-tasks') && serveSrc.includes('isRun')) ok('任务立即执行端点已接')
+  else bad('任务立即执行端点缺失')
+
+  const exportSrc = fs.readFileSync(path.join(ROOT, 'src/shared/exportHtml.ts'), 'utf-8')
+  if (exportSrc.includes('markdownToHtml') && exportSrc.includes('@media print')) ok('HTML/PDF 导出模块在列')
+  else bad('导出模块缺失')
+  const mainSrc = fs.readFileSync(path.join(ROOT, 'electron/main.cjs'), 'utf-8')
+  if (mainSrc.includes("'export-pdf'") && mainSrc.includes('printToPDF')) ok('桌面端 PDF 落盘在列')
+  else bad('Electron printToPDF 未接')
+
+  const presetsSrc = fs.readFileSync(path.join(ROOT, 'src/shared/mcpPresets.ts'), 'utf-8')
+  if (presetsSrc.includes('MCP_PRESETS') && presetsSrc.includes('buildPresetServer')) ok('MCP 推荐服务预设在列')
+  else bad('MCP 预设缺失')
+} catch (e) { bad(`读取失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)

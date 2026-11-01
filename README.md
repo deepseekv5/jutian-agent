@@ -9,7 +9,7 @@
 [English](README_EN.md) | **简体中文**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v13.11.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Version](https://img.shields.io/badge/v14.0.0-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Platform](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Docs](https://img.shields.io/badge/docs-12%20篇-8b5cf6?style=for-the-badge&labelColor=0a0a0b)](#docs)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
@@ -326,10 +326,10 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 - [x] 瞬时错误指数退避重试(429/5xx + Retry-After)
 - [x] 文件上下文追踪(防旧内容覆盖外部修改)
 - [x] 代码编辑器 VSCode 化(大纲/面包屑/查找替换/移动行/状态栏)
-- [ ] MCP SSE / streamable-http
-- [ ] MCP 服务级权限开关
+- [x] MCP SSE / streamable-http + 服务级权限 + 推荐服务市场
+- [x] 定时任务 × 工具执行（agent 模式）与标准 cron
 - [ ] 定时任务 × 集群编排
-- [ ] 会话模板 / 导出 PDF
+- [x] 会话导出 HTML / PDF
 
 <br>
 
