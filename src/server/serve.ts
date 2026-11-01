@@ -237,6 +237,7 @@ var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } cat
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
+var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
 // TTS 域（系统语音兜底 + 多格式缓存）
@@ -1606,6 +1607,85 @@ function computeNextRun(task) {
   const n = new Date(now);
   n.setDate(n.getDate() + (type === "daily" ? 1 : 7));
   return { nextRun: n.toISOString() };
+}
+
+/* ─── 工作流（v14.1）：多步骤自动化，步骤间用占位符传值 ─── */
+var WF_FILE = path.join(LYCLAW_HOME, "workflows.json");
+function loadWorkflows() {
+  try { const a = JSON.parse(fs.readFileSync(WF_FILE, "utf-8")); return Array.isArray(a) ? a : [] } catch { return [] }
+}
+function saveWorkflows(list) {
+  try {
+    fs.mkdirSync(path.dirname(WF_FILE), { recursive: true });
+    fs.writeFileSync(WF_FILE, JSON.stringify(list, null, 2), "utf-8");
+  } catch {}
+}
+
+/** 单次模型调用（工作流 prompt 步骤与任务 text 模式共用） */
+async function callLLMOnce(base, key, model, system, user, maxTokens = 2000, timeoutMs = 120000) {
+  const r = await fetch(base + "/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      max_tokens: maxTokens,
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const d = await r.json().catch(() => null);
+  if (!d) throw new Error("模型无响应");
+  const msg = d.choices && d.choices[0] && d.choices[0].message;
+  if (!msg) throw new Error((d.error && d.error.message) || "模型返回为空");
+  return String(msg.content || "").trim();
+}
+
+/**
+ * 执行工作流（v14.1）：按步骤顺序跑，prompt 步骤调模型、tool 步骤调工具。
+ * 某步失败默认中止后续（标记 skipped），continueOnError 时继续。
+ * 返回每步结果，前端据此展示逐步进度。
+ */
+async function runWorkflow(wf, inputs, cfg) {
+  const results = [];
+  const ctx = { inputs: inputs || {}, steps: {}, prev: "" };
+  let aborted = false;
+  for (const step of wf.steps || []) {
+    if (aborted) {
+      results.push({ id: step.id, title: step.title || step.id, type: step.type, status: "skipped", output: "", error: "前序步骤失败，已跳过" });
+      continue;
+    }
+    const t0 = Date.now();
+    try {
+      if (step.type === "prompt") {
+        const rendered = WORKFLOW_MOD.renderTemplate(String(step.prompt || ""), { ...ctx, prev: ctx.prev });
+        const sys = "你是工作流中的一个执行步骤。严格按用户指令完成这一步，只输出本步骤的结果，不要解释你在做什么，不要提及自己是 AI。";
+        const out = await callLLMOnce(cfg.base, cfg.key, cfg.model, sys, rendered.text, 2000, Math.min(180, Number(step.timeoutSec) || 120) * 1000);
+        ctx.steps[step.id] = out;
+        ctx.prev = out;
+        results.push({ id: step.id, title: step.title || step.id, type: step.type, status: "done", output: out, ms: Date.now() - t0, warnings: rendered.warnings });
+      } else {
+        const rendered = WORKFLOW_MOD.renderToolArgs(String(step.args || "{}"), { ...ctx, prev: ctx.prev });
+        if (rendered.error) throw new Error(rendered.error);
+        const out = await executeToolCore(String(step.tool || ""), rendered.args || {});
+        const text = out.success ? String(out.output == null ? "" : out.output) : String(out.error || "工具执行失败");
+        ctx.steps[step.id] = text;
+        ctx.prev = text;
+        results.push({
+          id: step.id, title: step.title || step.id, type: step.type,
+          status: out.success ? "done" : "error", output: out.success ? text : "",
+          error: out.success ? undefined : text, ms: Date.now() - t0, warnings: rendered.warnings,
+        });
+        if (!out.success && !step.continueOnError) aborted = true;
+      }
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      ctx.steps[step.id] = "";
+      results.push({ id: step.id, title: step.title || step.id, type: step.type, status: "error", output: "", error: msg, ms: Date.now() - t0 });
+      if (!step.continueOnError) aborted = true;
+    }
+  }
+  return results;
 }
 
 function loadTasks() {
@@ -3261,6 +3341,69 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const r = await executeToolCore(name, args);
       return json(res, r);
     }
+    // --- 工作流 API（v14.1）---
+    const wfMatch = url.pathname.match(/^\/api\/workflows(?:\/([^/]+))?(?:\/(run))?$/);
+    if (wfMatch) {
+      const wfId = wfMatch[1];
+      const wfRun = wfMatch[2] === "run";
+      if (!wfId) {
+        if (req.method === "POST") {
+          const wf = await body(req);
+          if (!WORKFLOW_MOD) return json(res, { error: "工作流模块不可用" }, 500);
+          const err = WORKFLOW_MOD.validateWorkflow(wf);
+          if (err) return json(res, { error: err }, 400);
+          wf.id = "wf_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          wf.createdAt = (/* @__PURE__ */ new Date()).toISOString();
+          const list = loadWorkflows();
+          list.push(wf);
+          saveWorkflows(list);
+          return json(res, { ok: true, workflow: wf });
+        }
+        return json(res, { workflows: loadWorkflows() });
+      }
+      const list = loadWorkflows();
+      const idx = list.findIndex((x) => x.id === wfId);
+      if (idx < 0) return json(res, { error: "未找到工作流" }, 404);
+      if (wfRun && req.method === "POST") {
+        if (!WORKFLOW_MOD) return json(res, { error: "工作流模块不可用" }, 500);
+        const rows = sharedDb ? db.getAllSettings() : [];
+        const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+        if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
+        const { inputs } = await body(req);
+        const collected = WORKFLOW_MOD.collectInputs(list[idx], inputs || {});
+        if (collected.error) return json(res, { error: collected.error }, 400);
+        const t0 = Date.now();
+        const results = await runWorkflow(list[idx], collected.values, { base: st.apiBaseUrl, key: st.apiKey, model: st.model });
+        const failed = results.some((r) => r.status === "error");
+        // 记录最近一次执行（面板直接展示，不用再翻日志）
+        const fresh = loadWorkflows();
+        const it = fresh.find((x) => x.id === wfId);
+        if (it) {
+          it.lastRun = (/* @__PURE__ */ new Date()).toISOString();
+          it.lastStatus = failed ? "error" : "done";
+          it.lastSummary = WORKFLOW_MOD.summarizeRun(results);
+          saveWorkflows(fresh);
+        }
+        return json(res, { ok: !failed, ms: Date.now() - t0, steps: results });
+      }
+      if (req.method === "PUT") {
+        const patch = await body(req);
+        const merged = { ...list[idx], ...patch, id: wfId };
+        if (WORKFLOW_MOD) {
+          const err = WORKFLOW_MOD.validateWorkflow(merged);
+          if (err) return json(res, { error: err }, 400);
+        }
+        list[idx] = merged;
+        saveWorkflows(list);
+        return json(res, { ok: true, workflow: merged });
+      }
+      if (req.method === "DELETE") {
+        saveWorkflows(list.filter((x) => x.id !== wfId));
+        return json(res, { ok: true });
+      }
+      return json(res, { error: "不支持的方法" }, 405);
+    }
+
     // --- 定时任务 API ---
     const tasksMatch = url.pathname.match(/^\/api\/scheduled-tasks(?:\/([^/]+))?(?:\/(run))?$/);
     if (tasksMatch) {

@@ -28,6 +28,7 @@ const SkillMarket = lazy(() => import('../panels/SkillMarket'));
 const MemoryPanel = lazy(() => import('../panels/MemoryPanel'));
 const OutputsPanel = lazy(() => import('../panels/OutputsPanel'));
 const ScheduledTasksPanel = lazy(() => import('../panels/ScheduledTasksPanel'));
+const WorkflowPanel = lazy(() => import('../panels/WorkflowPanel'));
 const BrowserOverlay = lazy(() => import('./BrowserOverlay'));
 const CodeView = lazy(() => import('../code/CodeView'));
 const VoiceCall = lazy(() => import('../media/VoiceCall'));
@@ -498,6 +499,8 @@ function MainApp() {
         return <MemoryPanel embedded onClose={() => closeTab(tab.id)} />;
       case 'tasks':
         return <ScheduledTasksPanel embedded onClose={() => closeTab(tab.id)} />;
+      case 'workflow':
+        return <WorkflowPanel onClose={() => closeTab(tab.id)} />;
       case 'qqbot':
         return <QQBotTab />;
       case 'settings':

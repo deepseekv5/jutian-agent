@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare'
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare'
 
 export interface WorkTab {
   id: string
@@ -26,6 +26,7 @@ export const PAGE_META: Record<PageType, { label: string; labelEn?: string; icon
   skills: { label: 'Skills', labelEn: 'Skills', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z' },
   code: { label: 'Code', labelEn: 'Code', icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z' },
   memory: { label: '记忆', labelEn: 'Memory', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+  workflow: { label: '工作流', labelEn: 'Workflows', icon: 'M4 6h16M4 12h10M4 18h7' },
   tasks: { label: '任务', labelEn: 'Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
   qqbot: { label: 'QQ', labelEn: 'QQ', icon: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
   settings: { label: '设置', labelEn: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
