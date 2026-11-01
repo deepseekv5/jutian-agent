@@ -3416,7 +3416,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           task.id = "task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
           task.createdAt = (/* @__PURE__ */ new Date()).toISOString();
           task.enabled = task.enabled !== false;
-          task.mode = task.mode === "agent" ? "agent" : "text";
+          task.mode = ["agent", "workflow"].includes(String(task.mode)) ? String(task.mode) : "text";
+          if (task.mode === "workflow" && !task.workflowId) return json(res, { error: "workflow 模式需要选择工作流" }, 400);
           // nextRun 计算（v14 修复）：此前这里不算，任务创建后永远不会触发
           const nr = computeNextRun(task);
           if (nr.error) return json(res, { error: nr.error }, 400);
@@ -3439,7 +3440,16 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
         try {
           let result;
-          if (task.mode === "agent") {
+          if (task.mode === "workflow" && task.workflowId) {
+            const wf = loadWorkflows().find((x) => x.id === task.workflowId);
+            if (!wf) return json(res, { error: "关联的工作流不存在" }, 404);
+            const col = WORKFLOW_MOD ? WORKFLOW_MOD.collectInputs(wf, task.inputs || {}) : { values: task.inputs || {} };
+            if (col.error) return json(res, { error: col.error }, 400);
+            const rs = await runWorkflow(wf, col.values, { base: st.apiBaseUrl, key: st.apiKey, model: st.model });
+            const failed = rs.some((x) => x.status === "error");
+            const last = [...rs].reverse().find((x) => x.status === "done");
+            result = (failed ? "工作流有步骤失败：" : "工作流完成：") + (WORKFLOW_MOD ? WORKFLOW_MOD.summarizeRun(rs) : "") + "\n\n" + String((last && last.output) || "").slice(0, 2000);
+          } else if (task.mode === "agent") {
             const r0 = await runTaskAgent(st.apiBaseUrl, st.apiKey, st.model, task);
             result = r0.result + (r0.trace.length ? "\n\n（工具调用：" + r0.trace.map((x) => x.tool + (x.ok ? "" : "✗")).join("、") + "）" : "");
           } else {
@@ -6308,6 +6318,22 @@ function runScheduler() {  try {
       saveTasks(tasks);
       const taskId = t.id;
       const type = t.type || "once";
+      // v14.1：workflow 模式直接跑已编排好的工作流（最适合「固定流程 + 定时」）
+      if (t.mode === "workflow" && t.workflowId) {
+        const wf = loadWorkflows().find((x) => x.id === t.workflowId);
+        if (!wf) { failTask(taskId, "关联的工作流不存在（可能已被删除）"); continue; }
+        const collected = WORKFLOW_MOD ? WORKFLOW_MOD.collectInputs(wf, t.inputs || {}) : { values: t.inputs || {} };
+        if (collected.error) { failTask(taskId, collected.error); continue; }
+        runWorkflow(wf, collected.values, { base, key, model })
+          .then((results) => {
+            const failed = results.some((r) => r.status === "error");
+            const last = [...results].reverse().find((r) => r.status === "done");
+            const summary = WORKFLOW_MOD ? WORKFLOW_MOD.summarizeRun(results) : "";
+            finishTask(taskId, type, (failed ? "工作流有步骤失败：" : "工作流完成：") + summary + "\n\n" + String((last && last.output) || "").slice(0, 2000));
+          })
+          .catch((e) => failTask(taskId, "工作流执行失败：" + String((e && e.message) || e)));
+        continue;
+      }
       // v14：agent 模式带工具真实执行；text 模式保持原样（纯文本产出）
       if (t.mode === "agent") {
         runTaskAgent(base, key, model, t)

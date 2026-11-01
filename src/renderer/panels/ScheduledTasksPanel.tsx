@@ -25,7 +25,8 @@ interface ScheduledTask {
   enabled: boolean
   createdAt: string
   cron?: string
-  mode?: 'text' | 'agent'
+  mode?: 'text' | 'agent' | 'workflow'
+  workflowId?: string
   status?: string
   lastResult?: string
   lastRun?: string
@@ -52,7 +53,9 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
   const [newContent, setNewContent] = useState('')
   const [newType, setNewType] = useState<'once' | 'daily' | 'weekly'>('once')
   const [newSchedule, setNewSchedule] = useState('')
-  const [newMode, setNewMode] = useState<'text' | 'agent'>('text')
+  const [newMode, setNewMode] = useState<'text' | 'agent' | 'workflow'>('text')
+  const [workflows, setWorkflows] = useState<{ id: string; name: string }[]>([])
+  const [newWorkflowId, setNewWorkflowId] = useState('')
   const [creating, setCreating] = useState(false)
   const [err, setErr] = useState('')
   const [runningId, setRunningId] = useState<string | null>(null)
@@ -65,6 +68,11 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
     } catch { /* 服务不可用时保留上次列表 */ }
   }, [])
   useEffect(() => { refresh(); const t = setInterval(refresh, 15000); return () => clearInterval(t) }, [refresh])
+  useEffect(() => {
+    fetchCompat('/api/workflows').then(r => r.json())
+      .then(j => setWorkflows(Array.isArray(j?.workflows) ? j.workflows.map((w: any) => ({ id: w.id, name: w.name })) : []))
+      .catch(() => {})
+  }, [])
 
   const handleCreate = async () => {
     if (!newTitle.trim()) { setErr('请填写任务标题'); return }
@@ -74,6 +82,10 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
     try {
       const body: Record<string, unknown> = {
         title: newTitle.trim(), content: newContent.trim(), type: newType, mode: newMode, enabled: true,
+      }
+      if (newMode === 'workflow') {
+        if (!newWorkflowId) { setErr('请选择要运行的工作流'); return }
+        body.workflowId = newWorkflowId
       }
       if (newType === 'once') body.delayMinutes = Math.max(1, parseInt(newSchedule, 10) || 60)
       else body.cron = newSchedule.trim()
@@ -151,6 +163,9 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
                         <span className="text-[10px] px-2 py-0.5 rounded-full shrink-0" style={{ background: task.enabled ? '#34d39922' : c.bgInput, color: task.enabled ? '#059669' : c.textMuted }}>
                           {task.enabled ? '运行中' : '已暂停'}
                         </span>
+                        {task.mode === 'workflow' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full shrink-0" style={{ background: `${c.accent}18`, color: c.accent }}>工作流</span>
+                        )}
                         {task.mode === 'agent' && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full shrink-0" style={{ background: `${c.accent}18`, color: c.accent }}>带工具</span>
                         )}
@@ -216,7 +231,7 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
             <div className="flex items-center gap-2">
               <span className="text-[11.5px]" style={{ color: c.textTertiary }}>执行模式</span>
               <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                {([['text', '纯文本'], ['agent', '带工具执行']] as const).map(([v, zh]) => (
+                {([['text', '纯文本'], ['agent', '带工具执行'], ['workflow', '跑工作流']] as const).map(([v, zh]) => (
                   <button key={v} onClick={() => setNewMode(v)} className="px-2.5 h-7 text-[11px]"
                     style={{ background: newMode === v ? c.accent : 'transparent', color: newMode === v ? '#fff' : c.textTertiary }}>
                     {zh}
@@ -224,9 +239,21 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
                 ))}
               </div>
               <span className="text-[10.5px]" style={{ color: c.textMuted }}>
-                {newMode === 'agent' ? '可读写文件、执行命令、联网（最多 6 轮）' : '只生成文字，不操作系统'}
+                {newMode === 'agent' ? '可读写文件、执行命令、联网（最多 6 轮）'
+                  : newMode === 'workflow' ? '按编排好的步骤依次执行' : '只生成文字，不操作系统'}
               </span>
             </div>
+            {newMode === 'workflow' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11.5px]" style={{ color: c.textTertiary }}>工作流</span>
+                <select value={newWorkflowId} onChange={e => setNewWorkflowId(e.target.value)}
+                  className="flex-1 px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ border: `1px solid ${c.border}`, background: c.bgInput, color: c.text }}>
+                  <option value="">（选择工作流）</option>
+                  {workflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+                {workflows.length === 0 && <span className="text-[10.5px]" style={{ color: c.textMuted }}>先在「工作流」里创建</span>}
+              </div>
+            )}
 
             <div className="flex gap-2">
               <select value={newType} onChange={e => setNewType(e.target.value as 'once' | 'daily' | 'weekly')} className="px-3 py-2 rounded-lg text-xs outline-none" style={{ border: `1px solid ${c.border}`, background: c.bgInput, color: c.text }}>
