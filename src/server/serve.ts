@@ -2814,6 +2814,8 @@ function promisifyGzip(buf) {
 // 渲染层崩溃原先只写 console，用户看不到、报障时也拿不到线索。
 // 这里保留最近 50 条（内存，重启即清），诊断页一并返回。
 var CLIENT_ERRORS = [];
+// 最近一次上游接力记录（v15.2）：主模型失败降级到免费线路时，界面据此提示用户
+var lastRelayUsed = "";
 
 // ─── 开放本地 API：把本机当成一个 OpenAI 兼容服务，供其它工具调用 ───
 // 安全取向见 shared/localApi（有测试）：默认关闭；只认显式生成的 Key；
@@ -3195,6 +3197,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (url.pathname === "/api/health") return json(res, {
       status: "ok", agent: "巨天agent", version: PKG.version, tools: Object.keys(TOOLS).length,
       platform: process.platform, workDir: globalWorkDir || null, defaultWorkDir: DEFAULT_WORKSPACE,
+      lastRelay: lastRelayUsed || "",
       // 诊断级快照：排查环境问题时一个请求看全（v13.2）
       uptime_s: Math.round(process.uptime()),
       memory: { rss_mb: Math.round(process.memoryUsage().rss / 1048576), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576) },
@@ -3961,7 +3964,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
                   let j2 = null;
                   try { j2 = JSON.parse(await r2.text()); } catch {}
                   if (!bodyEmpty(j2)) {
-                    res.writeHead(200, { ...sseHeaders, "X-Relay-Used": `${u.name}(429-retry)` });
+                    lastRelayUsed = `${u.name}(429-retry)`;
+                    res.writeHead(200, { ...sseHeaders, "X-Relay-Used": lastRelayUsed });
                     res.end(JSON.stringify(j2));
                     return;
                   }
@@ -3984,7 +3988,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
               }
             }
             if (!bodyEmpty(j)) {
-              res.writeHead(200, { ...sseHeaders, "X-Relay-Used": u.name });
+              lastRelayUsed = u.name;
+              res.writeHead(200, { ...sseHeaders, "X-Relay-Used": lastRelayUsed });
               res.end(JSON.stringify(j));
               return;
             }

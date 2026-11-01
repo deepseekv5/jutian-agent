@@ -1114,6 +1114,14 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         setMessages(await listMessages(sessionId))
       }
       abortRef.current = null
+      // 上游降级检测（v15.2）：放在 finally 保证三个引擎都覆盖到。
+      // 主模型失败时代理会静默切免费模型，用户只会觉得「变笨了」。
+      try {
+        const h = await fetch('/api/health').then((r) => r.json())
+        if (h?.lastRelay) {
+          window.dispatchEvent(new CustomEvent('chat-relay-fallback', { detail: { relay: h.lastRelay } }))
+        }
+      } catch { /* 检测失败不影响主流程 */ }
     }
 
     // ─── 目标模式：本轮回复完成后，独立评估器判定是否达成；未达成且未超轮次则自动续跑 ───
