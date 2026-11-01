@@ -22,6 +22,7 @@ import { effectiveApiKey } from '../store/storage'
 import { executeTool } from './tools'
 import type { StreamCallbacks } from './stream'
 import { checkRepeatCall, callSignature } from '../../shared/toolLoopGuard'
+import { filterTools, repairToolCallJson, stepToolFilter } from '../../shared/toolFilter'
 
 /** 单次请求的最大工具轮次（SDK 的 stepCountIs 语义：一轮 = 一次模型调用 + 其工具执行） */
 const MAX_STEPS = 12
@@ -60,7 +61,9 @@ function toModelMessages(messages: OpenAIMsg[]): unknown[] {
       if (text) parts.push({ type: 'text', text })
       for (const tc of m.tool_calls || []) {
         let input: unknown = {}
-        try { input = JSON.parse(tc.function?.arguments || '{}') } catch { input = {} }
+        try { input = JSON.parse(tc.function?.arguments || '{}') } catch {
+          input = repairToolCallJson(tc.function?.arguments || '{}') ?? {}
+        }
         parts.push({ type: 'tool-call', toolCallId: tc.id, toolName: tc.function?.name || '', input })
       }
       // 空 assistant 消息跳过（SDK 不接受空 content）
@@ -92,6 +95,10 @@ export async function streamChatVercel(
     try { return JSON.parse(localStorage.getItem('harness-disabled-tools') || '[]') as string[] } catch { return [] }
   })()
   const allTools = [...BUILTIN_TOOLS, ...(extraTools || [])].filter((t) => !disabled.includes(t.name))
+  // 动态过滤（v15.1）：只发与对话相关的工具（50 → ~15），省 token 提高选择准确率
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+  const userText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : (Array.isArray(messages) && messages.length > 0 ? String(messages[0]?.content ?? '') : '')
+  const activeTools = filterTools(allTools, userText) as typeof allTools
 
   // 走本地代理：provider 会把请求发到 `${baseURL}/chat/completions`，
   // 这里用自定义 fetch 把它改写成 POST /api/llm-proxy（代理内部再拼上游地址）。
@@ -117,7 +124,7 @@ export async function streamChatVercel(
   const toolCallLog: ToolCall[] = []
   // 跨轮累计：同一签名调用次数（软提醒/硬拦截）
   const callSignatures = new Map<string, number>()
-  const tools = Object.fromEntries(allTools.map((t) => [
+  const tools = Object.fromEntries(activeTools.map((t) => [
     t.name,
     (tool as any)({
       description: t.description,
@@ -193,6 +200,12 @@ export async function streamChatVercel(
       messages: toModelMessages(messages) as never,
       tools: tools as never,
       stopWhen: stepCountIs(MAX_STEPS),
+      // 智能步骤控制（v15.1）：第一步只给只读工具，防止模型没读文件就直接写
+      prepareStep: ({ stepNumber }: { stepNumber: number }) => {
+        const readonly = stepToolFilter(stepNumber)
+        if (!readonly) return {}
+        return { activeTools: readonly }
+      },
       // 工具审批（v15）：高风险工具需要用户确认。
       // SDK 内置审批机制：toolApproval 配置决定哪些工具需要审批，
       // 审批通过后才执行 execute。
