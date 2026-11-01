@@ -11,6 +11,7 @@
  */
 import React, { useCallback, useEffect, useState } from 'react'
 import { fetchCompat } from '../api'
+import { MCP_PRESETS, buildPresetServer, isOneClick, type McpPreset } from '../../shared/mcpPresets'
 
 type Transport = 'stdio' | 'http' | 'sse'
 
@@ -58,6 +59,7 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
   const [msg, setMsg] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [permOpen, setPermOpen] = useState<string | null>(null)
+  const [presetsOpen, setPresetsOpen] = useState(false)
 
   const refresh = useCallback(async (refreshTools = false) => {
     try {
@@ -123,6 +125,31 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
     finally { setLoading(false) }
   }
 
+  /** 预设 → 表单/直接添加（v14）：需要参数的只预填，不替用户瞎猜目录 */
+  const applyPreset = async (p: McpPreset) => {
+    const payload = buildPresetServer(p)
+    if (!isOneClick(p)) {
+      setTransport(payload.type)
+      setName(payload.name)
+      setCommand(payload.command)
+      setArgs(payload.args)
+      setUrl(payload.url)
+      setTest(null)
+      setMsg(p.needs ? '已填入表单：' + p.needs : '已填入表单')
+      return
+    }
+    setLoading(true)
+    try {
+      const r = await fetchCompat('/api/mcp/servers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      const d = await r.json()
+      if (d.error) setMsg(d.error)
+      else { setMsg(`已添加 ${p.name}，正在拉取工具…`); await refresh(true) }
+    } catch (e: any) { setMsg(String(e.message || e)) }
+    finally { setLoading(false) }
+  }
+
   const toggle = async (s: McpServer) => {
     await fetchCompat('/api/mcp/servers/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) })
     refresh(true)
@@ -146,6 +173,32 @@ export default function McpSection({ c, t }: { c: any; t: (zh: string, en: strin
         {t('接入任何 MCP Server（本地进程或远程地址），它的工具会自动出现在对话与集群里。命名规则 mcp__服务__工具。',
           'Plug in any MCP Server (local process or remote URL); its tools appear in chat and swarm. Named mcp__server__tool.')}
       </p>
+
+      {/* 推荐服务（v14）：一键装官方 server，省去查包名 */}
+      <div>
+        <button onClick={() => setPresetsOpen(v => !v)} className="text-[10.5px] font-medium" style={{ color: c.accent }}>
+          {presetsOpen ? '▾' : '▸'} {t('推荐服务（一键添加）', 'Recommended servers')}
+        </button>
+        {presetsOpen && (
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            {MCP_PRESETS.map(p => (
+              <button key={p.id} onClick={() => applyPreset(p)} disabled={loading}
+                className="text-left px-2.5 py-2 rounded-lg transition-colors disabled:opacity-50"
+                style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11.5px] font-semibold truncate" style={{ color: c.textHead }}>{p.name}</span>
+                  <span className="text-[9px] px-1 rounded" style={{ background: c.surfaceHover, color: c.textTertiary }}>
+                    {p.type === 'stdio' ? t('本地', 'local') : 'HTTP'}
+                  </span>
+                  {p.readOnly && <span className="text-[9px] px-1 rounded" style={{ background: `${c.accent}18`, color: c.accent }}>{t('只读', 'RO')}</span>}
+                  {!isOneClick(p) && <span className="text-[9px] px-1 rounded" style={{ background: '#f59e0b22', color: '#b45309' }}>{t('需填参数', 'params')}</span>}
+                </div>
+                <div className="text-[10px] mt-0.5 leading-snug" style={{ color: c.textTertiary }}>{p.description}</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* 服务列表 */}
       {servers.map(s => {
