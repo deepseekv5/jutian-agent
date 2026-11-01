@@ -10,7 +10,7 @@ import { buildReport, reportToMarkdown, checkApiConfig, checkWorkDir, checkNodeV
 import { isPersistent } from '../utils/safeStorage'
 import { APP_VERSION } from '../brand'
 import { fetchCompat } from '../api'
-import { perfSummary } from '../engine/agentPerf'
+import { perfSummary } from '../../shared/agentPerf'
 import type { PerfReport } from '../engine/agentPerf'
 
 

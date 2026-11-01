@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useReducer } from 'react'
 import type { Message, Settings, ToolCall, ToolDef, AttachedFile } from '../types'
 import { BUILTIN_TOOLS } from '../types'
 import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter, effectiveApiKey } from '../store/storage'
+import { streamChatViaServer } from '../engine/serverStream'
 import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { planCompression, mergeSummary, buildCompressedMessages, type ApiMsgLike } from '../engine/contextCompress'
 import { executeTool } from '../engine/tools'
@@ -1080,7 +1081,15 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const onPerf = (r: { totalMs: number; rounds: number; llmMs: number; toolMs: number; toolCalls: number; toolErrors: number }) => {
         window.dispatchEvent(new CustomEvent('chat-perf', { detail: { sessionId, ...r } }))
       }
-      await streamChat(settings, apiMessages, { ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools)
+      // 内核选择（v14.3）：默认走服务端循环（工具零回环、定时任务同源）；
+      // 设置里可切回渲染层循环作为对照/兜底
+      const engine = settings.agentEngine === 'client' ? 'client' : 'server'
+      const callArgs = [{ ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools] as const
+      if (engine === 'server') {
+        await streamChatViaServer(settings, apiMessages, ...callArgs)
+      } else {
+        await streamChat(settings, apiMessages, ...callArgs)
+      }
     } finally {
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {

@@ -786,6 +786,18 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     </button>
                   </div>
                   <div className="space-y-1">
+                    <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Agent 内核', 'Agent engine')}</label>
+                    <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
+                      {([['server', '服务端'], ['client', '兼容']] as const).map(([v, zh]) => (
+                        <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
+                          className="flex-1 px-2 py-1 text-[10.5px] transition-colors"
+                          style={{ background: (form.agentEngine || 'server') === v ? (c.accent || '#10a37f') : 'transparent', color: (form.agentEngine || 'server') === v ? '#fff' : c.textTertiary }}>
+                          {t(zh, v === 'server' ? 'Server' : 'Legacy')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Hermes 工具协议', 'Hermes tool protocol')}</label>
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
                       {([['auto', '自动'], ['on', '开'], ['off', '关']] as const).map(([v, zh]) => (

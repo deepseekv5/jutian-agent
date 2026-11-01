@@ -21,12 +21,12 @@ import {
   parseToolCallsFromDelta, accumulateToolCallDelta,
   adoptNonStreamToolCalls, toolCallsToArray,
   type ToolCallAccum,
-} from './toolCallStream'
+} from '../../shared/toolCallStream'
 import { buildHttpErrorMessage } from './httpErrors'
-import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from './toolLoopGuard'
-import { createAgentPerf } from './agentPerf'
+import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from '../../shared/toolLoopGuard'
+import { createAgentPerf } from '../../shared/agentPerf'
 import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from '../../shared/retry'
-import type { PerfReport } from './agentPerf'
+import type { PerfReport } from '../../shared/agentPerf'
 
 export interface StreamCallbacks {
   onChunk: (delta: string) => void

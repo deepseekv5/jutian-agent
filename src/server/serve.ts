@@ -238,6 +238,7 @@ var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
 var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
+var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
@@ -3316,6 +3317,118 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       return json(res, { success: true, checks: check, allOk: check.every((c) => c.ok), clientErrors: CLIENT_ERRORS.slice(0, 20) });
     }
     if (url.pathname === "/api/tools") return json(res, { tools: Object.keys(TOOLS).map((k) => ({ name: k })) });
+    /**
+     * Agent 主循环（v14.3）：循环搬进服务端。
+     *
+     * 渲染层 POST 消息与工具定义，服务端跑循环、直接执行工具（不再每次 HTTP
+     * 回环），用 SSE 把事件推回去。定时任务/Webhook 复用同一个循环。
+     *
+     * 无状态续跑：遇到「需要用户确认」或「客户端工具」时，把消息原样返回
+     * （needs_client 事件），渲染层处理完带着新消息重新 POST。
+     */
+    if (url.pathname === "/api/agent/run" && req.method === "POST") {
+      if (!AGENT_LOOP) return json(res, { error: "agent 循环模块不可用" }, 500);
+      const payload = await body(req);
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      const tools = Array.isArray(payload.tools) ? payload.tools : [];
+      const rows = sharedDb ? db.getAllSettings() : [];
+      const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+      const apiBase = String(payload.apiBase || st.apiBaseUrl || "");
+      const apiKey = String(payload.apiKey || st.apiKey || "");
+      const model = String(payload.model || st.model || "");
+      if (!model) return json(res, { error: "未选择模型" }, 400);
+      if (payload.workDir) { try { setWorkDir(String(payload.workDir)) } catch {} }
+
+      // SSE 头
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      const send = (obj) => { try { res.write("data: " + JSON.stringify(obj) + "\n\n") } catch {} };
+      const abort = new AbortController();
+      req.on("close", () => { try { abort.abort() } catch {} });
+
+      const clientTools = new Set(["dispatch_subagents", "update_plan"]);
+      const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
+
+      try {
+        const result = await AGENT_LOOP.runAgentLoop(messages, {
+          tools,
+          model,
+          apiBase,
+          contextWindow: Number(payload.contextWindow) || 0,
+          hermesMode: payload.hermesMode,
+          disabledTools: Array.isArray(payload.disabledTools) ? payload.disabledTools : [],
+          resume: payload.resume || undefined,
+          pendingTool: payload.pendingTool || undefined,
+          signal: abort.signal,
+          // 内部转发到 llm-proxy（不是上游直连）：密钥解析、Kilo 免费档、
+          // free/keyless 哨兵、上游接力全都在代理里，直接打上游会绕过它们。
+          // 回环 HTTP 约 1ms，相比省掉的「每次工具一次往返」可以忽略。
+          callLLM: (bodyStr, signal) => fetch("http://127.0.0.1:" + PORT + "/api/llm-proxy", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(apiBase ? { "X-Target-Base": apiBase } : {}),
+              ...(apiKey ? { "X-Api-Key": apiKey } : {}),
+              ...(APP_UI_TOKEN ? { "X-App-Token": APP_UI_TOKEN } : {}),
+            },
+            body: bodyStr,
+            signal,
+          }),
+          isClientTool: (name) => clientTools.has(name),
+          needsClient: (tc) => {
+            if (clientTools.has(tc.name)) return "client_tool";
+            // 「需要我确认」档：写/删/命令类必须先问
+            const level = String(payload.permissionLevel || st.permissionLevel || "edit");
+            if (level === "ask" && /^(write_file|edit_file|delete_file|move_file|shell|npm_run|git_operation)$/.test(tc.name) && !(tc.id in confirmed)) return "confirm";
+            return null;
+          },
+          confirmTool: async (tc) => {
+            const v = confirmed[tc.id];
+            return v === undefined || v === null || v === true ? null : String(v);
+          },
+          runTool: async (name, args) => {
+            // 与 /api/tools/execute 同一套门禁
+            const sec = securityConfig();
+            const secError = checkSecurity(name, args, sec);
+            if (secError) return { success: false, error: "【安全策略】" + secError };
+            const platErr = toolPlatformError(name);
+            if (platErr) return { success: false, error: platErr };
+            return await executeToolCore(name, args);
+          },
+          saveLargeOutput: async (name, text) => {
+            const fname = "tool-outputs/" + name + "-" + Date.now() + ".txt";
+            const r = await executeToolCore("write_file", { path: fname, content: text });
+            return r && r.success ? fname : null;
+          },
+          events: {
+            onChunk: (t) => send({ type: "chunk", text: t }),
+            onThinking: (t) => send({ type: "thinking", text: t }),
+            onToolDraft: (name) => send({ type: "tool_draft", name }),
+            onToolStart: (tc) => send({ type: "tool_start", tool: tc }),
+            onToolEnd: (tc) => send({ type: "tool_end", tool: tc }),
+            onNetStatus: (phase, info) => send({ type: "net", phase, info }),
+            onPerf: (r) => { send({ type: "perf", report: r }); try { const store = loadJson("perf_log.json"); store.items = store.items || []; store.items.unshift({ ...r, ts: Date.now() }); if (store.items.length > 100) store.items.length = 100; saveJson("perf_log.json", store); } catch {} },
+          },
+        });
+        send({ type: "done", content: result.content, thinking: result.thinking, toolCalls: result.toolCalls, stopped: result.stopped, error: result.error });
+      } catch (e) {
+        if (e && e.name === "NeedsClientError") {
+          send({ type: "needs_client", kind: e.kind, tool: e.toolCall, messages: e.messages, partial: e.partial });
+        } else if (e && (e.name === "AbortError" || abort.signal.aborted)) {
+          send({ type: "aborted" });
+        } else {
+          send({ type: "error", message: String((e && e.message) || e) });
+        }
+      } finally {
+        try { res.end() } catch {}
+      }
+      return;
+    }
+
     if (url.pathname === "/api/tools/execute" && req.method === "POST") {
       const { name, args = {} } = await body(req);
       // 工作目录是**全局**状态（影响后续所有请求），不能让任意请求随手改。
