@@ -35,6 +35,10 @@ export default function WorkflowPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [openStep, setOpenStep] = useState<string | null>(null)
+  // AI 生成（v14.2）：自然语言描述 → 工作流草稿（后端调模型 + 校验，这里只负责收集与预填）
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiDesc, setAiDesc] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -109,6 +113,21 @@ export default function WorkflowPanel({ onClose }: { onClose: () => void }) {
     setEditing({ ...editing, inputs: inputs2 })
   }
 
+  const generate = async () => {
+    if (!aiDesc.trim()) { setMsg('请先描述你想要的自动化流程'); return }
+    setAiBusy(true); setMsg('')
+    try {
+      const r = await fetchCompat('/api/workflows/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: aiDesc.trim() }),
+      }).then(x => x.json())
+      if (r.error) { setMsg(r.error); return }
+      setEditing(r.workflow)
+      setAiOpen(false); setAiDesc('')
+      setMsg('已生成草稿，请检查步骤与参数后保存')
+    } catch (e: any) { setMsg(String(e.message || e)) }
+    finally { setAiBusy(false) }
+  }
+
   const placeholderHelp = useMemo(() => [
     { code: '{{input.KEY}}', desc: '运行时填的输入' },
     { code: '{{step.ID.output}}', desc: '某一步的输出' },
@@ -123,6 +142,10 @@ export default function WorkflowPanel({ onClose }: { onClose: () => void }) {
         <button onClick={() => { setEditing(emptyWorkflow()); setMsg('') }}
           className="h-9 px-4 rounded-lg text-[13px] font-medium" style={{ background: c.textHead, color: c.bg }}>
           新建工作流
+        </button>
+        <button onClick={() => setAiOpen(true)} className="h-9 px-3 rounded-lg text-[12.5px] font-medium"
+          style={{ background: `${c.accent}18`, color: c.accent }}>
+          AI 生成
         </button>
         <span className="text-[11px]" style={{ color: c.textMuted }}>
           步骤可用 {'{{input.x}}'} / {'{{step.id.output}}'} / {'{{prev.output}}'} 传值
@@ -166,6 +189,27 @@ export default function WorkflowPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+
+      {/* AI 生成 */}
+      {aiOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: c.modalOverlay }} onClick={() => setAiOpen(false)}>
+          <div className="rounded-xl p-5 space-y-3 glass-strong" style={{ width: 520, border: `1px solid ${c.border}` }} onClick={e => e.stopPropagation()}>
+            <h3 className="text-[15px] font-semibold" style={{ color: c.textHead }}>AI 生成工作流</h3>
+            <textarea value={aiDesc} onChange={e => setAiDesc(e.target.value)} rows={4} autoFocus
+              placeholder="用自然语言描述自动化流程，例如：抓取 https://example.com 的正文，总结成 3 条要点，保存到 knowledge.md"
+              className="w-full px-3 py-2 rounded-lg text-[12.5px] outline-none resize-y"
+              style={{ border: `1px solid ${c.border}`, background: c.bgInput, color: c.text }} />
+            <p className="text-[10.5px]" style={{ color: c.textMuted }}>
+              生成的是草稿——保存前请在编辑器里检查每一步的工具与参数。
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setAiOpen(false)} className="px-4 py-2 rounded-lg text-[12px]" style={{ color: c.textSecondary }}>取消</button>
+              <button onClick={generate} disabled={aiBusy} className="px-4 py-2 rounded-lg text-[12px] font-medium disabled:opacity-30"
+                style={{ background: c.accent, color: c.accentText }}>{aiBusy ? '生成中…' : '生成草稿'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 编辑器 */}
       {editing && (

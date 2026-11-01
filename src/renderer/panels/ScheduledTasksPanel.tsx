@@ -31,6 +31,7 @@ interface ScheduledTask {
   lastResult?: string
   lastRun?: string
   delayMinutes?: number
+  history?: { ts: number; status: string; summary: string }[]
 }
 
 const TYPE_LABELS: Record<string, string> = { once: '一次性', daily: '每天', weekly: '每周' }
@@ -205,6 +206,18 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
                       <div className="text-[11px]" style={{ color: c.textTertiary }}>
                         上次执行：{fmtTime(task.lastRun)} · 状态：{task.status || '未执行'}
                       </div>
+                      {(task.history || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {(task.history || []).slice(0, 10).map((h, i) => (
+                            <span key={i} className="text-[9.5px] px-1.5 py-0.5 rounded"
+                              style={{ background: h.status === 'error' ? '#ef444415' : c.bgInput, color: h.status === 'error' ? c.toolErr : c.textTertiary }}
+                              title={h.summary}>
+                              {new Date(h.ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              {h.status === 'error' ? ' 失败' : ' 成功'}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {task.lastResult && (
                         <pre className="text-[10.5px] whitespace-pre-wrap break-words max-h-48 overflow-y-auto scrollbar-thin px-2 py-1.5 rounded-lg"
                           style={{ background: c.bgInput, color: c.textSecondary }}>{task.lastResult}</pre>

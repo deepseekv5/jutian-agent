@@ -29,7 +29,7 @@ interface Props {
   onOpenFreeModels?: () => void;
 }
 
-type TabId = 'inference' | 'workspace' | 'security' | 'usage' | 'data' | 'appearance' | 'language' | 'localapi' | 'about';
+type TabId = 'inference' | 'workspace' | 'security' | 'usage' | 'data' | 'appearance' | 'language' | 'localapi' | 'integrations' | 'about';
 
 // 提供商预设：一键切换 API 地址/默认模型/上下文窗口/多模态能力
 const PROVIDERS = [
@@ -82,6 +82,7 @@ const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string;
   { tab: 'appearance', label: '背景图片与透明度', labelEn: 'Background image & opacity', desc: '外观', keywords: 'background 背景 壁纸 透明度 wallpaper' },
   { tab: 'language', label: '界面语言', labelEn: 'Interface language', desc: '语言', keywords: 'language 语言 中文 english 中英文' },
   { tab: 'data', label: '会话数据统计 / 导入导出', labelEn: 'Session stats / import & export', desc: '数据', keywords: 'data 数据 导出 导入 备份 统计 清空' },
+  { tab: 'integrations', label: 'Webhook 通知与触发', labelEn: 'Webhook notify & trigger', desc: '集成', keywords: 'webhook 集成 hook 通知 推送 触发 外部 url token' },
   { tab: 'usage', label: 'Token 用量统计', labelEn: 'Token usage', desc: '用量', keywords: 'usage 用量 tokens 统计 消耗' },
 ];
 
@@ -999,6 +1000,50 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               <p className="text-[10.5px]" style={{ color: c.textMuted }}>{t('统计基于 token 估算值，按本地存储保留 90 天。', 'Based on token estimates, stored locally for 90 days.')}</p>
             </>)}
 
+            {tab === 'integrations' && (<>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-[12.5px] font-semibold mb-1" style={{ color: c.textHead }}>{t('Webhook 通知', 'Webhook notifications')}</div>
+                  <p className="text-[11px] leading-relaxed mb-2" style={{ color: c.textTertiary }}>
+                    {t('定时任务与工作流结束时，把结果 POST 到这个地址（JSON：{event, ts, data}）。可用于对接飞书/钉钉/Slack 机器人或自建服务。', 'Task & workflow results are POSTed as {event, ts, data} JSON — great for Feishu/DingTalk/Slack bots or your own services.')}
+                  </p>
+                  <input value={form.webhook_url || ''} onChange={e => persistDebounced({ ...form, webhook_url: e.target.value })}
+                    placeholder="https://example.com/hook" className={inputCls} style={inputStyle} />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[['task_done', '任务完成'], ['task_error', '任务失败'], ['wf_done', '工作流完成'], ['wf_error', '工作流失败']].map(([v, zh]) => {
+                      const evs = String(form.webhook_events || 'task_done,task_error,wf_done,wf_error').split(',').map(x => x.trim()).filter(Boolean)
+                      const on = evs.includes(v)
+                      return (
+                        <button key={v} onClick={() => {
+                          const next = on ? evs.filter(x => x !== v) : [...evs, v]
+                          persistNow({ webhook_events: next.join(',') })
+                        }} className="px-2.5 py-1 rounded-full text-[11px] transition-colors"
+                          style={{ background: on ? `${c.accent}18` : c.bgInput, color: on ? c.accent : c.textTertiary }}>
+                          {zh}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[12.5px] font-semibold mb-1" style={{ color: c.textHead }}>{t('外部触发工作流', 'Trigger workflow from outside')}</div>
+                  <p className="text-[11px] leading-relaxed mb-2" style={{ color: c.textTertiary }}>
+                    {t('外部系统 POST /api/hooks/workflow/<工作流ID>/<token>（body 带 {"inputs": {...}}）即可运行工作流。token 留空 = 关闭入站。', 'POST /api/hooks/workflow/<id>/<token> with {"inputs": {...}} to run a workflow. Empty token = inbound disabled.')}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input value={form.hook_token || ''} onChange={e => persistDebounced({ ...form, hook_token: e.target.value })}
+                      placeholder={t('触发令牌（留空关闭入站）', 'Trigger token (empty = off)')}
+                      className={'flex-1 ' + inputCls + ' font-mono'} style={inputStyle} />
+                    <button onClick={() => {
+                      const tok = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => b.toString(16).padStart(2, '0')).join('')
+                      persistNow({ hook_token: tok })
+                    }} className="px-3 h-8 rounded-lg text-[11.5px] shrink-0" style={{ background: c.bgInput, color: c.textSecondary }}>
+                      {t('随机生成', 'Generate')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>)}
             {tab === 'data' && (<>
               <Sub c={c} title={t('备份与恢复', 'Backup & Restore')}>
                 <div className="flex gap-2 mb-1">

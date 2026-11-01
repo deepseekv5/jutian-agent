@@ -68,6 +68,10 @@ export interface Settings {
   keepAwake?: boolean
   /** Hermes 文本协议注入（v13.10.1）：auto=免费/小模型线路自动注入（默认）；on=恒注入；off=关闭 */
   hermesProtocol?: 'auto' | 'on' | 'off'
+  /** Webhook 集成（v14.2）：出站通知地址 / 订阅事件 / 入站触发令牌 */
+  webhook_url?: string
+  webhook_events?: string
+  hook_token?: string
   // 提供商与模型能力
   providerName?: string
   contextWindow?: number

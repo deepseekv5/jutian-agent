@@ -236,6 +236,7 @@ var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } cat
 // 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
+var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
@@ -3341,6 +3342,27 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const r = await executeToolCore(name, args);
       return json(res, r);
     }
+    // 入站 Webhook（v14.2）：外部系统凭 token 触发工作流
+    // 例：POST /api/hooks/workflow/wf_xxx/MyToken  body: {"inputs": {...}}
+    const hookMatch = url.pathname.match(/^\/api\/hooks\/workflow\/([^/]+)\/([^/]+)$/);
+    if (hookMatch && req.method === "POST") {
+      if (!WORKFLOW_MOD) return json(res, { error: "工作流模块不可用" }, 500);
+      if (!hookTokenOk(decodeURIComponent(hookMatch[2]))) return json(res, { error: "token 无效" }, 403);
+      const wf = loadWorkflows().find((x) => x.id === hookMatch[1]);
+      if (!wf) return json(res, { error: "未找到工作流" }, 404);
+      const rows = sharedDb ? db.getAllSettings() : [];
+      const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+      if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
+      const payload = await body(req);
+      const collected = WORKFLOW_MOD.collectInputs(wf, (payload && payload.inputs) || {});
+      if (collected.error) return json(res, { error: collected.error }, 400);
+      const t0 = Date.now();
+      const results = await runWorkflow(wf, collected.values, { base: st.apiBaseUrl, key: st.apiKey, model: st.model });
+      const failed = results.some((r) => r.status === "error");
+      postWebhook(failed ? "wf_error" : "wf_done", { workflowId: wf.id, name: wf.name, via: "hook", summary: WORKFLOW_MOD.summarizeRun(results) });
+      return json(res, { ok: !failed, ms: Date.now() - t0, steps: results });
+    }
+
     // --- 工作流 API（v14.1）---
     const wfMatch = url.pathname.match(/^\/api\/workflows(?:\/([^/]+))?(?:\/(run))?$/);
     if (wfMatch) {
@@ -3361,6 +3383,35 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         }
         return json(res, { workflows: loadWorkflows() });
       }
+      if (wfId === "generate" && req.method === "POST") {
+        // AI 生成工作流草稿（v14.2）：自然语言描述 → JSON 草稿，用户在编辑器里确认
+        const { description } = await body(req);
+        const desc = String(description || "").trim();
+        if (!desc) return json(res, { error: "请描述你想要的自动化流程" }, 400);
+        const rows = sharedDb ? db.getAllSettings() : [];
+        const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+        if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
+        const sys = [
+          "你是工作流编排助手。把用户的自动化需求转成 JSON 工作流草稿。",
+          "可用工具：read_file, write_file, edit_file, list_dir, search_content, search_files, shell, web_search, web_fetch, http_request, json_process, text_tools, recall, save_knowledge。",
+          "步骤类型：prompt（给模型的指令，产出文本）或 tool（调用工具）。",
+          "步骤之间用占位符传值：{{input.KEY}}（运行时输入）、{{step.ID.output}}（某步输出）、{{prev.output}}（上一步输出）。",
+          "只输出 JSON，不要任何解释。格式：",
+          '{"name":"工作流名","description":"一句话说明","inputs":[{"key":"KEY","label":"显示名","required":true}],"steps":[{"id":"s1","type":"tool","title":"步骤名","tool":"工具名","args":"{\\"url\\":\\"{{input.url}}\\"}"},{"id":"s2","type":"prompt","title":"步骤名","prompt":"基于 {{step.s1.output}} 做什么"}]}',
+        ].join("\n");
+        try {
+          const out = await callLLMOnce(st.apiBaseUrl, st.apiKey, st.model, sys, desc, 4096, 180000);
+          const m = out.match(/\{[\s\S]*\}/);
+          if (!m) return json(res, { error: "模型未返回 JSON，请换个描述重试", raw: out.slice(0, 500) }, 502);
+          const draft = JSON.parse(m[0]);
+          const err = WORKFLOW_MOD ? WORKFLOW_MOD.validateWorkflow(draft) : null;
+          if (err) return json(res, { error: "生成的工作流未通过校验：" + err, raw: out.slice(0, 500) }, 502);
+          return json(res, { ok: true, workflow: draft });
+        } catch (e) {
+          return json(res, { error: String((e && e.message) || e) }, 502);
+        }
+  return json(res, { workflows: loadWorkflows() });
+      }
       const list = loadWorkflows();
       const idx = list.findIndex((x) => x.id === wfId);
       if (idx < 0) return json(res, { error: "未找到工作流" }, 404);
@@ -3375,6 +3426,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         const t0 = Date.now();
         const results = await runWorkflow(list[idx], collected.values, { base: st.apiBaseUrl, key: st.apiKey, model: st.model });
         const failed = results.some((r) => r.status === "error");
+        postWebhook(failed ? "wf_error" : "wf_done", { workflowId: wfId, name: list[idx].name, summary: WORKFLOW_MOD.summarizeRun(results), steps: results.map((r) => ({ id: r.id, status: r.status, ms: r.ms })) });
         // 记录最近一次执行（面板直接展示，不用再翻日志）
         const fresh = loadWorkflows();
         const it = fresh.find((x) => x.id === wfId);
@@ -6316,6 +6368,41 @@ function loadTaskToolSchemas() {
   return __taskToolCache;
 }
 
+/* ─── Webhook 集成（v14.2）：结果推出去、外部事件触发进来 ─── */
+function hookSettings() {
+  const rows = sharedDb ? db.getAllSettings() : [];
+  const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  return {
+    url: String(st.webhook_url || "").trim(),
+    events: String(st.webhook_events || "task_done,task_error,wf_done,wf_error").split(",").map((x) => x.trim()).filter(Boolean),
+    token: String(st.hook_token || ""),
+  };
+}
+
+/** 出站 Webhook：fire-and-forget，5s 超时；失败只记日志不拖主流程 */
+function postWebhook(event, data) {
+  const cfg = hookSettings();
+  if (!cfg.url || !cfg.events.includes(event)) return;
+  try {
+    fetch(cfg.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, ts: Date.now(), source: "jutian-agent", data }),
+      signal: AbortSignal.timeout(5000),
+    }).catch((e) => console.error("[webhook]", event, e.message));
+  } catch (e) { console.error("[webhook]", event, e.message); }
+}
+
+/** 入站触发鉴权：token 恒时比较，避免逐字节泄露 */
+function hookTokenOk(given) {
+  const cfg = hookSettings();
+  if (!cfg.token) return false;
+  const a = Buffer.from(String(given || ""));
+  const b = Buffer.from(cfg.token);
+  if (a.length !== b.length) return false;
+  return nodeCrypto.timingSafeEqual(a, b);
+}
+
 /** 任务收尾：写结果、算下次时间、推通知（text / agent 两种模式共用） */
 function finishTask(taskId, type, result) {
   const list = loadTasks();
@@ -6323,6 +6410,9 @@ function finishTask(taskId, type, result) {
   if (!item) return;
   item.lastResult = String(result || "").slice(0, 8000);
   item.status = "done";
+  // 运行历史（v14.2）：最近 20 次，面板可查——只有 lastResult 时无法回答「最近几次成没成」
+  item.history = [{ ts: Date.now(), status: "done", summary: String(result || "").slice(0, 120) }, ...(item.history || [])].slice(0, 20);
+  postWebhook("task_done", { taskId, title: item.title || item.content, result: item.lastResult });
   if (type === "once") item.enabled = false;
   else {
     // v14：优先按 cron 算下一次（支持任意表达式），无 cron 时退回周期顺延
@@ -6346,7 +6436,9 @@ function failTask(taskId, msg) {
   if (!item) return;
   item.status = "error";
   item.lastResult = String(msg || "执行失败").slice(0, 2000);
+  item.history = [{ ts: Date.now(), status: "error", summary: String(msg || "").slice(0, 120) }, ...(item.history || [])].slice(0, 20);
   saveTasks(list);
+  postWebhook("task_error", { taskId, title: item.title || item.content, error: item.lastResult });
   // 失败必须可见（v14.1）：无人值守的任务失败后，用户只有翻列表才会发现
   try {
     pushServerNotice({ type: "system", title: "任务失败：" + String(item.title || item.content || "任务").slice(0, 30), body: String(msg || "").slice(0, 160) });
