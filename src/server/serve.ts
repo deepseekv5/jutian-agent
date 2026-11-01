@@ -5975,7 +5975,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         // Google 兜底（v14.4.2）：edge-tts 全域名 403 时，系统语音太生硬
         try {
           const g = await googleTtsSynthesize(spoken);
-          try { TTS_MOD && TTS_MOD.cacheStore(ttsCacheDir, ttsKey, "mp3", g) } catch {}
+          try { if (TTS_MOD) TTS_MOD.cacheStore(ttsCacheDir, ttsKey, "mp3", g) } catch { /* 缓存失败不影响播放 */ }
           res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/mpeg", "X-TTS-Engine": "google" });
           res.end(g);
           return;

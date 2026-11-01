@@ -69,7 +69,7 @@ export interface Settings {
   /** Hermes 文本协议注入（v13.10.1）：auto=免费/小模型线路自动注入（默认）；on=恒注入；off=关闭 */
   hermesProtocol?: 'auto' | 'on' | 'off'
   /** Agent 内核（v14.3）：server=循环跑在服务端（默认，工具零回环）；client=旧渲染层循环 */
-  agentEngine?: 'server' | 'client'
+  agentEngine?: 'vercel' | 'server' | 'client'
   /** Webhook 集成（v14.2）：出站通知地址 / 订阅事件 / 入站触发令牌 */
   webhook_url?: string
   webhook_events?: string

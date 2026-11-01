@@ -829,11 +829,11 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Agent 内核', 'Agent engine')}</label>
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                      {([['server', '服务端'], ['client', '兼容']] as const).map(([v, zh]) => (
+                      {([['vercel', 'Vercel'], ['server', '服务端'], ['client', '兼容']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
                           className="flex-1 px-2 py-1 text-[10.5px] transition-colors"
-                          style={{ background: (form.agentEngine || 'server') === v ? (c.accent || '#10a37f') : 'transparent', color: (form.agentEngine || 'server') === v ? '#fff' : c.textTertiary }}>
-                          {t(zh, v === 'server' ? 'Server' : 'Legacy')}
+                          style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || '#10a37f') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
+                          {t(zh, v === 'vercel' ? 'Vercel' : v === 'server' ? 'Server' : 'Legacy')}
                         </button>
                       ))}
                     </div>

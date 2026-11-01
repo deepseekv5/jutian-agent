@@ -1,0 +1,225 @@
+/**
+ * Agent 引擎：Vercel AI SDK（v15.0）
+ *
+ * 为什么换内核：自研循环虽然能用，但缺少成熟实现里那些经过大量真实场景打磨的
+ * 细节——工具调用的流式增量拼装、多步循环的终止判定、错误重试与降级、
+ * 结构化输出的类型安全。Vercel AI SDK 是 TypeScript 生态的事实标准，
+ * 支持任意 OpenAI 兼容端点，这里把它的 `streamText` 接成我们的引擎。
+ *
+ * 保留的能力：
+ *   - 走 /api/llm-proxy（密钥解析、免费档、上游接力全在代理里）
+ *   - 权限闸门（beforeTool）与客户端工具（onClientTool）
+ *   - 流式回调（chunk / thinking / toolStart / toolEnd / draft / net / perf）
+ *
+ * 与自研循环的差异：循环控制交给 SDK（stopWhen: stepCountIs），
+ * 不再自己累加轮次、拼 tool_calls、修复重复签名。
+ */
+import { streamText, tool, jsonSchema, stepCountIs } from 'ai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import type { Settings, ToolCall } from '../types'
+import { BUILTIN_TOOLS } from '../types'
+import { effectiveApiKey } from '../store/storage'
+import { executeTool } from './tools'
+import type { StreamCallbacks } from './stream'
+import { checkRepeatCall, callSignature } from '../../shared/toolLoopGuard'
+
+/** 单次请求的最大工具轮次（SDK 的 stepCountIs 语义：一轮 = 一次模型调用 + 其工具执行） */
+const MAX_STEPS = 12
+
+/** 客户端处理的工具（不在服务端执行） */
+const CLIENT_TOOLS = new Set(['dispatch_subagents', 'update_plan'])
+
+type OpenAIMsg = {
+  role: string
+  content?: unknown
+  tool_calls?: { id: string; function: { name: string; arguments: string } }[]
+  tool_call_id?: string
+}
+
+/** OpenAI 消息 → AI SDK ModelMessage（tool_calls 转成 content parts） */
+function toModelMessages(messages: OpenAIMsg[]): unknown[] {
+  const nameById = new Map<string, string>()
+  // 先扫一遍 assistant 消息，建立 toolCallId → 工具名映射（tool 消息需要）
+  for (const m of messages) {
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) if (tc.id && tc.function?.name) nameById.set(tc.id, tc.function.name)
+    }
+  }
+
+  const out: unknown[] = []
+  for (const m of messages) {
+    if (m.role === 'system' || m.role === 'user') {
+      const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
+      out.push({ role: m.role, content: text })
+      continue
+    }
+    if (m.role === 'assistant') {
+      const parts: unknown[] = []
+      const text = typeof m.content === 'string' ? m.content : ''
+      if (text) parts.push({ type: 'text', text })
+      for (const tc of m.tool_calls || []) {
+        let input: unknown = {}
+        try { input = JSON.parse(tc.function?.arguments || '{}') } catch { input = {} }
+        parts.push({ type: 'tool-call', toolCallId: tc.id, toolName: tc.function?.name || '', input })
+      }
+      // 空 assistant 消息跳过（SDK 不接受空 content）
+      if (parts.length === 0) continue
+      out.push({ role: 'assistant', content: parts })
+      continue
+    }
+    if (m.role === 'tool') {
+      const id = String(m.tool_call_id || '')
+      const name = nameById.get(id) || 'unknown'
+      const value = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
+      out.push({
+        role: 'tool',
+        content: [{ type: 'tool-result', toolCallId: id, toolName: name, output: { type: 'text', value } }],
+      })
+    }
+  }
+  return out
+}
+
+export async function streamChatVercel(
+  settings: Settings,
+  messages: OpenAIMsg[],
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+  extraTools?: { name: string; description: string; parameters: unknown }[],
+): Promise<void> {
+  const disabled = (() => {
+    try { return JSON.parse(localStorage.getItem('harness-disabled-tools') || '[]') as string[] } catch { return [] }
+  })()
+  const allTools = [...BUILTIN_TOOLS, ...(extraTools || [])].filter((t) => !disabled.includes(t.name))
+
+  // 走本地代理：provider 会把请求发到 `${baseURL}/chat/completions`，
+  // 这里用自定义 fetch 把它改写成 POST /api/llm-proxy（代理内部再拼上游地址）。
+  const proxyFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const headers = new Headers(init?.headers || {})
+    headers.set('X-Target-Base', settings.apiBaseUrl || '')
+    headers.set('X-Api-Key', effectiveApiKey(settings.apiKey))
+    return fetch('/api/llm-proxy', { ...init, headers })
+  }
+
+  const provider = createOpenAICompatible({
+    name: 'jutian',
+    baseURL: 'http://local-proxy.invalid/v1',
+    apiKey: 'proxy',
+    fetch: proxyFetch as typeof fetch,
+  })
+
+  const toolCallLog: ToolCall[] = []
+  // 跨轮累计：同一签名调用次数（软提醒/硬拦截）
+  const callSignatures = new Map<string, number>()
+  const tools = Object.fromEntries(allTools.map((t) => [
+    t.name,
+    (tool as any)({
+      description: t.description,
+      inputSchema: jsonSchema(t.parameters as never),
+      execute: async (input: Record<string, unknown>, { abortSignal }: { abortSignal?: AbortSignal }) => {
+        // 空转防护（自研内核保留下来的一件好东西）：相同工具+相同参数
+        // 第 3 次起注入提醒，第 5 次直接拦截——SDK 的循环本身不做这个判断。
+        const sig = callSignature(t.name, JSON.stringify(input ?? {}))
+        const repeat = checkRepeatCall(callSignatures, sig)
+        if (repeat.blocked) return repeat.message
+
+        const tc: ToolCall = {
+          id: 'call_' + t.name + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+          name: t.name,
+          arguments: JSON.stringify(input ?? {}),
+          status: 'running',
+          started_at: new Date().toISOString(),
+        }
+        callbacks.onToolStart(tc)
+
+        // 权限闸门
+        const denial = await callbacks.beforeTool?.(tc)
+        if (denial) {
+          tc.status = 'error'
+          tc.result = denial
+          tc.finished_at = new Date().toISOString()
+          callbacks.onToolEnd(tc)
+          toolCallLog.push(tc)
+          return denial
+        }
+
+        try {
+          let out: string
+          if (CLIENT_TOOLS.has(t.name)) {
+            out = (await callbacks.onClientTool?.(tc)) || '{"ok":true}'
+            tc.status = 'done'
+          } else {
+            const r = await executeTool({ name: t.name, args: input ?? {} }, settings.workDir || undefined, abortSignal || signal)
+            out = r.success ? String(r.output ?? '') : ('❌ 错误: ' + r.error)
+            tc.status = r.success ? 'done' : 'error'
+            if (r.changeId) tc.changeId = r.changeId
+          }
+          // 结果截断：40K 对模型足够判断下一步
+          const MAX = 40_000
+          tc.result = (out.length > MAX ? out.slice(0, MAX) + '\n…[输出已截断]' : out) + (repeat.message || '')
+          tc.finished_at = new Date().toISOString()
+          callbacks.onToolEnd(tc)
+          toolCallLog.push(tc)
+          return tc.result
+        } catch (e) {
+          const msg = '❌ 错误: ' + (e instanceof Error ? e.message : String(e))
+          tc.status = 'error'
+          tc.result = msg
+          tc.finished_at = new Date().toISOString()
+          callbacks.onToolEnd(tc)
+          toolCallLog.push(tc)
+          return msg
+        }
+      },
+    }) as never,
+  ])) as Record<string, never>
+
+  callbacks.onNetStatus?.('connecting')
+
+  let fullText = ''
+  let fullThinking = ''
+  let firstTokenSeen = false
+
+  try {
+    const result = (streamText as any)({
+      model: provider(settings.model),
+      messages: toModelMessages(messages) as never,
+      tools: tools as never,
+      stopWhen: stepCountIs(MAX_STEPS),
+      abortSignal: signal,
+      maxOutputTokens: Number(settings.contextWindow) >= 8000 ? 16384 : 8192,
+    })
+
+    for await (const part of (result.fullStream as AsyncIterable<any>)) {
+      switch (part.type) {
+        case 'text-delta':
+          if (!firstTokenSeen) { firstTokenSeen = true; callbacks.onNetStatus?.('first-token') }
+          fullText += part.text
+          callbacks.onChunk(part.text)
+          break
+        case 'reasoning-delta':
+          if (!firstTokenSeen) { firstTokenSeen = true; callbacks.onNetStatus?.('first-token') }
+          fullThinking += part.text
+          callbacks.onThinking?.(part.text)
+          break
+        case 'tool-input-start':
+          callbacks.onToolDraft?.({ name: part.toolName })
+          break
+        case 'error': {
+          const err = (part as { error?: unknown }).error
+          const msg = err instanceof Error ? err.message : String(err ?? '未知错误')
+          await callbacks.onError(msg)
+          return
+        }
+        default:
+          break
+      }
+    }
+
+    await callbacks.onDone(fullText, toolCallLog, fullThinking || undefined)
+  } catch (e) {
+    const err = e as { name?: string; message?: string }
+    if (err.name === 'AbortError' || signal?.aborted) return
+    await callbacks.onError(err.message || '模型请求失败')
+  }
+}

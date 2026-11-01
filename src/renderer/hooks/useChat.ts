@@ -1087,9 +1087,13 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       }
       // 内核选择（v14.3）：默认走服务端循环（工具零回环、定时任务同源）；
       // 设置里可切回渲染层循环作为对照/兜底
-      const engine = settings.agentEngine === 'client' ? 'client' : 'server'
+      const engine = settings.agentEngine === 'client' ? 'client' : settings.agentEngine === 'server' ? 'server' : 'vercel'
       const callArgs = [{ ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools] as const
-      if (engine === 'server') {
+      if (engine === 'vercel') {
+        // 按需加载：AI SDK 体积较大，首屏不需要它
+        const { streamChatVercel } = await import('../engine/vercelStream')
+        await streamChatVercel(settings, apiMessages, ...callArgs)
+      } else if (engine === 'server') {
         await streamChatViaServer(settings, apiMessages, ...callArgs)
       } else {
         await streamChat(settings, apiMessages, ...callArgs)
