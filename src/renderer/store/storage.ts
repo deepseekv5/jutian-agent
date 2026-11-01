@@ -254,6 +254,38 @@ export async function deleteSession(id: string): Promise<void> {
       localStorage.setItem('lyclaw_sessions', JSON.stringify(sessions))
     }
   } catch {}
+  // 关键：消息缓存必须一起删。getMessages 会把「数据库没有、localStorage 有」的
+  // 消息合并回来——只删库不删缓存，下次打开同一个 id 旧消息就复活了。
+  try { localStorage.removeItem('lyclaw_messages_' + id) } catch {}
+}
+
+/**
+ * 清空界面层的全部会话缓存（v14.5）
+ *
+ * 这是「清除数据清不掉」的第二个存储源：会话与消息在 localStorage 里还有一份，
+ * 而且 getMessages 会把库里没有的本地消息合并回界面。只清数据库等于没清。
+ * 返回删除的键数量，供界面提示。
+ */
+export function clearLocalChatData(): number {
+  let n = 0
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (!k) continue
+      if (
+        k.startsWith('lyclaw_messages_') ||   // 逐会话消息缓存
+        k === 'lyclaw_sessions' ||            // 会话列表缓存
+        k.startsWith('lyclaw_msg_') ||        // 首字耗时 / 目标 侧车
+        k === 'lyclaw_session_colors' ||      // 会话配色
+        k === 'lyclaw_collapsed_projects' ||  // 侧栏折叠状态
+        k === 'lyclaw_scheduled_tasks' ||     // 旧版任务缓存（已迁到服务端）
+        k === 'lyclaw_input_history'          // 输入历史里含旧对话内容
+      ) { keys.push(k) }
+    }
+    for (const k of keys) { localStorage.removeItem(k); n++ }
+  } catch { /* 隐私模式 */ }
+  return n
 }
 
 export async function updateSessionTitle(id: string, title: string): Promise<void> {

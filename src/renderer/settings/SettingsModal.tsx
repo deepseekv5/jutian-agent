@@ -4,6 +4,7 @@ import { useModalBehavior } from '../hooks/useModalBehavior';
 import { reportError } from '../app/ErrorToast';
 import { loadVisualSettings, saveVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
 import CliInstallModal from '../app/CliInstallModal';
+import { clearLocalChatData } from '../store/storage'
 import { useLanguage } from '../hooks/useLanguage';
 import { APP_VERSION } from '../brand'
 import type { Settings, PermissionLevel } from '../types';
@@ -417,19 +418,19 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     } catch (e: any) { alert(`备份失败: ${e.message}`) }
   }
 
-  /** 清 localStorage 里的会话侧车（首字耗时/目标/元数据）——它们不属于数据库，
-   *  只清库的话这些缓存会让旧会话"看起来还在" */
-  const clearLocalCaches = () => {
-    try {
-      const keys = Object.keys(localStorage)
-      for (const k of keys) {
-        if (k.startsWith('lyclaw_msg_') || k.startsWith('lyclaw_sessions') || k.startsWith('lyclaw_session_meta') || k === 'lyclaw_scheduled_tasks') localStorage.removeItem(k)
-      }
-    } catch { /* 隐私模式下不可用 */ }
-  }
+  /** 清界面层的会话数据（消息缓存/会话列表/侧车）——这些是"第二个存储源"，
+   *  只清数据库的话，getMessages 会把本地缓存的消息合并回来，看起来像没清掉 */
+  const clearLocalCaches = () => clearLocalChatData()
 
   const handleClearChats = async () => {
-    if (!confirm('确定清空所有对话？\n\n会同时清理：数据库、降级存储文件、旧版逐会话文件、界面缓存。此操作不可恢复，建议先导出备份。')) return
+    let preview = ''
+    try {
+      const p = await fetchCompat('/api/data/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'chats', dryRun: true }),
+      }).then(x => x.json())
+      if (p?.preview) preview = `\n\n将清除：${p.preview.sessions} 个会话、${p.preview.jsonFiles} 个旧存储文件，以及界面缓存。`
+    } catch { /* 预演失败不影响正式清除 */ }
+    if (!confirm('确定清空所有对话？' + preview + '\n\n此操作不可恢复，建议先导出备份。')) return
     try {
       const r = await fetchCompat('/api/data/reset', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'chats' }),
@@ -445,7 +446,14 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   /** 清除全部数据：对话 + 记忆 + 知识库 + 任务 + 工作流 + 性能日志 + 变更留底。
    *  设置与密钥保留（它们有单独的「恢复默认设置」）。 */
   const handleClearAllData = async () => {
-    if (!confirm('确定清除全部数据？\n\n包括：对话、长期记忆、知识库、定时任务、工作流、性能日志、变更留底、日记。\n设置与 API 密钥会保留。此操作不可恢复！')) return
+    let preview = ''
+    try {
+      const p = await fetchCompat('/api/data/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scope: 'all', dryRun: true }),
+      }).then(x => x.json())
+      if (p?.preview) preview = `\n\n将清除：${p.preview.sessions} 个会话、${p.preview.memories} 条记忆、${p.preview.jsonFiles} 个存储文件。`
+    } catch {}
+    if (!confirm('确定清除全部数据？' + preview + '\n\n包括：对话、长期记忆、知识库、定时任务、工作流、性能日志、变更留底、日记。\n设置与 API 密钥会保留。此操作不可恢复！')) return
     if (!confirm('再确认一次：全部数据将永久删除，无法恢复。')) return
     try {
       const r = await fetchCompat('/api/data/reset', {

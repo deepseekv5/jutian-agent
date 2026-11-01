@@ -3598,8 +3598,22 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
      * 变更留底/日记/通知一起清（设置与密钥保留，它们有单独的恢复默认）。
      */
     if (url.pathname === "/api/data/reset" && req.method === "POST") {
-      const { scope } = await body(req);
+      const { scope, dryRun } = await body(req);
       const all = scope === "all";
+      if (dryRun) {
+        // 预演：只数不删（确认框据此告诉用户「将清除 N 个会话 / M 个文件」）
+        const preview = { sessions: 0, jsonFiles: 0, memories: 0 };
+        try { preview.sessions = hasDb ? (db.listSessions() || []).length : 0 } catch {}
+        try {
+          for (const f of fs.readdirSync(DATA_DIR)) {
+            if (/^messages_.*\.json$/.test(f) || f === "sessions.json") preview.jsonFiles++;
+          }
+        } catch {}
+        if (all) {
+          try { preview.memories = hasDb ? (db.getAllMemories() || []).filter((m) => !String(m.key).startsWith("persona:")).length : 0 } catch {}
+        }
+        return json(res, { ok: true, preview, scope: all ? "all" : "chats" });
+      }
       const cleared = { sessions: 0, messages: 0, memories: 0, kb: 0, jsonFiles: 0, jsondb: false };
       try {
         // 1) 数据库层（SQLite 或 jsondb，取决于当前运行模式）

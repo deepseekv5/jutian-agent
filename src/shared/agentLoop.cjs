@@ -383,6 +383,18 @@ function totalTokens(messages) {
   return n;
 }
 var MICROCOMPACT_KEEP_RECENT = 6;
+var CLEARABLE_TOOLS = /* @__PURE__ */ new Set([
+  "read_file",
+  "list_dir",
+  "search_files",
+  "search_content",
+  "web_search",
+  "web_fetch",
+  "system_info",
+  "process_list",
+  "port_check",
+  "shell_output"
+]);
 var CLEARED_PLACEHOLDER = "[\u65E7\u5DE5\u5177\u7ED3\u679C\u5DF2\u6E05\u7A7A\u4EE5\u91CA\u653E\u4E0A\u4E0B\u6587\u3002\u5173\u952E\u4FE1\u606F\u5E94\u5DF2\u4F53\u73B0\u5728\u540E\u7EED\u56DE\u590D\u91CC\uFF1B\u9700\u8981\u65F6\u91CD\u65B0\u8C03\u7528\u8BE5\u5DE5\u5177\u5373\u53EF\u3002]";
 function microcompact(messages, opts = {}) {
   const keep = Math.max(1, opts.keepRecent ?? MICROCOMPACT_KEEP_RECENT);
@@ -397,6 +409,7 @@ function microcompact(messages, opts = {}) {
     const text = typeof m.content === "string" ? m.content : "";
     if (text.length < minChars) return m;
     if (text === CLEARED_PLACEHOLDER) return m;
+    if (opts.clearableIds && !opts.clearableIds.has(String(m.tool_call_id || ""))) return m;
     cleared++;
     return { ...m, content: CLEARED_PLACEHOLDER };
   });
@@ -516,6 +529,7 @@ async function runAgentLoop(messages, deps) {
   perf.setModel(deps.model);
   let toolRound = 0;
   let wrapUp = false;
+  const clearableIds = /* @__PURE__ */ new Set();
   let overflowRetried = false;
   const callSignatures = /* @__PURE__ */ new Map();
   const toolUseCounts = /* @__PURE__ */ new Map();
@@ -607,7 +621,7 @@ async function runAgentLoop(messages, deps) {
     if (budget > 0) {
       const used = totalTokens(sendMessages);
       if (used > budget * 0.8 && deps.microcompact !== false) {
-        const mc = microcompact(sendMessages);
+        const mc = microcompact(sendMessages, { clearableIds });
         if (mc.cleared > 0) sendMessages = mc.messages;
       }
       if (totalTokens(sendMessages) > budget) {
@@ -805,6 +819,7 @@ async function runAgentLoop(messages, deps) {
       perf.addTool(toolRound, pl.tc.name, ms, pl.obj.status !== "error");
       const base = pl.obj.result && String(pl.obj.result).trim() ? String(pl.obj.result) : pl.obj.status === "error" ? "\u5DE5\u5177 " + pl.tc.name + " \u6267\u884C\u5931\u8D25\uFF08\u672A\u8FD4\u56DE\u5177\u4F53\u9519\u8BEF\u4FE1\u606F\uFF09\u3002" : "\u5DE5\u5177 " + pl.tc.name + " \u5DF2\u6267\u884C\uFF0C\u4F46\u8FD4\u56DE\u7A7A\u7ED3\u679C\u3002";
       const useN = bumpToolUse(toolUseCounts, pl.tc.name);
+      if (CLEARABLE_TOOLS.has(pl.tc.name)) clearableIds.add(pl.tc.id);
       const failN = bumpToolFail(failCounter, pl.obj.status === "error");
       return base + toolUseHint(toolUseCounts, pl.tc.name) + toolFailHint(failN, pl.tc.name);
     };
