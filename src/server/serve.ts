@@ -5317,6 +5317,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       try {
         const fp = path.resolve(url.searchParams.get("path") || "");
         if (!ok(fp)) return json(res, { success: false, error: "路径不允许" }, 403);
+        if (!fs.existsSync(fp)) return json(res, { success: false, error: "文件不存在" }, 404);
         const content = fs.readFileSync(fp, "utf-8");
         return json(res, { success: true, content });
       } catch (e) { return json(res, { success: false, error: e.message }, 500); }

@@ -48,7 +48,8 @@ function toModelMessages(messages: OpenAIMsg[]): unknown[] {
 
   const out: unknown[] = []
   for (const m of messages) {
-    if (m.role === 'system' || m.role === 'user') {
+    if (m.role === 'system') continue  // system 走 instructions，不能放 messages
+    if (m.role === 'user') {
       const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')
       out.push({ role: m.role, content: text })
       continue
@@ -107,6 +108,11 @@ export async function streamChatVercel(
     apiKey: 'proxy',
     fetch: proxyFetch as typeof fetch,
   })
+
+  // system 消息 → instructions（AI SDK v7 强制要求，不能混进 messages）
+  const systemText = messages.filter((m) => m.role === 'system')
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')))
+    .join('\n\n')
 
   const toolCallLog: ToolCall[] = []
   // 跨轮累计：同一签名调用次数（软提醒/硬拦截）
@@ -183,9 +189,17 @@ export async function streamChatVercel(
   try {
     const result = (streamText as any)({
       model: provider(settings.model),
+      ...(systemText ? { instructions: systemText } : {}),
       messages: toModelMessages(messages) as never,
       tools: tools as never,
       stopWhen: stepCountIs(MAX_STEPS),
+      // 工具审批（v15）：高风险工具需要用户确认。
+      // SDK 内置审批机制：toolApproval 配置决定哪些工具需要审批，
+      // 审批通过后才执行 execute。
+      toolApproval: (async (toolName: string) => {
+        const highRisk = /^(delete_file|write_file|edit_file|shell|npm_run|git_operation)$/.test(toolName)
+        return highRisk ? 'user-approval' : 'approved'
+      }) as any,
       abortSignal: signal,
       maxOutputTokens: Number(settings.contextWindow) >= 8000 ? 16384 : 8192,
     })
@@ -204,6 +218,13 @@ export async function streamChatVercel(
           break
         case 'tool-input-start':
           callbacks.onToolDraft?.({ name: part.toolName })
+          break
+        case 'tool-approval-request':
+          // 审批请求已由 SDK 内置机制处理，这里只发通知
+          callbacks.onToolDraft?.({ name: (part as any).toolCall?.name || '审批' })
+          break
+        case 'tool-approval-response':
+          // 审批结果已回传，SDK 自动继续执行
           break
         case 'error': {
           const err = (part as { error?: unknown }).error
