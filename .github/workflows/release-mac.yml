@@ -65,13 +65,11 @@ jobs:
             test -n "$ASAR_SRC" || { echo "no app.asar"; exit 1; }
             cp "$ASAR_SRC" "dist-out/jutian-agent-$VER-app.asar"
           fi
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            mv "release/jutian-agent-$VER-arm64-mac.dmg" "dist-out/jutian-agent-$VER-arm64.dmg"
-            mv "release/jutian-agent-$VER-arm64-mac.zip" "dist-out/jutian-agent-$VER-arm64-mac.zip"
-          else
-            mv "release/jutian-agent-$VER-x64-mac.dmg"   "dist-out/jutian-agent-$VER-x64.dmg"
-            mv "release/jutian-agent-$VER-x64-mac.zip"   "dist-out/jutian-agent-$VER-x64-mac.zip"
-          fi
+          ARCH="${{ matrix.arch }}"
+          DMG=$(find release -name "jutian-agent-*-${ARCH}*.dmg" -maxdepth 1 | head -1)
+          ZIP=$(find release -name "jutian-agent-*-${ARCH}*.zip" -maxdepth 1 | head -1)
+          [ -n "$DMG" ] && mv "$DMG" "dist-out/jutian-agent-$VER-$ARCH.dmg" || echo "WARN: DMG not found for $ARCH"
+          [ -n "$ZIP" ] && mv "$ZIP" "dist-out/jutian-agent-$VER-$ARCH-mac.zip" || echo "WARN: ZIP not found for $ARCH"
           ls -la dist-out/
 
       - name: 上传到 Release
