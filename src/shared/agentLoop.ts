@@ -62,15 +62,17 @@ export interface LoopMessage {
 export class NeedsClientError extends Error {
   kind: 'confirm' | 'client_tool'
   toolCall: LoopToolCall
+  scopeKey?: string
   messages: LoopMessage[]
   partial: { content: string; thinking: string; toolCalls: LoopToolCall[] }
-  constructor(kind: 'confirm' | 'client_tool', toolCall: LoopToolCall, messages: LoopMessage[], partial: { content: string; thinking: string; toolCalls: LoopToolCall[] }) {
+  constructor(kind: 'confirm' | 'client_tool', toolCall: LoopToolCall, messages: LoopMessage[], partial: { content: string; thinking: string; toolCalls: LoopToolCall[] }, scopeKey?: string) {
     super(kind === 'confirm' ? '需要用户确认' : '需要客户端执行工具')
     this.name = 'NeedsClientError'
     this.kind = kind
     this.toolCall = toolCall
     this.messages = messages
     this.partial = partial
+    this.scopeKey = scopeKey
   }
 }
 
@@ -106,6 +108,8 @@ export interface AgentLoopDeps {
   confirmTool?: (tc: LoopToolCall) => Promise<string | null | undefined>
   /** 该调用是否需要渲染层介入（确认弹窗 / 客户端工具）。返回 'confirm' | 'client_tool' | null */
   needsClient?: (tc: LoopToolCall) => 'confirm' | 'client_tool' | null
+  /** 审批请求的作用域键（「本会话允许」用它记忆） */
+  scopeKeyOf?: (tc: LoopToolCall) => string | undefined
   /** 续跑：上一段已累积的内容（服务端无状态，靠它把多段拼回整轮） */
   resume?: { content: string; thinking: string; toolCalls: LoopToolCall[] }
   /** 续跑：上一步因「需要确认」中断的调用。decision 为拒绝文案时直接记入结果。
@@ -409,7 +413,7 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
       // 更新后的 messages 重新调用本循环（无状态续跑）
       const need = deps.needsClient?.(obj)
       if (need) {
-        throw new NeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls })
+        throw new NeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls }, deps.scopeKeyOf?.(obj))
       }
 
       const denial = await deps.confirmTool?.(obj)

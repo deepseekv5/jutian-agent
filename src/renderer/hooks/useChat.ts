@@ -3,6 +3,8 @@ import type { Message, Settings, ToolCall, ToolDef, AttachedFile } from '../type
 import { BUILTIN_TOOLS } from '../types'
 import { listMessages, createMessage, updateMessageContent, updateMessageThinking, updateMessageToolCalls, updateMessageSwarm, updateMessageVariants, deleteMessagesAfter, effectiveApiKey } from '../store/storage'
 import { streamChatViaServer } from '../engine/serverStream'
+import { buildPermissionRequest, denialMessage } from '../../shared/permission'
+import { askPermission, isSessionApproved, approveForSession } from '../app/permissionGate'
 import { streamChat, type StreamCallbacks } from '../engine/stream'
 import { planCompression, mergeSummary, buildCompressedMessages, type ApiMsgLike } from '../engine/contextCompress'
 import { executeTool } from '../engine/tools'
@@ -999,7 +1001,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
        * edit 档：放行写入，仍拦不可逆操作。
        * full 档：全部放行。
        */
-      beforeTool: (tc) => {
+      beforeTool: async (tc) => {
         // 计划模式硬只读：未批准时副作用工具一律拦下（代码层，优先于权限档位判断）
         if (planMode && !planApprovedRef.current) {
           const gate = gatePlanTool(tc.name, false)
@@ -1009,16 +1011,18 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         }
         const level = sendOpts?.accessLevel || 'ask'
         if (level === 'full') return null
-        let args: unknown = {}
+        let args: Record<string, unknown> = {}
         try { args = JSON.parse(tc.arguments || '{}') } catch { /* 参数不合法交给工具自身报错 */ }
-        const hit = checkSensitiveTool(tc.name, args)
-        if (!hit) return null
-        if (level === 'edit' && hit.level !== 'high') return null
-        return JSON.stringify({
-          ok: false,
-          error: `【权限拦截】${hit.label}属于${hit.level === 'high' ? '不可逆' : '需留意'}操作，当前权限档位为「${level === 'ask' ? '需要我确认' : '可以编辑'}」。`
-            + `请改用非破坏性方案，或告知用户后由其手动执行。`,
-        })
+        // 真审批（v14.4）：判定 → 弹窗 → 本次/本会话/拒绝。
+        // 以前这里是硬拒绝：用户连「要不要执行」都看不到，只能看到失败。
+        const req = buildPermissionRequest(tc.id, tc.name, args, settings.workDir || '')
+        if (!req) return null
+        if (level === 'edit' && req.risk !== 'dangerous') return null
+        if (isSessionApproved(req.scopeKey)) return null
+        const decision = await askPermission(req)
+        if (decision === 'deny') return denialMessage(req)
+        if (decision === 'allow-session') approveForSession(req.scopeKey)
+        return null
       },
 
       onError: async (err) => {

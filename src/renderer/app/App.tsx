@@ -11,6 +11,7 @@ import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import BackgroundLayer from './BackgroundLayer';
 import CommandPalette from './CommandPalette';
+import PermissionPrompt from './PermissionPrompt';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
 import ErrorBoundary from './ErrorBoundary';
 import ErrorToastHost, { useGlobalErrorListener } from './ErrorToast';
@@ -643,6 +644,7 @@ function MainApp() {
       {cliPrompt && <CliInstallModal onClose={() => setCliPrompt(false)} />}
 
       {/* 全局命令面板 Cmd+K */}
+      <PermissionPrompt />
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}

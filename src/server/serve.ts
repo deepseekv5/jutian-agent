@@ -238,6 +238,7 @@ var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
 var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
+var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"); } catch (e) { console.error("permission.cjs load failed:", e.message); return null; } })();
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
@@ -3381,10 +3382,24 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           isClientTool: (name) => clientTools.has(name),
           needsClient: (tc) => {
             if (clientTools.has(tc.name)) return "client_tool";
-            // 「需要我确认」档：写/删/命令类必须先问
             const level = String(payload.permissionLevel || st.permissionLevel || "edit");
-            if (level === "ask" && /^(write_file|edit_file|delete_file|move_file|shell|npm_run|git_operation)$/.test(tc.name) && !(tc.id in confirmed)) return "confirm";
-            return null;
+            if (level === "full") return null;
+            if (tc.id in confirmed) return null;
+            // 与渲染层共用同一套判定（shared/permission）：两边规则不会漂移
+            let args = {};
+            try { args = JSON.parse(tc.arguments || "{}") } catch {}
+            const req = PERMISSION_MOD ? PERMISSION_MOD.buildPermissionRequest(tc.id, tc.name, args, String(payload.workDir || "")) : null;
+            if (!req) return null;
+            if (level === "edit" && req.risk !== "dangerous") return null;
+            const approved = Array.isArray(payload.approvedScopes) ? payload.approvedScopes : [];
+            if (approved.includes(req.scopeKey)) return null;
+            return "confirm";
+          },
+          scopeKeyOf: (tc) => {
+            let args = {};
+            try { args = JSON.parse(tc.arguments || "{}") } catch {}
+            const req = PERMISSION_MOD ? PERMISSION_MOD.buildPermissionRequest(tc.id, tc.name, args, String(payload.workDir || "")) : null;
+            return req ? req.scopeKey : undefined;
           },
           confirmTool: async (tc) => {
             const v = confirmed[tc.id];
@@ -3417,7 +3432,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         send({ type: "done", content: result.content, thinking: result.thinking, toolCalls: result.toolCalls, stopped: result.stopped, error: result.error });
       } catch (e) {
         if (e && e.name === "NeedsClientError") {
-          send({ type: "needs_client", kind: e.kind, tool: e.toolCall, messages: e.messages, partial: e.partial });
+          send({ type: "needs_client", kind: e.kind, tool: e.toolCall, scopeKey: e.scopeKey, messages: e.messages, partial: e.partial });
         } else if (e && (e.name === "AbortError" || abort.signal.aborted)) {
           send({ type: "aborted" });
         } else {

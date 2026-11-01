@@ -16,6 +16,7 @@ import { BUILTIN_TOOLS } from '../types'
 import { effectiveApiKey } from '../store/storage'
 import { ssePayloads } from '../../shared/sse'
 import type { StreamCallbacks } from './stream'
+import { isSessionApproved } from '../app/permissionGate'
 
 interface ServerEvent {
   type: 'chunk' | 'thinking' | 'tool_start' | 'tool_end' | 'tool_draft' | 'net' | 'perf' | 'done' | 'error' | 'aborted' | 'needs_client'
@@ -30,6 +31,7 @@ interface ServerEvent {
   toolCalls?: ToolCall[]
   message?: string
   kind?: 'confirm' | 'client_tool'
+  scopeKey?: string
   messages?: unknown[]
   partial?: { content: string; thinking: string; toolCalls: ToolCall[] }
 }
@@ -50,7 +52,10 @@ export async function streamChatViaServer(
   let resume: ServerEvent['partial'] | undefined
   let pendingTool: { toolCall: ToolCall; decision?: string | null } | undefined
   const confirmations: Record<string, unknown> = {}
+  // 本会话已放行的操作（服务端按 scopeKey 判断，不再弹窗）
+  const approvedScopes: string[] = []
   const seenToolEnd = new Set<string>()
+
 
   for (let hop = 0; hop < 30; hop++) {
     if (signal?.aborted) return
@@ -74,6 +79,7 @@ export async function streamChatViaServer(
           resume,
           pendingTool,
           confirmations,
+          approvedScopes,
         }),
         signal,
       })
@@ -152,6 +158,8 @@ export async function streamChatViaServer(
       } else {
         confirmations[needs.tool.id] = true
         pendingTool = { toolCall: needs.tool, decision: null }
+        // 用户选了「本会话允许」→ beforeTool 内部已记录，这里同步给服务端
+        if (needs.scopeKey && isSessionApproved(needs.scopeKey)) approvedScopes.push(needs.scopeKey)
       }
       continue
     }

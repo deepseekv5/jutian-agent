@@ -364,15 +364,17 @@ function shouldInjectHermes(model, apiBase, mode) {
 var NeedsClientError = class extends Error {
   kind;
   toolCall;
+  scopeKey;
   messages;
   partial;
-  constructor(kind, toolCall, messages, partial) {
+  constructor(kind, toolCall, messages, partial, scopeKey) {
     super(kind === "confirm" ? "\u9700\u8981\u7528\u6237\u786E\u8BA4" : "\u9700\u8981\u5BA2\u6237\u7AEF\u6267\u884C\u5DE5\u5177");
     this.name = "NeedsClientError";
     this.kind = kind;
     this.toolCall = toolCall;
     this.messages = messages;
     this.partial = partial;
+    this.scopeKey = scopeKey;
   }
 };
 var READONLY_TOOLS = /* @__PURE__ */ new Set([
@@ -626,7 +628,7 @@ async function runAgentLoop(messages, deps) {
       events.onToolStart?.(obj);
       const need = deps.needsClient?.(obj);
       if (need) {
-        throw new NeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls });
+        throw new NeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls }, deps.scopeKeyOf?.(obj));
       }
       const denial = await deps.confirmTool?.(obj);
       if (denial) {
