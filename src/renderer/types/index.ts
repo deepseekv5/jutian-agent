@@ -74,6 +74,11 @@ export interface Settings {
   webhook_url?: string
   webhook_events?: string
   hook_token?: string
+  /** MiMo V2.5 TTS 语音合成 */
+  mimo_api_key?: string
+  mimo_tts_model?: string
+  mimo_tts_voice?: string
+  mimo_tts_sing?: boolean
   // 提供商与模型能力
   providerName?: string
   contextWindow?: number

@@ -6014,6 +6014,102 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       } catch (e) { return json(res, { error: e.message }, 502); }
     }
 
+    // ─── MiMo V2.5 TTS（语音合成 + 唱歌 + 音频识别 + 上传分析）───
+    // 文档: https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/audio/speech-synthesis-v2.5
+    if (url.pathname === "/api/mimo/tts" && req.method === "POST") {
+      const { text, voice, model, style, sing, format } = await body(req);
+      if (!text) return json(res, { error: "缺少 text" }, 400);
+      const apiKey = (db.getSetting ? db.getSetting("mimo_api_key") : "") || "";
+      if (!apiKey) return json(res, { error: "未配置 MiMo API Key（设置 → 推理 → 语音合成）" }, 400);
+      try {
+        const messages = [];
+        if (style) messages.push({ role: "user", content: style });
+        messages.push({ role: "assistant", content: sing ? "(唱歌)" + text : text });
+        const r = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+          body: JSON.stringify({
+            model: model || "mimo-v2.5-tts",
+            messages,
+            audio: { format: format || "wav", voice: voice || "mimo_default" },
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!r.ok) return json(res, { error: "MiMo TTS 请求失败: HTTP " + r.status }, 502);
+        const j = await r.json();
+        const b64 = j?.choices?.[0]?.message?.audio?.data;
+        if (!b64) return json(res, { error: "MiMo TTS 无音频数据" }, 502);
+        const mime = format === "pcm16" ? "audio/wav" : "audio/wav";
+        res.writeHead(200, { "Content-Type": mime, "X-Mimo-TTS": "ok" });
+        res.end(Buffer.from(b64, "base64"));
+        return;
+      } catch (e) {
+        return json(res, { error: String(e.message || e) }, 502);
+      }
+    }
+
+    // MiMo 音频识别：上传音频 → 转文字（用 mimo-v2.5-tts 的 ASR 或直接用 LLM 看图听声）
+    if (url.pathname === "/api/mimo/analyze" && req.method === "POST") {
+      const { audioBase64, mimeType, model } = await body(req);
+      if (!audioBase64) return json(res, { error: "缺少 audioBase64" }, 400);
+      const apiKey = (db.getSetting ? db.getSetting("mimo_api_key") : "") || "";
+      if (!apiKey) return json(res, { error: "未配置 MiMo API Key（设置 → 推理 → 语音合成）" }, 400);
+      try {
+        const prefix = mimeType ? `data:${mimeType};base64,` : "data:audio/mpeg;base64,";
+        const r = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+          body: JSON.stringify({
+            model: model || "mimo-v2.5-asr",
+            messages: [{ role: "user", content: [
+              { type: "input_audio", input_audio: { data: prefix + audioBase64, format: (mimeType || "mp3").includes("wav") ? "wav" : "mp3" } },
+              { type: "text", text: "请识别这段音频的内容，如果是语音则转成文字，如果是音乐则描述曲目和风格。" },
+            ] }],
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!r.ok) return json(res, { error: "MiMo ASR 请求失败: HTTP " + r.status }, 502);
+        const j = await r.json();
+        const text = j?.choices?.[0]?.message?.content;
+        if (!text) return json(res, { error: "MiMo ASR 无识别结果" }, 502);
+        return json(res, { success: true, text });
+      } catch (e) {
+        return json(res, { error: String(e.message || e) }, 502);
+      }
+    }
+
+    // MiMo 电话格式 TTS：低带宽电话音质
+    if (url.pathname === "/api/mimo/telephone" && req.method === "POST") {
+      const { text, voice } = await body(req);
+      if (!text) return json(res, { error: "缺少 text" }, 400);
+      const apiKey = (db.getSetting ? db.getSetting("mimo_api_key") : "") || "";
+      if (!apiKey) return json(res, { error: "未配置 MiMo API Key（设置 → 推理 → 语音合成）" }, 400);
+      try {
+        const r = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apiKey },
+          body: JSON.stringify({
+            model: "mimo-v2.5-tts",
+            messages: [
+              { role: "user", content: "电话通话音质，窄带 8kHz 采样率，带轻微底噪和电话压缩质感" },
+              { role: "assistant", content: text },
+            ],
+            audio: { format: "wav", voice: voice || "mimo_default" },
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!r.ok) return json(res, { error: "MiMo 电话格式 TTS 失败: HTTP " + r.status }, 502);
+        const j = await r.json();
+        const b64 = j?.choices?.[0]?.message?.audio?.data;
+        if (!b64) return json(res, { error: "无音频数据" }, 502);
+        res.writeHead(200, { "Content-Type": "audio/wav", "X-Mimo-TTS": "telephone" });
+        res.end(Buffer.from(b64, "base64"));
+        return;
+      } catch (e) {
+        return json(res, { error: String(e.message || e) }, 502);
+      }
+    }
+
     // ─── v11 深度调研:服务端编排（拆检索词 → 多轮搜索 → 抓取正文 → 交叉引用报告）───
     // 服务端 LLM 调用:配置的模型优先,失败自动落免费链（与 llm-proxy 接力同一批上游）
     async function serverLLM(messages, maxTokens, temperature) {

@@ -67,6 +67,7 @@ const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string;
   { tab: 'inference', label: '本地模型 (LM Studio)', labelEn: 'Local models (LM Studio)', desc: '推理', keywords: 'local 本地模型 lm studio llama 本地推理' },
   { tab: 'inference', label: '上下文窗口', labelEn: 'Context window', desc: '推理', keywords: 'context window 上下文 窗口 tokens' },
   { tab: 'inference', label: '多模态', labelEn: 'Multimodal', desc: '推理', keywords: 'multimodal 多模态 图片 视觉 vision' },
+  { tab: 'inference', label: '语音合成 (MiMo)', labelEn: 'Voice synthesis (MiMo)', desc: '推理', keywords: 'tts 语音合成 唱歌 音乐 sing voice mimo 电话 telephone 分析 asr' },
   { tab: 'workspace', label: '工作目录', labelEn: 'Working directory', desc: '工作区', keywords: 'workdir 工作目录 工作区 目录 文件夹' },
   { tab: 'security', label: 'AI 权限等级', labelEn: 'AI permission level', desc: '安全', keywords: 'permission 权限 受限 标准 完全访问 restricted full' },
   { tab: 'security', label: 'Shell 命令执行', labelEn: 'Shell command execution', desc: '安全', keywords: 'shell 命令 执行 终端 命令执行' },
@@ -825,6 +826,39 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       className="relative w-10 h-5 rounded-full transition-colors" style={{ background: form.multimodal ? c.accent : `${c.textMuted}44` }}>
                       <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: form.multimodal ? 'calc(100% - 18px)' : '2px' }} />
                     </button>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('语音合成 (MiMo)', 'Voice synthesis (MiMo)')}</label>
+                    <input value={form.mimo_api_key || ''} onChange={e => persistDebounced({ ...form, mimo_api_key: e.target.value })}
+                      placeholder="MiMo API Key (mimo.mi.com)" className={inputCls + ' font-mono'} style={inputStyle} />
+                    <div className="flex gap-1.5 mt-1">
+                      <select value={form.mimo_tts_model || 'mimo-v2.5-tts'} onChange={e => persistNow({ mimo_tts_model: e.target.value })}
+                        className={inputCls} style={{ ...inputStyle, flex: 1 }}>
+                        <option value="mimo-v2.5-tts">mimo-v2.5-tts（预置音色+唱歌）</option>
+                        <option value="mimo-v2.5-tts-voicedesign">voicedesign（文本设计音色）</option>
+                        <option value="mimo-v2.5-tts-voiceclone">voiceclone（音频复刻音色）</option>
+                      </select>
+                      <select value={form.mimo_tts_voice || 'mimo_default'} onChange={e => persistNow({ mimo_tts_voice: e.target.value })}
+                        className={inputCls} style={{ ...inputStyle, flex: 1 }}>
+                        <option value="mimo_default">默认（中国集群=冰糖）</option>
+                        <option value="冰糖">冰糖（中文女）</option>
+                        <option value="茉莉">茉莉（中文女）</option>
+                        <option value="苏打">苏打（中文男）</option>
+                        <option value="白桦">白桦（中文男）</option>
+                        <option value="Mia">Mia（英文女）</option>
+                        <option value="Chloe">Chloe（英文女）</option>
+                        <option value="Milo">Milo（英文男）</option>
+                        <option value="Dean">Dean（英文男）</option>
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
+                      <input type="checkbox" checked={!!form.mimo_tts_sing} onChange={e => persistNow({ mimo_tts_sing: e.target.checked })}
+                        className="w-4 h-4 rounded" style={{ accentColor: c.accent }} />
+                      <span className="text-[11px]" style={{ color: c.textSecondary }}>{t('启用唱歌模式（官方 (唱歌) 标签）', 'Enable singing mode (official tag)')}</span>
+                    </label>
+                    <p className="text-[10px] leading-relaxed" style={{ color: c.textMuted }}>
+                      {t('存入知识库的音频可用 mimo-v2.5-asr 识别；电话格式、唱歌模式走文本标签控制。详见 mimo.mi.com/docs', 'Audio recognition via mimo-v2.5-asr. Telephone/singing via text tags. See mimo.mi.com/docs')}
+                    </p>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Agent 内核', 'Agent engine')}</label>
