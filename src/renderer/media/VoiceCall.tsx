@@ -240,7 +240,7 @@ export default function VoiceCall({ settings, onClose }: Props) {
     return new Blob([header, pcm.buffer], { type: 'audio/wav' })
   }
 
-  // ─── 说话：Edge-TTS ───
+  // ─── 说话：MiMo TTS（电话音质）→ edge-tts 兜底，引擎选择在服务端 ───
   const speak = useCallback(async (text: string): Promise<void> => {
     return new Promise((resolve) => {
       let voice = 'zh-CN-XiaoxiaoNeural'
@@ -257,7 +257,7 @@ export default function VoiceCall({ settings, onClose }: Props) {
       fetchCompat('/api/edge-tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice, speed: Number(speed) || 1.0 }),
+        body: JSON.stringify({ text, voice, speed: Number(speed) || 1.0, telephone: true }),
       })
         .then(r => { if (!r.ok) throw new Error(); return r.blob() })
         .then(b => { el.src = URL.createObjectURL(b); return el.play() })

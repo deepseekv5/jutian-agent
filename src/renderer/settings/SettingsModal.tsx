@@ -857,7 +857,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       <span className="text-[11px]" style={{ color: c.textSecondary }}>{t('启用唱歌模式（官方 (唱歌) 标签）', 'Enable singing mode (official tag)')}</span>
                     </label>
                     <p className="text-[10px] leading-relaxed" style={{ color: c.textMuted }}>
-                      {t('存入知识库的音频可用 mimo-v2.5-asr 识别；电话格式、唱歌模式走文本标签控制。详见 mimo.mi.com/docs', 'Audio recognition via mimo-v2.5-asr. Telephone/singing via text tags. See mimo.mi.com/docs')}
+                      {t('聊天里可直接上传 mp3/录音：发送时先经 MiMo 识别再交主模型，回复自动语音播报；通话与语音输入同样优先 MiMo。唱歌模式走 (唱歌) 标签。详见 mimo.mi.com/docs', 'Upload mp3/recordings in chat: MiMo transcribes first, the main model answers, and the reply is spoken aloud. Calls and voice input prefer MiMo too. See mimo.mi.com/docs')}
                     </p>
                   </div>
                   <div className="space-y-1">

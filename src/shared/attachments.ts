@@ -31,6 +31,15 @@ export function isTextMime(mime: string): boolean {
   return /^text\/|application\/(json|xml|javascript|typescript|x-yaml|yaml)/i.test(String(mime || ''))
 }
 
+/** 是否是音频附件（v14.7 聊天直传 mp3/录音：发送前先经 MiMo 识别再交主模型） */
+export function isAudioFile(name: string, mime?: string): boolean {
+  if (mime && /^audio\//i.test(String(mime))) return true
+  return /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|amr|wma|webm)$/i.test(String(name || ''))
+}
+
+/** 音频上传上限（base64 后约 26.7MB，低于服务端 32MB 请求体限制） */
+export const MAX_AUDIO_BYTES = 20 * 1024 * 1024
+
 /**
  * 判断粘贴内容该内联还是转附件。
  * 返回 'inline' 表示正常粘进输入框。

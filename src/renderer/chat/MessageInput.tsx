@@ -16,7 +16,7 @@ import { effectiveApiKey } from '../store/storage'
 import { baseName } from '../utils/pathName'
 import { matchTrigger, snippetVars } from '../../shared/snippets'
 import { loadSnippets } from '../store/snippets'
-import { pasteDisposition, pastedFileName, dedupeAttachments, exceedsSizeLimit } from '../../shared/attachments'
+import { pasteDisposition, pastedFileName, dedupeAttachments, exceedsSizeLimit, humanSize, MAX_AUDIO_BYTES } from '../../shared/attachments'
 import { readDraft, saveDraft, dropDraft } from '../store/drafts'
 import { inputStats } from '../../shared/drafts'
 import { fetchCompat } from '../api'
@@ -387,30 +387,26 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
-  const [analyzingAudio, setAnalyzingAudio] = useState(false)
+
+  /** 音频附件在输入条显示 ♪ 标识 */
+  const isAudioFileName = (name: string) => /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|amr|wma|webm)$/i.test(String(name || ''))
+  /** 删附件：按位置删（无磁盘路径的音频/粘贴文件 path 均为空，不能按 path 过滤） */
+  const removeAttached = (_file: AttachedFile, idx: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== idx))
+  }
 
 
-  /** 上传音频 → MiMo ASR 识别 → 结果作为消息发出（v14.6） */
-  const handleAudioAnalyze = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
+  /** 选音频 → 挂为附件（v14.7）：发送时先经 MiMo 识别、结果连同问题交主模型，回复自动语音播报 */
+  const handleAudioPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!f) return
-    setAnalyzingAudio(true)
-    try {
-      const buf = await f.arrayBuffer()
-      const bytes = new Uint8Array(buf)
-      let bin = ''
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-      const r = await fetchCompat('/api/mimo/analyze', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioBase64: btoa(bin), mimeType: f.type || 'audio/mpeg' }),
-      }).then((x) => x.json())
-      if (r.error) { setAnalyzingAudio(false); window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: r.error })); return }
-      // 直接把识别结果发出去（用户上传音频就是想问它）
-      onSend('【音频识别：' + f.name + '】\n' + r.text)
-    } catch (err) {
-      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '音频识别失败：' + String((err as Error)?.message || err) }))
-    } finally { setAnalyzingAudio(false) }
+    if (!files.length) return
+    const oversized = files.find(f => f.size > MAX_AUDIO_BYTES)
+    if (oversized) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: `音频太大（${humanSize(oversized.size)}），上限 20MB` }))
+      return
+    }
+    setAttachedFiles(prev => dedupeAttachments([...prev, ...files.map(f => ({ path: '', name: f.name, size: f.size, file: f }))]))
   }
 
   const handleFileUpload = useCallback(async () => {
@@ -961,11 +957,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             <div className="p-3 space-y-3">
               {attachedFiles.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {attachedFiles.map(file => (
-                    <span key={file.path} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
+                  {attachedFiles.map((file, idx) => (
+                    <span key={file.path || `${file.name}-${idx}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
                       style={{ background: c.surfaceInput, border: `1px solid ${c.border}`, color: c.textSecondary }}>
-                      {file.name}
-                      <button onClick={() => setAttachedFiles(prev => prev.filter(f => f.path !== file.path))} className="ml-0.5 hover:opacity-70" style={{ color: c.textTertiary }}>&times;</button>
+                      {isAudioFileName(file.name) ? '♪ ' : ''}{file.name}
+                      <button onClick={() => removeAttached(file, idx)} className="ml-0.5 hover:opacity-70" style={{ color: c.textTertiary }}>&times;</button>
                     </span>
                   ))}
                 </div>
@@ -986,13 +982,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                   </svg>
                   附件
                 </button>
-                <button onClick={() => { setShowToolbar(false); audioInputRef.current?.click() }} disabled={analyzingAudio}
-                  title="音频识别（MiMo）：上传 mp3/wav，识别语音或描述音乐"
-                  className="btn-ghost flex items-center gap-1.5 px-2.5 h-8 disabled:opacity-50" style={{ color: analyzingAudio ? c.accent : c.textSecondary }}>
+                <button onClick={() => { setShowToolbar(false); audioInputRef.current?.click() }}
+                  title="上传 mp3/wav/录音：发送时先用 MiMo 识别内容，再连同你的问题交给模型，回复自动语音播报"
+                  className="btn-ghost flex items-center gap-1.5 px-2.5 h-8" style={{ color: c.textSecondary }}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                   </svg>
-                  {analyzingAudio ? '识别中…' : '音频识别'}
+                  音频
                 </button>
                 <button onClick={() => { setShowToolbar(false); handleScreenshot() }} title="截图提问（Cmd+Shift+S 全局可用）"
                   className="btn-ghost flex items-center gap-1.5 px-2.5 h-8" style={{ color: c.textSecondary }}>
@@ -1332,11 +1328,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
           {/* 已附加文件 */}
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5 px-4 pt-3">
-              {attachedFiles.map(file => (
-                <span key={file.path} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px]"
+              {attachedFiles.map((file, idx) => (
+                <span key={file.path || `${file.name}-${idx}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px]"
                   style={{ background: c.surfaceInput, border: `1px solid ${c.border}`, color: c.textSecondary }}>
-                  {file.name}
-                  <button onClick={() => setAttachedFiles(prev => prev.filter(f => f.path !== file.path))} className="hover:opacity-70" style={{ color: c.textTertiary }}>&times;</button>
+                  {isAudioFileName(file.name) ? '♪ ' : ''}{file.name}
+                  <button onClick={() => removeAttached(file, idx)} className="hover:opacity-70" style={{ color: c.textTertiary }}>&times;</button>
                 </span>
               ))}
             </div>
@@ -1664,7 +1660,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         </div>
 
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleNativeFileChange} />
-        <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a" className="hidden" onChange={handleAudioAnalyze} />
+        <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a" multiple className="hidden" onChange={handleAudioPick} />
       </div>
     </div>
   )

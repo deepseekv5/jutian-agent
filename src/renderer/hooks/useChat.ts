@@ -93,6 +93,68 @@ async function loadCtxSummary(sid: string): Promise<string> {
 
 export { ctxSummaries }
 
+// ─── 音频附件：MiMo 先识别，再连同问题交主模型（v14.7）───
+const AUDIO_EXT_RE = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|amr|wma|webm)$/i
+const isAudioAttached = (f: any): boolean => {
+  if (f?.dataUrl && String(f.dataUrl).startsWith('data:audio/')) return true
+  if (f?.file && /^audio\//i.test(String(f.file.type || ''))) return true
+  return AUDIO_EXT_RE.test(String(f?.name || ''))
+}
+
+const fileToDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const fr = new FileReader()
+  fr.onload = () => resolve(String(fr.result || ''))
+  fr.onerror = reject
+  fr.readAsDataURL(file)
+})
+
+/** 把附件还原成 base64：dataUrl → 浏览器 File → 磁盘路径（服务端读） */
+async function resolveAudioBase64(f: AttachedFile): Promise<{ b64: string; mime: string }> {
+  let dataUrl = ''
+  if (f.dataUrl) dataUrl = f.dataUrl
+  else if (f.file) dataUrl = await fileToDataUrl(f.file)
+  if (dataUrl) {
+    const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/s)
+    if (m) return { mime: m[1] || 'audio/mpeg', b64: m[2] }
+    throw new Error('音频 dataUrl 格式异常')
+  }
+  if (f.path) {
+    const r = await fetchCompat(`/api/file-base64?path=${encodeURIComponent(f.path)}`)
+    if (!r.ok) throw new Error('读取音频文件失败 HTTP ' + r.status)
+    const d = await r.json()
+    if (d?.data) return { mime: d.mime || 'audio/mpeg', b64: d.data }
+  }
+  throw new Error('读不到音频数据')
+}
+
+/** MiMo 识别音频（语音→文字；音乐→曲风描述），失败回落本地/云端 STT 链 */
+async function analyzeAttachedAudio(f: AttachedFile): Promise<string> {
+  const { b64, mime } = await resolveAudioBase64(f)
+  try {
+    const r = await fetchCompat('/api/mimo/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioBase64: b64, mimeType: mime }),
+    })
+    const d = await r.json().catch(() => ({} as any))
+    const text = String(d?.text || '').trim()
+    if (!r.ok || !text) throw new Error(String(d?.error || 'HTTP ' + r.status))
+    return text
+  } catch (mimoErr) {
+    // 未配 MiMo / MiMo 失败 → 走服务端 STT（本地 whisper → 云端兜底）
+    const bin = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0))
+    const fd = new FormData()
+    fd.append('audio', new Blob([bin], { type: mime }), f.name || 'audio.mp3')
+    const r2 = await fetchCompat('/api/speech-to-text', { method: 'POST', body: fd })
+    const d2 = await r2.json().catch(() => ({} as any))
+    const text2 = String(d2?.text || '').trim()
+    if (!r2.ok || !text2) {
+      const reason = String(d2?.error || (mimoErr instanceof Error ? mimoErr.message : String(mimoErr)))
+      throw new Error(reason)
+    }
+    return text2
+  }
+}
+
 export function useChat(sessionId: string | null, settings: Settings, onFirstMessageDone?: (userContent: string) => void, onAiTitle?: (sid: string, title: string) => void) {
   const [messages, setMessages] = useState<Message[]>([])
   // 始终持有当前 sessionId：异步回调里用它判断「我这条结果还属于当前会话吗」
@@ -564,15 +626,32 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
     // 构建附加文件上下文
     let userContent = content
+    // 音频附件（v14.7）：先经 MiMo 识别（语音→文字 / 音乐→曲风描述），识别结果随消息交给主模型；
+    // 本条带过音频时回复完成后自动语音播报（MiMo TTS 优先，见 onDone）
+    let hadAudio = false
+    let audioBlocks = ''
+    if (attachedFiles && attachedFiles.length > 0) {
+      const auds = attachedFiles.filter(isAudioAttached).slice(0, 2)
+      for (const f of auds) {
+        hadAudio = true
+        try {
+          const text = await analyzeAttachedAudio(f)
+          audioBlocks += `\n\n--- 音频附件《${f.name}》识别结果 ---\n${text}`
+        } catch (e) {
+          audioBlocks += `\n\n--- 音频附件《${f.name}》识别失败 ---\n（${String((e as Error)?.message || e)}。请直接用文字告诉用户音频未能识别。）`
+        }
+      }
+    }
     if (attachedFiles && attachedFiles.length > 0) {
       // 有磁盘路径的给 file:// 链接；截图等 dataUrl 附件只列名字（内容已作为 image_url 随请求发送）
       const lines: string[] = []
       for (const f of attachedFiles) {
-        if (f.dataUrl) lines.push(`- ${f.name}（图片，已随消息发送）`)
+        if (isAudioAttached(f)) lines.push(`- ${f.name}（音频，MiMo 识别结果见下方）`)
+        else if (f.dataUrl) lines.push(`- ${f.name}（图片，已随消息发送）`)
         else if (f.path) lines.push(`- [${f.name}](file://${f.path})`)
         else lines.push(`- ${f.name}`)
       }
-      userContent = `${content}\n\n--- 附加文件 ---\n${lines.join('\n')}`
+      userContent = `${content}\n\n--- 附加文件 ---\n${lines.join('\n')}${audioBlocks}`
     }
 
     // 保存用户消息
@@ -938,10 +1017,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         setStreamingId(null)
         const msgs = await listMessages(sessionId)
         setMessages(msgs)
-        // 自动朗读（设置开启时）：念 AI 的最终回复
+        // 自动朗读：设置开启常驻；本条消息带过音频附件时无条件播报（v14.7 音频进→语音出）
         try {
-          if ((settings as any)?.autoSpeak && fullContent.trim()) {
-            const spoken = fullContent.replace(/```[\s\S]*?```/g, '（代码已省略）').replace(/[*_#>`|]/g, '').slice(0, 1500)
+          if (((settings as any)?.autoSpeak || hadAudio) && fullContent.trim()) {
+            const spoken = fullContent.replace(/```[\s\S]*?```/g, '（代码已省略）').replace(/[*_#>`|]/g, '').slice(0, hadAudio ? 3000 : 1500)
             let voice = 'zh-CN-XiaoxiaoNeural'
             let speed = '1.0'
             try { const raw = localStorage.getItem('lyclaw_settings'); if (raw) { const ls = JSON.parse(raw); voice = ls.voiceId || voice; speed = ls.ttsSpeed || speed } } catch {}

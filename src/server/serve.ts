@@ -5831,6 +5831,35 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           break;
         }
         if (!audioData || audioData.length === 0) return json(res, { success: false, error: "缺少音频数据" }, 400);
+        // MiMo ASR 优先（v14.7）：配置 mimo_api_key 时通话录音/语音输入全走云端大模型识别，
+        // 失败静默回落本地 whisper → 云端兜底原链路
+        try {
+          const mimoKey = (db.getSetting ? db.getSetting("mimo_api_key") : "") || "";
+          if (mimoKey) {
+            const isWav = audioData.length > 12 && audioData[0] === 0x52 && audioData[1] === 0x49 && audioData[2] === 0x46 && audioData[3] === 0x46; // RIFF
+            const ar = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + mimoKey },
+              body: JSON.stringify({
+                model: "mimo-v2.5-asr",
+                messages: [{ role: "user", content: [
+                  { type: "input_audio", input_audio: { data: `data:${isWav ? "audio/wav" : "audio/mpeg"};base64,` + audioData.toString("base64"), format: isWav ? "wav" : "mp3" } },
+                  { type: "text", text: "请逐字转写这段音频为文字，只输出转写结果，不要任何解释或前缀。" },
+                ] }],
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (ar.ok) {
+              const aj = await ar.json();
+              const t = String(aj?.choices?.[0]?.message?.content || "").trim();
+              if (t) return json(res, { success: true, text: t, engine: "mimo" });
+            } else {
+              console.error("[STT] MiMo ASR HTTP " + ar.status + "，回落本地引擎");
+            }
+          }
+        } catch (mimoErr) {
+          console.error("[STT] MiMo ASR 异常，回落本地引擎:", (mimoErr && mimoErr.message) || mimoErr);
+        }
         const tmpDir = path.join(os.homedir(), ".lyclaw", "stt-tmp");
         fs.mkdirSync(tmpDir, { recursive: true });
         const wavPath = path.join(tmpDir, `rec_${Date.now()}.wav`);
@@ -5939,12 +5968,14 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
 
     if (url.pathname === "/api/edge-tts" && req.method === "POST") {
       try {
-        const { text, input, voice, speed } = await body(req);
+        const { text, input, voice, speed, telephone } = await body(req);
         const spoken = text || input;
         if (!spoken) return json(res, { error: "缺少 text" }, 400);
         // v11.0.1:TTS 磁盘缓存 —— 相同文本+音色+语速第二次朗读零等待
+        // v14.7：键里带上引擎档（MiMo/edge）与电话音质标记，避免换引擎后播到旧缓存
         const ttsCacheDir = path.join(DATA_DIR, "tts-cache");
-        const ttsKey = TTS_MOD.cacheKey(spoken, voice, speed);
+        const mimoPref = !!((db.getSetting ? db.getSetting("mimo_api_key") : "") || "");
+        const ttsKey = TTS_MOD.cacheKey((mimoPref ? "m|" : "e|") + (telephone ? "tel|" : "") + spoken, voice, speed);
         try {
           const hit = TTS_MOD.cacheLookup(ttsCacheDir, ttsKey);
           if (hit) {
@@ -5962,8 +5993,12 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           const mimoSing = (db.getSetting ? db.getSetting("mimo_tts_sing") : "") === "1";
           if (mimoKey) {
             const messages = [];
+            // v14.7：电话音质（通话模式传 telephone:true）与音色风格指令合并进 user 消息（官方自然语言控制位）
             const style = voice && voice !== "zh-CN-XiaoxiaoNeural" ? String(voice) : "";
-            if (style && !style.startsWith("zh-")) messages.push({ role: "user", content: style });
+            const insts = [];
+            if (telephone) insts.push("电话通话音质，窄带 8kHz 采样率，带轻微底噪和电话压缩质感");
+            if (style && !style.startsWith("zh-")) insts.push(style);
+            if (insts.length) messages.push({ role: "user", content: insts.join("；") });
             messages.push({ role: "assistant", content: mimoSing ? "(唱歌)" + spoken : spoken });
             const r = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
               method: "POST",
