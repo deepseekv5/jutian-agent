@@ -386,6 +386,32 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [isListening, browserSttBroken, startBrowserSTT, startServerSTT])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
+  const [analyzingAudio, setAnalyzingAudio] = useState(false)
+
+
+  /** 上传音频 → MiMo ASR 识别 → 结果作为消息发出（v14.6） */
+  const handleAudioAnalyze = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setAnalyzingAudio(true)
+    try {
+      const buf = await f.arrayBuffer()
+      const bytes = new Uint8Array(buf)
+      let bin = ''
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+      const r = await fetchCompat('/api/mimo/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioBase64: btoa(bin), mimeType: f.type || 'audio/mpeg' }),
+      }).then((x) => x.json())
+      if (r.error) { setAnalyzingAudio(false); window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: r.error })); return }
+      // 直接把识别结果发出去（用户上传音频就是想问它）
+      onSend('【音频识别：' + f.name + '】\n' + r.text)
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '音频识别失败：' + String((err as Error)?.message || err) }))
+    } finally { setAnalyzingAudio(false) }
+  }
 
   const handleFileUpload = useCallback(async () => {
     const api = (window as any).electronAPI
@@ -959,6 +985,14 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                   附件
+                </button>
+                <button onClick={() => { setShowToolbar(false); audioInputRef.current?.click() }} disabled={analyzingAudio}
+                  title="音频识别（MiMo）：上传 mp3/wav，识别语音或描述音乐"
+                  className="btn-ghost flex items-center gap-1.5 px-2.5 h-8 disabled:opacity-50" style={{ color: analyzingAudio ? c.accent : c.textSecondary }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                  </svg>
+                  {analyzingAudio ? '识别中…' : '音频识别'}
                 </button>
                 <button onClick={() => { setShowToolbar(false); handleScreenshot() }} title="截图提问（Cmd+Shift+S 全局可用）"
                   className="btn-ghost flex items-center gap-1.5 px-2.5 h-8" style={{ color: c.textSecondary }}>
@@ -1630,6 +1664,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         </div>
 
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleNativeFileChange} />
+        <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.m4a" className="hidden" onChange={handleAudioAnalyze} />
       </div>
     </div>
   )

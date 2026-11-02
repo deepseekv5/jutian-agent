@@ -5953,6 +5953,40 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
             return;
           }
         } catch {}
+        // MiMo V2.5 TTS 优先（v14.6）：配置了 mimo_api_key 时优先走 MiMo
+        // 这样通话、朗读、自动朗读四处调用全部自动升级，无需改前端
+        try {
+          const mimoKey = (db.getSetting ? db.getSetting("mimo_api_key") : "") || "";
+          const mimoModel = (db.getSetting ? db.getSetting("mimo_tts_model") : "") || "mimo-v2.5-tts";
+          const mimoVoice = (db.getSetting ? db.getSetting("mimo_tts_voice") : "") || "mimo_default";
+          const mimoSing = (db.getSetting ? db.getSetting("mimo_tts_sing") : "") === "1";
+          if (mimoKey) {
+            const messages = [];
+            const style = voice && voice !== "zh-CN-XiaoxiaoNeural" ? String(voice) : "";
+            if (style && !style.startsWith("zh-")) messages.push({ role: "user", content: style });
+            messages.push({ role: "assistant", content: mimoSing ? "(唱歌)" + spoken : spoken });
+            const r = await fetch("https://api.xiaomimimo.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + mimoKey },
+              body: JSON.stringify({ model: mimoModel, messages, audio: { format: "wav", voice: mimoVoice } }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (r.ok) {
+              const j = await r.json();
+              const b64 = j?.choices?.[0]?.message?.audio?.data;
+              if (b64) {
+                const buf = Buffer.from(b64, "base64");
+                try { TTS_MOD.cacheStore(ttsCacheDir, ttsKey, "wav", buf) } catch {}
+                res.writeHead(200, { ...(corsHeaders(req) || {}), "Content-Type": "audio/wav", "X-TTS-Engine": "mimo" });
+                res.end(buf);
+                return;
+              }
+            }
+            console.error("[TTS] MiMo 失败 HTTP " + (r ? r.status : "no"), "回落 edge-tts");
+          }
+        } catch (mimoErr) {
+          console.error("[TTS] MiMo 异常,回落 edge-tts:", mimoErr.message);
+        }
         // v10.8：Node 原生 Edge TTS 优先（零 python 依赖，mac-x64/Win 全平台可用，
         // 引擎随 app.asar 分发）；失败回落打包的 python edge-tts 服务（5050）。
         try {

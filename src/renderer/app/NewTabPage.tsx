@@ -46,6 +46,16 @@ const CARDS: Card[] = [
   { type: 'qqbot', desc: '连接 QQ 机器人，聊天里指挥它干活', descEn: 'Connect a QQ bot and command it from chat', chips: ['官方网关'], chipsEn: ['Official gateway'] },
   { type: 'settings', desc: '模型、外观、权限与数据管理', descEn: 'Model, appearance, permissions, data', chips: ['种子色', '协议'], chipsEn: ['Seed color', 'Legal'] },
   { type: 'about', desc: '版本、更新日志与自动更新', descEn: 'Version, changelog, auto-update', chips: ['一键更新'], chipsEn: ['One-click update'] },
+  { type: 'workflow', desc: '多步骤自动化编排，上一步结果喂给下一步', descEn: 'Multi-step automation with chained outputs', chips: ['AI 生成', '示例模板'], chipsEn: ['AI draft', 'Examples'] },
+  { type: 'export', desc: '会话导出 Markdown / HTML / PDF', descEn: 'Export chats as Markdown / HTML / PDF', chips: ['多选合并', '按关键词筛'], chipsEn: ['Merge', 'Filter'] },
+  { type: 'backup', desc: '数据备份与恢复，选范围导出导入', descEn: 'Backup and restore, pick a scope', chips: ['密钥不进备份'], chipsEn: ['No keys'] },
+  { type: 'usage', desc: 'Token 用量与花费趋势，按模型统计', descEn: 'Token usage and spend by model', chips: ['趋势图'], chipsEn: ['Trend'] },
+  { type: 'diagnostics', desc: '一键环境自检，生成可复制报告', descEn: 'One-click self-check with a report', chips: ['服务 / 密钥 / 目录'], chipsEn: ['Service / Key / Dir'] },
+  { type: 'shortcuts', desc: '查看全部快捷键', descEn: 'All keyboard shortcuts', chips: ['Cmd+K 等'], chipsEn: ['Cmd+K etc.'] },
+  { type: 'templates', desc: '可复用提示词模板库，填参数直接用', descEn: 'Reusable prompt templates', chips: ['10 模板'], chipsEn: ['10 templates'] },
+  { type: 'snippets', desc: '代码片段库，触发器一键展开', descEn: 'Code snippets with triggers', chips: ['触发词'], chipsEn: ['Trigger'] },
+  { type: 'todos', desc: 'AI 维护的任务清单', descEn: 'Todo list the agent maintains', chips: ['实时同步'], chipsEn: ['Live sync'] },
+  { type: 'compare', desc: '同一问题让多个模型并行回答，并排对比', descEn: 'Ask several models at once, compare side by side', chips: ['多模型'], chipsEn: ['Multi-model'] },
 ]
 
 const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
@@ -53,6 +63,9 @@ const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
   { label: '研究与产出', labelEn: 'Research & Output', items: ['research', 'ppt', 'outputs'] },
   { label: '核心工作区', labelEn: 'Workspace', items: ['code', 'terminal', 'files'] },
   { label: '扩展能力', labelEn: 'Extended', items: ['kb', 'skills', 'memory', 'tasks', 'diary', 'employees', 'freemodels'] },
+  { label: '自动化与流水线', labelEn: 'Automation', items: ['workflow'] },
+  { label: '数据与诊断', labelEn: 'Data & Diagnostics', items: ['export', 'backup', 'usage', 'diagnostics', 'todos', 'compare'] },
+  { label: '效率工具', labelEn: 'Productivity', items: ['templates', 'snippets', 'shortcuts'] },
   { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about'] },
 ]
 
