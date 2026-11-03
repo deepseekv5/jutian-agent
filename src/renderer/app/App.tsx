@@ -416,6 +416,7 @@ function MainApp() {
       }
       if (mod && e.shiftKey && k === 'e') { e.preventDefault(); openTabRef.current('export'); return }
       // 朗读最后回复（v14.8）
+      if (mod && e.shiftKey && k === 'd') { e.preventDefault(); openTabRef.current('diagnostics'); return }
       if (mod && e.shiftKey && k === 'r') {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('read-aloud-last'))

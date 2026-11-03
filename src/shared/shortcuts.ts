@@ -168,6 +168,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
   { id: 'prev-tab', combo: 'ctrl+shift+tab', label: '切换上一个标签', group: '界面' },
   { id: 'reopen-tab', combo: 'mod+shift+t', label: '重新打开关闭的标签', group: '界面' },
   { id: 'read-aloud-last', combo: 'mod+shift+r', label: '朗读最后回复', group: '对话' },
+  { id: 'open-diagnostics', combo: 'mod+shift+d', label: '打开诊断面板', group: '帮助' },
   { id: 'font-up', combo: 'mod+equal', label: '聊天字号放大', group: '界面' },
   { id: 'font-down', combo: 'mod+minus', label: '聊天字号缩小', group: '界面' },
   { id: 'font-reset', combo: 'mod+0', label: '聊天字号复位', group: '界面' },
