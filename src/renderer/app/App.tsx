@@ -209,6 +209,7 @@ function MainApp() {
     const map: Record<string, string> = { small: '14.5px', standard: '16px', large: '18px' };
     const size = map[(settings as any).chatFontSize || 'standard'] || '16px';
     document.documentElement.style.setProperty('--chat-font', size);
+    try { localStorage.setItem('lyclaw_font_size', (settings as any).chatFontSize || 'standard') } catch { /* ignore */ }
   }, [settings]);
 
   useEffect(() => {
@@ -436,6 +437,23 @@ function MainApp() {
       if (mod && e.shiftKey && k === 't') {
         e.preventDefault();
         reopenClosedTabRef.current?.()
+        return
+      }
+      // Cmd+加/减/0 快速调节聊天字号（v14.8）
+      if (k === '=' || k === '-' || k === '0') {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        e.preventDefault();
+        const sizes = ['small', 'standard', 'large'] as const;
+        const cur = sizes.indexOf((localStorage.getItem('lyclaw_font_size') as typeof sizes[number]) || 'standard');
+        let next = cur;
+        if (k === '=') next = Math.min(sizes.length - 1, cur + 1);
+        else if (k === '-') next = Math.max(0, cur - 1);
+        else next = 1;
+        if (next !== cur) {
+          localStorage.setItem('lyclaw_font_size', sizes[next]);
+          window.dispatchEvent(new CustomEvent('settings-updated', { detail: { ...(JSON.parse(localStorage.getItem('lyclaw_settings') || '{}')), chatFontSize: sizes[next] } }))
+        }
         return
       }
       if (k === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
