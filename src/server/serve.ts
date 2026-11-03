@@ -4796,6 +4796,23 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         return json(res, { ok: true, sessionId: newId, copied: picked.length });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
+    if (url.pathname === "/api/sessions/merge" && req.method === "POST") {
+      try {
+        if (!hasDb) return json(res, { error: "本地数据库不可用" }, 503);
+        const b = await body(req);
+        const targetId = String(b.targetId || "");
+        const sourceId = String(b.sourceId || "");
+        if (!targetId || !sourceId || targetId === sourceId) return json(res, { error: "参数不合法" }, 400);
+        const msgs = db.getMessages(sourceId) || [];
+        for (const m of msgs) {
+          db.addMessage(db.genId(), targetId, m.role, m.content || "",
+            m.thinking || "",
+            typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []),
+            m.tool_call_id || "");
+        }
+        return json(res, { ok: true, merged: msgs.length });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     if (url.pathname === "/api/sessions" && req.method === "POST") {
       const s = await body(req);
       if (hasDb) {
@@ -6703,6 +6720,49 @@ async function globalSearch(q, limit = 8) {
   } catch (e) {
     json(res, { error: e.message }, 500);
   }
+
+
+// ─── 自动备份（v14.8）───
+// daily=每天一次；weekly=每 7 天一次。导出完整备份到 ~/.lyclaw/backups，保留最近 4 份。
+async function autoBackupTick() {
+  try {
+    if (!hasDb) return;
+    const mode = String(db.getSetting("autoBackup") || "off");
+    if (mode !== "daily" && mode !== "weekly") return;
+    const dir = path.join(os.homedir(), ".lyclaw", "backups");
+    fs.mkdirSync(dir, { recursive: true });
+    const intervalMs = mode === "daily" ? 24 * 3600e3 : 7 * 24 * 3600e3;
+    const re = /^jutian-backup-\d{8}-\d{6}\.json$/;
+    const files = fs.readdirSync(dir).filter((f) => re.test(f)).sort();
+    const last = files[files.length - 1];
+    if (last) {
+      const m = last.match(/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/);
+      if (m) {
+        const lastTs = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+        if (Date.now() - lastTs < intervalMs) return;
+      }
+    }
+    const sessions = db.listSessions();
+    const messages = {};
+    for (const ses of sessions) messages[ses.id] = db.getMessages(ses.id);
+    const settingsObj = Object.fromEntries(db.getAllSettings().map((r) => [r.key, r.value]));
+    const memories = db.getAllMemories();
+    const payload = { version: 1, exported_at: new Date().toISOString(), sessions, messages, settings: settingsObj, memories, auto: true };
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const name = "jutian-backup-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + ".json";
+    fs.writeFileSync(path.join(dir, name), JSON.stringify(payload));
+    const all = fs.readdirSync(dir).filter((f) => re.test(f)).sort();
+    for (const old of all.slice(0, Math.max(0, all.length - 4))) {
+      try { fs.unlinkSync(path.join(dir, old)); } catch {}
+    }
+    pushServerNotice({ type: "system", title: "自动备份完成", body: "已导出 " + sessions.length + " 个会话到 " + name });
+  } catch (e) {
+    console.error("[auto-backup]", (e && e.message) || e);
+  }
+}
+setTimeout(autoBackupTick, 90 * 1000);
+setInterval(autoBackupTick, 3600 * 1000);
 
 }).listen(PORT, () => {
   console.log(`

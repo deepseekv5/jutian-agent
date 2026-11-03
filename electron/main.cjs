@@ -402,7 +402,8 @@ function setupIPC() {
       return dataUrl
     } catch (e) { return '' }
   })
-  globalShortcut.register('CommandOrControl+Shift+S', async () => {
+  // 抓屏→发送到聊天（Cmd+Shift+S 与托盘共用）
+  const captureAndSend = async () => {
     try {
       // 隐藏主窗再抓屏（避免截到应用自己）
       const wasVisible = mainWindow && mainWindow.isVisible()
@@ -417,7 +418,8 @@ function setupIPC() {
         mainWindow.show()
       }
     } catch { /* ignore */ }
-  })
+  }
+  globalShortcut.register('CommandOrControl+Shift+S', captureAndSend)
 
   // ─── 全局唤起/隐藏主窗口（Cmd+Shift+A）───
   globalShortcut.register('CommandOrControl+Shift+A', () => {
@@ -452,6 +454,9 @@ function setupIPC() {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示主窗口', click: () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() } } },
       { label: '新建对话', click: () => { if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.webContents.send('tray-new-chat') } } },
+      { label: '语音通话', click: () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() ; if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("tray-open", "call") } } },
+      { label: '深度调研', click: () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() ; if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("tray-open", "research") } } },
+      { label: '截图提问', click: async () => { if (mainWindow && !mainWindow.isDestroyed()) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus() } await captureAndSend() } },
       { type: 'separator' },
       { label: '退出', click: () => { app.quit() } },
     ]))

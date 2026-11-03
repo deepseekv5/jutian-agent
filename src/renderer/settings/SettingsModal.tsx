@@ -1358,6 +1358,32 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   </div>
                   <Toggle c={c} on={form.autoTitle !== false} onClick={() => applyPrefNow({ autoTitle: form.autoTitle === false })} />
                 </div>
+                {/* 自动备份（v14.8）：定时导出到 ~/.lyclaw/backups，保留最近 4 份 */}
+                <div className="flex items-center justify-between p-3 rounded-lg mb-2" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('自动备份', 'Auto backup')}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('定时导出全部数据到 ~/.lyclaw/backups，保留最近 4 份', 'Export to ~/.lyclaw/backups, keep last 4')}</div>
+                  </div>
+                  <div className="flex gap-1">
+                    {([['off', '关'], ['daily', '每天'], ['weekly', '每周']] as const).map(([id, label]) => (
+                      <button key={id} type="button" onClick={() => applyPrefNow({ autoBackup: id })}
+                        className="px-2.5 h-7 rounded-full text-[12px]"
+                        style={form.autoBackup === id || (id === 'off' && !form.autoBackup)
+                          ? { background: c.accentBg || '#10a37f', color: '#fff' }
+                          : { background: c.bgHover || c.bgInput, color: c.textSecondary }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 启动恢复上次会话（v14.8） */}
+                <div className="flex items-center justify-between p-3 rounded-lg mb-2" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('启动恢复上次会话', 'Restore last session on launch')}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('启动时自动打开上次正在聊的会话', 'Reopen the last active conversation at startup')}</div>
+                  </div>
+                  <Toggle c={c} on={form.restoreLastSession === true} onClick={() => applyPrefNow({ restoreLastSession: form.restoreLastSession !== true })} />
+                </div>
                 {/* 自动朗读 */}
                 <div className="flex items-center justify-between p-3 rounded-lg mb-2" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
                   <div>

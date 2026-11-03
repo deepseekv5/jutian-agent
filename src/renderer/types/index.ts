@@ -92,6 +92,10 @@ export interface Settings {
   chatFontSize?: 'small' | 'standard' | 'large'
   /** 首次对话后 AI 自动生成标题（默认 true） */
   autoTitle?: boolean
+  /** 启动时自动恢复上次活跃会话（默认 false） */
+  restoreLastSession?: boolean
+  /** 自动备份（v14.8）：off / weekly / daily，导出到 ~/.lyclaw/backups 保留最近 4 份 */
+  autoBackup?: 'off' | 'weekly' | 'daily'
   /** 回复完成后系统通知（窗口在后台时，默认 false） */
   notifyDone?: boolean
   /** 上下文自动压缩阈值百分比（默认 70） */

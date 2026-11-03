@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onStartCall: (cb) => { const h = () => cb(); ipcRenderer.on('open-call-tab', h); return () => ipcRenderer.removeListener('open-call-tab', h) },
   // 托盘「新建对话」
   onTrayNewChat: (cb) => { const h = () => cb(); ipcRenderer.on('tray-new-chat', h); return () => ipcRenderer.removeListener('tray-new-chat', h) },
+  onTrayOpen: (cb) => { const h = (e, page) => cb(page); ipcRenderer.on('tray-open', h); return () => ipcRenderer.removeListener('tray-open', h) },
   // 窗口置顶
   setAlwaysOnTop: (enabled) => ipcRenderer.invoke('set-always-on-top', enabled),
   getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),

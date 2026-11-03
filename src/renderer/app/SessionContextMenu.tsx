@@ -6,6 +6,7 @@
  * 列表一滚动菜单就该消失，否则会飘在错误的行上。
  */
 import { useEffect, useRef, useState } from 'react'
+import { fetchCompat } from '../api'
 import { useTheme } from '../hooks/useTheme'
 import { getMeta, saveMeta } from '../store/sessionMeta'
 import { addTag, removeTag, normalizeTag, togglePin } from '../../shared/sessionMeta'
@@ -17,13 +18,36 @@ interface Props {
   y: number
   onClose: () => void
   onArchived?: () => void
+  onMerged?: (targetId: string) => void
 }
 
-export default function SessionContextMenu({ sessionId, title, x, y, onClose, onArchived }: Props) {
+export default function SessionContextMenu({ sessionId, title, x, y, onClose, onArchived, onMerged }: Props) {
   const { c } = useTheme()
   const [meta, setMeta] = useState(() => getMeta(sessionId))
   const [tagInput, setTagInput] = useState('')
   const [showTagInput, setShowTagInput] = useState(false)
+  // 合并到…（v14.8）：展开可选目标会话列表
+  const [merging, setMerging] = useState(false)
+  const [mergeTargets, setMergeTargets] = useState<{ id: string; title: string }[]>([])
+  const startMerge = async () => {
+    if (merging) { setMerging(false); return }
+    try {
+      const r = await fetchCompat('/api/sessions', {}).then((x) => x.json())
+      const list = Array.isArray(r) ? r : (r?.sessions || [])
+      setMergeTargets(list.filter((x: { id: string }) => x.id !== sessionId).slice(0, 12).map((x: { id: string; title: string }) => ({ id: x.id, title: x.title || '未命名' })))
+      setMerging(true)
+    } catch { setMerging(false) }
+  }
+  const doMerge = async (targetId: string) => {
+    onClose()
+    try {
+      await fetchCompat('/api/sessions/merge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, sourceId: sessionId }),
+      })
+      onMerged?.(targetId)
+    } catch { /* 静默 */ }
+  }
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -118,6 +142,40 @@ export default function SessionContextMenu({ sessionId, title, x, y, onClose, on
 
       <div className="my-1 h-px" style={{ background: c.borderLight }} />
       <Item label="复制标题" onClick={() => { navigator.clipboard?.writeText(title).catch(() => {}); onClose() }} />
+      <Item label="复制会话为 Markdown" hint="全部消息"
+        onClick={async () => {
+          onClose()
+          try {
+            const msgs = await fetchCompat('/api/sessions/' + sessionId + '/messages', {}).then((x) => x.json())
+            const arr = Array.isArray(msgs) ? msgs : (msgs?.messages || [])
+            const md = arr.map((m: { role: string; content: string }) => '### ' + (m.role === 'user' ? '用户' : 'AI') + '\n\n' + (m.content || '')).join('\n\n---\n\n')
+            await navigator.clipboard.writeText('# ' + title + '\n\n' + md)
+            window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '已复制会话为 Markdown（' + arr.length + ' 条消息）' }))
+          } catch { /* 静默 */ }
+        }} />
+      <Item label={merging ? '取消合并' : '合并到…'} hint="把本会话消息并入另一会话" onClick={startMerge} />
+      {merging && (
+        <div className="mt-1 max-h-40 overflow-auto rounded-lg" style={{ background: c.bgInput }}>
+          {mergeTargets.length === 0 && <div className="px-3 py-2 text-[11px]" style={{ color: c.textTertiary }}>没有其它会话</div>}
+          {mergeTargets.map((tg) => (
+            <button key={tg.id} onClick={() => doMerge(tg.id)}
+              className="w-full text-left px-3 py-1.5 text-[12px] truncate hover:opacity-80"
+              style={{ color: c.textHead }}>{tg.title}</button>
+          ))}
+        </div>
+      )}
+      <Item label="克隆会话" hint="含全部消息"
+        onClick={async () => {
+          onClose()
+          try {
+            const r = await fetchCompat('/api/sessions/branch', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceId: sessionId, title: title + '（副本）' }),
+            })
+            const d = await r.json()
+            if (d?.sessionId) window.dispatchEvent(new CustomEvent('session-cloned', { detail: d.sessionId }))
+          } catch { /* 静默失败：菜单已关，不打断 */ }
+        }} />
       <Item label={meta.archived ? '取消归档' : '归档（从列表隐藏）'}
         onClick={() => { apply({ ...meta, archived: !meta.archived }); onArchived?.(); onClose() }} />
     </div>

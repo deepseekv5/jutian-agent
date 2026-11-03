@@ -99,7 +99,12 @@ function loadPersistedTabs(): WorkTab[] | null {
 
 function MainApp() {
   const { settings, loaded, saveSettings } = useSettings();
-  const { sessions, activeId, setActiveId, create, remove, updateTitle, setProject } = useSessions();
+  const { sessions, activeId, setActiveId: setActiveIdRaw, create, remove, updateTitle, setProject, refresh } = useSessions();
+  // 记录上次活跃会话（v14.8）：供「启动恢复上次会话」用
+  const setActiveId = useCallback((id: string | null) => {
+    try { if (id) localStorage.setItem('lyclaw_last_session', id); else localStorage.removeItem('lyclaw_last_session') } catch { /* ignore */ }
+    setActiveIdRaw(id)
+  }, [setActiveIdRaw]);
   const { c, theme } = useTheme();
 
   const [tabs, setTabs] = useState<WorkTab[]>(() => loadPersistedTabs() || []);
@@ -160,10 +165,30 @@ function MainApp() {
   useEffect(() => {
     if (!loaded || tabs.length > 0) return;
     (async () => {
-      const sid = sessions[0]?.id || (await create()).id;
-      const tab: WorkTab = { id: uid(), type: 'chat', title: sessions[0]?.title || '新对话', sessionId: sid };
-      setTabs([tab]);
-      setActiveTabId(tab.id);
+      // 启动恢复上次会话（v14.8）：设置开启时优先打开上次活跃的会话
+      let lastTitle = ''
+      let restoreOk = false
+      try {
+        const raw = localStorage.getItem('lyclaw_settings')
+        const pref = raw ? JSON.parse(raw).restoreLastSession : false
+        const lastSid = localStorage.getItem('lyclaw_last_session')
+        if (pref && lastSid) {
+          const found = sessions.find(x => x.id === lastSid)
+          if (found) {
+            const tab: WorkTab = { id: uid(), type: 'chat', title: found.title || '新对话', sessionId: lastSid };
+            setTabs([tab]);
+            setActiveTabId(tab.id);
+            setActiveId(lastSid);
+            restoreOk = true
+          }
+        }
+      } catch { /* ignore */ }
+      if (!restoreOk) {
+        const sid = sessions[0]?.id || (await create()).id;
+        const tab: WorkTab = { id: uid(), type: 'chat', title: sessions[0]?.title || '新对话', sessionId: sid };
+        setTabs([tab]);
+        setActiveTabId(tab.id);
+      }
     })();
     // 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,7 +277,20 @@ function MainApp() {
       if (type) openTab(type as PageType)
     }
     window.addEventListener('open-panel', h)
-    return () => window.removeEventListener('open-panel', h)
+    // 会话克隆（v14.8）：右键菜单克隆后刷新列表并直接打开副本
+    const onCloned = (e: Event) => {
+      const newId = String((e as CustomEvent).detail || '')
+      if (!newId) return
+      refresh().then(() => {
+        setActiveId(newId)
+        openTab('chat', { title: '会话副本', sessionId: newId })
+      }).catch(() => {})
+    }
+    window.addEventListener('session-cloned', onCloned)
+    return () => {
+      window.removeEventListener('open-panel', h)
+      window.removeEventListener('session-cloned', onCloned)
+    }
   }, [openTab])
 
   // v11.0.3：打开「用户协议与隐私政策」页（关于页入口派发）
@@ -271,9 +309,13 @@ function MainApp() {
     return () => { window.removeEventListener('skills-changed', onChanged); window.removeEventListener('focus', onChanged) }
   }, [])
 
+  // 关闭的标签栈（v14.8）：Cmd+Shift+T 重新打开
+  const closedTabStack = useRef<WorkTab[]>([]);
   const closeTab = useCallback((id: string) => {
     const idx = tabs.findIndex(t => t.id === id);
     if (idx === -1) return;
+    closedTabStack.current.push(tabs[idx]);
+    if (closedTabStack.current.length > 20) closedTabStack.current.shift();
     const next = tabs.filter(t => t.id !== id);
     if (next.length === 0) {
       (async () => {
@@ -335,6 +377,10 @@ function MainApp() {
   const openTabRef = useRef(openTab);
   const closeTabRef = useRef<(id: string) => void>(() => {});
   const activeTabRef = useRef<string>('');
+  const activeSessionIdRef = useRef<string | null>(null);
+  const tabsOrderRef = useRef<WorkTab[]>([]);
+  const switchTabRef = useRef<((id: string) => void) | null>(null);
+  const reopenClosedTabRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       // ? 打开快捷键一览（输入框/可编辑区内不抢）
@@ -348,6 +394,50 @@ function MainApp() {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       const k = e.key.toLowerCase();
+      // 复制最后一条 AI 回复（v14.8）：从当前会话消息里取最后一条 assistant 正文
+      if (mod && e.shiftKey && k === 'c') {
+        const el = document.activeElement as HTMLElement | null;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        e.preventDefault();
+        (async () => {
+          try {
+            const sid = activeSessionIdRef.current
+            if (!sid) return
+            const msgs = await (await import('../store/storage')).listMessages(sid)
+            const last = [...msgs].reverse().find(m => m.role === 'assistant' && (m.content || '').trim())
+            if (last) {
+              await navigator.clipboard.writeText(last.content)
+              window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '已复制最后一条回复' }))
+            }
+          } catch { /* 静默 */ }
+        })()
+        return
+      }
+      if (mod && e.shiftKey && k === 'e') { e.preventDefault(); openTabRef.current('export'); return }
+      // 朗读最后回复（v14.8）
+      if (mod && e.shiftKey && k === 'r') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('read-aloud-last'))
+        return
+      }
+      // Ctrl/Cmd+Tab：循环切换标签（v14.8）
+      if (k === 'tab') {
+        e.preventDefault();
+        const order = tabsOrderRef.current;
+        if (order.length > 1) {
+          const cur = order.findIndex(t => t.id === activeTabRef.current);
+          const dir = e.shiftKey ? -1 : 1;
+          const nextTab = order[(cur + dir + order.length) % order.length];
+          if (nextTab) switchTabRef.current?.(nextTab.id)
+        }
+        return
+      }
+      // Cmd+Shift+T：重新打开刚关闭的标签（v14.8）
+      if (mod && e.shiftKey && k === 't') {
+        e.preventDefault();
+        reopenClosedTabRef.current?.()
+        return
+      }
       if (k === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
       else if (k === 'n') { e.preventDefault(); handleCreateSessionRef.current?.() }
       else if (k === 't') { e.preventDefault(); openTabRef.current('newtab') }
@@ -371,7 +461,11 @@ function MainApp() {
     const api = (window as any).electronAPI;
     if (!api?.onTrayNewChat) return;
     const off = api.onTrayNewChat(() => { handleCreateSessionRef.current?.() });
-    return off;
+    // 托盘快捷入口（v14.8）：通话 / 调研 / 截图提问
+    const offTrayOpen = api.onTrayOpen?.((page: string) => {
+      if (page === 'call' || page === 'research') openTabRef.current(page as never)
+    });
+    return () => { off(); if (offTrayOpen) offTrayOpen() };
   }, []);
 
   const handleSelectSession = useCallback((sid: string) => {
@@ -455,6 +549,15 @@ function MainApp() {
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   activeTabRef.current = activeTab?.id || '';
+  activeSessionIdRef.current = activeTab?.sessionId || activeId || null;
+  tabsOrderRef.current = tabs;
+  switchTabRef.current = (id: string) => { setActiveTabId(id); try { localStorage.setItem(ACTIVE_TAB_KEY, id) } catch { /* ignore */ } };
+  reopenClosedTabRef.current = () => {
+    const last = closedTabStack.current.pop();
+    if (!last) return;
+    setTabs(prev => [...prev, last]);
+    switchTabRef.current?.(last.id);
+  };
 
   const renderTabBody = (tab: WorkTab) => {
     switch (tab.type) {

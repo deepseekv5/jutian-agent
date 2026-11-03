@@ -7,7 +7,7 @@ import SubAgentTracker from './SubAgentTracker'
 import type { PageType } from './TabBar'
 import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
-import { useMetaMap } from '../store/sessionMeta'
+import { useMetaMap, saveMeta } from '../store/sessionMeta'
 import { filterByTags, tagCloud } from '../../shared/sessionMeta'
 import { translate } from '../../shared/i18n'
 import { tokenize, highlight } from '../../shared/searchIndex'
@@ -359,6 +359,17 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               onMouseLeave={e => e.currentTarget.style.background = isActive ? c.sidebarActiveBg : c.surfaceHover}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+              </svg>
+            </button>
+            <button onClick={e => {
+              e.stopPropagation();
+              const m = metaMap[session.id] || {}
+              const next = m.pinnedAt ? { ...m, pinnedAt: 0 } : { ...m, pinnedAt: Date.now() }
+              saveMeta(session.id, next)
+            }} title={metaMap[session.id]?.pinnedAt ? '取消置顶' : '置顶'} className="row-pin-btn"
+              style={{ color: metaMap[session.id]?.pinnedAt ? '#10a37f' : c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 4v6l3 4v2h-6v6l-1 1-1-1v-6H5v-2l3-4V4a1 1 0 011-1h6a1 1 0 011 1z" />
               </svg>
             </button>
             <button onClick={e => { e.stopPropagation(); handleStartEdit(session, e) }} title="重命名"
@@ -730,6 +741,10 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
+          onMerged={(targetId) => {
+            // 合并后刷新列表并打开目标会话（复用克隆事件）
+            window.dispatchEvent(new CustomEvent('session-cloned', { detail: targetId }))
+          }}
         />
       )}
     </div>

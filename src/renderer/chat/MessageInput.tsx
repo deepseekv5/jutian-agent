@@ -704,6 +704,84 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     return () => window.removeEventListener('keydown', h, true)
   }, [fullscreenEdit])
 
+  // ─── 定时发送（v14.8）：延迟 N 分钟自动发送，带倒计时与取消 ───
+  const [schedAt, setSchedAt] = useState<number | null>(null)
+  const [schedLeft, setSchedLeft] = useState(0)
+  const schedTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const schedPayload = useRef<{ content: string; skills?: string[]; files?: typeof attachedFiles; opts?: Record<string, unknown> } | null>(null)
+  const stopSchedule = () => {
+    if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
+    setSchedAt(null); setSchedLeft(0); schedPayload.current = null
+  }
+  const startSchedule = (delayMin: number) => {
+    const text = value.trim()
+    if (!text || !onSend) return
+    const fire = Date.now() + delayMin * 60_000
+    // 快照当前草稿 + 附件 + 选项，到点原样发出
+    const content = text
+    const skills = selectedSkillIds.length > 0 ? [...selectedSkillIds] : undefined
+    const files = attachedFiles.length > 0 ? [...attachedFiles] : undefined
+    schedPayload.current = { content, skills, files }
+    if (sessionId) dropDraft(sessionId)
+    setValue(''); setAttachedFiles([]); setSelectedSkillIds([])
+    setSchedAt(fire); setSchedLeft(delayMin * 60)
+    if (schedTimer.current) clearInterval(schedTimer.current)
+    schedTimer.current = setInterval(() => {
+      const left = Math.max(0, Math.ceil((fire - Date.now()) / 1000))
+      setSchedLeft(left)
+      if (left <= 0) {
+        // 先取快照再停表：stopSchedule 会清 payload
+        const pl = schedPayload.current
+        if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
+        setSchedAt(null); setSchedLeft(0); schedPayload.current = null
+        if (pl) onSend(pl.content, pl.skills, pl.files as never)
+      }
+    }, 500)
+  }
+  useEffect(() => () => { if (schedTimer.current) clearInterval(schedTimer.current) }, [])
+
+  // ─── AI 改写草稿（v14.8）：不发送，让当前模型把草稿改写后直接填回输入框 ───
+  const [rewriting, setRewriting] = useState(false)
+  const aiRewrite = async () => {
+    const text = value.trim()
+    if (!text || rewriting) return
+    setRewriting(true)
+    try {
+      const r = await fetchCompat('/api/llm-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Target-Base': settings?.apiBaseUrl || '',
+          'X-Api-Key': effectiveApiKey(settings?.apiKey),
+        },
+        body: JSON.stringify({
+          model: settings?.model,
+          messages: [
+            { role: 'system', content: '你是文字润色助手。改写用户的草稿：使其更清晰、连贯、专业，保留原意与关键信息，不添加新内容。直接输出改写结果，不要解释、不要引号。' },
+            { role: 'user', content: text.slice(0, 6000) },
+          ],
+          max_tokens: 4096,
+          stream: false,
+        }),
+      })
+      const d = await r.json()
+      const msg = d?.choices?.[0]?.message || {}
+      let out = String(msg.content || '').trim()
+      if (!out) {
+        // 推理模型思考吃掉 max_tokens 时 content 为空：从 reasoning 提取正文
+        const rc = String(msg.reasoning_content || msg.reasoning || '').trim()
+        if (rc) out = rc.split('\n').filter((l: string) => l.trim() && !/^[<【]*(思考|think)/i.test(l.trim())).join('\n').trim()
+      }
+      if (!out) throw new Error(String(d?.error?.message || d?.error || '模型未返回内容'))
+      // 掉出包裹引号
+      out = out.replace(/^[「『"'\u201c\u2018]+/, '').replace(/[」』"'\u201d\u2019]+$/, '')
+      setValue(out)
+      textareaRef.current?.focus()
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '改写失败：' + String((e as Error)?.message || e) }))
+    } finally { setRewriting(false) }
+  }
+
   // 提示词预设库：一键对输入内容套用预设指令
   const PROMPT_PRESETS: { id: string; label: string; tpl: (t: string) => string }[] = [
     { id: 'translate', label: '翻译成英文', tpl: t => `请将以下内容翻译成地道的英文，只输出译文：\n\n${t}` },
@@ -997,6 +1075,22 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                   </svg>
                   截图
+                </button>
+                <button onClick={() => { setShowToolbar(false); aiRewrite() }} disabled={rewriting || !value.trim()}
+                  title="AI 改写草稿（不发送，改写后填回输入框）"
+                  className="btn-ghost flex items-center gap-1.5 px-2.5 h-8 disabled:opacity-40" style={{ color: rewriting ? c.accent : c.textSecondary }}>
+                  <svg className={rewriting ? 'w-4 h-4 animate-spin' : 'w-4 h-4'} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                  </svg>
+                  {rewriting ? '改写中…' : 'AI 改写'}
+                </button>
+                <button onClick={() => { setShowToolbar(false); startSchedule(2) }} disabled={!value.trim()}
+                  title="定时发送：2 分钟后自动发出（草稿与附件一起）"
+                  className="btn-ghost flex items-center gap-1.5 px-2.5 h-8 disabled:opacity-40" style={{ color: c.textSecondary }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  定时发送
                 </button>
               </div>
 
@@ -1604,6 +1698,16 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         </div>
 
         {/* 消息队列指示 */}
+        {schedAt !== null && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11.5px] mx-auto w-full" style={{ maxWidth: wide ? 1100 : 860, background: 'rgba(16,163,127,.10)', color: '#10a37f' }}>
+            <svg className="w-3.5 h-3.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>定时发送：{schedLeft >= 60 ? Math.floor(schedLeft / 60) + ' 分 ' + (schedLeft % 60) + ' 秒' : schedLeft + ' 秒'}后自动发出</span>
+            <span className="flex-1" />
+            <button onClick={stopSchedule} className="px-2.5 h-6 rounded-full text-[11px] font-medium" style={{ background: c.bgInput, color: c.textSecondary }}>取消</button>
+          </div>
+        )}
         {queueCount > 0 && (
           <div className="mb-1.5 rounded-xl border overflow-hidden animate-fade-in" style={{ background: c.bgCard, borderColor: c.border }}>
             <div className="flex items-center gap-2 px-3 h-8 border-b" style={{ borderColor: c.borderLight }}>

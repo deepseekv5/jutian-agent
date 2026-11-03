@@ -79,6 +79,8 @@ const DEFAULT_SETTINGS: Settings = {
   enterToSend: true,
   chatFontSize: 'standard',
   autoTitle: true,
+  restoreLastSession: false,
+  autoBackup: 'off',
   notifyDone: false,
   autoCompactPct: 70,
   ttsSpeed: '1.0',
