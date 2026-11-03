@@ -90,6 +90,9 @@ const SLASH_COMMANDS: SlashCmd[] = [
 
   { cmd: '知识库', label: '知识库增强', hint: 'RAG 检索笔记/索引', key: 'kb' },
   { cmd: '截图', label: '截图提问', hint: '框选屏幕区域提问', key: 'shot' },
+  { cmd: '定时', label: '定时发送', hint: '2 分钟后自动发出（v14.8）', key: 'sched' },
+  { cmd: '改写', label: 'AI 改写草稿', hint: '润色后填回输入框（v14.8）', key: 'rewrite' },
+  { cmd: '朗读', label: '朗读最后回复', hint: '朗读最新一条 AI 消息（v14.8）', key: 'readaloud' },
   { cmd: '编码', label: 'Coding 模式', hint: '工作目录边界 + 工具优先', key: 'coding' },
   { cmd: '通用', label: '通用模式', hint: '日常对话', key: 'general' },
   { cmd: '思考低', label: '思考:低', hint: '简短思考，更快回复', key: 'think-low' },
@@ -594,6 +597,9 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     else if (sc.key === 'think-low') setThinking('low')
     else if (sc.key === 'think-high') setThinking('high')
     else if (sc.key === 'think-max') setThinking('max')
+    else if (sc.key === 'sched') { setValue(v => v.replace(/^\/\S*\s?/, '')); startSchedule(2); return }
+    else if (sc.key === 'rewrite') { setValue(v => v.replace(/^\/\S*\s?/, '')); aiRewrite(); return }
+    else if (sc.key === 'readaloud') { setValue(v => v.replace(/^\/\S*\s?/, '')); window.dispatchEvent(new CustomEvent('read-aloud-last')); return }
     else toggleMode(sc.key as ModeKey)
     // 保留命令后已输入的正文（/联网 搜天气 → 搜天气）
     setValue(v => v.replace(/^\/\S*\s?/, ''))
