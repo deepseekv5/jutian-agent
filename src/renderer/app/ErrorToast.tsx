@@ -84,10 +84,14 @@ export function useGlobalErrorListener() {
       }
       if (e.message) { reportError(e.message); report(e.message, e.error?.stack) }
     }
+    // chat-error-toast：音频识别等业务侧错误也走这里
+    const onChatErr = (e: Event) => { const t = (e as CustomEvent).detail; if (t) report(String(t)) }
+    window.addEventListener('chat-error-toast', onChatErr)
     window.addEventListener('unhandledrejection', onRej)
     window.addEventListener('error', onErr)
     return () => {
-      window.removeEventListener('unhandledrejection', onRej)
+      window.removeEventListener('chat-error-toast', onChatErr)
+    window.removeEventListener('unhandledrejection', onRej)
       window.removeEventListener('error', onErr)
     }
   }, [])
