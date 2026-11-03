@@ -160,6 +160,20 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const allTags = useMemo(() => tagCloud(Object.values(metaMap)).slice(0, 12), [metaMap])
   // 右键菜单（v12）：置顶/标签/归档入口
   const [ctxMenu, setCtxMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
+  // 删除两击确认（v14.8）：第一次点变红「确认？」，2.5 秒内再点才真删，防误触
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleDeleteClick = (id: string) => {
+    if (confirmDeleteId === id) {
+      if (confirmTimer.current) clearTimeout(confirmTimer.current)
+      setConfirmDeleteId(null)
+      onDeleteRef.current(id)
+      return
+    }
+    setConfirmDeleteId(id)
+    if (confirmTimer.current) clearTimeout(confirmTimer.current)
+    confirmTimer.current = setTimeout(() => setConfirmDeleteId(null), 2500)
+  }
   const [search, setSearch] = useState('')
   const [msgHits, setMsgHits] = useState<SearchHit[]>([])
   const [titleHits, setTitleHits] = useState<{ id: string; title: string }[]>([])
@@ -381,9 +395,10 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
-            <button onClick={e => { e.stopPropagation(); onDelete(session.id) }} title="删除"
+            <button onClick={e => { e.stopPropagation(); handleDeleteClick(session.id) }}
+              title={confirmDeleteId === session.id ? '再点一次确认删除' : '删除（再次点击确认）'}
               className="w-6 h-6 rounded-md flex items-center justify-center transition-colors"
-              style={{ color: c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}
+              style={{ color: confirmDeleteId === session.id ? c.toolErr : c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}
               onMouseEnter={e => { e.currentTarget.style.background = c.surfaceActive; e.currentTarget.style.color = c.toolErr }}
               onMouseLeave={e => { e.currentTarget.style.background = isActive ? c.sidebarActiveBg : c.surfaceHover; e.currentTarget.style.color = c.textTertiary }}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
