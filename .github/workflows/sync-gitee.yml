@@ -1,0 +1,47 @@
+# Gitee 镜像同步（v14.8）
+#
+# 每次 push 到 main 或打 tag 后，把整个仓库（含标签）镜像推到 Gitee。
+# 前置条件（一次性手工配置）：
+#   1. gitee.com 手动建仓库 <用户名>/jutian-agent（空仓库、不初始化）
+#   2. GitHub 仓库 Settings → Secrets and variables → Actions 添加：
+#      - GITEE_USER：Gitee 用户名（如 deepseekv5）
+#      - GITEE_TOKEN：Gitee **私人令牌**（Settings → 私人令牌 → 生成，
+#        必须勾选 projects scope；第三方 OAuth 应用令牌无效——
+#        实测表现为 GET /user 200 但建仓/推送 401 "Access token does not exist"）
+#   3. 生成后可用此命令自检（200 且能列出仓库才算有效）：
+#      curl "https://gitee.com/api/v5/user/repos?access_token=<TOKEN>"
+#
+# 失败不阻塞主流程（继续为 Gitee 特有的网络抖动留重试）。
+
+name: Sync Gitee
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 推送到 Gitee（全分支 + 全标签）
+        continue-on-error: true
+        run: |
+          if [ -z "${{ secrets.GITEE_TOKEN }}" ]; then
+            echo "::warning::未配置 GITEE_TOKEN secret，跳过 Gitee 同步"
+            exit 0
+          fi
+          git remote add gitee "https://${{ secrets.GITEE_USER }}:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ secrets.GITEE_USER }}/jutian-agent.git"
+          for i in 1 2 3; do
+            git push gitee main --force --tags && exit 0
+            echo "第 $i 次推送失败，重试..."
+            sleep 10
+          done
+          echo "::warning::Gitee 推送三次均失败（多为网络抖动），本次跳过"
+          exit 0
