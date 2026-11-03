@@ -96,6 +96,16 @@ export default function AboutContent() {
     api().updateApply(upd.asarUrl).then((r: any) => {
       if (!r?.ok && !r?.started) setProg({ stage: 'error', error: r?.error || '更新失败' })
     }).catch((e: any) => setProg({ stage: 'error', error: String(e?.message || e) }))
+    // 兜底（v14.7.2）：6 秒内没收到任何下载字节 = 后台下载没启动，
+    // 关掉全屏覆盖层（否则永远卡在 0% 假进度），回到关于页重试或走安装包
+    setTimeout(() => {
+      setProg(cur => {
+        if (cur && cur.stage === 'download' && !(cur.got)) {
+          return { stage: 'error', error: '后台下载未启动（可能是网络问题），请重试，或到 GitHub Release 下载安装包' }
+        }
+        return cur
+      })
+    }, 6000)
   }
 
   const cancel = () => { api().updateCancel?.(); setProg(null) }
@@ -154,7 +164,29 @@ export default function AboutContent() {
             </svg>
           </button>
         </div>
-        {hasUpdate && upd?.notes && (
+        {/* 可更新状态行（v14.7.2）：之前按钮只放在 notes 区，notes 为空或未渲染时无任何可点入口 */}
+      {hasUpdate && (
+        <div className="py-1.5 flex items-center gap-2">
+          <span className="text-[12.5px] font-bold" style={{ color: '#10a37f' }}>
+            {lang === 'en' ? `Update to v${upd?.latest} available` : `可更新至 v${upd?.latest}`}
+          </span>
+          <span className="flex-1" />
+          {upd.asarUrl ? (
+            <button onClick={apply} disabled={!!updating}
+              className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
+              style={{ background: '#10a37f', color: '#fff' }}>
+              {lang === 'en' ? 'Update now' : '立即更新'}
+            </button>
+          ) : upd.installerUrl ? (
+            <a href={upd.installerUrl} target="_blank" rel="noreferrer"
+              className="px-4 h-8 leading-8 rounded-full text-[12px] font-semibold inline-block"
+              style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Download installer' : '下载安装包'}</a>
+          ) : (
+            <span className="text-[11px]" style={{ color: c.textMuted }}>{lang === 'en' ? 'No update package' : '无更新包'}</span>
+          )}
+        </div>
+      )}
+      {hasUpdate && upd?.notes && (
           <div className="mt-3 rounded-xl p-3" style={{ background: c.bgInput }}>
             <div className="text-[11px] font-semibold mb-1.5" style={{ color: c.textSecondary }}>{lang === 'en' ? 'Release notes' : '更新说明'}</div>
             <div className="text-[12px] leading-relaxed max-h-40 overflow-auto markdown-body" style={{ color: c.textSecondary }}>
