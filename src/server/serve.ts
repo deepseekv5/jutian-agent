@@ -6418,6 +6418,57 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
+    if (url.pathname === "/api/backup/auto-list" && req.method === "GET") {
+      // 自动备份历史（v14.8）：列 ~/.lyclaw/backups 下 jutian-backup-*.json
+      try {
+        const dir = path.join(os.homedir(), ".lyclaw", "backups");
+        if (!fs.existsSync(dir)) return json(res, { items: [] });
+        const re = /^jutian-backup-\d{8}-\d{6}\.json$/;
+        const items = fs.readdirSync(dir).filter((f) => re.test(f)).sort().reverse().map((f) => {
+          let sessions = 0, size = 0;
+          try {
+            size = fs.statSync(path.join(dir, f)).size;
+            const head = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8").slice(0, 2000000));
+            sessions = Object.keys(head.sessions || {}).length;
+          } catch { /* 损坏文件标 0 */ }
+          return { file: f, size, sessions };
+        });
+        return json(res, { items, dir });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname === "/api/backup/auto-restore" && req.method === "POST") {
+      // 从自动备份文件恢复（v14.8）：文件名白名单校验，路径拼接防目录穿越
+      try {
+        if (!hasDb) return json(res, { error: "本地数据库不可用" }, 503);
+        const b = await body(req);
+        const file = String(b.file || "");
+        if (!/^jutian-backup-\d{8}-\d{6}\.json$/.test(file)) return json(res, { error: "文件名不合法" }, 400);
+        const fp = path.join(os.homedir(), ".lyclaw", "backups", file);
+        if (!fs.existsSync(fp)) return json(res, { error: "备份文件不存在" }, 404);
+        const data = JSON.parse(fs.readFileSync(fp, "utf8"));
+        if (!data.sessions) return json(res, { error: "备份文件格式不正确" }, 400);
+        let restored = 0;
+        for (const ses of data.sessions) {
+          try {
+            const exist = db.getSession ? db.getSession(ses.id) : null;
+            if (exist) continue; // 已存在跳过（不覆盖现数据）
+            db.createSession(ses.id, ses.title || "恢复会话");
+            restored++;
+          } catch { /* 跳过失败项 */ }
+        }
+        for (const [sid, msgs] of Object.entries(data.messages || {})) {
+          try {
+            const arr = Array.isArray(msgs) ? msgs : [];
+            for (const m of arr) {
+              db.addMessage(db.genId(), sid, m.role, m.content || "", m.thinking || "",
+                typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []),
+                m.tool_call_id || "");
+            }
+          } catch { /* 会话不在库中，跳过 */ }
+        }
+        return json(res, { ok: true, restored });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     if (url.pathname === "/api/backup/export" && req.method === "GET") {
       try {
         if (!hasDb) return json(res, { error: "db unavailable" }, 500);

@@ -25,11 +25,18 @@ export default function BackupPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
   const [scopes, setScopes] = useState<BackupScope[]>(['settings', 'sessions', 'memory', 'knowledge', 'skills'])
   const [stats, setStats] = useState<Stats | null>(null)
+  // 自动备份历史（v14.8）：~/.lyclaw/backups 列表 + 一键恢复
+  const [autoItems, setAutoItems] = useState<{ file: string; size: number; sessions: number }[]>([])
+  const [autoDir, setAutoDir] = useState('')
+  const loadAuto = () => {
+    requestJson<{ items: typeof autoItems; dir: string }>('/api/backup/auto-list').then((d) => { setAutoItems(d.items || []); setAutoDir(d.dir || '') }).catch(() => {})
+  }
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
     requestJson<Stats>('/api/backup/stats').then(setStats).catch(() => setStats(null))
+    loadAuto()
   }, [])
 
   const plan = useMemo(() => {
@@ -127,6 +134,29 @@ export default function BackupPanel({ onClose }: { onClose: () => void }) {
 
         {msg && <div className="text-[11px] px-3 py-2 rounded-lg" style={{ background: c.bgInput, color: c.textSecondary || c.textTertiary }}>{msg}</div>}
       </div>
+
+      {autoItems.length > 0 && (
+        <div className="px-5 py-3 border-t" style={{ borderColor: c.borderLight }}>
+          <div className="text-[11.5px] font-medium mb-2" style={{ color: c.textHead }}>自动备份（{autoDir}）</div>
+          <div className="max-h-32 overflow-auto rounded-lg" style={{ background: c.bgInput }}>
+            {autoItems.map((it) => (
+              <div key={it.file} className="flex items-center gap-2 px-3 py-1.5 text-[11.5px]">
+                <span className="flex-1 truncate font-mono" style={{ color: c.textSecondary || c.textTertiary }}>{it.file}</span>
+                <span style={{ color: c.textTertiary }}>{it.sessions} 会话 · {humanBytes(it.size)}</span>
+                <button onClick={async () => {
+                  setBusy(true); setMsg('')
+                  try {
+                    const d = await post<{ ok?: boolean; restored?: number; error?: string }>('/api/backup/auto-restore', { file: it.file }, { timeoutMs: 120_000 })
+                    if (d?.error) setMsg(`恢复失败：${d.error}`)
+                    else setMsg(`已恢复 ${d?.restored ?? 0} 个会话（已存在的会话未覆盖）`)
+                  } catch (err) { setMsg(`恢复失败：${(err as Error)?.message || err}`) }
+                  finally { setBusy(false) }
+                }} className="px-2.5 py-1 rounded-md text-[11px]" style={{ background: c.surfaceHover || c.bgInput, color: c.textSecondary || c.textTertiary }}>恢复</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="px-5 py-3 border-t flex items-center gap-2" style={{ borderColor: c.borderLight }}>
         <label className="text-[11.5px] px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
