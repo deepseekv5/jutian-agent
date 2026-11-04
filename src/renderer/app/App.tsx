@@ -165,15 +165,22 @@ function MainApp() {
   useEffect(() => {
     if (!loaded || tabs.length > 0) return;
     (async () => {
-      // 启动恢复上次会话（v14.8）：设置开启时优先打开上次活跃的会话
-      let lastTitle = ''
+      // 启动恢复上次会话（v14.8 / v14.9 修竞态）：
+      // 修复前 sessions 还是 []（异步未返回）就 find，恢复必然失败；
+      // 修复前恢复失败时无条件 create()，老用户每次启动都多一个空会话。
       let restoreOk = false
       try {
         const raw = localStorage.getItem('lyclaw_settings')
         const pref = raw ? JSON.parse(raw).restoreLastSession : false
         const lastSid = localStorage.getItem('lyclaw_last_session')
         if (pref && lastSid) {
-          const found = sessions.find(x => x.id === lastSid)
+          // 先确保会话列表已加载（sessions 可能在异步加载中）
+          let list = sessions
+          if (!list.length) {
+            const mod = await import('../store/storage')
+            list = await mod.listSessions()
+          }
+          const found = list.find(x => x.id === lastSid)
           if (found) {
             const tab: WorkTab = { id: uid(), type: 'chat', title: found.title || '新对话', sessionId: lastSid };
             setTabs([tab]);
@@ -184,10 +191,17 @@ function MainApp() {
         }
       } catch { /* ignore */ }
       if (!restoreOk) {
-        const sid = sessions[0]?.id || (await create()).id;
-        const tab: WorkTab = { id: uid(), type: 'chat', title: sessions[0]?.title || '新对话', sessionId: sid };
+        // 仅当确实没有任何会话时才 create；有会话时打开最近一条而不是新建
+        let list = sessions
+        if (!list.length) {
+          const mod = await import('../store/storage')
+          list = await mod.listSessions()
+        }
+        const sid = list[0]?.id || (await create()).id;
+        const tab: WorkTab = { id: uid(), type: 'chat', title: list[0]?.title || '新对话', sessionId: sid };
         setTabs([tab]);
         setActiveTabId(tab.id);
+        if (list[0]?.id) setActiveId(list[0].id)
       }
     })();
     // 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab
