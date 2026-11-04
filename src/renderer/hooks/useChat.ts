@@ -180,6 +180,9 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   const [streamingId, setStreamingId] = useState<StreamingId>(null)
   const streamingRef = useRef<StreamingId>(null)  // ref avoids stale closure in send
   streamingRef.current = streamingId
+  // 修复（v14.9）：send 入口到 setStreamingId 之间隔着多个 await（音频识别可达数秒），
+  // 期间二次发送不会被拦。inFlight 在入口同步置位、finally 清除。
+  const inFlightRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const titleDoneRef = useRef(false)
@@ -618,7 +621,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     try { await updateMessageVariants(assistantMsgId, sessionId!, pv) } catch { /* 分支归档失败不影响主流程 */ }
   }, [sessionId])
 
-  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {    if (!sessionId || streamingRef.current !== null) return
+  const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {
+    if (!sessionId || streamingRef.current !== null || inFlightRef.current) return
+    inFlightRef.current = true
     setError(null)
 
     // Store for potential rollback
@@ -1204,6 +1209,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         await streamChat(settings, apiMessages, ...callArgs)
       }
     } finally {
+      inFlightRef.current = false
       // 如果被中止，手动清理流状态（stream.ts 吞掉 AbortError 不会触发 onDone）
       if (controller.signal.aborted) {
         await updateMessageContent(assistantMsg.id, sessionId, fullContent || '(已中止)')
