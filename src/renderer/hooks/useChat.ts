@@ -95,6 +95,23 @@ export { ctxSummaries }
 
 // ─── 音频附件：MiMo 先识别，再连同问题交主模型（v14.7）───
 const AUDIO_EXT_RE = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|amr|wma|webm)$/i
+/** 性能（v14.9）：流结束把最终内容/工具调用 patch 进占位消息，替代整段 listMessages re-fetch。
+ *  re-fetch 会换掉全部消息对象引用（tool_calls/variants 全新数组），击穿所有气泡 memo，
+ *  且长会话要重新下载+反序列化整个会话。 */
+function patchAssistantFinal(
+  setMessages: React.Dispatch<React.SetStateAction<any[]>>,
+  sessionId: string,
+  assistantMsgId: string,
+  patch: { content?: string; thinking?: string; tool_calls?: any[] },
+): void {
+  setMessages(prev => prev.map(m => (m.id === assistantMsgId ? {
+    ...m,
+    ...(patch.content !== undefined ? { content: patch.content } : {}),
+    ...(patch.thinking !== undefined ? { thinking: patch.thinking } : {}),
+    ...(patch.tool_calls !== undefined ? { tool_calls: patch.tool_calls } : {}),
+  } : m)))
+}
+
 const isAudioAttached = (f: any): boolean => {
   if (f?.dataUrl && String(f.dataUrl).startsWith('data:audio/')) return true
   if (f?.file && /^audio\//i.test(String(f.file.type || ''))) return true
@@ -654,8 +671,13 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       userContent = `${content}\n\n--- 附加文件 ---\n${lines.join('\n')}${audioBlocks}`
     }
 
+    // 性能（v14.9）：本条会话的用户消息计数/最新内容（标题生成判定用，替代 re-fetch）
+    const userMsgCountRef = { current: 0 }
+    const userContentRef = { current: '' }
     // 保存用户消息
     const userMsg = await createMessage({ session_id: sessionId, role: 'user', content: userContent })
+    userMsgCountRef.current += 1
+    userContentRef.current = userContent
 
     // 深度调研不在这里：v11.1 起它有自己的工作台（panels/ResearchPanel），
     // 聊天内联跑只能把进度覆写进一条消息，来源与历史都没地方呈现
@@ -1015,8 +1037,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           }
         }
         setStreamingId(null)
-        const msgs = await listMessages(sessionId)
-        setMessages(msgs)
+        // 性能（v14.9）：本地 patch 替代全量 re-fetch（DB 已在流过程中逐段写好）
+        patchAssistantFinal(setMessages, sessionId, assistantMsg.id, {
+          content: fullContent,
+          thinking: fullThinking || undefined,
+          ...(allToolCalls.length ? { tool_calls: allToolCalls } : {}),
+        })
         // 自动朗读：设置开启常驻；本条消息带过音频附件时无条件播报（v14.7 音频进→语音出）
         try {
           if (((settings as any)?.autoSpeak || hadAudio) && fullContent.trim()) {
@@ -1031,9 +1057,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           }
         } catch { /* ignore */ }
         // 首次对话完成后生成标题：先截断兜底，AI 标题随后替换
-        const userMsgs = msgs.filter(m => m.role === 'user')
-        if (userMsgs.length === 1 && onFirstMessageDoneRef.current) {
-          const firstUserContent = String(userMsgs[0].content || '')
+        // 性能（v14.9）：不再依赖 re-fetch 的 msgs——本会话用户消息数用 ref 计数
+        if (userMsgCountRef.current === 1 && onFirstMessageDoneRef.current) {
+          const firstUserContent = userContentRef.current
           onFirstMessageDoneRef.current(firstUserContent)
           generateAiTitle(sessionId, firstUserContent, fullContent)
         }
