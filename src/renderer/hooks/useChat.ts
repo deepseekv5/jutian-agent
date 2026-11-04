@@ -1160,6 +1160,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         // 且 assistant 占位消息要删掉，否则重发后会出现一问两答。
         if ((info.kind === 'network' || info.kind === 'timeout') && !fullContent.trim()) {
           try {
+            // 修复（v14.9）：会话仍存在校验——流式中删会话后，消息不能进死会话队列
+            // （否则重试队列会被任意存活标签 drain，把这条消息发进别的会话）
+            const alive = await fetchCompat('/api/sessions/' + sessionId, {}).then(r => r.ok).catch(() => false)
+            if (!alive) { setStreamingId(null); return }
             const q = enqueue(loadQueue(), {
               id: `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
               sessionId,
@@ -1172,7 +1176,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           } catch { /* 入队失败不阻塞错误提示 */ }
         }
         setStreamingId(null)
-        setMessages(await listMessages(sessionId))
+        try {
+          setMessages(await listMessages(sessionId))
+        } catch { /* 会话已删除：忽略 */ }
       },
     }
 
