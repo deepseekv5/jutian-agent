@@ -188,13 +188,23 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [value, sessionId])
 
   // 切换会话时：把旧草稿存好，再把新会话的草稿读进来
+  // 统一草稿存储（v14.9）：此前并存两套互不读取的草稿（drafts 桶 + lyclaw_draft_* 裸键），
+  // 后写的裸键版本胜出，drafts 桶写了个寂寞。现在只认 drafts 桶，旧裸键数据首读迁移。
   const draftSessionRef = useRef(sessionId)
   useEffect(() => {
     if (draftSessionRef.current === sessionId) return
     const prev = draftSessionRef.current
     if (prev) saveDraft(prev, value)
     draftSessionRef.current = sessionId
-    setValue(readDraft(sessionId || ''))
+    let text = readDraft(sessionId || '')
+    if (!text && sessionId) {
+      // 旧版本数据迁移：裸键有值而桶里没有 → 搬进桶并清掉裸键
+      try {
+        const legacy = localStorage.getItem('lyclaw_draft_' + sessionId)
+        if (legacy) { text = legacy; saveDraft(sessionId, legacy); localStorage.removeItem('lyclaw_draft_' + sessionId) }
+      } catch { /* ignore */ }
+    }
+    setValue(text)
     // 只在 sessionId 变化时执行，value 不参与依赖（否则每次打字都会重跑）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
@@ -902,24 +912,6 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   // ─── 草稿保存：按会话隔离，切换会话自动恢复 ───
   const valueRef = useRef(value)
   valueRef.current = value
-  const prevSessionRef = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    // 会话切换时先把未保存的旧草稿写回旧会话，再载入新会话草稿
-    if (prevSessionRef.current !== undefined && prevSessionRef.current !== sessionId) {
-      const oldKey = `lyclaw_draft_${prevSessionRef.current}`
-      try { if (valueRef.current) { localStorage.setItem(oldKey, valueRef.current) } else { localStorage.removeItem(oldKey) } } catch { /* ignore */ }
-    }
-    prevSessionRef.current = sessionId
-    if (!sessionId) return
-    try { setValue(localStorage.getItem(`lyclaw_draft_${sessionId}`) || '') } catch { /* ignore */ }
-  }, [sessionId])
-  useEffect(() => {
-    if (!sessionId) return
-    const key = `lyclaw_draft_${sessionId}`
-    const t = setTimeout(() => { try { if (value) { localStorage.setItem(key, value) } else { localStorage.removeItem(key) } } catch { /* ignore */ } }, 400)
-    return () => clearTimeout(t)
-  }, [value, sessionId])
-
   const handleSend = () => {
     const trimmed = value.trim()
     if (!trimmed) return
