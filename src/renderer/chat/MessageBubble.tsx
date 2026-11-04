@@ -825,10 +825,10 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             ? <DiffCardView key={'d_' + tc.id} tc={tc} c={c} />
             : null
           const Text = ({ v }: { v: string }) => !v ? null : (
-            <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
-              <MdInner text={v} remark={mdRemark} rehype={mdRehype} link={LinkRenderer} math />
-            </div>
-          )
+            <div>
+              <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
+                <MdInner text={v} remark={mdRemark} rehype={mdRehype} link={LinkRenderer} math />
+              </div>
               {translated && (
                 <div className="mt-2 rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed animate-fade-in" style={{ background: c.bgInput, border: '1px dashed ' + c.border }}>
                   <div className="text-[10.5px] font-semibold mb-1 flex items-center gap-1" style={{ color: c.textTertiary }}>
@@ -840,6 +840,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
                   <div style={{ color: c.textSecondary, whiteSpace: 'pre-wrap' }}>{translated}</div>
                 </div>
               )}
+            </div>
+          )
           // 时序交错:带 preLen 标记(本轮会话产生)→ 文本与工具卡按真实顺序排布,
           // 说在工具前的话在卡片上方,最终输出收尾;历史无标记行 → 文在前卡在后
           const hasPre = tcs.some((tc: any) => typeof tc.preLen === 'number')
