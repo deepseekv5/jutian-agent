@@ -183,6 +183,9 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   // 修复（v14.9）：send 入口到 setStreamingId 之间隔着多个 await（音频识别可达数秒），
   // 期间二次发送不会被拦。inFlight 在入口同步置位、finally 清除。
   const inFlightRef = useRef(false)
+  // perf8：持最新 messages 供 send 内本地 append（避免闭包读旧数组）
+  const messagesRef = useRef<any[]>([])
+  messagesRef.current = messages
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const titleDoneRef = useRef(false)
@@ -697,8 +700,11 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         localStorage.setItem('lyclaw_msg_goal', JSON.stringify(map))
       } catch { /* ignore */ }
     }
-    const updated = await listMessages(sessionId)
-    if (sessionIdRef.current === sessionId) setMessages(updated)
+    // perf8（v14.9）：本地 append 替代整段 listMessages re-fetch——
+    // re-fetch 换掉全部历史对象引用，击穿所有气泡 memo；userMsg 本地就有
+    const updated = messagesRef.current
+    const appended = [...updated, userMsg]
+    if (sessionIdRef.current === sessionId) setMessages(appended)
     // 自动标题：仅首条消息时立即生成（避免后续消息不断改写标题）
     if (!titleDoneRef.current) {
       titleDoneRef.current = true
@@ -714,7 +720,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     })
 
     setStreamingId(assistantMsg.id)
-    setMessages([...updated, assistantMsg])
+    setMessages([...appended, assistantMsg])
 
     // 「思考了 N 秒」：记录请求发出时刻，首个流式增量到达时落盘耗时（侧车存储，不动消息表）
     const reqStartAt = Date.now()
