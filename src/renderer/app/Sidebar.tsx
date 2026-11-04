@@ -292,7 +292,13 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const handleStartEdit = (session: Session, e: React.MouseEvent) => { e.stopPropagation(); setEditingId(session.id); setEditTitle(session.title || '新对话') }
   const handleSaveTitle = async (id: string) => {
     if (editTitle.trim()) {
-      try { await fetchCompat(`/api/sessions/${id}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle.trim() }) }) } catch {}
+      try {
+        const r = await fetchCompat(`/api/sessions/${id}/title`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle.trim() }) })
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+      } catch (e) {
+        // 修复（v14.9）：重命名失败要可见——此前界面显示已改名，刷新后回旧名
+        window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '重命名失败：' + String((e as Error)?.message || e) }))
+      }
     }
     setEditingId(null)
   }
