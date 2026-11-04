@@ -135,11 +135,64 @@ function StatsPane({ messages }: { messages: Message[] }) {
     </div>
   )
 
+  // AI 会话摘要（v14.9）：一键把当前会话压缩成要点卡
+  const { lang: _lang, t: _t } = useLanguage()
+  const [aiSummary, setAiSummary] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const genSummary = async () => {
+    if (summarizing) return
+    setSummarizing(true)
+    try {
+      let st: any = {}
+      try { st = JSON.parse(localStorage.getItem('lyclaw_settings') || '{}') } catch {}
+      // 会话摘要喂给模型：截断每条 300 字、总 6000 字，保住两头
+      const digest = messages.slice(0, 3).concat(messages.slice(-40)).map(m =>
+        `${m.role === 'user' ? '用户' : 'AI'}：${String(m.content || '').slice(0, 300)}`).join('\n').slice(0, 6000)
+      const r = await fetchCompat('/api/llm-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': st.apiBaseUrl || '', 'X-Api-Key': effectiveApiKey(st.apiKey) },
+        body: JSON.stringify({
+          model: st.model,
+          messages: [
+            { role: 'system', content: '总结这段对话：3-6 条要点（做了什么/结论/待办）。只输出要点列表，不要寒暄。' },
+            { role: 'user', content: digest },
+          ],
+          max_tokens: 2048, stream: false,
+        }),
+      })
+      const d = await r.json()
+      const out = String(d?.choices?.[0]?.message?.content || '').trim()
+      if (!out) throw new Error(String(d?.error?.message || d?.error || '模型未返回内容'))
+      setAiSummary(out)
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '摘要失败：' + String((e as Error)?.message || e) }))
+    } finally { setSummarizing(false) }
+  }
+
   if (messages.length === 0) {
     return <div className="flex-1 flex items-center justify-center text-[12px]" style={{ color: c.textMuted }}>对话开始后可查看统计</div>
   }
   return (
     <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+      {/* AI 摘要卡 */}
+      <div className="rounded-xl glass p-2.5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[11.5px] font-medium" style={{ color: c.text }}>AI 会话摘要</span>
+          <span className="flex-1" />
+          {aiSummary && (
+            <button onClick={() => { navigator.clipboard?.writeText(aiSummary).catch(() => {}) }}
+              className="text-[10.5px] px-2 py-0.5 rounded-md" style={{ color: c.textTertiary }}>复制</button>
+          )}
+          <button onClick={genSummary} disabled={summarizing || messages.length < 2}
+            className="px-2.5 py-1 rounded-md text-[11px] font-medium disabled:opacity-40"
+            style={{ background: 'rgba(16,163,127,.12)', color: '#10a37f' }}>
+            {summarizing ? '总结中…' : aiSummary ? '重新生成' : '生成'}
+          </button>
+        </div>
+        {aiSummary && (
+          <div className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: c.textSecondary }}>{aiSummary}</div>
+        )}
+      </div>
       <Row label="消息总数" value={`${messages.length} 条`} />
       <Row label="用户 / 助手" value={`${stats.user.length} / ${stats.assistant.length}`} />
       <Row label="总字数" value={stats.totalChars.toLocaleString()} />
