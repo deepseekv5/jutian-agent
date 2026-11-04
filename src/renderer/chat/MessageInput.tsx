@@ -1065,25 +1065,32 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }
 
   // ─── 上下文占用估算 ───
+  // 性能（v14.9）：拆三层 useMemo。原实现依赖里有 value——每个击键都对全部历史做
+  // 逐字符 token 估算 + JSON.stringify 全部 tool_calls（长会话打字明显卡顿）。
+  // 系统提示/工具定义几乎不变；历史消息只随条数变化；只有「当前输入」跟 value 实时算。
+  const sysTokens = useMemo(
+    () => (settings ? estimateTokens(buildChatSystemPrompt(settings)) : 0),
+    [settings])
+  const toolTokens = useMemo(() => {
+    try { return estimateTokens(JSON.stringify(BUILTIN_TOOLS)) } catch { return 0 }
+  }, [])
+  const msgCountKey = messages?.length || 0
+  const historyTokensRef = useRef<{ n: number; tokens: number }>({ n: -1, tokens: 0 })
+  if (historyTokensRef.current.n !== msgCountKey) {
+    historyTokensRef.current = { n: msgCountKey, tokens: (messages || []).reduce((sum, m) => {
+      if (!m.tool_calls) return sum + estimateTokens(m.content) + estimateTokens((m as any).thinking)
+      try { return sum + estimateTokens(m.content) + estimateTokens((m as any).thinking) + estimateTokens(JSON.stringify(m.tool_calls)) } catch { return sum }
+    }, 0) }
+  }
+  const historyTokens = historyTokensRef.current.tokens
   const contextParts: ContextPart[] = useMemo(() => {
     const parts: ContextPart[] = []
-    if (settings) {
-      parts.push({ label: '系统提示', tokens: estimateTokens(buildChatSystemPrompt(settings)), color: c.textTertiary })
-    }
-    try {
-      parts.push({ label: '工具定义', tokens: estimateTokens(JSON.stringify(BUILTIN_TOOLS)), color: c.accent })
-    } catch { /* ignore */ }
-    if (messages && messages.length > 0) {
-      const history = messages.reduce((sum, m) => {
-        let tcLen = 0
-        if (m.tool_calls) { try { tcLen = JSON.stringify(m.tool_calls).length } catch { tcLen = 0 } }
-        return sum + estimateTokens(m.content) + estimateTokens((m as any).thinking) + estimateTokens(tcLen ? JSON.stringify(m.tool_calls) : '')
-      }, 0)
-      parts.push({ label: '历史消息', tokens: history, color: '#3b82f6' })
-    }
+    if (sysTokens) parts.push({ label: '系统提示', tokens: sysTokens, color: c.textTertiary })
+    if (toolTokens) parts.push({ label: '工具定义', tokens: toolTokens, color: c.accent })
+    if (historyTokens) parts.push({ label: '历史消息', tokens: historyTokens, color: '#3b82f6' })
     parts.push({ label: '当前输入', tokens: estimateTokens(value), color: '#f59e0b' })
     return parts
-  }, [settings, value, messages, c.accent, c.textTertiary])
+  }, [sysTokens, toolTokens, historyTokens, value, c.accent, c.textTertiary])
 
   const canSend = !!value.trim()
 
