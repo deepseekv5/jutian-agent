@@ -21,6 +21,8 @@ interface Side {
   text: string
   status: 'idle' | 'streaming' | 'done' | 'error'
   ms: number
+  /** 首字延迟（v14.9）：发出请求到第一个 token 到达的毫秒数 */
+  ttft: number
   error?: string
 }
 
@@ -28,7 +30,7 @@ const FREE_BASE = 'https://opencode.ai/zen/v1'
 
 async function streamOne(
   base: string, model: string, key: string, prompt: string,
-  onDelta: (t: string) => void, signal: AbortSignal,
+  onDelta: (t: string, ttftMs?: number) => void, signal: AbortSignal,
 ): Promise<string> {
   const r = await fetchCompat('/api/llm-proxy', {
     method: 'POST',
@@ -43,6 +45,7 @@ async function streamOne(
     }),
     signal,
   })
+  const start = Date.now()
   // 流式读取 SSE
   const reader = r.body?.getReader()
   if (!reader) throw new Error('无可读流')
@@ -62,7 +65,11 @@ async function streamOne(
       try {
         const j = JSON.parse(payload)
         const d = j?.choices?.[0]?.delta?.content
-        if (typeof d === 'string' && d) { full += d; onDelta(full) }
+        if (typeof d === 'string' && d) {
+          const ttfb = full ? undefined : Date.now() - start
+          full += d
+          onDelta(full, ttfb)
+        }
       } catch { /* 跳过不完整的行 */ }
     }
   }
@@ -73,8 +80,8 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
   const { c } = useTheme()
   const { t } = useLanguage()
   const [prompt, setPrompt] = useState('')
-  const [left, setLeft] = useState<Side>({ model: '', base: '', text: '', status: 'idle', ms: 0 })
-  const [right, setRight] = useState<Side>({ model: '', base: '', text: '', status: 'idle', ms: 0 })
+  const [left, setLeft] = useState<Side>({ model: '', base: '', text: '', status: 'idle', ms: 0, ttft: 0 })
+  const [right, setRight] = useState<Side>({ model: '', base: '', text: '', status: 'idle', ms: 0, ttft: 0 })
   const [running, setRunning] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -92,8 +99,8 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
   function pickDefault() {
     // 默认左侧用当前模型，右侧用另一个免费档
     const other = freeModels.find(m => m !== userModel) || freeModels[0]
-    setLeft({ model: userModel || freeModels[0], base: userModel ? userBase : FREE_BASE, text: '', status: 'idle', ms: 0 })
-    setRight({ model: other, base: FREE_BASE, text: '', status: 'idle', ms: 0 })
+    setLeft({ model: userModel || freeModels[0], base: userModel ? userBase : FREE_BASE, text: '', status: 'idle', ms: 0, ttft: 0 })
+    setRight({ model: other, base: FREE_BASE, text: '', status: 'idle', ms: 0, ttft: 0 })
   }
 
   const run = useCallback(async () => {
@@ -102,14 +109,14 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
     const ctl = new AbortController()
     abortRef.current = ctl
     const t0 = Date.now()
-    setLeft(s => ({ ...s, text: '', status: 'streaming', ms: 0, error: undefined }))
-    setRight(s => ({ ...s, text: '', status: 'streaming', ms: 0, error: undefined }))
+    setLeft(s => ({ ...s, text: '', status: 'streaming', ms: 0, ttft: 0, error: undefined }))
+    setRight(s => ({ ...s, text: '', status: 'streaming', ms: 0, ttft: 0, error: undefined }))
 
     const runSide = async (side: Side, set: typeof setLeft) => {
       const key = side.base === userBase ? userKey : 'free'
       try {
-        await streamOne(side.base, side.model, key, prompt, (txt) => {
-          set(s => ({ ...s, text: txt, ms: Date.now() - t0 }))
+        await streamOne(side.base, side.model, key, prompt, (txt, ttft) => {
+          set(s => ({ ...s, text: txt, ms: Date.now() - t0, ...(ttft !== undefined && !s.ttft ? { ttft } : {}) }))
         }, ctl.signal)
         set(s => ({ ...s, status: 'done', ms: Date.now() - t0 }))
       } catch (e) {
@@ -153,7 +160,7 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
         <span className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
           {side.status === 'streaming' ? t('生成中', 'Streaming') : side.status === 'done' ? t('完成', 'Done') : side.status === 'error' ? t('失败', 'Error') : t('就绪', 'Ready')}
         </span>
-        {side.ms > 0 && <span className="text-[10px] font-mono shrink-0" style={{ color: c.textMuted }}>{(side.ms / 1000).toFixed(1)}s · {side.text.length} 字</span>}
+        {side.ms > 0 && <span className="text-[10px] font-mono shrink-0" style={{ color: c.textMuted }}>{side.ttft ? side.ttft + 'ms' : ''} · {(side.ms / 1000).toFixed(1)}s · {side.text.length} 字</span>}
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin px-3.5 py-3 text-[12px] leading-[1.75] whitespace-pre-wrap break-words"
         style={{ color: c.textSecondary || c.textTertiary, minHeight: 200 }}>
