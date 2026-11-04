@@ -465,6 +465,17 @@ function setupIPC() {
   } catch (e) { log(`托盘启动失败: ${e.message}`) }
 
 
+  // 在系统文件管理器中打开指定目录（v14.9：备份页「打开备份目录」等）
+  ipcMain.handle('reveal-path', async (_event, dir) => {
+    try {
+      const { shell } = require('electron')
+      const p = String(dir || '')
+      if (!p || !p.startsWith(require('os').homedir())) return { ok: false, error: '路径不合法' }
+      await shell.openPath(p)
+      return { ok: true }
+    } catch (e) { return { ok: false, error: e.message } }
+  });
+
   ipcMain.handle('open-folder-dialog', async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return null
     const result = await dialog.showOpenDialog(mainWindow, {

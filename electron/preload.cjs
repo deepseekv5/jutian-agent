@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFileAccess: () => ipcRenderer.invoke('get-file-access'),
   setFileAccess: (lock, dirs) => ipcRenderer.invoke('set-file-access', lock, dirs),
   setShellAccess: (enabled) => ipcRenderer.invoke('set-shell-access', enabled),
+  revealPath: (dir) => ipcRenderer.invoke('reveal-path', dir),
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
 

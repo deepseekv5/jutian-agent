@@ -137,7 +137,15 @@ export default function BackupPanel({ onClose }: { onClose: () => void }) {
 
       {autoItems.length > 0 && (
         <div className="px-5 py-3 border-t" style={{ borderColor: c.borderLight }}>
-          <div className="text-[11.5px] font-medium mb-2" style={{ color: c.textHead }}>自动备份（{autoDir}）</div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[11.5px] font-medium flex-1 truncate" style={{ color: c.textHead }}>自动备份（{autoDir}）</span>
+            <button onClick={async () => {
+              const api = (window as any).electronAPI
+              const r = api?.revealPath ? await api.revealPath(autoDir) : null
+              if (r && !r.ok) setMsg('打开目录失败：' + (r.error || '未知'))
+            }} className="text-[10.5px] px-2 py-0.5 rounded-md shrink-0"
+              style={{ background: c.surfaceHover || c.bgInput, color: c.textSecondary || c.textTertiary }}>打开目录</button>
+          </div>
           <div className="max-h-32 overflow-auto rounded-lg" style={{ background: c.bgInput }}>
             {autoItems.map((it) => (
               <div key={it.file} className="flex items-center gap-2 px-3 py-1.5 text-[11.5px]">
