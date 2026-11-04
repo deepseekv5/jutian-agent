@@ -48,25 +48,37 @@ function dayLabel(ts: unknown, lang: 'zh' | 'en' = 'zh'): string {
 export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage, sessionId }: Props) {
   const { lang } = useLanguage()
   // 对话健康度（v12.1）：只在"确实该提醒"时出现，好状态下不占位
-  const health = useMemo(() => {
+  // 性能（v14.9）：流式 flush 只改最后一条内容、不换条数——健康度全量扫描按条数门控，
+  // 流式期间不再每 50ms 对全历史做 3 次 reduce + 逐字符 token 估算
+  const msgCountRef = useRef(-1)
+  const healthRef = useRef<ReturnType<typeof analyzeHealth> | null>(null)
+  if (msgCountRef.current !== messages.length || !healthRef.current) {
+    msgCountRef.current = messages.length
     const toolCalls = messages.reduce((n, m) => n + ((m as any).tool_calls?.length || 0), 0)
     const failed = messages.reduce((n, m) => n + ((m as any).tool_calls?.filter((t: any) => t.status === 'error').length || 0), 0)
     const used = messages.reduce((n, m) => n + estimateTokens(String(m.content || '')), 0)
-    return analyzeHealth({
+    healthRef.current = analyzeHealth({
       messageCount: messages.length,
       usedTokens: used,
       contextLimit: 128000,   // 通用上限；精确值由输入框的 ContextGauge 展示
       toolCalls,
       failedToolCalls: failed,
     })
-  }, [messages])
+  }
+  const health = healthRef.current
 
   // 日期分隔（v12.1）：必须在任何 early return 之前调用，
   // 否则 hooks 顺序会随条件分支变化（React 会直接报错）
-  const daySeps = useMemo(() => dayBoundaries(messages.map((m) => {
-    const t = new Date((m as any).created_at || Date.now()).getTime()
-    return Number.isFinite(t) ? t : Date.now()
-  })), [messages])
+  const dayCountRef = useRef(-1)
+  const daySepsRef = useRef<number[] | null>(null)
+  if (dayCountRef.current !== messages.length || !daySepsRef.current) {
+    dayCountRef.current = messages.length
+    daySepsRef.current = dayBoundaries(messages.map((m) => {
+      const t = new Date((m as any).created_at || Date.now()).getTime()
+      return Number.isFinite(t) ? t : Date.now()
+    }))
+  }
+  const daySeps = daySepsRef.current
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickToBottomRef = useRef(true)
@@ -241,7 +253,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
 
   // 搜索：内容过滤命中 → ↑↓ 循环定位
   useEffect(() => {
-    if (!searchQ.trim()) { setSearchHits([]); return }
+    if (!searchQ.trim()) { setSearchHits(prev => prev.length ? [] : prev); return }
     const q = searchQ.toLowerCase()
     const hits = messages.reduce<number[]>((acc, m, i) => {
       if ((m.content || '').toLowerCase().includes(q)) acc.push(i)
