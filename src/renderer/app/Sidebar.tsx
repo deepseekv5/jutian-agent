@@ -179,6 +179,9 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   const [titleHits, setTitleHits] = useState<{ id: string; title: string }[]>([])
   const [searching, setSearching] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 修复（v14.9）：AbortController 提到 effect 外——原写在 setTimeout 回调里，
+  // return () => ctrl.abort() 被丢弃、从不生效；快速输入时旧请求会覆盖新结果
+  const searchCtrlRef = useRef<AbortController | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   // 会话颜色标记：标题前的色点用于人工分类（工作/学习/临时…）
   const [colors, setColors] = useState<Record<string, string>>(() => {
@@ -266,18 +269,25 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     if (!q) { setMsgHits([]); setTitleHits([]); setSearching(false); return }
     setSearching(true)
     searchTimer.current = setTimeout(() => {
+      // 新请求前中止上一个（乱序防护）
+      searchCtrlRef.current?.abort()
       const ctrl = new AbortController()
+      searchCtrlRef.current = ctrl
       fetchCompat(`/api/search?q=${encodeURIComponent(q)}&limit=40`, { signal: ctrl.signal })
         .then(r => r.json())
         .then(d => {
+          // 只接受最新一轮的结果
+          if (searchCtrlRef.current !== ctrl) return
           setMsgHits(Array.isArray(d?.messages) ? d.messages : [])
           setTitleHits(Array.isArray(d?.sessions) ? d.sessions.map((s: any) => ({ id: s.id, title: s.title })) : [])
         })
         .catch(() => { /* 忽略中止/网络错误，保留上一次结果 */ })
-        .finally(() => setSearching(false))
-      return () => ctrl.abort()
+        .finally(() => { if (searchCtrlRef.current === ctrl) setSearching(false) })
     }, 350)
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current)
+      searchCtrlRef.current?.abort()
+    }
   }, [search])
 
   const handleStartEdit = (session: Session, e: React.MouseEvent) => { e.stopPropagation(); setEditingId(session.id); setEditTitle(session.title || '新对话') }
