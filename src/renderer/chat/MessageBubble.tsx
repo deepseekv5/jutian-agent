@@ -488,6 +488,35 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
     }
   }
 
+  // 单条消息翻译（v14.9）：中→英 / 英→中 自动判向，结果内联展示
+  const [translated, setTranslated] = useState('')
+  const [translating, setTranslating] = useState(false)
+  const translateMessage = async () => {
+    if (translated) { setTranslated(''); return }
+    const text = textForSpeech(shownContent).slice(0, 4000)
+    if (!text.trim()) return
+    setTranslating(true)
+    try {
+      const isCJK = /[\u4e00-\u9fff]/.test(text)
+      const sys = isCJK
+        ? 'Translate the following Chinese text into natural English. Output ONLY the translation, nothing else.'
+        : '将下面的英文翻译成自然的中文，只输出译文本身，不要解释。'
+      let st: any = {}
+      try { st = JSON.parse(localStorage.getItem('lyclaw_settings') || '{}') } catch {}
+      const r = await fetchCompat('/api/llm-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': st.apiBaseUrl || '', 'X-Api-Key': (st.apiKey || '').replace(/^sk-\*+$/, '') },
+        body: JSON.stringify({ model: st.model, messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: 4096, stream: false }),
+      })
+      const d = await r.json()
+      const out = String(d?.choices?.[0]?.message?.content || '').trim()
+      if (!out) throw new Error(String(d?.error?.message || d?.error || '模型未返回内容'))
+      setTranslated(out)
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '翻译失败：' + String((e as Error)?.message || e) }))
+    } finally { setTranslating(false) }
+  }
+
   const speakContent = async () => {
     if (speaking) { audioRef.current?.pause(); audioRef.current = null; window.speechSynthesis.cancel(); setSpeaking(false); return }
     setSpeaking(true)
@@ -776,6 +805,17 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               </ReactMarkdown>
             </div>
           )
+              {translated && (
+                <div className="mt-2 rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed animate-fade-in" style={{ background: c.bgInput, border: '1px dashed ' + c.border }}>
+                  <div className="text-[10.5px] font-semibold mb-1 flex items-center gap-1" style={{ color: c.textTertiary }}>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7m-3.5-3.5L18 14m-3-4l-3 3m0 0l-3-3m3 3V3" />
+                    </svg>
+                    翻译
+                  </div>
+                  <div style={{ color: c.textSecondary, whiteSpace: 'pre-wrap' }}>{translated}</div>
+                </div>
+              )}
           // 时序交错:带 preLen 标记(本轮会话产生)→ 文本与工具卡按真实顺序排布,
           // 说在工具前的话在卡片上方,最终输出收尾;历史无标记行 → 文在前卡在后
           const hasPre = tcs.some((tc: any) => typeof tc.preLen === 'number')
@@ -846,6 +886,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             <IconAction label={copied ? '已复制' : '复制'} icon={copied ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'} onClick={copyContent} active={copied} />
             <IconAction label={sharedImg ? '已导出' : '分享图'} icon={sharedImg ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'} onClick={shareAsImage} active={sharedImg} />
             <IconAction label={speaking ? '停止朗读' : '朗读'} icon={speaking ? 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z' : 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14'} onClick={speakContent} active={speaking} />
+            <IconAction label={translating ? '翻译中…' : translated ? '收起翻译' : '翻译'} icon="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7m-3.5-3.5L18 14m-3-4l-3 3m0 0l-3-3m3 3V3" onClick={translateMessage} active={!!translated} />
             <IconAction label="存入知识库" icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" onClick={async () => {
               try {
                 const r = await fetchCompat('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: shownContent.slice(0, 18).replace(/[#*\n]/g, ' ').trim() || '对话摘录', content: shownContent, tags: ['对话收藏'], source: 'ai' }) })
