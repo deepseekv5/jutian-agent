@@ -234,7 +234,8 @@ function MainApp() {
     return () => { if (api?.removeBrowserOverlayListener) api.removeBrowserOverlayListener(); };
   }, []);
 
-  const handleOpenBrowser = (url: string) => { setBrowserUrl(url); setShowBrowserOverlay(true); };
+  // 性能（v14.9）：稳定引用——此前每次 App 渲染都换新函数，击穿所有 MessageBubble 的 memo
+  const handleOpenBrowser = useCallback((url: string) => { setBrowserUrl(url); setShowBrowserOverlay(true); }, []);
 
   const openTab = useCallback((type: PageType, opts?: { sessionId?: string; title?: string; refId?: string; iconPath?: string }) => {
     if (opts?.sessionId) {
