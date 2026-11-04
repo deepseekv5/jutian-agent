@@ -184,7 +184,7 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   // 期间二次发送不会被拦。inFlight 在入口同步置位、finally 清除。
   const inFlightRef = useRef(false)
   // perf8：持最新 messages 供 send 内本地 append（避免闭包读旧数组）
-  const messagesRef = useRef<any[]>([])
+  const messagesRef = useRef<Message[]>([])
   messagesRef.current = messages
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
