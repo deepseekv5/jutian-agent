@@ -23,6 +23,15 @@ export const QUEUE_MAX = 50
 export const QUEUE_MAX_AGE_MS = 24 * 3600 * 1000
 
 export function enqueue(queue: QueuedMessage[], item: Omit<QueuedMessage, 'attempts' | 'nextAt'>): QueuedMessage[] {
+  // 去重（v14.9）：同一会话同内容时保留最新一条（替换旧条目）——
+  // 双击重试/断网重放会把同一条消息入队多次，恢复后连发 N 遍。
+  // 内容相同 = 用户重复发同一句话的极端场景也只发最后一条，可接受。
+  const dupIdx = queue.findIndex(q => q.sessionId === item.sessionId && q.content === item.content)
+  if (dupIdx >= 0) {
+    const next = [...queue]
+    next[dupIdx] = { ...item, attempts: 0, nextAt: 0 }
+    return next
+  }
   const next = [...queue, { ...item, attempts: 0, nextAt: 0 }]
   // 超限时丢最旧的，但保留最近 1 条（用户刚打的）
   return next.length > QUEUE_MAX ? next.slice(next.length - QUEUE_MAX) : next
