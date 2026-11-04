@@ -278,8 +278,14 @@ describe('shortcuts', () => {
 })
 
 describe('sendQueue', () => {
-  const mk = (id: string, at = 0) => ({ id, sessionId: 's', content: 'c', createdAt: at })
+  const mk = (id: string, at = 0, content = 'c') => ({ id, sessionId: 's', content, createdAt: at })
 
+  it('同会话同内容去重（保留最新）', () => {
+    let q = enqueue([], mk('1', 100, 'same'))
+    q = enqueue(q, mk('2', 200, 'same'))
+    expect(q.length).toBe(1)
+    expect(q[0].id).toBe('2')  // 旧的被替换
+  })
   it('入队与出队', () => {
     let q = enqueue([], mk('1'))
     expect(q.length).toBe(1)
@@ -288,12 +294,12 @@ describe('sendQueue', () => {
   })
   it('超上限时丢最旧的', () => {
     let q: any[] = []
-    for (let i = 0; i < QUEUE_MAX + 5; i++) q = enqueue(q, mk(String(i)))
+    for (let i = 0; i < QUEUE_MAX + 5; i++) q = enqueue(q, mk(String(i), 0, 'content-' + i))
     expect(q.length).toBe(QUEUE_MAX)
     expect(q[q.length - 1].id).toBe(String(QUEUE_MAX + 4))  // 最新保留
   })
   it('就绪项按创建时间 FIFO', () => {
-    const q = enqueue(enqueue([], mk('b', 200)), mk('a', 100))
+    const q = enqueue(enqueue([], mk('b', 200, 'cb')), mk('a', 100, 'ca'))
     expect(readyItems(q, 1000).map((x) => x.id)).toEqual(['a', 'b'])
   })
   it('退避后未到时间不重试', () => {
