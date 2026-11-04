@@ -996,3 +996,11 @@ textarea:focus, input[type=text]:focus, input[type=search]:focus {
 
 /* 原生复选框/单选/滑块 */
 input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(--accent); }
+
+/* ── Sidebar 会话行 hover（v14.9）──
+   用纯 CSS 替换 hoveredId state：鼠标划过会话列表不再触发整个 Sidebar 重渲染
+   （每经过一行就是一次全列表 re-render，几百会话时掉帧）。 */
+.session-row:hover { background: var(--row-hover-bg, rgba(0,0,0,.04)); }
+.session-row .row-actions { opacity: 0; pointer-events: none; transition: opacity .12s ease; }
+.session-row:hover .row-actions { opacity: 1; pointer-events: auto; }
+.session-row:hover .row-time { display: none !important; }

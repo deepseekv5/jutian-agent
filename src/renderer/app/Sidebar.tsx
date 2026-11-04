@@ -150,7 +150,6 @@ const isMac = platformIsMac()
 
 export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCreate, onDelete, onOpenTab, onCollapse, onJumpToMessage }: Props) {
   const { lang, t } = useLanguage()
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [starred, setStarred] = useState<Set<string>>(loadStarred())
@@ -312,10 +311,8 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           if (manageMode) return
           setCtxMenu({ id: session.id, title, x: e.clientX, y: e.clientY })
         }}
-        onMouseEnter={() => setHoveredId(session.id)}
-        onMouseLeave={() => setHoveredId(null)}
-        className="group relative flex items-center gap-2 px-2.5 h-9 rounded-lg cursor-pointer transition-colors"
-        style={{ background: isActive ? c.sidebarActiveBg : hoveredId === session.id ? c.surfaceHover : 'transparent' }}>
+        className="session-row group relative flex items-center gap-2 px-2.5 h-9 rounded-lg cursor-pointer transition-colors"
+        style={{ ...(isActive ? { background: c.sidebarActiveBg } : { ['--row-hover-bg' as any]: c.surfaceHover }) }}>
 
         {/* 前导状态指示 */}
         {manageMode ? (
@@ -357,16 +354,15 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               {title}
             </span>
             {/* 相对时间（非悬停时显示，企业级信息密度） */}
-            <span className="text-[10.5px] font-mono shrink-0"
-              style={{ color: c.textMuted, display: hoveredId === session.id ? 'none' : 'block' }}>
+            <span className="row-time text-[10.5px] font-mono shrink-0" style={{ color: c.textMuted }}>
               {relTime(session.updated_at)}
             </span>
           </>
         )}
 
         {/* 悬停操作 */}
-        {hoveredId === session.id && editingId !== session.id && (
-          <div className="absolute right-1.5 flex items-center gap-0.5">
+        {editingId !== session.id && (
+          <div className="row-actions absolute right-1.5 flex items-center gap-0.5">
             <button onClick={e => { e.stopPropagation(); toggleStar(session.id, e) }} title={isStarred ? '取消星标' : '星标'}
               className="w-6 h-6 rounded-md flex items-center justify-center transition-colors"
               style={{ color: isStarred ? '#f5b301' : c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}
