@@ -102,13 +102,14 @@ function patchAssistantFinal(
   setMessages: React.Dispatch<React.SetStateAction<any[]>>,
   sessionId: string,
   assistantMsgId: string,
-  patch: { content?: string; thinking?: string; tool_calls?: any[] },
+  patch: { content?: string; thinking?: string; tool_calls?: any[]; variants?: string[] },
 ): void {
   setMessages(prev => prev.map(m => (m.id === assistantMsgId ? {
     ...m,
     ...(patch.content !== undefined ? { content: patch.content } : {}),
     ...(patch.thinking !== undefined ? { thinking: patch.thinking } : {}),
     ...(patch.tool_calls !== undefined ? { tool_calls: patch.tool_calls } : {}),
+    ...(patch.variants !== undefined ? { variants: patch.variants } : {}),
   } : m)))
 }
 
@@ -619,9 +620,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
   // 消息分支：把重新生成前的旧回答归档为新消息的 variants（一次性）
   const flushPendingVariants = useCallback(async (assistantMsgId: string) => {
     const pv = pendingVariantRef.current
-    if (!pv || pv.length === 0) return
+    if (!pv || pv.length === 0) return null
     pendingVariantRef.current = null
     try { await updateMessageVariants(assistantMsgId, sessionId!, pv) } catch { /* 分支归档失败不影响主流程 */ }
+    return pv
   }, [sessionId])
 
   const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {
@@ -1009,7 +1011,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         // 流真正结束：清掉"工具参数写入中"等瞬时状态条
         window.dispatchEvent(new CustomEvent('chat-stream-done', { detail: { sessionId } }))
         await updateMessageContent(assistantMsg.id, sessionId, fullContent)
-        await flushPendingVariants(assistantMsg.id)
+        const flushedVariants = await flushPendingVariants(assistantMsg.id)
         if (fullThinking) {
           await updateMessageThinking(assistantMsg.id, sessionId, fullThinking)
         }
@@ -1048,6 +1050,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           content: fullContent,
           thinking: fullThinking || undefined,
           ...(allToolCalls.length ? { tool_calls: allToolCalls } : {}),
+          ...(flushedVariants ? { variants: flushedVariants } : {}),
         })
         // 自动朗读：设置开启常驻；本条消息带过音频附件时无条件播报（v14.7 音频进→语音出）
         try {
