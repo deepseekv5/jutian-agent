@@ -159,37 +159,45 @@ export function effectiveApiKey(key?: string): string {
   return k.indexOf('****') >= 0 ? '' : k
 }
 
+/** v14.9 修复：设置双写不一致可见化——localStorage 先写、服务端逐项写，
+ *  任何一项失败都上报（此前静默返回 null，重启后被服务端旧值覆盖，设置无声丢失）。 */
 export async function saveSettings(s: Settings): Promise<void> {
+  let failed = 0
+  const put = async (key: string, value: string) => {
+    const r = await apiPost('/api/settings', { key, value })
+    if (!r) failed++
+  }
   try { localStorage.setItem('lyclaw_settings', JSON.stringify(s)) } catch {}
-  await apiPost('/api/settings', { key: 'apiBaseUrl', value: s.apiBaseUrl })
+  await put('apiBaseUrl', s.apiBaseUrl)
   // 掩码值(GET 回显)与空值都不回写:掩码只是显示,空值视为保留服务器现有密钥
   if (s.apiKey && s.apiKey.indexOf('****') < 0) {
-    await apiPost('/api/settings', { key: 'apiKey', value: s.apiKey })
+    await put('apiKey', s.apiKey)
   }
-  await apiPost('/api/settings', { key: 'model', value: s.model })
-  await apiPost('/api/settings', { key: 'provider', value: s.provider })
-  await apiPost('/api/settings', { key: 'localModel', value: s.localModel })
-  await apiPost('/api/settings', { key: 'voiceId', value: s.voiceId })
-  await apiPost('/api/settings', { key: 'workDir', value: s.workDir || '' })
-  await apiPost('/api/settings', { key: 'sensitiveBlock', value: String(s.sensitiveBlock) })
-  await apiPost('/api/settings', { key: 'permissionLevel', value: s.permissionLevel })
-  await apiPost('/api/settings', { key: 'allowedFolders', value: JSON.stringify(s.allowedFolders) })
-  await apiPost('/api/settings', { key: 'shellAccess', value: String(s.shellAccess) })
-  await apiPost('/api/settings', { key: 'keepAwake', value: String(s.keepAwake !== false) })
-  await apiPost('/api/settings', { key: 'providerName', value: s.providerName || '' })
-  await apiPost('/api/settings', { key: 'contextWindow', value: String(Math.max(4000, s.contextWindow || 1000000)) })
-  await apiPost('/api/settings', { key: 'multimodal', value: String(!!s.multimodal) })
+  await put('model', s.model)
+  await put('provider', s.provider)
+  await put('localModel', s.localModel)
+  await put('voiceId', s.voiceId)
+  await put('workDir', s.workDir || '')
+  await put('sensitiveBlock', String(s.sensitiveBlock))
+  await put('permissionLevel', s.permissionLevel)
+  await put('allowedFolders', JSON.stringify(s.allowedFolders))
+  await put('shellAccess', String(s.shellAccess))
+  await put('keepAwake', String(s.keepAwake !== false))
+  await put('providerName', s.providerName || '')
+  await put('contextWindow', String(Math.max(4000, s.contextWindow || 1000000)))
+  await put('multimodal', String(!!s.multimodal))
   // 防清空：陈旧快照的空模型列表不允许覆盖已有列表
   if (Array.isArray(s.models) && s.models.length > 0) {
-    await apiPost('/api/settings', { key: 'models', value: JSON.stringify(s.models) })
+    await put('models', JSON.stringify(s.models))
   }
-  await apiPost('/api/settings', { key: 'enterToSend', value: String(s.enterToSend !== false) })
-  await apiPost('/api/settings', { key: 'chatFontSize', value: s.chatFontSize || 'standard' })
-  await apiPost('/api/settings', { key: 'autoTitle', value: String(s.autoTitle !== false) })
-  await apiPost('/api/settings', { key: 'notifyDone', value: String(!!s.notifyDone) })
-  await apiPost('/api/settings', { key: 'autoCompactPct', value: String(s.autoCompactPct ?? 70) })
-  await apiPost('/api/settings', { key: 'ttsSpeed', value: s.ttsSpeed || '1.0' })
-  await apiPost('/api/settings', { key: 'autoSpeak', value: String(!!s.autoSpeak) })
+  await put('enterToSend', String(s.enterToSend !== false))
+  await put('chatFontSize', s.chatFontSize || 'standard')
+  await put('autoTitle', String(s.autoTitle !== false))
+  await put('notifyDone', String(!!s.notifyDone))
+  await put('autoCompactPct', String(s.autoCompactPct ?? 70))
+  await put('ttsSpeed', s.ttsSpeed || '1.0')
+  await put('autoSpeak', String(!!s.autoSpeak))
+  if (failed > 0) reportWriteFailure('设置', '/api/settings × ' + failed)
 }
 
 export function hasAnySettingsSync(): boolean {
