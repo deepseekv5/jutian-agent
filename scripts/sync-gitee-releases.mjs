@@ -41,6 +41,7 @@ for (let page = 1; page <= 2; page++) {
       tag: String(x.tag_name || ''),
       name: String(x.name || x.tag_name || '').slice(0, 50),
       body: String(x.body || '').trim(),
+      sha: String(x.target_commitish || ''),
     })
   }
   if (list.length < 100) break
@@ -76,7 +77,8 @@ for (const rel of releases) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(30000),
-      body: JSON.stringify({ tag_name: rel.tag, name: rel.name, body }),
+      // target_commitish 必填（Gitee 400: "target_commitish is missing"）
+      body: JSON.stringify({ tag_name: rel.tag, name: rel.name, body, target_commitish: rel.sha }),
     })
     ok = r.ok
     if (!ok) {
