@@ -4803,6 +4803,10 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         const targetId = String(b.targetId || "");
         const sourceId = String(b.sourceId || "");
         if (!targetId || !sourceId || targetId === sourceId) return json(res, { error: "参数不合法" }, 400);
+        // merge 目标校验（v14.9）：目标被删时直接报错，不产生孤儿消息行
+        const allSessions = db.listSessions() || [];
+        if (!allSessions.some((x) => x.id === targetId)) return json(res, { error: "目标会话不存在" }, 404);
+        if (!allSessions.some((x) => x.id === sourceId)) return json(res, { error: "源会话不存在" }, 404);
         const msgs = db.getMessages(sourceId) || [];
         for (const m of msgs) {
           db.addMessage(db.genId(), targetId, m.role, m.content || "",
@@ -4810,6 +4814,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             typeof m.tool_calls === "string" ? m.tool_calls : JSON.stringify(m.tool_calls || []),
             m.tool_call_id || "");
         }
+        // bump updated_at：侧栏排序按最近活动，合并后目标应浮上来
+        try { db.updateSession(targetId, { updated_at: new Date().toISOString() }); } catch { /* 字段不存在时忽略 */ }
         return json(res, { ok: true, merged: msgs.length });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }

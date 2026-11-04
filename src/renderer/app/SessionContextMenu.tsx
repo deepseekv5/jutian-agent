@@ -41,12 +41,20 @@ export default function SessionContextMenu({ sessionId, title, x, y, onClose, on
   const doMerge = async (targetId: string) => {
     onClose()
     try {
-      await fetchCompat('/api/sessions/merge', {
+      // merge-stream-guard（v14.9）：失败要可见，不能静默吞掉
+      const r = await fetchCompat('/api/sessions/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetId, sourceId: sessionId }),
       })
+      const d = await r.json().catch(() => ({} as any))
+      if (!r.ok || d?.error) {
+        window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '合并失败：' + String(d?.error || 'HTTP ' + r.status) }))
+        return
+      }
       onMerged?.(targetId)
-    } catch { /* 静默 */ }
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '合并失败：' + String((e as Error)?.message || e) }))
+    }
   }
   const ref = useRef<HTMLDivElement>(null)
 
