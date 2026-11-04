@@ -1260,6 +1260,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
   const rollbackTo = useCallback(async (messageIndex: number) => {
     if (!sessionId) return
+    // 流式守卫（v14.9）：输出中回滚会截断 DB 里正在写的 assistant 行，
+    // 且流回调继续写已删除的消息——先中止再回滚
+    if (streamingRef.current !== null) { abortRef.current?.abort(); setStreamingId(null); streamingRef.current = null }
     const targetMsg = messages[messageIndex]
     if (!targetMsg || targetMsg.role !== 'user') return
 
@@ -1283,6 +1286,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
   // 编辑用户消息：截断到该消息、更新内容并重新发送（ChatGPT 风格 ✏️）
   const editMessage = useCallback(async (messageIndex: number, newContent: string) => {
+    // 流式守卫（v14.9）：编辑重发前必须先停掉在途流，否则编辑内容会被流回调覆盖
+    if (streamingRef.current !== null) { abortRef.current?.abort(); setStreamingId(null); streamingRef.current = null }
     if (!sessionId) return
     const targetMsg = messages[messageIndex]
     if (!targetMsg || targetMsg.role !== 'user' || !newContent.trim()) return
