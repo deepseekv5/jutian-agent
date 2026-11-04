@@ -71,16 +71,12 @@ for (const rel of releases) {
   const body = rel.body || `${rel.name}：见 GitHub Release 完整说明。`
   let ok = false
   for (let i = 0; i < 3 && !ok; i++) {
-    const r = await fetch(`https://gitee.com/api/v5/repos/${GITEE_REPO}/releases`, {
+    // Gitee POST API 的 access_token 必须放 query（放 body 会 401 "Access token does not exist"）
+    const r = await fetch(`https://gitee.com/api/v5/repos/${GITEE_REPO}/releases?access_token=${encodeURIComponent(GITEE_TOKEN)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(30000),
-      body: JSON.stringify({
-        tag_name: rel.tag,
-        name: rel.name,
-        body,
-        access_token: GITEE_TOKEN,
-      }),
+      body: JSON.stringify({ tag_name: rel.tag, name: rel.name, body }),
     })
     ok = r.ok
     if (!ok) {
