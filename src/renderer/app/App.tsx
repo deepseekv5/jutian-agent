@@ -373,6 +373,20 @@ function MainApp() {
     return () => clearTimeout(t);
   }, []);
 
+  // 应用内剪贴板历史（v14.9）：copy 事件记录 + Cmd+Shift+B 通知输入框开面板
+  useEffect(() => {
+    const onCopy = () => {
+      try {
+        const sel = String(window.getSelection?.() || '')
+        if (sel.trim()) {
+          void import('../utils/clipboardHistory').then(m => m.recordClip(sel, 'manual'))
+        }
+      } catch { /* ignore */ }
+    }
+    document.addEventListener('copy', onCopy)
+    return () => document.removeEventListener('copy', onCopy)
+  }, [])
+
   // 全局命令面板（Cmd/Ctrl+K）+ 标签页快捷键（Cmd+N 新建对话 / Cmd+T 新标签页 / Cmd+W 关闭标签）
   const [cmdOpen, setCmdOpen] = useState(false);
   const openTabRef = useRef(openTab);
@@ -415,6 +429,12 @@ function MainApp() {
         return
       }
       if (mod && e.shiftKey && k === 'e') { e.preventDefault(); openTabRef.current('export'); return }
+      // 剪贴板历史面板（v14.9）
+      if (mod && e.shiftKey && k === 'b') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('open-clip-history'))
+        return
+      }
       // 朗读最后回复（v14.8）
       if (mod && e.shiftKey && k === 'd') { e.preventDefault(); openTabRef.current('diagnostics'); return }
       if (mod && e.shiftKey && k === 'r') {

@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import type { ToolCall } from '../types'
 import { useTheme } from '../hooks/useTheme'
 import { textForSpeech } from '../utils/tts'
+import { recordClip } from '../utils/clipboardHistory'
 import { hasMathSyntax, normalizeMathDelimiters, useMathPlugins } from './useMathPlugins'
 import { extractCodeText, isMermaidLang, isPreviewableHtml } from '../utils/richCode'
 import BrandMark from '../app/BrandMark'
@@ -260,6 +261,7 @@ function CodeBlock({ children }: { children?: any }) {
 
   const copy = () => {
     navigator.clipboard?.writeText(raw).then(() => {
+      recordClip(raw, 'code')
       setCopied(true); setTimeout(() => setCopied(false), 1800)
     }).catch(() => {})
   }
@@ -348,6 +350,7 @@ function TableBlock({ children }: { children?: any }) {
     const tsv = rows.map(tr => Array.from(tr.querySelectorAll('th,td'))
       .map(td => (td.textContent || '').replace(/[\t\n]/g, ' ')).join('\t')).join('\n')
     navigator.clipboard?.writeText(tsv).then(() => {
+      recordClip(tsv, 'table')
       setCopied(true); setTimeout(() => setCopied(false), 1800)
     }).catch(() => {})
   }
@@ -469,6 +472,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
   }, [c.accent, onOpenBrowser])
 
   const copyContent = async () => {
+    recordClip(shownContent, 'msg')
+    // 原逻辑继续
     try { await navigator.clipboard.writeText(shownContent) } catch {
       const ta = document.createElement('textarea'); ta.value = shownContent; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     }

@@ -13,6 +13,7 @@ import { hhmmss } from '../utils/datetime'
 import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 import { selfCheck, shouldBlock } from '../engine/selfCheck'
 import { effectiveApiKey } from '../store/storage'
+import { loadClipHistory, removeClipItem, type ClipItem } from '../utils/clipboardHistory'
 import { baseName } from '../utils/pathName'
 import { matchTrigger, snippetVars } from '../../shared/snippets'
 import { loadSnippets } from '../store/snippets'
@@ -710,6 +711,18 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     return () => window.removeEventListener('keydown', h, true)
   }, [fullscreenEdit])
 
+  // ─── 剪贴板历史面板（v14.9）：Cmd+Shift+B 或事件打开，点条目插入输入框 ───
+  const [clipOpen, setClipOpen] = useState(false)
+  const [clipItems, setClipItems] = useState<ClipItem[]>(() => loadClipHistory())
+  const refreshClips = () => setClipItems(loadClipHistory())
+  useEffect(() => {
+    const open = () => { refreshClips(); setClipOpen(true); setTimeout(() => textareaRef.current?.focus(), 30) }
+    const changed = () => refreshClips()
+    window.addEventListener('open-clip-history', open)
+    window.addEventListener('clip-history-changed', changed)
+    return () => { window.removeEventListener('open-clip-history', open); window.removeEventListener('clip-history-changed', changed) }
+  }, [])
+
   // ─── 定时发送（v14.8）：延迟 N 分钟自动发送，带倒计时与取消 ───
   const [schedAt, setSchedAt] = useState<number | null>(null)
   const [schedLeft, setSchedLeft] = useState(0)
@@ -1368,6 +1381,45 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
           </div>
         )}
 
+        {/* 剪贴板历史面板（v14.9） */}
+        {clipOpen && (
+          <div className="absolute bottom-full left-0 right-0 mb-2 z-40 rounded-2xl border shadow-lg animate-fade-in overflow-hidden glass-strong"
+            style={{ borderColor: c.border }}>
+            <div className="flex items-center px-4 py-2 border-b" style={{ borderColor: c.borderLight }}>
+              <span className="text-[11.5px] font-semibold" style={{ color: c.textHead }}>剪贴板历史</span>
+              <span className="flex-1" />
+              {clipItems.length > 0 && (
+                <button onClick={() => { void import('../utils/clipboardHistory').then(m => { m.clearClipHistory(); refreshClips() }) }}
+                  className="text-[10.5px] px-2 py-0.5 rounded-md" style={{ color: c.textTertiary }}>清空</button>
+              )}
+              <button onClick={() => setClipOpen(false)} className="ml-2 text-[10.5px] px-2 py-0.5 rounded-md" style={{ color: c.textTertiary }}>关闭</button>
+            </div>
+            <div className="py-1.5 max-h-56 overflow-y-auto scrollbar-thin">
+              {clipItems.length === 0 && (
+                <div className="px-4 py-3 text-[12px]" style={{ color: c.textTertiary }}>
+                  还没有复制记录——在对话里复制消息/代码后会出现在这里（上限 20 条）
+                </div>
+              )}
+              {clipItems.map((it) => (
+                <div key={it.ts} className="group flex items-start gap-2 px-4 py-2 transition-colors" style={{ background: 'transparent' }}>
+                  <button onClick={() => {
+                    setValue(v => (v ? v + '\n' + it.text : it.text))
+                    setClipOpen(false)
+                    setTimeout(() => textareaRef.current?.focus(), 30)
+                  }}
+                    className="flex-1 min-w-0 text-left" title="点击插入输入框">
+                    <div className="text-[12px] line-clamp-2 whitespace-pre-wrap break-all" style={{ color: c.text }}>{it.text.slice(0, 160)}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: c.textTertiary }}>
+                      {new Date(it.ts).toLocaleTimeString()}{it.src === 'code' ? ' · 代码' : it.src === 'msg' ? ' · 消息' : it.src === 'table' ? ' · 表格' : ''}
+                    </div>
+                  </button>
+                  <button onClick={() => { removeClipItem(it.ts); refreshClips() }}
+                    className="opacity-0 group-hover:opacity-100 text-[11px] px-1.5 rounded" style={{ color: c.textTertiary }} title="删除该条">×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* @ 文件提及菜单：输入 @ 触发，补全工作区文件路径 */}
         {mentionActive && (mentionHits.length > 0 || mentionLoading) && (
           <div className="absolute bottom-full left-0 right-0 mb-2 z-40 rounded-2xl border shadow-lg animate-fade-in overflow-hidden glass-strong"
