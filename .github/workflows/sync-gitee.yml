@@ -1,17 +1,16 @@
-# Gitee 镜像同步（v14.8）
+# Gitee 镜像同步（v14.8.3）
 #
-# 每次 push 到 main 或打 tag 后，把整个仓库（含标签）镜像推到 Gitee。
-# 前置条件（一次性手工配置）：
-#   1. gitee.com 手动建仓库 <用户名>/jutian-agent（空仓库、不初始化）
-#   2. GitHub 仓库 Settings → Secrets and variables → Actions 添加：
-#      - GITEE_USER：Gitee 用户名（如 deepseekv5）
-#      - GITEE_TOKEN：Gitee **私人令牌**（Settings → 私人令牌 → 生成，
-#        必须勾选 projects scope；第三方 OAuth 应用令牌无效——
-#        实测表现为 GET /user 200 但建仓/推送 401 "Access token does not exist"）
-#   3. 生成后可用此命令自检（200 且能列出仓库才算有效）：
-#      curl "https://gitee.com/api/v5/user/repos?access_token=<TOKEN>"
+# 两种触发：
+#   1. push main / 打 tag  → 自动镜像 git + 同步该 tag 的发行版
+#   2. workflow_dispatch   → 可带 mode=sync-history 补同步全部历史发行版
 #
-# 失败不阻塞主流程（继续为 Gitee 特有的网络抖动留重试）。
+# 令牌来源（按优先级）：Secrets 里配置的 GITEE_TOKEN → workflow_dispatch 的
+# inputs.gitee_token（一次性补历史时用，GitHub 服务器端运行，不过用户本机流量）。
+# 前置条件（二选一）：
+#   · GitHub 仓库 Settings → Secrets → GITEE_USER / GITEE_TOKEN
+#   · 或手动触发时在 Inputs 里传 gitee_user / gitee_token
+#
+# 失败不阻塞：Gitee 网络抖动重试 3 次后跳过。
 
 name: Sync Gitee
 
@@ -20,28 +19,111 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'mirror（默认，只推 git）或 sync-history（同步全部历史发行版）'
+        required: false
+        default: 'mirror'
+      gitee_user:
+        description: 'Gitee 用户名（一次性）'
+        required: false
+      gitee_token:
+        description: 'Gitee 私人令牌（一次性）'
+        required: false
+
+permissions:
+  contents: write
 
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 推送到 Gitee（全分支 + 全标签）
-        continue-on-error: true
+      - name: 准备令牌
+        id: tok
         run: |
-          if [ -z "${{ secrets.GITEE_TOKEN }}" ]; then
-            echo "::warning::未配置 GITEE_TOKEN secret，跳过 Gitee 同步"
+          USER="${{ secrets.GITEE_USER || inputs.gitee_user || '' }}"
+          TOKEN="${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}"
+          if [ -z "$USER" ] || [ -z "$TOKEN" ]; then
+            echo "::warning::未配置 Gitee 令牌，跳过"
             exit 0
           fi
-          git remote add gitee "https://${{ secrets.GITEE_USER }}:${{ secrets.GITEE_TOKEN }}@gitee.com/${{ secrets.GITEE_USER }}/jutian-agent.git"
+          echo "USER=$USER" >> $GITHUB_OUTPUT
+          echo "TOKEN=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: 推送 Git（全分支 + 全标签）
+        if: steps.tok.outputs.USER
+        env:
+          GITEE_USER: ${{ steps.tok.outputs.USER }}
+          GITEE_TOKEN: ${{ steps.tok.outputs.TOKEN }}
+        run: |
+          git remote add gitee "https://${GITEE_USER}:${GITEE_TOKEN}@gitee.com/${GITEE_USER}/jutian-agent.git"
           for i in 1 2 3; do
-            git push gitee main --force --tags && exit 0
+            git push gitee main --force --tags && break
             echo "第 $i 次推送失败，重试..."
             sleep 10
           done
-          echo "::warning::Gitee 推送三次均失败（多为网络抖动），本次跳过"
-          exit 0
+
+  sync-releases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 默认跑（有令牌时）；synchrony-history 模式专门补历史
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - name: 同步发行版
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER || inputs.gitee_user || '' }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$GITEE_USER" ] || [ -z "$GITEE_TOKEN" ]; then
+            echo "::warning::未配置 Gitee 令牌，跳过发行版同步"
+            exit 0
+          fi
+          node --version >/dev/null 2>&1 || { echo "::error::runner 没有 node"; exit 1; }
+
+          # 模式决定范围：sync-history → 全部；push → 本次 tag
+          MODE="mirror"
+          [ "${{ inputs.mode }}" = "sync-history" ] && MODE="sync-history"
+
+          # 取 GitHub 发行版（GitHub 服务器 → GitHub API，零本机流量）
+          gh api -H "Accept: application/vnd.github+json" \
+            "/repos/deepseekv5/jutian-agent/releases?per_page=100&page=1" --jq '.[] | {tag: .tag_name, name: (.name // .tag_name) | tostring, body: (.body // "")}' > /tmp/rel1.json || exit 1
+          if [ "$MODE" = "sync-history" ]; then
+            gh api -H "Accept: application/vnd.github+json" \
+              "/repos/deepseekv5/jutian-agent/releases?per_page=100&page=2" --jq '.[] | {tag: .tag_name, name: (.name // .tag_name) | tostring, body: (.body // "")}' > /tmp/rel2.json 2>/dev/null || true
+          fi
+          cat /tmp/rel1.json /tmp/rel2.json 2>/dev/null | node -e "
+            const lines = [require('fs').readFileSync(0, 'utf8')];
+            const all = JSON.parse('[' + lines.join(',').replace(/\n$/, '') + ']');
+            console.log(JSON.stringify(all));
+          " > /tmp/all.json
+          [ -s /tmp/all.json ] || exit 1
+
+          # Gitee 已有发行版 tag 集合
+          curl -s -m 30 "https://gitee.com/api/v5/repos/${GITEE_USER}/jutian-agent/releases?access_token=${GITEE_TOKEN}&per_page=100" -o /tmp/ge.json
+          node -e "
+            const all = JSON.parse(require('fs').readFileSync('/tmp/all.json', 'utf8'));
+            const existing = new Set();
+            try { for (const r of JSON.parse(require('fs').readFileSync('/tmp/ge.json', 'utf8')) || []) existing.add(r.tag_name) } catch {}
+            let done = 0, fail = 0;
+            const todo = all.filter(r => !existing.has(r.tag));
+            for (const r of todo) {
+              const name = r.name.slice(0, 50);
+              const body = (r.body || '').trim() || name + '：见 GitHub Release 完整说明。';
+              const payload = JSON.stringify({ tag_name: r.tag, name, body, access_token: process.env.GITEE_TOKEN });
+              const { execSync } = require('child_process');
+              let ok = false;
+              for (let i = 0; i < 3 && !ok; i++) {
+                const code = execSync(\`curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST https://gitee.com/api/v5/repos/\${process.env.GITEE_USER}/jutian-agent/releases -H 'Content-Type: application/json' -d '\${payload}'\`, { encoding: 'utf8' }).trim();
+                ok = code === '201' || code === '200';
+                if (!ok) new Promise(s => setTimeout(s, 2000));
+              }
+              if (ok) { done++; console.log('✓', r.tag) } else { fail++; console.log('✗', r.tag) }
+            }
+            console.log(\`创建 \${done} 个发行版，失败 \${fail} 个\`);
+          "
