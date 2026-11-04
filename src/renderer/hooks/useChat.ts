@@ -915,7 +915,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         ok: true,
       })
       setStreamingId(null)
-      setMessages(await listMessages(sessionId))
+      // perf9（v14.9）：本地 patch 替代 re-fetch（集群分支：结果在 final 里）
+      patchAssistantFinal(setMessages, sessionId, assistantMsg.id, { content: final })
       abortRef.current = null
       return
     }
@@ -1227,7 +1228,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
           await updateMessageToolCalls(assistantMsg.id, sessionId, allToolCalls)
         }
         setStreamingId(null)
-        setMessages(await listMessages(sessionId))
+        // perf9（v14.9）：本地 patch 替代 re-fetch（中止路径同样换引用击穿 memo）
+        patchAssistantFinal(setMessages, sessionId, assistantMsg.id, {
+          content: fullContent || '(已中止)',
+          thinking: fullThinking || undefined,
+          ...(allToolCalls.length ? { tool_calls: allToolCalls } : {}),
+        })
       }
       abortRef.current = null
       // 上游降级检测（v15.2）：放在 finally 保证三个引擎都覆盖到。
