@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, memo, Fragment, lazy, Suspense } from 'react'
+import { useState, useRef, useCallback, useEffect, memo, Fragment, lazy, Suspense, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -245,6 +245,21 @@ function ThinkingBlock({ text, label, streaming }: { text: string; label: string
 const MermaidBlock = lazy(() => import('./MermaidBlock'))
 
 /** 代码块：语言栏 + 复制按钮（ChatGPT 风格）；mermaid 渲染成图，完整 HTML 文档给预览页签 */
+/** 性能（v14.9）：markdown 渲染 memo 化——历史消息 content 不变时整棵子树 bail out，
+ *  不再重复跑 remark/rehype/highlight 解析。切换几百条消息的会话从全量重解析变为零解析。 */
+const MdInner = memo(function MdInner({ text, remark, rehype, link, math }: {
+  text: string; remark: any[]; rehype: any[]; link: any; math: boolean
+}) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={remark as any}
+      rehypePlugins={rehype as any}
+      components={{ a: link, pre: CodeBlock as any, table: TableBlock as any }}>
+      {math ? normalizeMathDelimiters(text) : text}
+    </ReactMarkdown>
+  )
+})
+
 function CodeBlock({ children }: { children?: any }) {
   const { c } = useTheme()
   const [copied, setCopied] = useState(false)
@@ -441,8 +456,9 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
 
   // KaTeX 公式：只在消息真有公式语法时才懒加载（全局单例，整会话只加载一次）
   const math = useMathPlugins(hasMathSyntax(shownContent) || hasMathSyntax(content || '') || hasMathSyntax(thinking || ''))
-  const mdRemark = math ? [remarkGfm, math.remarkMath] : [remarkGfm]
-  const mdRehype = math ? [rehypeHighlight, math.rehypeKatex] : [rehypeHighlight]
+  // 性能（v14.9）：插件数组按 hasMath 标志 memo——引用稳定才能让 MdInner 生效
+  const mdRemark = useMemo(() => (math ? [remarkGfm, math.remarkMath] : [remarkGfm]), [math])
+  const mdRehype = useMemo(() => (math ? [rehypeHighlight, math.rehypeKatex] : [rehypeHighlight]), [math])
 
   // 消息聚焦阅读模式
   const [focusOpen, setFocusOpen] = useState(false)
@@ -810,12 +826,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             : null
           const Text = ({ v }: { v: string }) => !v ? null : (
             <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
-              <ReactMarkdown
-                remarkPlugins={mdRemark as any}
-                rehypePlugins={mdRehype as any}
-                components={{ a: LinkRenderer, pre: CodeBlock as any, table: TableBlock as any }}>
-                {normalizeMathDelimiters(v)}
-              </ReactMarkdown>
+              <MdInner text={v} remark={mdRemark} rehype={mdRehype} link={LinkRenderer} math />
             </div>
           )
               {translated && (
