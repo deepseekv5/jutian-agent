@@ -723,24 +723,62 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     return () => { window.removeEventListener('open-clip-history', open); window.removeEventListener('clip-history-changed', changed) }
   }, [])
 
-  // ─── 定时发送（v14.8）：延迟 N 分钟自动发送，带倒计时与取消 ───
+  // ─── 定时发送（v14.8 / v14.9 加固）：延迟 N 分钟自动发送，带倒计时与取消 ───
+  // v14.9 修复三个丢消息路径：
+  //   ① 关标签/退出应用 → 落 localStorage（sched-pending），挂载时补发
+  //   ② 二次定时覆盖第一条 → 已有待发时改为排队追加
+  //   ③ 到点发送丢 sendOpts → 快照完整 onSend 参数
   const [schedAt, setSchedAt] = useState<number | null>(null)
   const [schedLeft, setSchedLeft] = useState(0)
   const schedTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const schedPayload = useRef<{ content: string; skills?: string[]; files?: typeof attachedFiles; opts?: Record<string, unknown> } | null>(null)
+  const schedPayload = useRef<{ content: string; skills?: string[]; files?: typeof attachedFiles } | null>(null)
+  const SCHED_KEY = 'sched-pending'
+  type SchedItem = { fire: number; sessionId?: string; content: string; skills?: string[]; files?: { path: string; name: string; size: number }[] }
+  const loadSched = (): SchedItem[] => {
+    try { const a = JSON.parse(localStorage.getItem(SCHED_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
+  }
+  const saveSched = (items: SchedItem[]) => {
+    try { localStorage.setItem(SCHED_KEY, JSON.stringify(items)) } catch { /* ignore */ }
+  }
+  // 挂载补发：上次没发出去的到点消息（App 关闭期间到点的也在这里补）
+  useEffect(() => {
+    const items = loadSched()
+    if (!items.length) return
+    const due = items.filter(x => x.fire <= Date.now())
+    const keep = items.filter(x => x.fire > Date.now())
+    saveSched(keep)
+    for (const d of due) {
+      // 只补发属于本会话的（其他会话的由各自 MessageInput 补）
+      if (d.sessionId && d.sessionId !== sessionId) { keep.push(d); continue }
+      if (d.content?.trim()) onSend(d.content, d.skills, d.files as never)
+    }
+    if (keep.length !== items.length) saveSched(keep)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const stopSchedule = () => {
     if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
     setSchedAt(null); setSchedLeft(0); schedPayload.current = null
+    // 本会话的待发条目一并清掉
+    const items = loadSched().filter(x => x.sessionId !== sessionId)
+    saveSched(items)
   }
   const startSchedule = (delayMin: number) => {
     const text = value.trim()
     if (!text || !onSend) return
+    // ② 已有待发 → 拒绝并提示（防覆盖丢消息）
+    if (schedAt !== null || loadSched().some(x => !x.sessionId || x.sessionId === sessionId)) {
+      window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '已有定时消息待发送，请先等它发出或取消' }))
+      return
+    }
     const fire = Date.now() + delayMin * 60_000
-    // 快照当前草稿 + 附件 + 选项，到点原样发出
+    // 快照当前草稿 + 附件，到点原样发出
     const content = text
     const skills = selectedSkillIds.length > 0 ? [...selectedSkillIds] : undefined
-    const files = attachedFiles.length > 0 ? [...attachedFiles] : undefined
+    const files = attachedFiles.length > 0 ? attachedFiles.map(f => ({ path: f.path, name: f.name, size: f.size })) : undefined
     schedPayload.current = { content, skills, files }
+    // ① 落 localStorage：关标签/退出后仍可补发
+    const item: SchedItem = { fire, sessionId, content, skills, files }
+    saveSched([...loadSched(), item])
     if (sessionId) dropDraft(sessionId)
     setValue(''); setAttachedFiles([]); setSelectedSkillIds([])
     setSchedAt(fire); setSchedLeft(delayMin * 60)
@@ -753,11 +791,16 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         const pl = schedPayload.current
         if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
         setSchedAt(null); setSchedLeft(0); schedPayload.current = null
+        saveSched(loadSched().filter(x => !(x.fire === fire && x.sessionId === sessionId)))
         if (pl) onSend(pl.content, pl.skills, pl.files as never)
       }
     }, 500)
   }
-  useEffect(() => () => { if (schedTimer.current) clearInterval(schedTimer.current) }, [])
+  // 卸载：保留 localStorage 待发条目（下次挂载补发），只清本地计时器
+  useEffect(() => () => {
+    if (schedTimer.current) clearInterval(schedTimer.current)
+    schedPayload.current = null
+  }, [])
 
   // ─── AI 改写草稿（v14.8）：不发送，让当前模型把草稿改写后直接填回输入框 ───
   const [rewriting, setRewriting] = useState(false)
