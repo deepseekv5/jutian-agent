@@ -42,6 +42,9 @@ export function useSendQueue(onSendQueued: QueueSender) {
             queue = dequeue(loadQueue(), item.id)
             saveQueue(queue)
           } catch (e) {
+            // 归属不匹配（v14.9）：条目属于其他会话，留给那个会话的实例处理——
+            // 不退避、不中断，继续看下一条
+            if ((e as any)?.skip) continue
             // 失败：退避，然后停止本轮（后面的消息依赖前一条的上下文）
             const cur = loadQueue()
             const next = cur.map((q) => (q.id === item.id ? backoffItem(q, String(e), Date.now()) : q))

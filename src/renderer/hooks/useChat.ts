@@ -1335,6 +1335,14 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
   // 待发队列自动重试：网络恢复后按顺序重发。
   // 直接复用 send()，保证重发与手动发送走完全相同的链路（权限档位/技能/附件都在 sendOpts 里）。
   useSendQueue(async (item) => {
+    // 修复（v14.9）：drain 校验归属——多个 ChatTab 同时挂载、每个各有一个 drain 定时器，
+    // A 会话入队的消息不能被 B 会话的实例发进 B（此前完全忽略 item.sessionId）。
+    // 不是本会话的条目抛特定错误让本轮跳过但保留队列（不退避）。
+    if (item.sessionId !== sessionIdRef.current) {
+      const e = new Error('__SKIP_NOT_MINE__') as Error & { skip: boolean }
+      e.skip = true
+      throw e
+    }
     await send(item.content, undefined, undefined, item.opts as any)
   })
 
