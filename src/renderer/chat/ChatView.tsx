@@ -155,14 +155,18 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 让全部气泡重渲染、连 ReactMarkdown 都重新解析。
   // 依赖里只有 messages.length 这类流式期间不变的量；onOpenBrowser 由父层
   // 直接透传，本身已是稳定引用
+  // 性能（v14.9）：ref 持最新 messages，回调依赖不再跟着 messages 数组换引用
+  const messagesRefLocal = useRef(messages)
+  messagesRefLocal.current = messages
   const handleRegenerateAt = useCallback((idx: number) => {
-    if (idx === messages.length - 1 && onRegenerate) onRegenerate()
+    if (idx === messagesRefLocal.current.length - 1 && onRegenerate) onRegenerate()
     else onRegenerateAt?.(idx)
-  }, [messages.length, onRegenerate, onRegenerateAt])
+  }, [onRegenerate, onRegenerateAt])
   const handleRollback = useCallback((idx: number) => onRollback?.(idx), [onRollback])
   const handleEdit = useCallback((idx: number, text: string) => onEditMessage?.(idx, text), [onEditMessage])
   // 分叉（v12.1）：复制到该消息为止的对话成新会话，原会话不动
   const handleBranch = useCallback(async (idx: number) => {
+    const messages = messagesRefLocal.current
     const target = messages[idx]
     if (!target) return
     // 标题与分叉范围由 shared/branch 计算（与纯逻辑测试共用一套规则），
@@ -183,7 +187,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
     } catch (e) {
       console.warn('[branch] 失败', e)
     }
-  }, [messages, sessionId])
+  }, [sessionId])
 
   // 消息内搜索（Cmd/Ctrl+F）
   const [searchOpen, setSearchOpen] = useState(false)

@@ -126,14 +126,22 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   )
 }
 
-/** 读取消息的「首字耗时」侧车（useChat 在流式增量到达时写入） */
+/** 读取消息的「首字耗时」侧车（useChat 在流式增量到达时写入）
+ *  性能（v14.9）：模块级缓存整表，流式完成事件时失效——
+ *  此前每条 assistant 气泡每次渲染都 JSON.parse 一遍 localStorage */
+let thinkMsCache: { map: Record<string, number>; at: number } | null = null
+function readThinkMsRaw(): Record<string, number> {
+  const now = Date.now()
+  if (thinkMsCache && now - thinkMsCache.at < 1500) return thinkMsCache.map
+  try {
+    thinkMsCache = { map: JSON.parse(localStorage.getItem('lyclaw_msg_think_ms') || '{}'), at: now }
+    return thinkMsCache.map
+  } catch { return {} }
+}
 function readThinkMs(msgId?: string): number | null {
   if (!msgId) return null
-  try {
-    const map = JSON.parse(localStorage.getItem('lyclaw_msg_think_ms') || '{}')
-    const v = Number(map[msgId])
-    return v > 500 ? v : null
-  } catch { return null }
+  const v = Number(readThinkMsRaw()[msgId])
+  return v > 500 ? v : null
 }
 
 /** 读取消息的「目标」侧车标记（useChat 在目标模式发送时写入），返回目标文本或 null */
