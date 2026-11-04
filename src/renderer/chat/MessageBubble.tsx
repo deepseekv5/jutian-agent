@@ -240,10 +240,14 @@ function CodeBlock({ children }: { children?: any }) {
   const { c } = useTheme()
   const [copied, setCopied] = useState(false)
   const [view, setView] = useState<'code' | 'preview'>('code')
+  // 长代码块折叠（v14.9）：>25 行默认只显示前 18 行，点「展开全部」还原
+  const [expanded, setExpanded] = useState(false)
   const codeEl = Array.isArray(children) ? children[0] : children
-  const className: string = codeEl?.props?.className || ''
-  const lang = (/language-([\w-]+)/.exec(className)?.[1]) || 'text'
+  const codeClassName: string = codeEl?.props?.className || ''
+  const lang = (/language-([\w-]+)/.exec(codeClassName)?.[1]) || 'text'
   const raw = extractCodeText(codeEl?.props?.children).replace(/\n$/, '')
+  const lineCount = raw ? raw.split('\n').length : 0
+  const collapsible = lineCount > 25
 
   if (isMermaidLang(lang)) {
     return (
@@ -301,8 +305,31 @@ function CodeBlock({ children }: { children?: any }) {
           srcDoc={raw}
           style={{ display: 'block', width: '100%', height: 440, border: 0, borderRadius: '0 0 12px 12px', background: '#fff' }}
         />
+      ) : collapsible && !expanded ? (
+        // 折叠态：限高 + 渐隐 + 展开按钮（v14.9）
+        <div className="relative">
+          <pre style={{ maxHeight: 380, overflow: 'hidden' }}>{children}</pre>
+          <div className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
+            style={{ background: 'linear-gradient(transparent, rgba(255,255,255,.92))' }} />
+          <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-3">
+            <button onClick={() => setExpanded(true)}
+              className="px-3 h-7 rounded-full text-[11.5px] font-medium shadow-sm"
+              style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.border}` }}>
+              展开全部（{lineCount} 行）
+            </button>
+          </div>
+        </div>
       ) : (
-        <pre>{children}</pre>
+        <>
+          <pre>{children}</pre>
+          {collapsible && (
+            <div className="flex justify-center py-1.5" style={{ borderTop: `1px solid ${c.borderLight}` }}>
+              <button onClick={() => setExpanded(false)}
+                className="text-[11px] px-3 h-6 rounded-full"
+                style={{ color: c.textTertiary, background: c.bgInput }}>收起</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
