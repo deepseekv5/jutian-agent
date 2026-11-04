@@ -910,8 +910,6 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   }, [])
 
   // ─── 草稿保存：按会话隔离，切换会话自动恢复 ───
-  const valueRef = useRef(value)
-  valueRef.current = value
   const handleSend = () => {
     const trimmed = value.trim()
     if (!trimmed) return
