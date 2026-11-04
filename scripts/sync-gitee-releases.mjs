@@ -48,6 +48,14 @@ for (let page = 1; page <= 2; page++) {
 }
 console.log(`GitHub 发行版: ${releases.length}`)
 
+// tag 触发模式：只处理当前 tag（GITEE_ONLY_TAG 环境变量）
+const onlyTag = process.env.GITEE_ONLY_TAG || ''
+const filtered = onlyTag ? releases.filter(r => r.tag === onlyTag) : releases
+if (onlyTag && filtered.length === 0) {
+  console.log(`::warning::GitHub 上没有 ${onlyTag} 的发行版（可能尚未创建），跳过`)
+  process.exit(0)
+}
+
 // ── 2. Gitee 已有发行版 tag 集合 ──
 const existing = new Set()
 try {
@@ -67,7 +75,7 @@ console.log(`Gitee 已有: ${existing.size}`)
 
 // ── 3. 逐版创建（退避重试 3 次）──
 let done = 0, fail = 0
-for (const rel of releases) {
+for (const rel of filtered) {
   if (existing.has(rel.tag)) continue
   const body = rel.body || `${rel.name}：见 GitHub Release 完整说明。`
   let ok = false
