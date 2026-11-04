@@ -1,16 +1,11 @@
 # Gitee 镜像同步（v14.8.3）
 #
-# 两种触发：
-#   1. push main / 打 tag  → 自动镜像 git + 同步该 tag 的发行版
-#   2. workflow_dispatch   → 可带 mode=sync-history 补同步全部历史发行版
+# 触发方式：
+#   1. push main / 打 tag  → 自动镜像 git
+#   2. workflow_dispatch   → mode=mirror（只推 git）或 mode=sync-history（补全部历史发行版）
 #
-# 令牌来源（按优先级）：Secrets 里配置的 GITEE_TOKEN → workflow_dispatch 的
-# inputs.gitee_token（一次性补历史时用，GitHub 服务器端运行，不过用户本机流量）。
-# 前置条件（二选一）：
-#   · GitHub 仓库 Settings → Secrets → GITEE_USER / GITEE_TOKEN
-#   · 或手动触发时在 Inputs 里传 gitee_user / gitee_token
-#
-# 失败不阻塞：Gitee 网络抖动重试 3 次后跳过。
+# 令牌来源：Secrets.GITEE_USER/GITEE_TOKEN（推荐），或 dispatch 时传 inputs.gitee_user/gitee_token。
+# 发行版同步逻辑在 scripts/sync-gitee-releases.mjs（GitHub 服务器端运行，零本机流量）。
 
 name: Sync Gitee
 
@@ -21,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'mirror（默认，只推 git）或 sync-history（同步全部历史发行版）'
+        description: 'mirror 或 sync-history（同步全部历史发行版）'
         required: false
         default: 'mirror'
       gitee_user:
@@ -37,7 +32,7 @@ permissions:
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +50,7 @@ jobs:
           echo "USER=$USER" >> $GITHUB_OUTPUT
           echo "TOKEN=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: 推送 Git（全分支 + 全标签）
+      - name: 推送 Git（main + tags）
         if: steps.tok.outputs.USER
         env:
           GITEE_USER: ${{ steps.tok.outputs.USER }}
@@ -71,59 +66,11 @@ jobs:
   sync-releases:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # 默认跑（有令牌时）；synchrony-history 模式专门补历史
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     steps:
-      - name: 同步发行版
+      - name: 同步发行版（历史补建）
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'sync-history'
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           GITEE_USER: ${{ secrets.GITEE_USER || inputs.gitee_user || '' }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -z "$GITEE_USER" ] || [ -z "$GITEE_TOKEN" ]; then
-            echo "::warning::未配置 Gitee 令牌，跳过发行版同步"
-            exit 0
-          fi
-          node --version >/dev/null 2>&1 || { echo "::error::runner 没有 node"; exit 1; }
-
-          # 模式决定范围：sync-history → 全部；push → 本次 tag
-          MODE="mirror"
-          [ "${{ inputs.mode }}" = "sync-history" ] && MODE="sync-history"
-
-          # 取 GitHub 发行版（GitHub 服务器 → GitHub API，零本机流量）
-          gh api -H "Accept: application/vnd.github+json" \
-            "/repos/deepseekv5/jutian-agent/releases?per_page=100&page=1" --jq '.[] | {tag: .tag_name, name: (.name // .tag_name) | tostring, body: (.body // "")}' > /tmp/rel1.json || exit 1
-          if [ "$MODE" = "sync-history" ]; then
-            gh api -H "Accept: application/vnd.github+json" \
-              "/repos/deepseekv5/jutian-agent/releases?per_page=100&page=2" --jq '.[] | {tag: .tag_name, name: (.name // .tag_name) | tostring, body: (.body // "")}' > /tmp/rel2.json 2>/dev/null || true
-          fi
-          cat /tmp/rel1.json /tmp/rel2.json 2>/dev/null | node -e "
-            const lines = [require('fs').readFileSync(0, 'utf8')];
-            const all = JSON.parse('[' + lines.join(',').replace(/\n$/, '') + ']');
-            console.log(JSON.stringify(all));
-          " > /tmp/all.json
-          [ -s /tmp/all.json ] || exit 1
-
-          # Gitee 已有发行版 tag 集合
-          curl -s -m 30 "https://gitee.com/api/v5/repos/${GITEE_USER}/jutian-agent/releases?access_token=${GITEE_TOKEN}&per_page=100" -o /tmp/ge.json
-          node -e "
-            const all = JSON.parse(require('fs').readFileSync('/tmp/all.json', 'utf8'));
-            const existing = new Set();
-            try { for (const r of JSON.parse(require('fs').readFileSync('/tmp/ge.json', 'utf8')) || []) existing.add(r.tag_name) } catch {}
-            let done = 0, fail = 0;
-            const todo = all.filter(r => !existing.has(r.tag));
-            for (const r of todo) {
-              const name = r.name.slice(0, 50);
-              const body = (r.body || '').trim() || name + '：见 GitHub Release 完整说明。';
-              const payload = JSON.stringify({ tag_name: r.tag, name, body, access_token: process.env.GITEE_TOKEN });
-              const { execSync } = require('child_process');
-              let ok = false;
-              for (let i = 0; i < 3 && !ok; i++) {
-                const code = execSync(\`curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST https://gitee.com/api/v5/repos/\${process.env.GITEE_USER}/jutian-agent/releases -H 'Content-Type: application/json' -d '\${payload}'\`, { encoding: 'utf8' }).trim();
-                ok = code === '201' || code === '200';
-                if (!ok) new Promise(s => setTimeout(s, 2000));
-              }
-              if (ok) { done++; console.log('✓', r.tag) } else { fail++; console.log('✗', r.tag) }
-            }
-            console.log(\`创建 \${done} 个发行版，失败 \${fail} 个\`);
-          "
+        run: node scripts/sync-gitee-releases.mjs
