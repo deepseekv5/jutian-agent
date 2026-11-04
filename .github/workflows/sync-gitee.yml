@@ -1,4 +1,4 @@
-# Gitee 镜像同步（v14.8.3）
+# Gitee 镜像同步（v14.8.4）
 #
 # 触发方式：
 #   1. push main / 打 tag  → 自动镜像 git
@@ -65,8 +65,11 @@ jobs:
 
   sync-releases:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
+      # v14.8.4 修复：必须先 checkout 才有 scripts/sync-gitee-releases.mjs
+      - uses: actions/checkout@v4
+
       - name: 同步发行版（历史补建）
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'sync-history'
         env:
