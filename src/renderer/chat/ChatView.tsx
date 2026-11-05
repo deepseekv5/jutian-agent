@@ -190,6 +190,13 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }, [sessionId])
 
   // 消息内搜索（Cmd/Ctrl+F）
+  // msgWindow（v14.9.2）：长会话只渲染最近 60 条，顶部「加载更早」按 120 条/次前移。
+  // 绝对下标基准 windowBase 保持 daySeps/搜索命中/跳转的 idx 语义不变。
+  const [msgWindow, setMsgWindow] = useState(60)
+  const windowBase = Math.max(0, messages.length - msgWindow)
+  const visibleMessages = messages.slice(windowBase)
+  const loadEarlier = () => setMsgWindow(w => w + 120)
+
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQ, setSearchQ] = useState('')
   const [searchHits, setSearchHits] = useState<number[]>([])  // 命中消息 idx 列表
@@ -409,7 +416,16 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
             aria-busy 标记生成中，避免逐字播报打断用户 */}
         <div className="mx-auto px-6 pt-8 pb-4" style={{ maxWidth: contentWidth }}
           role="log" aria-live="polite" aria-relevant="additions text" aria-busy={isStreaming}>
-          {messages.map((msg, idx) => (
+          {windowBase > 0 && (
+            <button onClick={loadEarlier}
+              className="mx-auto mb-4 px-4 h-8 rounded-full text-[12px] font-medium"
+              style={{ background: c.bgInput, color: c.textSecondary, border: '1px solid ' + c.border }}>
+              加载更早（还有 {windowBase} 条）
+            </button>
+          )}
+          {visibleMessages.map((msg, idx0) => {
+          const idx = idx0 + windowBase
+          return (
             <Fragment key={`d-${msg.id}`}>
             {daySeps.includes(idx) && (
               <div className="flex items-center gap-3 py-3" aria-hidden>
@@ -447,7 +463,8 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
               />
             </div>
             </Fragment>
-          ))}
+          )
+          })}
           <div ref={bottomRef} />
         </div>
       </div>
