@@ -242,22 +242,34 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     })
   }
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+  // 性能（v14.9.2）：排序与搜索拆两段 memo + 预解析时间戳——
+  // 此前每次击键对全部会话完整 sort 且 comparator 里 new Date 两次（数百会话时 O(n log n × 2)）
+  const updatedTs = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of sessions) {
+      const t = new Date(s.updated_at || s.created_at || 0).getTime()
+      m.set(s.id, Number.isFinite(t) ? t : 0)
+    }
+    return m
+  }, [sessions])
+  const sortedBase = useMemo(() => {
     // 归档会话默认不出现在列表；标签筛选走 shared 的 AND 语义
     let pool = sessions.filter(s => !metaMap[s.id]?.archived)
     if (activeTags.length) pool = filterByTags(pool, (id) => metaMap[id], activeTags)
-    const base = [...pool].sort((a, b) => {
+    return [...pool].sort((a, b) => {
       // 置顶优先（v12），其次收藏，最后按更新时间
       const pa = metaMap[a.id]?.pinnedAt || 0, pb = metaMap[b.id]?.pinnedAt || 0
       if (pa !== pb) return pb - pa
       const sa = starred.has(a.id) ? 1 : 0, sb = starred.has(b.id) ? 1 : 0
       if (sa !== sb) return sb - sa
-      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+      return (updatedTs.get(b.id) || 0) - (updatedTs.get(a.id) || 0)
     })
-    if (!q) return base
-    return base.filter(s => String(s.title || '').toLowerCase().includes(q))
-  }, [search, sessions, starred, metaMap, activeTags])
+  }, [sessions, starred, metaMap, activeTags, updatedTs])
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return sortedBase
+    return sortedBase.filter(s => String(s.title || '').toLowerCase().includes(q))
+  }, [search, sortedBase])
 
   const groups = useMemo(() => groupSessionsMixed(filtered, lang), [filtered, lang])
 

@@ -650,7 +650,8 @@ app.whenReady().then(async () => {
   setupMenu()
   setupIPC()
   createWindow()
-  await sleep(500)
+  // v14.9.2：删掉无条件 sleep(500)——waitForServer 本身以 150ms 间隔探测，
+  // 这 500ms 纯拖慢每次启动
   await startAll()
 })
 
