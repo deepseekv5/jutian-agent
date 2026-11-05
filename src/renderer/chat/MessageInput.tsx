@@ -741,9 +741,10 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const [schedAt, setSchedAt] = useState<number | null>(null)
   const [schedLeft, setSchedLeft] = useState(0)
   const schedTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const schedPayload = useRef<{ content: string; skills?: string[]; files?: typeof attachedFiles } | null>(null)
+  const schedPayload = useRef<{ content: string; skills?: string[]; files?: typeof attachedFiles; opts?: Record<string, unknown> } | null>(null)
   const SCHED_KEY = 'sched-pending'
-  type SchedItem = { fire: number; sessionId?: string; content: string; skills?: string[]; files?: { path: string; name: string; size: number }[] }
+  // sched-opts-snapshot（v14.9.2）：快照完整发送选项，到点/补发不再丢 accessLevel/thinking/kb/goal
+  type SchedItem = { fire: number; sessionId?: string; content: string; skills?: string[]; files?: { path: string; name: string; size: number }[]; opts?: Record<string, unknown> }
   const loadSched = (): SchedItem[] => {
     try { const a = JSON.parse(localStorage.getItem(SCHED_KEY) || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
   }
@@ -760,7 +761,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     for (const d of due) {
       // 只补发属于本会话的（其他会话的由各自 MessageInput 补）
       if (d.sessionId && d.sessionId !== sessionId) { keep.push(d); continue }
-      if (d.content?.trim()) onSend(d.content, d.skills, d.files as never)
+      if (d.content?.trim()) onSend(d.content, d.skills, d.files as never, d.opts as never)
     }
     if (keep.length !== items.length) saveSched(keep)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -785,9 +786,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     const content = text
     const skills = selectedSkillIds.length > 0 ? [...selectedSkillIds] : undefined
     const files = attachedFiles.length > 0 ? attachedFiles.map(f => ({ path: f.path, name: f.name, size: f.size })) : undefined
-    schedPayload.current = { content, skills, files }
+    // 与 handleSend 同款选项快照（sendOpts 第四参）
+    const opts = { thinking, swarm: modes.swarm, team: modes.swarm ? swarmTeam : undefined, chatMode, kb: kbOn, goal: goalOn ? text : undefined, accessLevel: access }
+    schedPayload.current = { content, skills, files, opts }
     // ① 落 localStorage：关标签/退出后仍可补发
-    const item: SchedItem = { fire, sessionId, content, skills, files }
+    const item: SchedItem = { fire, sessionId, content, skills, files, opts }
     saveSched([...loadSched(), item])
     if (sessionId) dropDraft(sessionId)
     setValue(''); setAttachedFiles([]); setSelectedSkillIds([])
@@ -802,7 +805,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
         setSchedAt(null); setSchedLeft(0); schedPayload.current = null
         saveSched(loadSched().filter(x => !(x.fire === fire && x.sessionId === sessionId)))
-        if (pl) onSend(pl.content, pl.skills, pl.files as never)
+        if (pl) onSend(pl.content, pl.skills, pl.files as never, pl.opts as never)
       }
     }, 500)
   }
