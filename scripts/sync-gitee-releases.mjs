@@ -77,7 +77,7 @@ if (onlyTag) {
       sha: String(j.target_commitish || ''),
       assets: (Array.isArray(j.assets) ? j.assets : [])
         .filter(a => assetAllowed(a.name))
-        .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
+        .map(a => ({ name: a.name, url: a.browser_download_url, id: a.id, size: a.size })),
     })
   } else {
     console.log(`::warning::GitHub 上没有 ${onlyTag} 的发行版，跳过`)
@@ -170,10 +170,16 @@ for (const rel of releases) {
     for (let i = 0; i < 3 && !ok; i++) {
       try {
         console.log(`→ 下载 ${a.name} ...`)
-        // runner 下载（GitHub CDN → runner，零用户流量）
-        const dl = await fetch(a.url, {
-          headers: { Authorization: `Bearer ${GH_TOKEN || ''}`, 'User-Agent': 'jutian-sync' },
-          signal: AbortSignal.timeout(120_000),
+        // 用 GitHub API 资产端点（api.github.com/.../releases/assets/{id}）：
+        // browser_download_url 会 302 到 objects.githubusercontent.com，带 Authorization
+        // 头跟随重定向会被拒（runner 上卡死数分钟），API 端点由 GitHub 侧代取。
+        const dl = await fetch(`https://api.github.com/repos/${GH_REPO}/releases/assets/${a.id}`, {
+          headers: {
+            Authorization: `Bearer ${GH_TOKEN || ''}`,
+            Accept: 'application/octet-stream',
+            'User-Agent': 'jutian-sync',
+          },
+          signal: AbortSignal.timeout(180_000),
         })
         if (!dl.ok) throw new Error('下载 HTTP ' + dl.status)
         const buf = Buffer.from(await dl.arrayBuffer())
