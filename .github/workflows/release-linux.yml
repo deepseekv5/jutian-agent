@@ -69,3 +69,17 @@ jobs:
         with:
           files: dist-out/*
           fail_on_unmatched_files: true
+
+      - name: 上传安装包到 Gitee（零额外下载）
+        continue-on-error: true
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER || 'deepseekv5' }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_TAG: ${{ github.ref_name }}
+          GITEE_DIST_DIR: dist-out
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::warning::未配置 GITEE_TOKEN secret，跳过 Gitee 附件上传"
+            exit 0
+          fi
+          node scripts/upload-gitee-assets.mjs

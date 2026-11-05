@@ -129,3 +129,24 @@ jobs:
             ${{ matrix.arch == 'x64' && 'release/latest.yml' || 'asar-out/.keep' }}
             ${{ matrix.arch == 'x64' && 'asar-out/*.asar' || 'asar-out/.keep' }}
           fail_on_unmatched_files: false
+
+      - name: 集中产物供 Gitee 上传
+        run: |
+          mkdir -p dist-out
+          cp release/*.exe dist-out/ 2>/dev/null || true
+          cp asar-out/*.asar dist-out/ 2>/dev/null || true
+          ls -la dist-out/
+
+      - name: 上传安装包到 Gitee（零额外下载）
+        continue-on-error: true
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER || 'deepseekv5' }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_TAG: ${{ github.ref_name }}
+          GITEE_DIST_DIR: dist-out
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::warning::未配置 GITEE_TOKEN secret，跳过 Gitee 附件上传"
+            exit 0
+          fi
+          node scripts/upload-gitee-assets.mjs
