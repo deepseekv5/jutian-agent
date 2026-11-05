@@ -229,9 +229,18 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }
 
   const scrollToMessage = useCallback((idx: number) => {
+    // 窗口化（v14.9.2）：目标在窗口外时先展开到全部，等一帧 DOM 挂载再滚
+    if (idx < messages.length - msgWindow) {
+      setMsgWindow(messages.length)
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const el = scrollRef.current?.querySelector(`[data-msg-idx="${idx}"]`) as HTMLElement | null
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }))
+      return
+    }
     const el = scrollRef.current?.querySelector(`[data-msg-idx="${idx}"]`) as HTMLElement | null
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [])
+  }, [messages.length, msgWindow])
 
   // 外部跳转：全局搜索点「消息命中」时，滚动到该消息并高亮闪一下
   // 消息列表可能还在异步加载，重试查找直到出现（最多 ~2s）
