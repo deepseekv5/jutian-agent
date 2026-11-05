@@ -174,6 +174,20 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     confirmTimer.current = setTimeout(() => setConfirmDeleteId(null), 2500)
   }
   const [search, setSearch] = useState('')
+  // 搜索历史（v14.9.2）：最近 10 条，聚焦时回显，点击回填
+  const [searchHist, setSearchHist] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('lyclaw_search_history') || '[]') || [] } catch { return [] }
+  })
+  const [searchFocus, setSearchFocus] = useState(false)
+  const pushSearchHistory = (q: string) => {
+    const t = q.trim()
+    if (!t) return
+    setSearchHist(prev => {
+      const next = [t, ...prev.filter(x => x !== t)].slice(0, 10)
+      try { localStorage.setItem('lyclaw_search_history', JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
   const [msgHits, setMsgHits] = useState<SearchHit[]>([])
   const [titleHits, setTitleHits] = useState<{ id: string; title: string }[]>([])
   const [searching, setSearching] = useState(false)
@@ -280,6 +294,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
     if (!q) { setMsgHits([]); setTitleHits([]); setSearching(false); return }
     setSearching(true)
     searchTimer.current = setTimeout(() => {
+      if (q.trim()) pushSearchHistory(q)
       // 新请求前中止上一个（乱序防护）
       searchCtrlRef.current?.abort()
       const ctrl = new AbortController()
@@ -609,13 +624,24 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           <svg className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} style={{ color: c.textTertiary }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder={t('搜索标题与全部消息', 'Search titles & messages')}
+          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)}
+            onFocus={e => { setSearchFocus(true); e.currentTarget.style.background = c.surfaceCard; e.currentTarget.style.borderColor = c.border }}
+            onBlur={e => { setTimeout(() => setSearchFocus(false), 180); e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+            placeholder={t('搜索标题与全部消息', 'Search titles & messages')}
             className="w-full h-8 rounded-xl text-[12.5px] outline-none transition-colors"
             style={{ background: 'transparent', border: `1px solid transparent`, color: c.text, paddingLeft: 32 }}
-            onFocus={e => { e.currentTarget.style.background = c.surfaceCard; e.currentTarget.style.borderColor = c.border }}
-            onBlur={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
             aria-label="搜索对话" />
         </div>
+        {searchFocus && !search && searchHist.length > 0 && (
+          <div className="flex flex-wrap gap-1 px-1 pt-1.5">
+            {searchHist.map((q) => (
+              <button key={q} onMouseDown={e => { e.preventDefault(); setSearch(q) }}
+                className="px-2 py-0.5 rounded-full text-[10.5px] max-w-[140px] truncate"
+                style={{ background: c.bgInput, color: c.textTertiary }}
+                title="点击填入">{q}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── 子代理进度（AI 派出时显示）── */}
