@@ -33,9 +33,24 @@ const ghApi = async (url) => {
 // ── 1. GitHub 发行版（指定 tag 或全量）──
 const releases = []
 if (onlyTag) {
-  const r = await ghApi(`https://api.github.com/repos/${GH_REPO}/releases/tags/${encodeURIComponent(onlyTag)}`)
-  if (r.ok) {
-    const j = await r.json()
+  // 轮询等待资产（v14.9.1）：tag 推送时 Release 构建工作流还在跑，
+  // 资产要 15~40 分钟后才出现。同步立即跑只会拿到空资产列表。
+  let j = null, lastAssets = -1, waited = 0
+  while (waited < 45) {
+    const r = await ghApi(`https://api.github.com/repos/${GH_REPO}/releases/tags/${encodeURIComponent(onlyTag)}`)
+    if (r.ok) {
+      j = await r.json()
+      const n = Array.isArray(j.assets) ? j.assets.length : 0
+      if (n > 0 && n === lastAssets) break   // 资产数稳定 1 轮即就绪
+      lastAssets = n
+    }
+    if (!j) { console.log(`· 等待 GitHub release 创建（${waited}min）...`); }
+    else console.log(`· 等待资产就绪（${waited}min，当前 ${Array.isArray(j.assets) ? j.assets.length : 0} 个）...`)
+    if (waited >= 45) break
+    waited += 3
+    await new Promise(s2 => setTimeout(s2, 60_000))
+  }
+  if (j) {
     releases.push({
       tag: String(j.tag_name || ''),
       name: String(j.name || j.tag_name || '').slice(0, 50),
