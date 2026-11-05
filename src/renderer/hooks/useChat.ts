@@ -1178,7 +1178,8 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
               id: `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
               sessionId,
               content: userContent,
-              opts: sendOpts ? { ...sendOpts } : undefined,
+              // skills 一并入队（v14.9.2）：drain 重发时带原选择的技能，不再回落全部缓存
+              opts: { ...(sendOpts ? { ...sendOpts } : {}), skills: selectedSkillIds },
               createdAt: Date.now(),
             })
             saveQueue(q)
@@ -1358,7 +1359,15 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       e.skip = true
       throw e
     }
-    await send(item.content, undefined, undefined, item.opts as any)
+    // 修复（v14.9.2 高危）：本会话正在流式/在途时 send 会静默 return，
+    // drain 会把「没发出去」当「发成功」从队列删除——消息静默丢失。
+    // 忙时同样走 skip：条目保留在队列，下一轮 drain 再试。
+    if (streamingRef.current !== null || inFlightRef.current) {
+      const e = new Error('__SKIP_BUSY__') as Error & { skip: boolean }
+      e.skip = true
+      throw e
+    }
+    await send(item.content, item.opts?.skills as string[] | undefined, undefined, item.opts as any)
   })
 
   return {
