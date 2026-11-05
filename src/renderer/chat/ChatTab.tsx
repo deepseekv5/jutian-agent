@@ -427,7 +427,8 @@ export default function ChatTab({ sessionId, settings, onTitleGenerated, onAiTit
                 onRollback={handleRollback}
                 onEditMessage={handleEditMessage}
                 sessionId={sessionId}
-              />
+              contextLimit={Number(settings.contextWindow) || 0}
+            />
               {goal && goalDismissed !== goal.text + goal.status && (
                 <div className="px-6 pt-1 pb-2 shrink-0">
                   <GoalCard goal={goal} onStop={stopGoal} onDismiss={() => setGoalDismissed(goal.text + goal.status)} />

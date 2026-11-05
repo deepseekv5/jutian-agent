@@ -31,6 +31,8 @@ interface Props {
   onEditMessage?: (messageIndex: number, newContent: string) => void
   /** 当前会话 id：分叉需要它定位源会话 */
   sessionId?: string
+  /** 上下文窗口（健康度阈值用真值，此前硬编码 128000 与模型设置脱节） */
+  contextLimit?: number
 }
 
 function dayLabel(ts: unknown, lang: 'zh' | 'en' = 'zh'): string {
@@ -45,7 +47,9 @@ function dayLabel(ts: unknown, lang: 'zh' | 'en' = 'zh'): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 }
 
-export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage, sessionId }: Props) {
+export default function ChatView({ messages, streamingId, chatMode = 'general', onAbort, onRegenerate, onRegenerateAt, onQuickSend, onOpenBrowser, onRollback, onEditMessage, sessionId,
+  contextLimit,
+}: Props) {
   const { lang } = useLanguage()
   // 对话健康度（v12.1）：只在"确实该提醒"时出现，好状态下不占位
   // 性能（v14.9）：流式 flush 只改最后一条内容、不换条数——健康度全量扫描按条数门控，
@@ -60,7 +64,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
     healthRef.current = analyzeHealth({
       messageCount: messages.length,
       usedTokens: used,
-      contextLimit: 128000,   // 通用上限；精确值由输入框的 ContextGauge 展示
+      contextLimit: contextLimit || 128000,   // 传入真值；无则退回通用上限
       toolCalls,
       failedToolCalls: failed,
     })
