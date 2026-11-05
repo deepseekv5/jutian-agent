@@ -2,7 +2,8 @@
 #
 # 触发方式：
 #   1. push main / 打 tag  → 镜像 git + 同步该 tag 的发行版（文本+安装包资产）
-#   2. workflow_dispatch   → mode=sync-history 补全部历史发行版文本（不搬资产，避免数百个安装包）
+#   2. workflow_dispatch   → mode=sync-history 补全部历史发行版文本（不搬资产）
+#      或传 tag=vX.Y.Z   → 同步指定 tag（文本+资产）
 #
 # 令牌来源：Secrets.GITEE_USER/GITEE_TOKEN（推荐），或 dispatch 时传 inputs。
 # 资产流量：GitHub runner 下载 GitHub Releases CDN → 直传 Gitee，用户本机零流量。
@@ -19,6 +20,9 @@ on:
         description: 'mirror 或 sync-history（同步全部历史发行版文本）'
         required: false
         default: 'mirror'
+      tag:
+        description: '指定 tag 同步（文本+资产），如 v14.9.0'
+        required: false
       gitee_user:
         description: 'Gitee 用户名（一次性）'
         required: false
@@ -74,6 +78,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITEE_USER: ${{ secrets.GITEE_USER || inputs.gitee_user || '' }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}
-          GITEE_ONLY_TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ? github.ref_name : '' }}
-          GITEE_SYNC_ASSETS: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ? '1' : '0' }}
+          GITEE_ONLY_TAG: ${{ startsWith(github.ref, 'refs/tags/') ? github.ref_name : (inputs.tag || '') }}
+          GITEE_SYNC_ASSETS: ${{ startsWith(github.ref, 'refs/tags/') || (inputs.tag != '') ? '1' : '0' }}
         run: node scripts/sync-gitee-releases.mjs
