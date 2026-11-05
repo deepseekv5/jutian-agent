@@ -149,6 +149,14 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
 
   // 流结束/切换会话时兜底清除
   useEffect(() => { if (!isStreaming) { setNetPhase(null); setToolDraftName(null) } }, [isStreaming])
+  // 恢复「正在准备调用 XX」状态条（v14.9.2）：事件此前无监听者，
+  // stream.ts 的每 chunk 派发修复后按工具名去重，这里接上即可用
+  useEffect(() => {
+    if (!isStreaming) return
+    const h = (e: Event) => setToolDraftName(String((e as CustomEvent).detail?.name || '') || null)
+    window.addEventListener('chat-tool-draft', h)
+    return () => window.removeEventListener('chat-tool-draft', h)
+  }, [isStreaming])
 
   // 三个操作回调提成稳定引用：MessageBubble 是 memo 组件，若每条消息都传
   // 新建的闭包，memo 永远命中不了——流式期间每 50ms 一次 setMessages 就会

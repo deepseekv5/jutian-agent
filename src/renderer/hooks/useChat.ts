@@ -1168,6 +1168,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         }
         // 网络/超时这类"重试可能成功"的失败：入待发队列，恢复后自动重发。
         // 且 assistant 占位消息要删掉，否则重发后会出现一问两答。
+        let queued = false
         if ((info.kind === 'network' || info.kind === 'timeout') && !fullContent.trim()) {
           try {
             // 修复（v14.9）：会话仍存在校验——流式中删会话后，消息不能进死会话队列
@@ -1183,13 +1184,21 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
               createdAt: Date.now(),
             })
             saveQueue(q)
+            queued = true
             await deleteMessagesAfter(sessionId, assistantMsg.id)  // 清掉空的 assistant 占位
           } catch { /* 入队失败不阻塞错误提示 */ }
         }
         setStreamingId(null)
-        try {
-          setMessages(await listMessages(sessionId))
-        } catch { /* 会话已删除：忽略 */ }
+        // 性能（v14.9.2）：错误收尾也走本地 patch/delete，不再全量 re-fetch
+        if (queued) {
+          setMessages(prev => prev.filter(m => m.id !== assistantMsg.id))
+        } else {
+          patchAssistantFinal(setMessages, sessionId, assistantMsg.id, {
+            content: fullContent || `${info.message}${info.hint ? '\n\n' + info.hint : ''}`,
+            thinking: fullThinking || undefined,
+            ...(allToolCalls.length ? { tool_calls: allToolCalls } : {}),
+          })
+        }
       },
     }
 

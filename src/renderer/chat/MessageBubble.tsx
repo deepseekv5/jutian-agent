@@ -6,6 +6,7 @@ import type { ToolCall } from '../types'
 import { useTheme } from '../hooks/useTheme'
 import { textForSpeech } from '../utils/tts'
 import { recordClip } from '../utils/clipboardHistory'
+import { effectiveApiKey } from '../store/storage'
 import { hasMathSyntax, normalizeMathDelimiters, useMathPlugins } from './useMathPlugins'
 import { extractCodeText, isMermaidLang, isPreviewableHtml } from '../utils/richCode'
 import BrandMark from '../app/BrandMark'
@@ -536,7 +537,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
       try { st = JSON.parse(localStorage.getItem('lyclaw_settings') || '{}') } catch {}
       const r = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Target-Base': st.apiBaseUrl || '', 'X-Api-Key': (st.apiKey || '').replace(/^sk-\*+$/, '') },
+        headers: { 'Content-Type': 'application/json', 'X-Target-Base': st.apiBaseUrl || '', 'X-Api-Key': effectiveApiKey(st.apiKey) },
         body: JSON.stringify({ model: st.model, messages: [{ role: 'system', content: sys }, { role: 'user', content: text }], max_tokens: 4096, stream: false }),
       })
       const d = await r.json()

@@ -326,6 +326,7 @@ export async function streamChat(
       if (!res.body) throw new Error('No response body')
 
       let fullContent = ''
+      const draftAnnouncedNames = new Set<string>()
 
       // 累积式 tool call 收集器
       const toolCallMap = new Map<number, ToolCallAccum>()
@@ -362,11 +363,14 @@ export async function streamChat(
           const parsedTcs = parseToolCallsFromDelta(delta)
           if (parsedTcs) {
             for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
-            // 轻通知：首次开始写工具参数时告知一次（UI 显示轻状态条，非卡片）
-            let draftAnnounced = false
-            if (!draftAnnounced) {
-              draftAnnounced = true
-              callbacks.onToolDraft?.({ name: parsedTcs[0]?.function?.name || '…' })
+            // 轻通知（v14.9.2 修复）：draftAnnounced 原来声明在 chunk 循环体内恒真，
+            // 每个 SSE chunk 都派发一次。提到循环外按工具名去重，每个工具只通知一次。
+            for (const tc of parsedTcs) {
+              const n = tc.function?.name || ''
+              if (n && !draftAnnouncedNames.has(n)) {
+                draftAnnouncedNames.add(n)
+                callbacks.onToolDraft?.({ name: n })
+              }
             }
           }
 
