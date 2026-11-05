@@ -84,17 +84,14 @@ jobs:
         run: |
           # GitHub Actions 表达式不支持 ?: 三元（解析器会报 Unexpected symbol '?'），
           # 判断逻辑放 shell：tag push 用 ref_name，dispatch 用 inputs.tag
+          # 资产由 release-* 工作流直传 Gitee（零下载），这里只同步文本
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             export GITEE_ONLY_TAG="$GITHUB_REF_NAME"
-            export GITEE_SYNC_ASSETS=1
           elif [ -n "$DISPATCH_TAG" ]; then
             export GITEE_ONLY_TAG="$DISPATCH_TAG"
-            export GITEE_SYNC_ASSETS=1
           elif [ "${{ inputs.mode }}" = "sync-history" ]; then
             export GITEE_ONLY_TAG=""
-            export GITEE_SYNC_ASSETS=0
           else
             export GITEE_ONLY_TAG=""
-            export GITEE_SYNC_ASSETS=0
           fi
           node scripts/sync-gitee-releases.mjs
