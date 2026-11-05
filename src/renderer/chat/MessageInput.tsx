@@ -755,15 +755,37 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   useEffect(() => {
     const items = loadSched()
     if (!items.length) return
-    const due = items.filter(x => x.fire <= Date.now())
-    const keep = items.filter(x => x.fire > Date.now())
-    saveSched(keep)
+    const now = Date.now()
+    const due = items.filter(x => x.fire <= now)
+    const keep = items.filter(x => x.fire > now)
     for (const d of due) {
       // 只补发属于本会话的（其他会话的由各自 MessageInput 补）
-      if (d.sessionId && d.sessionId !== sessionId) { keep.push(d); continue }
+      if (d.sessionId && d.sessionId !== sessionId) continue
       if (d.content?.trim()) onSend(d.content, d.skills, d.files as never, d.opts as never)
     }
-    if (keep.length !== items.length) saveSched(keep)
+    // 修复（v14.9.2）：无条件回写 keep——此前「全部 due 都是别人会话」时
+    // 条件守卫不成立、已删的 due 不回写，别人的到期消息被永久删除
+    saveSched(keep)
+    // 修复（v14.9.2）：本会话的未到期条目恢复倒计时与计时器
+    // （此前关标签→重开后 schedAt 丢失，用户无法取消，消息也不触发只能等重挂载）
+    const mine = keep.find(x => (!x.sessionId || x.sessionId === sessionId))
+    if (mine) {
+      schedPayload.current = { content: mine.content, skills: mine.skills, files: mine.files, opts: mine.opts }
+      setSchedAt(mine.fire)
+      setSchedLeft(Math.max(1, Math.ceil((mine.fire - now) / 1000)))
+      if (schedTimer.current) clearInterval(schedTimer.current)
+      schedTimer.current = setInterval(() => {
+        const left = Math.max(0, Math.ceil((mine.fire - Date.now()) / 1000))
+        setSchedLeft(left)
+        if (left <= 0) {
+          const pl = schedPayload.current
+          if (schedTimer.current) { clearInterval(schedTimer.current); schedTimer.current = null }
+          setSchedAt(null); setSchedLeft(0); schedPayload.current = null
+          saveSched(loadSched().filter(x => !(x.fire === mine.fire && x.sessionId === sessionId)))
+          if (pl) onSend(pl.content, pl.skills, pl.files as never, pl.opts as never)
+        }
+      }, 500)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const stopSchedule = () => {
