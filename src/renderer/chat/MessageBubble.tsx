@@ -881,7 +881,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
             if (hasThink && thinkStr.length > tLast) {
               seq.push(<ThinkingBlock key="th-end" text={thinkStr.slice(tLast)} label={thinkBlock === 0 ? firstLabel : '继续思考'} streaming={!!isStreaming} />)
             }
-            if (last < displayContent.length) seq.push(<Text key="t-end" v={displayContent.slice(last)} />)
+            if (last < displayContent.length) seq.push(<Fragment key={''}>{renderText(displayContent.slice(last))}</Fragment>)
             return seq
           }
           return (
