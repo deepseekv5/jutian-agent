@@ -32,6 +32,9 @@ export default function NotificationCenter() {
   const badge = useNoticeBadge()
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'notices' | 'plugins'>('notices')
+  // 通知筛选（v14.9.2）：类型 chips + 文本过滤
+  const [noticeFilter, setNoticeFilter] = useState<'all' | AppNotice['type']>('all')
+  const [noticeQ, setNoticeQ] = useState('')
   const [list, setList] = useState<AppNotice[]>(getNotices)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
@@ -100,17 +103,36 @@ export default function NotificationCenter() {
           {/* ═══ 通知页签 ═══ */}
           {tab === 'notices' && (
             <>
-              <div className="flex items-center px-3.5 h-8 border-b" style={{ borderColor: c.borderLight }}>
+              <div className="flex items-center gap-1 px-3.5 h-8 border-b" style={{ borderColor: c.borderLight }}>
+                {([['all', '全部'], ['swarm', '集群'], ['subagent', '子代理'], ['system', '系统']] as const).map(([k, label]) => (
+                  <button key={k} onClick={() => setNoticeFilter(k)}
+                    className="px-2 py-0.5 rounded-full text-[10px]"
+                    style={noticeFilter === k
+                      ? { background: 'rgba(16,163,127,.15)', color: '#10a37f' }
+                      : { color: c.textTertiary }}>
+                    {label}
+                  </button>
+                ))}
                 <span className="flex-1" />
                 {list.length > 0 && <button onClick={() => { clearNotices(); refresh() }} className="text-[10.5px]" style={{ color: c.textTertiary }}>清空</button>}
               </div>
+              <div className="px-3.5 py-1.5 border-b" style={{ borderColor: c.borderLight }}>
+                <input value={noticeQ} onChange={e => setNoticeQ(e.target.value)}
+                  placeholder="筛选通知内容…"
+                  className="w-full h-7 px-2.5 rounded-lg text-[11.5px] outline-none"
+                  style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+              </div>
               <div className="max-h-[320px] overflow-y-auto scrollbar-thin">
-                {list.length === 0 && (
-                  <div className="px-4 py-8 text-center text-[11.5px]" style={{ color: c.textTertiary }}>
-                    暂无通知。集群任务、子代理、Computer Use 完成后会出现在这里。
-                  </div>
-                )}
-                {list.map(n => {
+                {(() => {
+                  const shown = list.filter(n => (noticeFilter === 'all' || n.type === noticeFilter) && (!noticeQ.trim() || String(n.title || '').includes(noticeQ) || String(n.body || '').includes(noticeQ)))
+                  if (shown.length === 0) {
+                    return (
+                      <div className="px-4 py-8 text-center text-[11.5px]" style={{ color: c.textTertiary }}>
+                        {list.length === 0 ? '暂无通知。集群任务、子代理、Computer Use 完成后会出现在这里。' : '没有匹配的通知'}
+                      </div>
+                    )
+                  }
+                  return shown.map(n => {
                   const meta = TYPE_META[n.type] || TYPE_META.system
                   return (
                     <div key={n.id} className="flex gap-2.5 px-3.5 py-2.5 border-b" style={{ borderColor: c.borderLight, background: n.read ? 'transparent' : 'rgba(16,163,127,.05)' }}>
@@ -127,7 +149,8 @@ export default function NotificationCenter() {
                       </div>
                     </div>
                   )
-                })}
+                  })
+                })()}
               </div>
             </>
           )}
