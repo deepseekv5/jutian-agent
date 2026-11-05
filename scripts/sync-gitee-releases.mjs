@@ -52,17 +52,16 @@ const assetAllowed = (name) => ASSET_ALLOW.some(re => re.test(name))
 // ── 1. GitHub 发行版 ──
 const releases = []
 if (onlyTag) {
-  // tag 推送时 Release 构建工作流还在跑（15~40min），轮询等资产就绪
-  let j = null, stable = 0, waited = 0
+  // tag 推送时 Release 构建工作流还在跑（15~40min），等首次出现资产即开始
+  // （不等"稳定"——构建期资产数持续增长会让稳定判定永不满足）
+  let j = null, waited = 0
   while (waited < 45) {
     const r = await ghApi(`https://api.github.com/repos/${GH_REPO}/releases/tags/${encodeURIComponent(onlyTag)}`)
     if (r.ok) {
       const cur = await r.json()
       const n = Array.isArray(cur.assets) ? cur.assets.length : 0
-      if (j && n > 0 && n === stable) break   // 资产数稳定两轮即就绪
-      stable = n
-      j = cur
-      console.log(`· 等待资产就绪（${waited}min，当前 ${n} 个）...`)
+      if (n > 0) { j = cur; break }
+      console.log(`· 等待资产就绪（${waited}min，当前 0 个）...`)
     } else {
       console.log(`· 等待 GitHub release 创建（${waited}min，HTTP ${r.status}）...`)
     }
