@@ -826,7 +826,10 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           const diffFor = (tc: any) => ((tc.name === 'write_file' || tc.name === 'edit_file') && tc.changeId && tc.status !== 'pending')
             ? <DiffCardView key={'d_' + tc.id} tc={tc} c={c} />
             : null
-          const Text = ({ v }: { v: string }) => !v ? null : (
+          // 性能修复（v14.9.2）：Text 此前是 render 体内定义的组件——每次渲染新类型，
+          // React 按类型不同 unmount+remount，MdInner 的 memo 从未生效（流式 50ms 全量重挂载）。
+          // 改为普通渲染函数：无组件边界，MdInner 元素保留 memo 判定。
+          const renderText = (v: string) => !v ? null: (
             <div>
               <div className="markdown-body" style={{ color: c.msgBotText, fontSize: 'var(--chat-font, 16px)' }}>
                 <MdInner text={v} remark={mdRemark} rehype={mdRehype} link={LinkRenderer} math />
@@ -870,7 +873,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
                 tLast = tCut
               }
               const cut = Math.max(last, Math.min(Number(tc.preLen) || 0, shownContent.length))
-              if (cut > last) seq.push(<Text key={'t' + seq.length} v={displayContent.slice(last, Math.min(cut, displayContent.length))} />)
+              if (cut > last) seq.push(<Fragment key={'t' + seq.length}>{renderText(displayContent.slice(last, Math.min(cut, displayContent.length)))}</Fragment>)
               seq.push(<Fragment key={'c' + tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</Fragment>)
               last = cut
             }
@@ -883,7 +886,7 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
           }
           return (
             <>
-              {shownContent ? <Text v={displayContent} /> : null}
+              {shownContent ? renderText(displayContent) : null}
               {tcs.map(tc => <Fragment key={tc.id}><ToolCallCard tool={tc} />{diffFor(tc)}</Fragment>)}
             </>
           )
