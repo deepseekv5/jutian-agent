@@ -1010,6 +1010,13 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       onDone: async (_full, _toolCalls) => {
         // 流真正结束：清掉"工具参数写入中"等瞬时状态条
         window.dispatchEvent(new CustomEvent('chat-stream-done', { detail: { sessionId } }))
+        // 发送成功清同内容待重试（v14.9.2）：用户网络断→旧消息入队→手动重发成功后，
+        // 网络恢复时队列里那条还会重发一遍，造成重复消息。成功即视为该内容已送达。
+        try {
+          const q = loadQueue()
+          const kept = q.filter(x => !(x.sessionId === sessionId && x.content === userContent))
+          if (kept.length !== q.length) saveQueue(kept)
+        } catch { /* 队列清理失败不影响主流程 */ }
         await updateMessageContent(assistantMsg.id, sessionId, fullContent)
         const flushedVariants = await flushPendingVariants(assistantMsg.id)
         if (fullThinking) {
