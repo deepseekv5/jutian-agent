@@ -55,6 +55,7 @@ if (onlyTag) {
   // tag 推送时 Release 构建工作流还在跑（15~40min），等首次出现资产即开始
   // （不等"稳定"——构建期资产数持续增长会让稳定判定永不满足）
   let j = null, waited = 0
+  console.log(`· GITEE_ONLY_TAG=${onlyTag}，开始检查 GitHub release ...`)
   while (waited < 45) {
     const r = await ghApi(`https://api.github.com/repos/${GH_REPO}/releases/tags/${encodeURIComponent(onlyTag)}`)
     if (r.ok) {
@@ -168,18 +169,20 @@ for (const rel of releases) {
     let ok = false
     for (let i = 0; i < 3 && !ok; i++) {
       try {
+        console.log(`→ 下载 ${a.name} ...`)
         // runner 下载（GitHub CDN → runner，零用户流量）
         const dl = await fetch(a.url, {
           headers: { Authorization: `Bearer ${GH_TOKEN || ''}`, 'User-Agent': 'jutian-sync' },
-          signal: AbortSignal.timeout(600_000),
+          signal: AbortSignal.timeout(120_000),
         })
         if (!dl.ok) throw new Error('下载 HTTP ' + dl.status)
         const buf = Buffer.from(await dl.arrayBuffer())
+        console.log(`→ 上传 ${a.name}（${Math.round(buf.length / 1048576)}MB）到 Gitee ...`)
         // Gitee 附件端点：POST /releases/{id}/attach_files，字段名 file，token 在 query
         const fd = new FormData()
         fd.append('file', new Blob([buf], { type: 'application/octet-stream' }), a.name)
         const up = await fetch(GEE(`/releases/${geId}/attach_files`), {
-          method: 'POST', body: fd, signal: AbortSignal.timeout(600_000),
+          method: 'POST', body: fd, signal: AbortSignal.timeout(120_000),
         })
         if (up.ok) { assetDone++; console.log(`✓ 资产 ${a.name}（${Math.round(buf.length / 1048576)}MB）`); ok = true }
         else throw new Error('上传 HTTP ' + up.status + ' ' + (await up.text()).slice(0, 120))
