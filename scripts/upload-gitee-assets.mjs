@@ -19,11 +19,14 @@ import { execFileSync } from 'node:child_process'
 // 的连接池问题），但 git push 走系统网络栈正常。这里统一用 curl（同系统栈）。
 const curl = (args, timeoutSec = 60) => {
   const out = execFileSync('curl', ['-sS', '-m', String(timeoutSec), ...args], {
-    encoding: 'utf8', maxBuffer: 20 * 1024 * 1024,
+    encoding: 'utf8', maxBuffer: 30 * 1024 * 1024,
   })
   return out
 }
 const curlJson = (args, timeoutSec = 60) => JSON.parse(curl(args, timeoutSec) || '{}')
+const giteeJsonSafe = (url) => {
+  try { return curlJson(['-H', 'Accept: application/json', url], 20) } catch { return null }
+}
 
 const USER = process.env.GITEE_USER || ''
 const TOKEN = process.env.GITEE_TOKEN || ''
@@ -63,10 +66,21 @@ try {
 console.log(`已有附件: ${have.size}`)
 
 // 3. 上传 dist-out 里的文件
-const files = readdirSync(DIR).filter(f => !f.endsWith('.blockmap') && !f.startsWith('latest'))
+// runner→Gitee 大文件（>30MB）实测连不上/卡 15min，只搬小体积文件：
+// 24MB 的 app.asar 更新包 + 手机 APK（65KB）。完整安装包仍从 GitHub Release 下载。
+const MAX_BYTES = 30 * 1024 * 1024
+const files = readdirSync(DIR).filter(f => {
+  if (f.endsWith('.blockmap') || f.startsWith('latest')) return false
+  try { return readFileSync(join(DIR, f)).length <= MAX_BYTES } catch { return false }
+})
 let done = 0, fail = 0
 for (const name of files) {
   if (have.has(name)) { console.log('· 已存在', name); continue }
+  // 并发竞态：多个平台 job 同时上传同名文件，上传前再查一次 Gitee
+  try {
+    const cur = giteeJsonSafe(GEE(`/releases/${releaseId}/attach_files`))
+    if (Array.isArray(cur) && cur.some(a => a.name === name)) { console.log('· 已被其他 job 上传', name); continue }
+  } catch { /* 查失败就按原逻辑 */ }
   const buf = readFileSync(join(DIR, name))
   let ok = false
   for (let i = 0; i < 3 && !ok; i++) {
