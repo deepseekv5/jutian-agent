@@ -41,8 +41,32 @@ if (onlyTag) {
       sha: String(j.target_commitish || ''),
     })
   } else {
-    console.log(`::warning::GitHub 上没有 ${onlyTag} 的发行版（构建工作流可能尚未创建），跳过`)
-    process.exit(0)
+    // tag push 时构建工作流刚启动，GitHub Release 还不存在——
+    // 用 tag + commit 信息直接建 Gitee 发行版（资产由 release 工作流随后补）
+    const tagInfo = await ghApi(`https://api.github.com/repos/${GH_REPO}/git/ref/tags/${encodeURIComponent(onlyTag)}`)
+    let sha = ''
+    if (tagInfo.ok) {
+      const t = await tagInfo.json()
+      sha = String(t.object?.sha || '')
+      if (t.object?.type === 'tag') {
+        const at = await ghApi(`https://api.github.com/repos/${GH_REPO}/git/tags/${sha}`)
+        if (at.ok) sha = String((await at.json()).object?.sha || sha)
+      }
+    }
+    if (!sha) {
+      console.log(`::warning::GitHub 上既无 ${onlyTag} 的发行版也无该 tag，跳过`)
+      process.exit(0)
+    }
+    let msg = ''
+    const c = await ghApi(`https://api.github.com/repos/${GH_REPO}/commits/${sha}`)
+    if (c.ok) msg = String((await c.json()).commit?.message || '').split('\n')[0]
+    releases.push({
+      tag: onlyTag,
+      name: onlyTag,
+      body: `${onlyTag}\n\n${msg || '见 GitHub Release。'}`.slice(0, 1000),
+      sha,
+    })
+    console.log(`· GitHub Release 尚未创建，用 tag ${onlyTag} (${sha.slice(0,7)}) 直接建 Gitee 发行版`)
   }
 } else {
   for (let page = 1; page <= 3; page++) {
