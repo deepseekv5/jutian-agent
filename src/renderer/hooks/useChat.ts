@@ -839,7 +839,10 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     // ─── 上下文自动压缩：超过阈值时把较早历史折叠成 AI 摘要 ───
     // 策略（保留区按 token 反推、摘要长度封顶、失败不丢历史）见 engine/contextCompress
     {
-      const plan = planCompression(apiMessages as ApiMsgLike[], estimateTokens)
+      const plan = planCompression(apiMessages as ApiMsgLike[], estimateTokens, {
+        pct: Number((settings as any).autoCompactPct) || 70,
+        ctxWindow: Number(settings.contextWindow) || 0,
+      })
       if (plan.shouldCompress && plan.oldChunk.length > 0) {
         let summary = await loadCtxSummary(sessionId)
         try {

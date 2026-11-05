@@ -62,11 +62,17 @@ export interface CompressPlan {
 export function planCompression(
   messages: ApiMsgLike[],
   estimate: (s: string) => number,
+  opts?: { /** 用户设置的压缩触发百分比（autoCompactPct，默认 70） */ pct?: number; /** 上下文窗口大小，决定 token 阈值换算 */ ctxWindow?: number },
 ): CompressPlan {
   // messages[0] 是系统提示，始终保留
   const body = messages.slice(1)
   const total = estimateMessagesTokens(messages, estimate)
-  const shouldCompress = total > COMPRESS_TOKEN_THRESHOLD || body.length > COMPRESS_MSG_THRESHOLD
+  // 接线 autoCompactPct（v14.9.2）：此前设置页的滑杆在主聊天完全无效——
+  // 阈值一直是硬编码 40K。现在按 ctxWindow × pct% 换算；无窗口信息时退回旧阈值。
+  const tokenThreshold = opts?.ctxWindow && opts.pct
+    ? Math.max(8_000, Math.floor(opts.ctxWindow * opts.pct / 100))
+    : COMPRESS_TOKEN_THRESHOLD
+  const shouldCompress = total > tokenThreshold || body.length > COMPRESS_MSG_THRESHOLD
   if (!shouldCompress) return { shouldCompress: false, oldChunk: [], recent: body }
 
   // 从末尾往前累加，直到超出 token 预算（但至少保留 KEEP_RECENT_MIN 条）
