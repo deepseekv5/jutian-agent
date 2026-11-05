@@ -131,6 +131,7 @@ jobs:
           fail_on_unmatched_files: false
 
       - name: 集中产物供 Gitee 上传
+        shell: bash
         run: |
           mkdir -p dist-out
           cp release/*.exe dist-out/ 2>/dev/null || true
@@ -138,6 +139,7 @@ jobs:
           ls -la dist-out/
 
       - name: 上传安装包到 Gitee（零额外下载）
+        shell: bash
         continue-on-error: true
         env:
           GITEE_USER: ${{ secrets.GITEE_USER || 'deepseekv5' }}
