@@ -75,7 +75,7 @@ export default function CodeView({ settings, onBack }: Props) {
   const code = useCodeProject()
   // 解构出 hook 返回对象的具体成员：身份与 code.xxx 一致（state / useCallback），
   // 但可直接进依赖数组，避免把每次渲染都新建的 code 对象本身当成依赖
-  const { setActiveProjectId, openFile, tabs, closeTab } = code
+  const { setActiveProjectId, openFile, tabs, closeTab, refreshTree } = code
   const [showNewProject, setShowNewProject] = useState(false)
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false)
   // 运行
@@ -140,6 +140,17 @@ export default function CodeView({ settings, onBack }: Props) {
     } else { setScrollTargetLine(undefined); setHighlightLines([]) }
     setFollowTarget(null)
   }, [followTarget, followMode, openFile])
+
+  // 打开来自聊天代码块的片段（v14.9.2）：refreshTree 后定位文件
+  useEffect(() => {
+    const h = (e: Event) => {
+      const { path, name } = (e as CustomEvent).detail || {}
+      if (!path) return
+      refreshTree().then(() => openFile(path, name || path.split('/').pop() || 'snippet')).catch(() => {})
+    }
+    window.addEventListener('code-open-file', h)
+    return () => window.removeEventListener('code-open-file', h)
+  }, [refreshTree, openFile])
 
   const handleFileChanged = useCallback((info: FileChangeInfo) => {
     setChangedLinesMap(prev => ({ ...prev, [info.filePath]: info.lines }))

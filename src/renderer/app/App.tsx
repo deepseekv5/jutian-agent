@@ -388,6 +388,33 @@ function MainApp() {
     return () => clearTimeout(t);
   }, []);
 
+  // 代码块「在 Code 打开」（v14.9.2）：把片段写进工作区 .jutian-snippets/ 后打开 Code 标签
+  useEffect(() => {
+    const h = async (e: Event) => {
+      try {
+        const { content, lang } = (e as CustomEvent).detail as { content: string; lang?: string }
+        if (!content?.trim()) return
+        const extMap: Record<string, string> = { javascript: 'js', typescript: 'ts', python: 'py', shell: 'sh', bash: 'sh', html: 'html', css: 'css', json: 'json', markdown: 'md', sql: 'sql', yaml: 'yml' }
+        const ext = extMap[String(lang || '').toLowerCase()] || (String(lang || 'text').slice(0, 4) || 'txt')
+        const name = 'snippet-' + Date.now().toString(36) + '.' + ext
+        const wd = JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').workDir || ''
+        const path = (wd ? wd.replace(/\/$/, '') : '') + '/.jutian-snippets/' + name
+        const r = await fetchCompat('/api/code/write-file', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, content }),
+        })
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        openTabRef.current('code')
+        // CodeView 挂载后监听此事件打开文件
+        setTimeout(() => window.dispatchEvent(new CustomEvent('code-open-file', { detail: { path, name } })), 600)
+      } catch (err) {
+        window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '在 Code 打开失败：' + String((err as Error)?.message || err) }))
+      }
+    }
+    window.addEventListener('open-in-code', h)
+    return () => window.removeEventListener('open-in-code', h)
+  }, [])
+
   // 应用内剪贴板历史（v14.9）：copy 事件记录 + Cmd+Shift+B 通知输入框开面板
   useEffect(() => {
     const onCopy = () => {

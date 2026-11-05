@@ -303,6 +303,14 @@ function CodeBlock({ children }: { children?: any }) {
                 style={{ background: view === 'preview' ? c.bgInput : 'transparent', color: view === 'preview' ? c.text : c.textTertiary }}>预览</button>
             </div>
           )}
+          <button onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-in-code', { detail: { content: raw, lang } }))
+          }} title="在 Code 模式打开">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+            </svg>
+            Code
+          </button>
           <button onClick={copy} title="复制代码">
             {copied ? (
               <>
