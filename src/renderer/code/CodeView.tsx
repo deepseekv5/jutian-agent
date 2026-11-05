@@ -146,7 +146,8 @@ export default function CodeView({ settings, onBack }: Props) {
     const h = (e: Event) => {
       const { path, name } = (e as CustomEvent).detail || {}
       if (!path) return
-      refreshTree().then(() => openFile(path, name || path.split('/').pop() || 'snippet')).catch(() => {})
+      try { refreshTree() } catch { /* ignore */ }
+      setTimeout(() => openFile(path, name || path.split('/').pop() || 'snippet'), 150)
     }
     window.addEventListener('code-open-file', h)
     return () => window.removeEventListener('code-open-file', h)
