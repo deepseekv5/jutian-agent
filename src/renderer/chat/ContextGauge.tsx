@@ -24,6 +24,10 @@ export default function ContextGauge({ parts, limit, compact: _compact = false }
 
   const total = parts.reduce((s, p) => s + p.tokens, 0)
   const frac = Math.min(total / effectiveLimit, 1)
+  // gauge-level（v14.9.2）：分级变色预警——>70% 橙、>90% 红，一眼看出快满了
+  const level = frac > 0.9 ? 2 : frac > 0.7 ? 1 : 0
+  const levelColor = level === 2 ? '#ef4444' : level === 1 ? '#f59e0b' : c.accent
+  const levelHint = level === 2 ? '即将耗尽：老消息会被自动裁剪' : level === 1 ? '偏高：可开新会话或清理历史' : '上下文用量'
 
   useEffect(() => {
     if (!open) return
@@ -48,7 +52,7 @@ export default function ContextGauge({ parts, limit, compact: _compact = false }
         onClick={() => setOpen(v => !v)}
         className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg transition-colors"
         style={{ color: c.textMuted }}
-        title="上下文用量"
+        title={levelHint}
         onMouseEnter={e => { e.currentTarget.style.background = c.bgInput }}
         onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
         <svg width={48} height={33} viewBox="0 0 48 33">
@@ -61,12 +65,12 @@ export default function ContextGauge({ parts, limit, compact: _compact = false }
           {total > 0 && (
             <path
               d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-              fill="none" stroke={c.accent} strokeWidth={stroke} strokeLinecap="round"
+              fill="none" stroke={levelColor} strokeWidth={stroke} strokeLinecap="round"
               strokeDasharray={`${filled} ${arcLen}`}
             />
           )}
           {/* 中心数值 */}
-          <text x={cx} y={cy - 3} textAnchor="middle" fontSize="8.5" fontWeight="600" fill={c.textSecondary}>
+          <text x={cx} y={cy - 3} textAnchor="middle" fontSize="8.5" fontWeight="600" fill={level === 2 ? '#ef4444' : c.textSecondary}>
             {fmtPercent(frac)}
           </text>
           <text x={cx} y={cy + 8} textAnchor="middle" fontSize="6.5" fill={c.textMuted}>
@@ -79,6 +83,11 @@ export default function ContextGauge({ parts, limit, compact: _compact = false }
       {open && (
         <div className="absolute bottom-8 right-0 z-50 rounded-xl shadow-lg border p-3.5 w-72"
           style={{ background: c.modalBg, borderColor: c.border }}>
+          {level > 0 && (
+            <div className="mb-2.5 px-2.5 py-1.5 rounded-lg text-[11px]" style={{ background: level === 2 ? 'rgba(239,68,68,.10)' : 'rgba(245,158,11,.10)', color: levelColor }}>
+              {levelHint}
+            </div>
+          )}
           <div className="flex items-baseline justify-between mb-2.5">
             <span className="text-[12px] font-semibold" style={{ color: c.textHead }}>上下文占用</span>
             <span className="text-[11px] font-mono" style={{ color: c.textMuted }}>
