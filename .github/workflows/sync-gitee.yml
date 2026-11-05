@@ -1,11 +1,11 @@
-# Gitee 镜像同步（v14.8.4）
+# Gitee 镜像同步（v14.9.1）
 #
 # 触发方式：
-#   1. push main / 打 tag  → 自动镜像 git
-#   2. workflow_dispatch   → mode=mirror（只推 git）或 mode=sync-history（补全部历史发行版）
+#   1. push main / 打 tag  → 镜像 git + 同步该 tag 的发行版（文本+安装包资产）
+#   2. workflow_dispatch   → mode=sync-history 补全部历史发行版文本（不搬资产，避免数百个安装包）
 #
-# 令牌来源：Secrets.GITEE_USER/GITEE_TOKEN（推荐），或 dispatch 时传 inputs.gitee_user/gitee_token。
-# 发行版同步逻辑在 scripts/sync-gitee-releases.mjs（GitHub 服务器端运行，零本机流量）。
+# 令牌来源：Secrets.GITEE_USER/GITEE_TOKEN（推荐），或 dispatch 时传 inputs。
+# 资产流量：GitHub runner 下载 GitHub Releases CDN → 直传 Gitee，用户本机零流量。
 
 name: Sync Gitee
 
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'mirror 或 sync-history（同步全部历史发行版）'
+        description: 'mirror 或 sync-history（同步全部历史发行版文本）'
         required: false
         default: 'mirror'
       gitee_user:
@@ -65,24 +65,15 @@ jobs:
 
   sync-releases:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
-      # v14.8.4 修复：必须先 checkout 才有 scripts/sync-gitee-releases.mjs
       - uses: actions/checkout@v4
 
-      - name: 同步当前 tag 的发行版
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      - name: 同步发行版（tag 推送：文本+资产；手动：历史文本）
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITEE_USER: ${{ secrets.GITEE_USER || inputs.gitee_user || '' }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}
-          GITEE_ONLY_TAG: ${{ github.ref_name }}
-        run: node scripts/sync-gitee-releases.mjs
-
-      - name: 同步全部历史发行版（手动触发 mode=sync-history）
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'sync-history'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITEE_USER: ${{ secrets.GITEE_USER || inputs.gitee_user || '' }}
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN || inputs.gitee_token || '' }}
+          GITEE_ONLY_TAG: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ? github.ref_name : '' }}
+          GITEE_SYNC_ASSETS: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ? '1' : '0' }}
         run: node scripts/sync-gitee-releases.mjs
