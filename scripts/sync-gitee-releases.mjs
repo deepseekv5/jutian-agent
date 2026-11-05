@@ -29,6 +29,26 @@ const ghApi = (url) => fetch(url, {
 })
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
+// 资产白名单（v14.9.2）：29 个资产里含大量 blockmap / latest.yml /
+// 重复别名（agent-* 与 jutian-agent-* 是同一份包），全传会耗 runner 时间且
+// 触发 Gitee 附件数限制。只保留各平台主安装包 + asar 更新包。
+const ASSET_ALLOW = [
+  /-app\.asar$/i,
+  /jutian-agent-[\d.]+-x64\.dmg$/i,
+  /jutian-agent-[\d.]+-arm64\.dmg$/i,
+  /jutian-agent-[\d.]+-x64-setup\.exe$/i,
+  /jutian-agent-[\d.]+-arm64-setup\.exe$/i,
+  /jutian-agent-[\d.]+_amd64\.deb$/i,
+  /jutian-agent-[\d.]+_arm64\.deb$/i,
+  /jutian-agent-[\d.]+-x86_64\.AppImage$/i,
+  /jutian-agent-[\d.]+-arm64\.AppImage$/i,
+  /jutian-local-[\d.]+\.apk$/i,
+  /jutian-remote-[\d.]+\.apk$/i,
+  /jutian-mobile-[\d.]+\.zip$/i,
+]
+const assetAllowed = (name) => ASSET_ALLOW.some(re => re.test(name))
+
+
 // ── 1. GitHub 发行版 ──
 const releases = []
 if (onlyTag) {
@@ -55,7 +75,9 @@ if (onlyTag) {
       name: String(j.name || j.tag_name || '').slice(0, 50),
       body: String(j.body || '').trim(),
       sha: String(j.target_commitish || ''),
-      assets: Array.isArray(j.assets) ? j.assets.map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })) : [],
+      assets: (Array.isArray(j.assets) ? j.assets : [])
+        .filter(a => assetAllowed(a.name))
+        .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
     })
   } else {
     console.log(`::warning::GitHub 上没有 ${onlyTag} 的发行版，跳过`)
