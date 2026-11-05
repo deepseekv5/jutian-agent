@@ -10,8 +10,20 @@
 //   GITEE_TAG        tag 名（如 v14.9.0）
 //   GITEE_DIST_DIR   产物目录（默认 dist-out）
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { execFileSync } from 'node:child_process'
+
+// GitHub Actions runner 的 Node fetch 连 Gitee 会 ConnectTimeoutError（境外→Gitee
+// 的连接池问题），但 git push 走系统网络栈正常。这里统一用 curl（同系统栈）。
+const curl = (args, timeoutSec = 60) => {
+  const out = execFileSync('curl', ['-sS', '-m', String(timeoutSec), ...args], {
+    encoding: 'utf8', maxBuffer: 20 * 1024 * 1024,
+  })
+  return out
+}
+const curlJson = (args, timeoutSec = 60) => JSON.parse(curl(args, timeoutSec) || '{}')
 
 const USER = process.env.GITEE_USER || ''
 const TOKEN = process.env.GITEE_TOKEN || ''
@@ -30,9 +42,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 // 1. 找该 tag 的 Gitee 发行版 id（分页）
 let releaseId = ''
 for (let page = 1; page <= 3 && !releaseId; page++) {
-  const r = await fetch(GEE('/releases', `per_page=100&page=${page}`), { signal: AbortSignal.timeout(30000) })
-  if (!r.ok) break
-  const list = await r.json()
+  const list = curlJson(['-H', 'Accept: application/json', GEE('/releases', `per_page=100&page=${page}`)], 30)
   if (!Array.isArray(list)) break
   const hit = list.find(x => x.tag_name === TAG)
   if (hit) releaseId = String(hit.id)
@@ -47,11 +57,8 @@ console.log(`Gitee ${TAG} 发行版 id: ${releaseId}`)
 // 2. 已有附件名（去重）
 const have = new Set()
 try {
-  const r = await fetch(GEE(`/releases/${releaseId}/attach_files`), { signal: AbortSignal.timeout(30000) })
-  if (r.ok) {
-    const list = await r.json()
-    if (Array.isArray(list)) for (const a of list) have.add(a.name)
-  }
+  const list = curlJson(['-H', 'Accept: application/json', GEE(`/releases/${releaseId}/attach_files`)], 30)
+  if (Array.isArray(list)) for (const a of list) have.add(a.name)
 } catch { /* 查不到就按不去重 */ }
 console.log(`已有附件: ${have.size}`)
 
@@ -64,13 +71,12 @@ for (const name of files) {
   let ok = false
   for (let i = 0; i < 3 && !ok; i++) {
     try {
-      const fd = new FormData()
-      fd.append('file', new Blob([buf], { type: 'application/octet-stream' }), name)
-      const r = await fetch(GEE(`/releases/${releaseId}/attach_files`), {
-        method: 'POST', body: fd, signal: AbortSignal.timeout(300_000),
-      })
-      if (r.ok) { done++; console.log(`✓ ${name}（${Math.round(buf.length / 1048576)}MB）`); ok = true }
-      else throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120))
+      const tmp = join(mkdtempSync(join(tmpdir(), 'jt-')), name)
+      writeFileSync(tmp, buf)
+      const res = curl(['-X', 'POST', '-F', `file=@${tmp}`, '-w', '\n%{http_code}', GEE(`/releases/${releaseId}/attach_files`)], 300)
+      const code = Number(res.trim().split('\n').pop())
+      if (code >= 200 && code < 300) { done++; console.log(`✓ ${name}（${Math.round(buf.length / 1048576)}MB）`); ok = true }
+      else throw new Error('HTTP ' + code + ' ' + res.slice(0, 120))
     } catch (e) {
       console.log(`· ${name} 失败：${String(e.message || e).slice(0, 120)}，重试...`)
       await sleep(3000 * (i + 1))

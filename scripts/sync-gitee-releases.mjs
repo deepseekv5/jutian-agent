@@ -10,6 +10,14 @@
 //   GITEE_TOKEN       Gitee 私人令牌
 //   GITEE_ONLY_TAG    只同步该 tag；为空=补全部历史
 
+import { execFileSync } from 'node:child_process'
+
+// runner 的 Node fetch 连 Gitee 偶发 ConnectTimeoutError，统一用 curl（同 git push 的系统网络栈）
+const curl = (args, timeoutSec = 60) => execFileSync('curl', ['-sS', '-m', String(timeoutSec), ...args], {
+  encoding: 'utf8', maxBuffer: 20 * 1024 * 1024,
+})
+const giteeJson = (url, timeoutSec = 30) => JSON.parse(curl(['-H', 'Accept: application/json', url], timeoutSec) || '{}')
+
 const GH_REPO = 'deepseekv5/jutian-agent'
 const GITEE_REPO = `${process.env.GITEE_USER || ''}/jutian-agent`
 const GH_TOKEN = process.env.GITHUB_TOKEN
@@ -90,9 +98,7 @@ console.log(`待同步发行版: ${releases.length}`)
 // ── 2. Gitee 已有发行版 ──
 const have = new Set()
 for (let page = 1; page <= 3; page++) {
-  const r = await fetch(GEE('/releases', `per_page=100&page=${page}`), { signal: AbortSignal.timeout(30000) })
-  if (!r.ok) break
-  const list = await r.json()
+  const list = giteeJson(GEE('/releases', `per_page=100&page=${page}`))
   if (!Array.isArray(list) || !list.length) break
   for (const x of list) have.add(x.tag_name)
   if (list.length < 100) break
@@ -106,18 +112,18 @@ for (const rel of releases) {
   let ok = false
   for (let i = 0; i < 3 && !ok; i++) {
     // Gitee POST token 必须 query；target_commitish 必填
-    const r = await fetch(GEE('/releases'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(30000),
-      body: JSON.stringify({
+    const res = curl([
+      '-X', 'POST', '-H', 'Content-Type: application/json',
+      '-d', JSON.stringify({
         tag_name: rel.tag,
         name: rel.name,
         body: rel.body || `${rel.name}：见 GitHub Release 完整说明。`,
         target_commitish: rel.sha,
       }),
-    })
-    ok = r.ok
+      '-w', '\n%{http_code}', GEE('/releases'),
+    ], 30)
+    const code = Number(res.trim().split('\n').pop())
+    ok = code >= 200 && code < 300
     if (!ok) await sleep(2000 * (i + 1))
   }
   if (ok) { done++; console.log('✓', rel.tag) }
