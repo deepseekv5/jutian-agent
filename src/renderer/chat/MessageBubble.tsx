@@ -520,6 +520,8 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
   // 单条消息翻译（v14.9）：中→英 / 英→中 自动判向，结果内联展示
   const [translated, setTranslated] = useState('')
   const [translating, setTranslating] = useState(false)
+  // 翻译随内容失效（v14.9.2）：切换分支/重新生成后旧译文对应的是旧内容
+  useEffect(() => { setTranslated('') }, [shownContent])
   const translateMessage = async () => {
     if (translated) { setTranslated(''); return }
     const text = textForSpeech(shownContent).slice(0, 4000)
