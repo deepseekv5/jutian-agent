@@ -2844,8 +2844,36 @@ var lastRelayUsed = "";
 // 安全取向见 shared/localApi（有测试）：默认关闭；只认显式生成的 Key；
 // 本机 Key 与局域网 Key 互不通用；局域网范围未开时外部请求一律拒绝。
 var LOCAL_API_MOD = (() => { try { return require("./src/shared/localApi.cjs"); } catch (e) { console.error("localApi.cjs load failed:", e.message); return null; } })();
+var LOCAL_ACTIVITY = (() => { try { return require("./src/shared/localActivity.cjs"); } catch (e) { console.error("localActivity.cjs load failed:", e.message); return null; } })();
 var localApiServer = null;
 var localApiConfig = { enabled: false, port: 18080, scope: "local", key: "", lanKey: "" };
+// ─── 本地 API 实时活动（v14.11.2）───
+// 内存是唯一实时数据源，落盘供设置页轮询读取（最近 30 条）。
+var __laList = [];
+var __laFlushT = null;
+function laSave() {
+  if (!LOCAL_ACTIVITY) return;
+  try {
+    const f = path.join(DATA_DIR, LOCAL_ACTIVITY.LA_FILE || "local-api-activity.json");
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify(__laList, null, 2), "utf-8");
+  } catch { /* 落盘失败只丢历史，不影响实时内存 */ }
+}
+function laPush(entry) {
+  if (!LOCAL_ACTIVITY) return null;
+  __laList = LOCAL_ACTIVITY.appendActivity(__laList, entry);
+  if (__laFlushT) clearTimeout(__laFlushT);
+  __laFlushT = setTimeout(laSave, 400); // 防抖落盘（流式 done 频繁时只落一次）
+  return __laList[0] || null;
+}
+function laLoad() {
+  if (!LOCAL_ACTIVITY) return;
+  try {
+    const f = path.join(DATA_DIR, LOCAL_ACTIVITY.LA_FILE || "local-api-activity.json");
+    if (fs.existsSync(f)) __laList = LOCAL_ACTIVITY.sanitizeActivity(JSON.parse(fs.readFileSync(f, "utf-8")));
+  } catch { __laList = []; }
+}
+laLoad();
 
 function localApiFromLoopback(req) {
   const ra = String(req.socket?.remoteAddress || "");
@@ -2938,6 +2966,17 @@ async function localApiHandler(req, res) {
     if (!parsed.model) {
       try { parsed.model = (db.getSetting ? db.getSetting("model") : "") || ""; } catch {}
     }
+    // 实时活动：记录「谁在用 + 问了什么」（v14.11.2）
+    const __laT0 = Date.now();
+    laPush({
+      source: LOCAL_ACTIVITY ? LOCAL_ACTIVITY.normalizeSource(req.headers["user-agent"], fromLoop) : "本机",
+      origin: fromLoop ? "local" : "lan",
+      path: url.pathname,
+      model: parsed.model || "",
+      preview: LOCAL_ACTIVITY ? LOCAL_ACTIVITY.previewOf(parsed.messages?.at(-1)?.content) : "",
+      status: "started",
+    });
+    const __laId = __laList[0]?.id || "";
     try {
       const upstream = await fetch(`http://127.0.0.1:${PORT}/api/llm-proxy`, {
         method: "POST",
@@ -2957,20 +2996,37 @@ async function localApiHandler(req, res) {
         body: JSON.stringify(parsed),
       });
       // 原样透传（含 SSE 流），客户端拿到的语义与直连上游一致
+      // 上游非 2xx：记为失败（客户端能看到真实状态码）
+      if (upstream.status < 200 || upstream.status >= 300) {
+        const errText = await upstream.text().catch(() => "");
+        laPush({ id: __laId, status: "error", error: ("HTTP " + upstream.status + " " + errText).slice(0, 120), totalMs: Date.now() - __laT0 });
+        res.writeHead(upstream.status, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+        });
+        return res.end(errText || JSON.stringify({ error: { message: "上游返回 HTTP " + upstream.status } }));
+      }
       res.writeHead(upstream.status, {
         "Content-Type": upstream.headers.get("content-type") || "application/json",
         "Cache-Control": "no-cache",
       });
+      let __laFirst = true;
       if (upstream.body) {
         const reader = upstream.body.getReader();
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          if (__laFirst && value && value.length) {
+            __laFirst = false;
+            laPush({ id: __laId, status: "started", ttft: Date.now() - __laT0 });
+          }
           res.write(Buffer.from(value));
         }
       }
+      laPush({ id: __laId, status: "done", totalMs: Date.now() - __laT0 });
       res.end();
     } catch (e) {
+      laPush({ id: __laId, status: "error", error: String(e?.message || e).slice(0, 120), totalMs: Date.now() - __laT0 });
       return jsonOut({ error: { message: String(e?.message || e), type: "upstream_error" } }, 502);
     }
     return;
@@ -4554,6 +4610,10 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     }
 
     // GET /api/settings — 统一走 SQLite
+    // ─── 本地 API 实时活动（v14.11.2）：供设置页轮询「谁在用、正在回复什么」───
+    if (url.pathname === "/api/local-api/activity" && req.method === "GET") {
+      return json(res, { items: __laList });
+    }
     if (url.pathname === "/api/settings" && req.method === "GET") {
       let obj = null;
       if (hasDb) {

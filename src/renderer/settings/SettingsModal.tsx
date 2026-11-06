@@ -20,6 +20,7 @@ import { isWindows } from '../utils/platform';
 import { recommendModels, inferCapability, TASK_LABEL, type TaskKind } from '../../shared/modelCapability';
 import { successRates, type ModelSuccessRate } from '../../shared/usageCost';
 import { fetchCompat } from '../api'
+import { relTime } from '../../shared/localActivity'
 
 interface Props {
   settings: Settings;
@@ -146,6 +147,21 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
     enabled: false, port: 18080, scope: 'local', key: '', lanKey: '',
   });
   const [localApiMsg, setLocalApiMsg] = useState('');
+  // 实时活动（v14.11.2）：谁在用本地 API、正在回复什么。开启时 3s 轮询。
+  const [laActivity, setLaActivity] = useState<import('../../shared/localActivity').LocalApiActivity[]>([])
+  const [laNow, setLaNow] = useState(Date.now())
+  const loadLaActivity = useCallback(async () => {
+    try {
+      const d = await fetchCompat('/api/local-api/activity').then(r => r.json())
+      setLaActivity(Array.isArray(d?.items) ? d.items : [])
+    } catch { /* 离线/未重启，保留旧列表 */ }
+  }, [])
+  useEffect(() => {
+    if (!localApi.enabled) return
+    loadLaActivity()
+    const iv = setInterval(() => { loadLaActivity(); setLaNow(Date.now()) }, 3000)
+    return () => clearInterval(iv)
+  }, [localApi.enabled, loadLaActivity]);
   const loadLocalApi = useCallback(async () => {
     try {
       const d = await fetchCompat('/api/settings').then(r => r.json());
@@ -1597,6 +1613,52 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   )}
                 </div>
               </Sub>
+
+              {/* 实时活动：谁在用、正在回复什么 */}
+              {localApi.enabled && (
+                <Sub c={c} title={t('实时活动', 'Live activity')}>
+                  {laActivity.length === 0 ? (
+                    <div className="text-[11.5px] py-2" style={{ color: c.textTertiary }}>
+                      {t('还没有外部调用。编辑器插件、脚本或局域网设备调用 /v1/chat/completions 时，这里会实时显示谁在问、回复进度。',
+                         'No external calls yet. Editor plugins, scripts, or LAN devices calling /v1/chat/completions will show up here in real time.')}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {laActivity.map(a => {
+                        const running = a.status === 'started'
+                        return (
+                          <div key={a.id} className="rounded-xl px-3 py-2.5" style={{ background: running ? 'rgba(16,163,127,.08)' : c.bgInput, border: `1px solid ${running ? 'rgba(16,163,127,.25)' : c.borderLight}` }}>
+                            <div className="flex items-center gap-2">
+                              {running ? (
+                                <span className="relative flex h-2 w-2 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#10a37f' }} />
+                                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#10a37f' }} />
+                                </span>
+                              ) : (
+                                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: a.status === 'error' ? '#ef4444' : '#10a37f' }} />
+                              )}
+                              <span className="text-[11.5px] font-medium truncate" style={{ color: c.text }}>
+                                {running ? t('正在回复', 'Replying') + ' · ' : ''}{a.source}
+                              </span>
+                              <span className="flex-1" />
+                              <span className="text-[10px] font-mono shrink-0" style={{ color: c.textMuted }}>{a.model || ''}</span>
+                              <span className="text-[10px] shrink-0" style={{ color: c.textTertiary }}>
+                                {a.ttft ? `${a.ttft}ms 首字` : ''}{(a.ttft && a.totalMs) ? ' · ' : ''}{a.totalMs ? `${(a.totalMs / 1000).toFixed(1)}s` : relTime(a.ts, laNow)}
+                              </span>
+                            </div>
+                            {a.preview && (
+                              <div className="text-[12px] mt-1 truncate" style={{ color: running ? c.text : c.textSecondary }}>
+                                {running ? '「' + a.preview + '」' : '问：' + a.preview}
+                              </div>
+                            )}
+                            {a.error && <div className="text-[10.5px] mt-1 truncate" style={{ color: '#ef4444' }}>{a.error.slice(0, 120)}</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </Sub>
+              )}
             </>)}
 
             {tab === 'language' && (<>
