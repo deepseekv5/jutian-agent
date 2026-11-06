@@ -1169,5 +1169,52 @@
     "dest"
    ]
   }
+ },
+ {
+  "name": "create_extension",
+  "description": "让 AI 为自己创建一个新的界面扩展（面板/小工具）。生成一个 HTML 单文件面板 + manifest，写入 ~/.lyclaw/extensions/ 用户层（官方 app.asar 更新不会覆盖）。创建后默认待用户批准，用户批准后出现在标签页/侧栏。适合做番茄钟、看板、表单、可视化等自定义界面。panel.html 内可用 window.parent.postMessage 请求宿主只读数据（settings/sessions/notices/workspace）。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "扩展 id（英文/数字/下划线，如 pomodoro）"
+    },
+    "name": {
+     "type": "string",
+     "description": "显示名称（如 番茄钟）"
+    },
+    "description": {
+     "type": "string",
+     "description": "一句话说明这个面板做什么"
+    },
+    "icon": {
+     "type": "string",
+     "description": "单个 emoji 或字符，如 🍅"
+    },
+    "slot": {
+     "type": "string",
+     "enum": [
+      "tab",
+      "sidebar",
+      "statusbar"
+     ],
+     "description": "挂载位置，默认 tab（独立标签页）"
+    },
+    "html": {
+     "type": "string",
+     "description": "完整 HTML 文档（含内联 <style> 与 <script>），不要引用外部 CDN/图片。可用 fetch 同源 /api/extensions/file 加载自身资源；与宿主通信用 window.parent.postMessage({type:'ext:api',...}, '*')"
+    },
+    "css": {
+     "type": "string",
+     "description": "可选独立 CSS 文件内容"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "html"
+   ]
+  }
  }
 ]

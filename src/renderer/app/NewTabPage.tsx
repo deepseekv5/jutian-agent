@@ -2,7 +2,9 @@ import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
 import { BUILTIN_TOOLS } from '../types'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getRegisteredExts, subscribeExts, extType } from './extensions'
+import NewTabSearch from './NewTabSearch'
 import { festivalBanner, nextTapCount } from '../../shared/festival1024'
 import FestivalEgg from './FestivalEgg'
 import FestivalHome from './FestivalHome'
@@ -56,6 +58,7 @@ const CARDS: Card[] = [
   { type: 'snippets', desc: '代码片段库，触发器一键展开', descEn: 'Code snippets with triggers', chips: ['触发词'], chipsEn: ['Trigger'] },
   { type: 'todos', desc: 'AI 维护的任务清单', descEn: 'Todo list the agent maintains', chips: ['实时同步'], chipsEn: ['Live sync'] },
   { type: 'compare', desc: '同一问题让多个模型并行回答，并排对比', descEn: 'Ask several models at once, compare side by side', chips: ['多模型'], chipsEn: ['Multi-model'] },
+  { type: 'extensions', desc: 'AI 生成的界面面板，批准后可启用/禁用', descEn: 'AI-created panels, approve to enable', chips: ['用户层', '更新不覆盖'], chipsEn: ['User layer', 'Survives updates'] },
 ]
 
 const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
@@ -66,7 +69,7 @@ const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
   { label: '自动化与流水线', labelEn: 'Automation', items: ['workflow'] },
   { label: '数据与诊断', labelEn: 'Data & Diagnostics', items: ['export', 'backup', 'usage', 'diagnostics', 'todos', 'compare'] },
   { label: '效率工具', labelEn: 'Productivity', items: ['templates', 'snippets', 'shortcuts'] },
-  { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about'] },
+  { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about', 'extensions'] },
 ]
 
 // 徽章亮点：短标题 + 一句话
@@ -82,6 +85,8 @@ interface Props {
 }
 
 export default function NewTabPage({ onPick }: Props) {
+  const [exts, setExts] = useState(getRegisteredExts)
+  useEffect(() => subscribeExts(() => setExts(getRegisteredExts())), [])
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const byType = new Map(CARDS.map(k => [k.type, k]))
@@ -157,6 +162,33 @@ export default function NewTabPage({ onPick }: Props) {
           <span className="text-[10.5px]" style={{ color: c.textMuted }}>{t('选择后本标签页自动关闭', 'This tab closes after you pick')}</span>
         </div>
 
+        {/* 全局搜索（v14.11）：页面 / 扩展 / 会话 / 消息 一框搜尽 */}
+        <NewTabSearch cards={CARDS} onPickPage={onPick} />
+
+        {/* UXL 动态扩展（v14.11）：与官方页面分开渲染，用 emoji 图标 */}
+        {exts.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>我的扩展</span>
+              <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>{exts.length}</span>
+              <div className="flex-1 h-px" style={{ background: c.borderLight }} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {exts.map(e => (
+                <button key={e.id} onClick={() => onPick(extType(e.id) as PageType)}
+                  className="group flex flex-col p-3.5 rounded-xl text-left transition-all glass"
+                  style={{ border: `1px solid ${c.borderLight}` }}>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[16px]" style={{ background: c.bgInput }}>{e.icon}</span>
+                    <span className="text-[13.5px] font-medium" style={{ color: c.textHead }}>{e.name}</span>
+                  </div>
+                  {e.description && <div className="text-[11px] line-clamp-2" style={{ color: c.textTertiary }}>{e.description}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {GROUPS.map(g => (
           <div key={g.label} className="mb-6">
             <div className="flex items-center gap-2 mb-2">
@@ -166,7 +198,7 @@ export default function NewTabPage({ onPick }: Props) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               {g.items.map(type => {
-                const meta = PAGE_META[type]
+                const meta = PAGE_META[type] || { label: "扩展", icon: "🧩" }
                 const card = byType.get(type)
                 return (
                   <button key={type} onClick={() => onPick(type)}

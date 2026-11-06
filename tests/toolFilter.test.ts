@@ -14,10 +14,17 @@ const ALL: ToolDef[] = [
   mk('screenshot'), mk('timestamp_tools'), mk('url_tools'), mk('color_tools'),
   mk('create_skill'), mk('install_skill'), mk('get_file_info'),
   mk('move_file'), mk('delete_file'), mk('random_tools'),
-  mk('uuid_generate'), mk('code_analysis'), mk('text_diff'),
+  mk('uuid_generate'), mk('code_analysis'), mk('text_diff'), mk('create_extension'),
 ]
 
 describe('filterTools（动态工具过滤）', () => {
+  it('v14.11：AI 给自己做界面时 create_extension 必须保留（不能被 15 上限截掉）', () => {
+    for (const msg of ['给自己做个日历扩展', '加个番茄钟面板', 'make me a kanban widget', '随便看看']) {
+      const out = filterTools(ALL, msg, 15).map(t => t.name)
+      expect(out, msg).toContain('create_extension')
+    }
+  })
+
   it('全量 ≤ maxTools 时原样返回', () => {
     const small = ALL.slice(0, 10)
     expect(filterTools(small, '测试')).toBe(small)

@@ -175,7 +175,7 @@ export default function FestivalHome({ onPick }: { onPick: (t: PageType) => void
         {/* 能力卡（节日版） */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {FESTIVAL_CARDS.map((card, i) => {
-            const meta = PAGE_META[card.type]
+            const meta = PAGE_META[card.type] || { label: "扩展", icon: "🧩" }
             return (
               <button key={card.type} onClick={() => onPick(card.type)}
                 className="group relative text-left p-4 rounded-2xl transition-all"
@@ -239,7 +239,7 @@ export default function FestivalHome({ onPick }: { onPick: (t: PageType) => void
         <div className="mt-9 flex items-center gap-2 flex-wrap justify-center">
           <span className="text-[10px] tracking-wider" style={{ color: '#a8a69d' }}>{t('全部工作区', 'All workspaces')}</span>
           {(['files', 'terminal', 'ppt', 'skills', 'memory', 'tasks', 'outputs', 'settings'] as PageType[]).map((tp) => {
-            const m = PAGE_META[tp]
+            const m = PAGE_META[tp] || { label: "扩展", icon: "🧩" }
             return (
               <button key={tp} onClick={() => onPick(tp)}
                 className="text-[11px] px-2.5 py-1 rounded-full transition-colors"

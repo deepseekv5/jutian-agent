@@ -286,6 +286,8 @@ var _EMPTY_CLEANUP = runEmptyCleanup(new Set());
 // AI 角色模块（预置角色 / 免责声明 / 系统提示构造）—— 与前端共用 src/shared/personas.ts
 // OpenCode Zen 免费车道：请求构造与判定（与前端共用 src/shared/opencodeZen.ts）
 var ZEN_MOD = (() => { try { return require("./src/shared/opencodeZen.cjs"); } catch (e) { console.error("opencodeZen.cjs load failed:", e.message); return null; } })();
+// 用户扩展层 UXL（v14.11）：旁加载 .cjs，与 skillMarket 同款 try/catch 降级
+var EXT_MOD = (() => { try { return require("./src/shared/extensionsHost.cjs"); } catch (e) { console.error("extensionsHost.cjs load failed:", e.message); return null; } })();
 var isZenBase = ZEN_MOD ? ZEN_MOD.isZenBase : () => false;
 var zenEndpoint = ZEN_MOD ? ZEN_MOD.zenEndpoint : () => "/chat/completions";
 var zenHeaders = ZEN_MOD ? ZEN_MOD.zenHeaders : () => ({});
@@ -1910,7 +1912,7 @@ function inDirs(p, dirs) {
 
 const DANGEROUS_SHELL_RE = /rm\s+-rf|del\s+\/f|rd\s+\/s|format\s+[a-z]:|shutdown|diskpart|mkfs/;
 const FILE_TOOLS = ["read_file", "list_dir", "search_files", "search_content", "get_file_info", "write_file", "edit_file", "delete_file", "move_file"];
-const WRITE_TOOLS = ["write_file", "edit_file", "move_file", "delete_file", "create_skill", "install_skill"];
+const WRITE_TOOLS = ["write_file", "edit_file", "move_file", "delete_file", "create_skill", "install_skill", "create_extension"];
 
 function checkSecurity(name, args, sec) {
   // 受限模式：禁止 shell、禁止写操作
@@ -2091,6 +2093,19 @@ async function image_generate(args) {
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true`;
     return { success: true, output: url };
   } catch (e) { return { success: false, error: e.message }; }
+}
+
+// UXL：AI 创建自己的界面扩展（v14.11）。复用 create_skill 的「写用户目录」范式，
+// 但产物是 HTML 面板 + manifest；默认 approved=false，必须用户显式批准才挂载。
+async function create_extension(args) {
+  if (!EXT_MOD) return { success: false, error: "扩展模块不可用" };
+  const r = await EXT_MOD.create(args || {});
+  if (!r.ok) return { success: false, error: r.error };
+  // 推一条系统通知：用户去「扩展」页批准后可挂载（通知中心已有统一通道）
+  try {
+    pushServerNotice({ type: "system", title: "新的界面扩展待批准", body: `「${args.name || r.id}」已生成，到「扩展」页批准后即可使用` });
+  } catch { /* 通知失败不影响创建 */ }
+  return { success: true, output: `界面扩展「${args.name || r.id}」已生成（${r.id}），等待用户在「扩展」页批准后生效。扩展保存在 ~/.lyclaw/extensions/，官方更新不会覆盖。` };
 }
 
 async function create_skill(args) {
@@ -2410,7 +2425,7 @@ var TOOLS = {
   uuid_generate, timestamp_tools, random_tools, color_tools, image_generate,
   text_diff, todo_write, find_in_files, file_stats,
   clipboard_read, clipboard_write, open_path, archive,
-  list_skills, load_skill, install_skill, create_skill,
+  list_skills, load_skill, install_skill, create_skill, create_extension,
   remember, recall, forget,
   save_knowledge: toolSaveKnowledge,
   consult_guidance: consultGuidance
@@ -4206,6 +4221,32 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         return json(res, { ok: true });
       } catch (e) {
         return json(res, { error: e.message }, 500);
+      }
+    }
+
+    // ─── 用户扩展层 UXL API（v14.11）───
+    // 所有端点都在 APP_UI_ONLY 门卫之后（同宿主 Origin），外部浏览器不可达。
+    // 扩展文件只在 ~/.lyclaw/extensions/ 内，官方更新只换 app.asar，永不冲突。
+    if (!EXT_MOD) {
+      if (url.pathname.startsWith("/api/extensions/")) return json(res, { error: "扩展模块不可用" }, 503);
+    } else {
+      if (url.pathname === "/api/extensions/list" && req.method === "GET") {
+        return json(res, { items: await EXT_MOD.listExtensions() });
+      }
+      if (url.pathname === "/api/extensions/active" && req.method === "GET") {
+        return json(res, { items: await EXT_MOD.activeExtensions() });
+      }
+      if (url.pathname === "/api/extensions/file" && req.method === "GET") {
+        const id = String(url.searchParams.get("id") || "");
+        const rel = String(url.searchParams.get("path") || "panel.html");
+        const r = await EXT_MOD.readFile(id, rel);
+        if (!r.ok) return json(res, { error: r.error }, 400);
+        res.writeHead(200, { "Content-Type": r.mime, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+        return res.end(r.buf);
+      }
+      if (url.pathname === "/api/extensions/manage" && req.method === "POST") {
+        const { id, action } = await body(req);
+        return json(res, await EXT_MOD.manage(String(id || ""), String(action || "")));
       }
     }
 

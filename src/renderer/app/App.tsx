@@ -5,6 +5,10 @@ import { ThemeProvider, useTheme } from '../hooks/useTheme';
 import Sidebar from './Sidebar';
 import ChatTab from '../chat/ChatTab';
 import TabBar, { PAGE_META, SINGLE_INSTANCE, type WorkTab, type PageType } from './TabBar';
+import { refreshExts, subscribeExts, extType } from './extensions';
+import { registerExtMeta, unregisterExtMeta, getAllExtMetaKeys } from './TabBar';
+import ExtPanel from './ExtPanel';
+import ExtensionsPanel from '../panels/ExtensionsPanel';
 import StatusBar from './StatusBar';
 import MobileTabBar from './MobileTabBar';
 import RuntimeHints from './RuntimeHints';
@@ -265,7 +269,7 @@ function MainApp() {
       const existing = tabs.find(t => t.type === type);
       if (existing) { setActiveTabId(existing.id); return; }
     }
-    const tab: WorkTab = { id: uid(), type, title: opts?.title || PAGE_META[type].label, sessionId: opts?.sessionId, refId: opts?.refId, iconPath: opts?.iconPath };
+    const tab: WorkTab = { id: uid(), type, title: opts?.title || PAGE_META[type]?.label || String(type), sessionId: opts?.sessionId, refId: opts?.refId, iconPath: opts?.iconPath };
     setTabs(prev => [...prev, tab]);
     setActiveTabId(tab.id);
   }, [tabs]);
@@ -315,6 +319,25 @@ function MainApp() {
     window.addEventListener('open-legal', h)
     return () => window.removeEventListener('open-legal', h)
   }, [openTab])
+
+  // UXL（v14.11）：启动拉已批准扩展 → 注册成动态页面；变更时刷新注册表。
+  // 扩展落在 ~/.lyclaw/extensions/，asar 更新不动；apiVersion 不符服务端已排除。
+  useEffect(() => {
+    const sync = async () => {
+      const list = await refreshExts()
+      const live = new Set(list.map(x => extType(x.id)))
+      // 清掉不再活跃的注册项
+      getAllExtMetaKeys().forEach(k => { if (!live.has(k)) unregisterExtMeta(k) })
+      for (const x of list) registerExtMeta(extType(x.id), x.icon + ' ' + x.name, x.icon)
+    }
+    sync()
+    const off = subscribeExts(sync)
+    window.addEventListener('extensions-changed', sync)
+    // AI 在同会话里用 create_extension 生成后服务端无法直推渲染层，
+    // 30s 轮询兜底（同会话内也能感知新扩展；成本低，仅一个 GET）
+    const iv = setInterval(sync, 30_000)
+    return () => { off(); clearInterval(iv); window.removeEventListener('extensions-changed', sync) }
+  }, [])
 
   // v10.0：启动即拉取已安装技能清单（系统提示词据此提示模型按需 load_skill）
   useEffect(() => {
@@ -569,6 +592,24 @@ function MainApp() {
     setTimeout(fire, 280);
   }, [handleSelectSession]);
 
+  // 新标签页全局搜索：打开会话 / 跳转消息（v14.11）
+  useEffect(() => {
+    const onSession = (e: Event) => {
+      const sid = String((e as CustomEvent).detail?.sessionId || '')
+      if (sid) handleSelectSession(sid)
+    }
+    const onMessage = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (d.sessionId && d.messageId) handleJumpToMessage(String(d.sessionId), String(d.messageId))
+    }
+    window.addEventListener('newtab-open-session', onSession)
+    window.addEventListener('newtab-open-message', onMessage)
+    return () => {
+      window.removeEventListener('newtab-open-session', onSession)
+      window.removeEventListener('newtab-open-message', onMessage)
+    }
+  }, [handleSelectSession, handleJumpToMessage])
+
   const handleCreateSession = useCallback(async () => {
     // 新会话直接带上当前工作目录作为项目分组标签
     const s = await create(undefined, settings.workDir || '');
@@ -716,7 +757,11 @@ function MainApp() {
         return <ComparePanel settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'about':
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
+      case 'extensions':
+        return <ExtensionsPanel />;
       default:
+        // UXL 动态扩展：ext:<id> → ExtPanel（iframe 沙箱）
+        if (String(tab.type).startsWith('ext:')) return <ExtPanel type={String(tab.type)} />;
         return null;
     }
   };

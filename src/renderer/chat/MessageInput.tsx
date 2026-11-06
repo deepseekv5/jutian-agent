@@ -611,6 +611,12 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     else if (sc.key === 'sched') { setValue(v => v.replace(/^\/\S*\s?/, '')); startSchedule(2); return }
     else if (sc.key === 'rewrite') { setValue(v => v.replace(/^\/\S*\s?/, '')); aiRewrite(); return }
     else if (sc.key === 'readaloud') { setValue(v => v.replace(/^\/\S*\s?/, '')); window.dispatchEvent(new CustomEvent('read-aloud-last')); return }
+    else if (sc.key === 'makeext') {
+      // /扩展 给模型一个明确的造界面指令（不依赖模型自己识别意图）
+      const rest = value.replace(/^\/\S*\s?/, '').trim()
+      setValue(rest ? `请用 create_extension 工具给我创建一个界面扩展：${rest}。生成完整可交互的 panel.html，不要去读写文件。` : '请用 create_extension 工具给我创建一个界面扩展，生成完整可交互的 panel.html，不要去读写文件。')
+      return
+    }
     else toggleMode(sc.key as ModeKey)
     // 保留命令后已输入的正文（/联网 搜天气 → 搜天气）
     setValue(v => v.replace(/^\/\S*\s?/, ''))

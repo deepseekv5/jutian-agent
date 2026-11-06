@@ -185,7 +185,38 @@ var CATEGORY_KEYWORDS = {
     "\u63A5\u53E3"
   ],
   scheduling: ["cron", "schedule", "timer", "\u5B9A\u65F6", "\u8BA1\u5212", "\u8C03\u5EA6", "\u95F9\u949F", "\u63D0\u9192"],
-  workflow: ["workflow", "pipeline", "automation", "\u5DE5\u4F5C\u6D41", "\u6D41\u6C34\u7EBF", "\u81EA\u52A8\u5316", "\u7F16\u6392"]
+  workflow: ["workflow", "pipeline", "automation", "\u5DE5\u4F5C\u6D41", "\u6D41\u6C34\u7EBF", "\u81EA\u52A8\u5316", "\u7F16\u6392"],
+  /** 界面扩展（v14.11）：AI 给自己做面板/小工具 — 必须能匹配「日历/番茄钟/看板」等意图 */
+  extension: [
+    "extension",
+    "plugin",
+    "widget",
+    "panel",
+    "ui",
+    "interface",
+    "calendar",
+    "timer",
+    "pomodoro",
+    "dashboard",
+    "kanban",
+    "\u6269\u5C55",
+    "\u63D2\u4EF6",
+    "\u9762\u677F",
+    "\u754C\u9762",
+    "\u5C0F\u5DE5\u5177",
+    "\u65E5\u5386",
+    "\u756A\u8304\u949F",
+    "\u770B\u677F",
+    "\u8BA1\u65F6\u5668",
+    "\u7ED9\u81EA\u5DF1\u505A",
+    "\u52A0\u4E2A",
+    "\u505A\u4E2A",
+    "\u505A\u4E00\u4E2A",
+    "\u751F\u6210\u754C\u9762",
+    "\u6539\u9020\u754C\u9762",
+    "\u6362\u4E2A\u754C\u9762",
+    "\u4E3B\u9898\u76AE\u80A4"
+  ]
 };
 var ALWAYS_INCLUDE = /* @__PURE__ */ new Set([
   "read_file",
@@ -195,7 +226,9 @@ var ALWAYS_INCLUDE = /* @__PURE__ */ new Set([
   "shell",
   "system_info",
   "recall",
-  "save_knowledge"
+  "save_knowledge",
+  // v14.11：造界面扩展是「AI 改自己」的入口，任何任务都不该被动态过滤截掉
+  "create_extension"
 ]);
 var TOOL_CATEGORY_MAP = {
   read_file: "file",
@@ -227,7 +260,9 @@ var TOOL_CATEGORY_MAP = {
   git_operation: "git",
   code_analysis: "code",
   image_generate: "media",
-  screenshot: "media"
+  screenshot: "media",
+  create_extension: "extension",
+  create_skill: "extension"
 };
 function matchedCategories(message) {
   const msg = message.toLowerCase();

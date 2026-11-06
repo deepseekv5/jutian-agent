@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare'
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | `ext:${string}`
 
 export interface WorkTab {
   id: string
@@ -17,7 +17,7 @@ export interface WorkTab {
   iconPath?: string
 }
 
-export const PAGE_META: Record<PageType, { label: string; labelEn?: string; icon: string }> = {
+export const PAGE_META: Record<string, { label: string; labelEn?: string; icon: string }> = {
   chat: { label: '对话', labelEn: 'Chat', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
   files: { label: '文件', labelEn: 'Files', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
   terminal: { label: '终端', labelEn: 'Terminal', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
@@ -52,9 +52,18 @@ export const PAGE_META: Record<PageType, { label: string; labelEn?: string; icon
   compare: { label: '模型对比', labelEn: 'Compare', icon: 'M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h2m8-14h2a2 2 0 012 2v10a2 2 0 01-2 2h-2m-6-6h6' },
   newtab: { label: '新建标签页', labelEn: 'New Tab', icon: 'M12 4v16m8-8H4' },
   freemodels: { label: '免费模型', labelEn: 'Free AI', icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z' },
+  extensions: { label: '扩展', labelEn: 'Extensions', icon: 'M4 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v3H4V5zm0 5h16v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9z' },
 }
 
-export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research']
+/** 动态注册扩展页面（v14.11）：渲染层拉到 active 扩展后写入 PAGE_META，
+ *  TabBar/NewTabPage/FestivalHome 的所有 PAGE_META[...] 索引点自动兼容。 */
+export function registerExtMeta(type: string, label: string, icon = '🧩') {
+  PAGE_META[type] = { label, labelEn: label, icon }
+}
+export function unregisterExtMeta(type: string) { delete PAGE_META[type] }
+export function getAllExtMetaKeys(): string[] { return Object.keys(PAGE_META).filter(k => k.startsWith('ext:')) }
+
+export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research']
 
 interface Props {
   tabs: WorkTab[]
@@ -98,7 +107,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
       <div className="tab-strip flex-1 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {tabs.map(tab => {
           const active = tab.id === activeTabId
-          const meta = PAGE_META[tab.type]
+          const meta = PAGE_META[tab.type] || { label: "扩展", icon: "🧩" }
           const isWorking = !!(tab.sessionId && workingSessionIds?.has(tab.sessionId))
           return (
             <div key={tab.id}

@@ -37,12 +37,17 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     '代码', '调试', '重构', '分析', '类型', '语法', '函数', '变量', '接口'],
   scheduling: ['cron', 'schedule', 'timer', '定时', '计划', '调度', '闹钟', '提醒'],
   workflow: ['workflow', 'pipeline', 'automation', '工作流', '流水线', '自动化', '编排'],
+  /** 界面扩展（v14.11）：AI 给自己做面板/小工具 — 必须能匹配「日历/番茄钟/看板」等意图 */
+  extension: ['extension', 'plugin', 'widget', 'panel', 'ui', 'interface', 'calendar', 'timer', 'pomodoro', 'dashboard', 'kanban',
+    '扩展', '插件', '面板', '界面', '小工具', '日历', '番茄钟', '看板', '计时器', '给自己做', '加个', '做个', '做一个', '生成界面', '改造界面', '换个界面', '主题皮肤'],
 }
 
 /** 永远保留的核心工具（任何任务都需要） */
 const ALWAYS_INCLUDE = new Set([
   'read_file', 'write_file', 'list_dir', 'search_content', 'shell', 'system_info',
   'recall', 'save_knowledge',
+  // v14.11：造界面扩展是「AI 改自己」的入口，任何任务都不该被动态过滤截掉
+  'create_extension',
 ])
 
 /** 工具名 → 类别映射（从分类关键词反向构建） */
@@ -58,6 +63,7 @@ const TOOL_CATEGORY_MAP: Record<string, string> = {
   remember: 'memory', recall: 'memory', forget: 'memory', save_knowledge: 'memory',
   git_operation: 'git', code_analysis: 'code',
   image_generate: 'media', screenshot: 'media',
+  create_extension: 'extension', create_skill: 'extension',
 }
 
 /** 用户消息 → 应包含的工具类别集合 */
