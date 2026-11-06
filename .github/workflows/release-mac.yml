@@ -55,6 +55,13 @@ jobs:
 
       # v13.10.1 起 eb-config 已把产物名统一为 ASCII（jutian-agent-*），
       # 这里只做归档重命名（asar 更新包仅 arm64 传一份）
+      # v14.11.2：发布前自证该架构安装包真的带了匹配的原生模块。
+      # app.asar 自更新包只替换纯 JS 包，带不了 app.asar.unpacked 里的 .node；
+      # 只有完整安装包能修。校验失败直接红灯，避免再发出「没有 sqlite」的包。
+      - name: 原生模块架构自检（darwin-${{ matrix.arch }}）
+        shell: bash
+        run: node scripts/verify-native.cjs ${{ matrix.arch }} darwin
+
       - name: 整理产物名
         run: |
           VER="${GITHUB_REF_NAME#v}"

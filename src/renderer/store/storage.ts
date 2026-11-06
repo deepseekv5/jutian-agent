@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoBackup: 'off',
   notifyDone: false,
   autoCompactPct: 70,
+  harnessUrl: 'http://127.0.0.1:3080',
   ttsSpeed: '1.0',
   autoSpeak: false,
 }

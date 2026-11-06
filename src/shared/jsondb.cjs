@@ -11,8 +11,8 @@
  *   · 相同的函数签名与返回形状（字段名、排序）
  *   · 写操作防抖 500ms 落盘（打字/流式期间不逐条写文件）
  *   · 进程退出前 flush
- * 知识库向量表（kb*）在手机模式返回空集而非报错——检索功能
- * 不可用是诚实的降级，不假装有数据。
+ * 知识库（v14.11.2）在降级模式真落盘：条目/分块/笔记本/全文搜索
+ * 全部可用，只有向量相似度计算降级（不做余弦检索，但数据不丢）。
  *
  * 导出形状与 db.cjs 完全一致，serve.ts 里可无缝替换。
  */
@@ -33,6 +33,8 @@ function createJsonDb(filePath) {
     memories: [],     // {key,value,updated_at}
     codeProjects: [], // {id,name,rootPath,created_at,updated_at}
     codeTabs: {},     // {projectId: JSON字符串}
+    kbEntries: [],    // v14.11.2：知识库条目（原生模块缺失时也必须真落盘）
+    kbChunks: [],     // v14.11.2：知识库向量块（JSON 存储，检索降级为空但数据不丢）
   };
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -221,21 +223,74 @@ function createJsonDb(filePath) {
     return data.codeTabs[projectId] || null;
   }
 
-  /* ─── 知识库：手机模式诚实降级（返回空集，不报错也不造假数据）─── */
-  const kbEmpty = {
-    kbInsert: () => {},
-    kbAll: () => [],
-    kbCount: () => 0,
-    kbClear: () => {},
-    kbDeleteByPath: () => {},
-    upsertKbEntry: () => {},
-    listKbEntries: () => [],
-    getKbEntryByTitle: () => null,
-    deleteKbEntry: () => {},
-    getKbEntry: () => null,
-    kbBacklinks: () => [],
-    kbNotebooks: () => [],
-    kbSearchNotes: () => [],
+  /* ─── 知识库（v14.11.2）：真落盘，绝不再静默丢弃 ───
+   * 此前手机/降级模式里 kbInsert 是 no-op，用户「知识库不会保存」——
+   * 写入被悄悄丢掉，比报错更糟。现在 kb* 全部读写 data 数组并触发 flush，
+   * 与 db.cjs 的返回形状/排序逐一对齐；向量检索仍诚实降级（不做相似度计算），
+   * 但条目、分块、笔记本、全文搜索全部可用。
+   */
+  const nowIso = () => new Date().toISOString()
+  function upsertKbEntry(entry) {
+    const base = { notebook: '', pinned: 0, icon: '', source: 'user', tags: '[]', links: '[]' }
+    const idx = data.kbEntries.findIndex(x => x.id === entry.id)
+    const row = idx >= 0
+      ? { ...data.kbEntries[idx], ...entry, updated_at: nowIso() }
+      : { ...base, ...entry, created_at: nowIso(), updated_at: nowIso() }
+    if (idx >= 0) data.kbEntries[idx] = row
+    else data.kbEntries.push(row)
+    scheduleFlush()
+    return row
+  }
+  function listKbEntries() {
+    return data.kbEntries.slice().sort((a, b) =>
+      (Number(b.pinned) || 0) - (Number(a.pinned) || 0) ||
+      String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+  }
+  function getKbEntryByTitle(title) { return data.kbEntries.find(x => x.title === title) || null }
+  function getKbEntry(id) { return data.kbEntries.find(x => x.id === id) || null }
+  function kbBacklinks(id) {
+    const needle = '"' + String(id) + '"'
+    return data.kbEntries.filter(x => x.id !== id && String(x.links || '').includes(needle))
+  }
+  function kbNotebooks() {
+    const counts = new Map()
+    for (const x of data.kbEntries) {
+      const k = String(x.notebook || '')
+      counts.set(k, (counts.get(k) || 0) + 1)
+    }
+    return [...counts.entries()].map(([notebook, n]) => ({ notebook, n })).sort((a, b) => b.n - a.n)
+  }
+  function kbSearchNotes(q) {
+    const needle = String(q || '').toLowerCase()
+    return data.kbEntries
+      .filter(x => String(x.title || '').toLowerCase().includes(needle) || String(x.content || '').toLowerCase().includes(needle))
+      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+      .slice(0, 50)
+      .map(x => ({ id: x.id, title: x.title, content: x.content, notebook: x.notebook, updated_at: x.updated_at }))
+  }
+  function deleteKbEntry(id) {
+    data.kbEntries = data.kbEntries.filter(x => x.id !== id)
+    data.kbChunks = data.kbChunks.filter(x => x.path !== 'entry:' + id)
+    scheduleFlush()
+  }
+  let chunkSeq = 0
+  function kbInsert(kbPath, chunk, vector) {
+    data.kbChunks.push({ id: ++chunkSeq, path: kbPath, chunk, vector: JSON.stringify(vector || []) })
+    scheduleFlush()
+  }
+  function kbAll() {
+    return data.kbChunks.map(x => ({ id: x.id, path: x.path, chunk: x.chunk, vector: x.vector }))
+  }
+  function kbCount() { return data.kbChunks.length }
+  function kbClear() { data.kbChunks = []; scheduleFlush() }
+  function kbDeleteByPath(kbPath) {
+    data.kbChunks = data.kbChunks.filter(x => x.path !== kbPath)
+    scheduleFlush()
+  }
+  const kbFallback = {
+    kbInsert, kbAll, kbCount, kbClear, kbDeleteByPath,
+    upsertKbEntry, listKbEntries, getKbEntryByTitle, deleteKbEntry, getKbEntry,
+    kbBacklinks, kbNotebooks, kbSearchNotes,
   };
 
   function migrateFromLocalStorage(payload) {
@@ -270,7 +325,7 @@ function createJsonDb(filePath) {
     createCodeProject, getCodeProject, listCodeProjects, deleteCodeProject,
     saveCodeTabs, getCodeTabs,
     migrateFromLocalStorage,
-    ...kbEmpty,
+    ...kbFallback,
     // 兼容个别直接访问 db.db 的调用点
     db: { exec: () => {}, prepare: () => ({ run: () => {}, get: () => null, all: () => [] }) },
     flush,

@@ -59,6 +59,7 @@ const CARDS: Card[] = [
   { type: 'todos', desc: 'AI 维护的任务清单', descEn: 'Todo list the agent maintains', chips: ['实时同步'], chipsEn: ['Live sync'] },
   { type: 'compare', desc: '同一问题让多个模型并行回答，并排对比', descEn: 'Ask several models at once, compare side by side', chips: ['多模型'], chipsEn: ['Multi-model'] },
   { type: 'extensions', desc: 'AI 生成的界面面板，批准后可启用/禁用', descEn: 'AI-created panels, approve to enable', chips: ['用户层', '更新不覆盖'], chipsEn: ['User layer', 'Survives updates'] },
+  { type: 'harness', desc: '嵌入 the agent harness 的 WebUI（独立服务，需本机启动）', descEn: 'Embed the agent harness WebUI (standalone local service)', chips: ['外部内核', '实验性'], chipsEn: ['External', 'Experimental'] },
 ]
 
 const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
@@ -69,7 +70,7 @@ const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
   { label: '自动化与流水线', labelEn: 'Automation', items: ['workflow'] },
   { label: '数据与诊断', labelEn: 'Data & Diagnostics', items: ['export', 'backup', 'usage', 'diagnostics', 'todos', 'compare'] },
   { label: '效率工具', labelEn: 'Productivity', items: ['templates', 'snippets', 'shortcuts'] },
-  { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about', 'extensions'] },
+  { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about', 'extensions', 'harness'] },
 ]
 
 // 徽章亮点：短标题 + 一句话

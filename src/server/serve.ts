@@ -208,7 +208,12 @@ function makeDbFallback() {
   // 知识库向量检索诚实降级为空集。
   try {
     var J = require("./src/shared/jsondb.cjs");
-    console.warn("[db] better-sqlite3 不可用，已切换 JSON 文件存储（对话数据照常保存；知识库检索不可用）");
+    console.warn("[db] better-sqlite3 不可用，已切换 JSON 文件存储（对话/知识库数据照常保存）");
+    // v14.11.2：降级必须可见——此前静默切换，用户「知识库不会保存」却无从得知。
+    // 推一条系统通知（通知中心会展示），并告知数据仍完整落盘、只是向量检索降级。
+    try {
+      pushServerNotice({ type: "system", title: "已切换到兼容存储", body: "本机缺少匹配的 SQLite 原生模块，已自动使用 JSON 存储：对话、设置与知识库均正常保存，仅向量相似度检索降级。如需完整能力请重装对应架构的完整安装包。" });
+    } catch { /* 通知失败不影响降级 */ }
     return J.createJsonDb(path.join(DATA_DIR, "data.json"));
   } catch (e) {
     console.error("[db] jsondb 初始化失败，功能将严重降级:", e.message);
@@ -2195,7 +2200,8 @@ function kbChunkText(text) {
 }
 // 索引整篇笔记：全文切块，逐块嵌入（不是只存开头 800 字）
 async function kbIndexEntry(id, title, content) {
-  if (!sharedDb) return 0;
+  // v14.11.2：不再因 sharedDb 缺失而跳过——jsondb 也能存分块（只是无向量）。
+  // 此前 KB 在降级端「保存成功但刷新即消失」的第二个根因就在这里。
   db.kbDeleteByPath("entry:" + id); kbBump();
   const body = (title ? title + "\n" : "") + (content || "");
   const chunks = kbChunkText(body);
@@ -2203,8 +2209,10 @@ async function kbIndexEntry(id, title, content) {
   for (let i = 0; i < chunks.length; i += 16) {
     const batch = chunks.slice(i, i + 16);
     let vecs = [];
-    try { vecs = await kbEmbedFor(batch) } catch { break }
-    batch.forEach((c, j) => { if (vecs[j]) { db.kbInsert("entry:" + id, c, vecs[j]); n++ } }); kbBump();
+    try { vecs = await kbEmbedFor(batch) } catch { vecs = [] }
+    // v14.11.2：嵌入失败（降级端无向量模型）时仍把分块文本落盘——
+    // 此前 `catch { break }` 让整篇笔记的分块一个都不存，知识库等于没保存。
+    batch.forEach((c, j) => { db.kbInsert("entry:" + id, c, vecs[j] || []); n++ }); kbBump();
   }
   return n;
 }
@@ -6610,7 +6618,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     const KB_SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".venv", "venv", "__pycache__", "release"]);
 
     if (url.pathname === "/api/kb/entries" && req.method === "GET") {
-      if (!sharedDb) return json(res, { entries: [] });
+      // jsondb 也实现了 listKbEntries/kbBacklinks（v14.11.2）
       try {
         const rows = db.listKbEntries();
         const all = rows.map((e) => ({ ...e, tags: JSON.parse(e.tags || "[]"), links: JSON.parse(e.links || "[]"), backlinkCount: db.kbBacklinks(e.id).length }));
@@ -6627,7 +6635,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     }
     if (url.pathname === "/api/kb/reindex" && req.method === "POST") {
       try {
-        if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+        // v14.11.2：降级端也可 reindex（分块真落盘，仅无向量）
         const es = db.listKbEntries();
         let chunks = 0, notes = 0;
         for (const e of es) { const c = await kbIndexEntry(e.id, e.title, e.content || ""); chunks += c; notes++ }
@@ -6635,7 +6643,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/notebooks" && req.method === "GET") {
-      if (!sharedDb) return json(res, { notebooks: [] });
+      // jsondb 也实现了 kbNotebooks（v14.11.2）
       try { return json(res, { notebooks: db.kbNotebooks() }); }
       catch (e) { return json(res, { error: e.message }, 500); }
     }
@@ -6738,7 +6746,7 @@ async function globalSearch(q, limit = 8) {
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/search-notes" && req.method === "GET") {
-      if (!sharedDb) return json(res, { results: [] });
+      // jsondb 也实现了 kbSearchNotes（v14.11.2）
       const q = (url.searchParams.get("q") || "").trim();
       if (!q) return json(res, { results: [] });
       try { return json(res, { results: db.kbSearchNotes(q) }); }
@@ -6749,13 +6757,13 @@ async function globalSearch(q, limit = 8) {
       catch (e) { return json(res, { error: e.message }, 500); }
     }
     if (url.pathname === "/api/kb/status" && req.method === "GET") {
-      if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+      // v14.11.2：jsondb 也实现了 kbAll（分块真落盘）
       const rows = db.kbAll();
       const files = [...new Set(rows.map((r) => r.path))];
       return json(res, { chunks: rows.length, files: files.length, paths: files.slice(0, 200) });
     }
     if (url.pathname === "/api/kb/clear" && req.method === "POST") {
-      if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+      // v14.11.2：jsondb 也实现了 kbClear
       db.kbClear(); kbBump();
       return json(res, { ok: true });
     }
@@ -6763,7 +6771,7 @@ async function globalSearch(q, limit = 8) {
       try {
         const { folder } = await body(req);
         if (!folder) return json(res, { error: "缺少 folder" }, 400);
-        if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+        // v14.11.2：降级端也允许 ingest（分块落盘，向量为空、检索走全文）
         const fsMod = await import("fs");
         const pathMod = await import("path");
         const files = [];
@@ -6802,7 +6810,14 @@ async function globalSearch(q, limit = 8) {
       try {
         const { query, topK } = await body(req);
         if (!query) return json(res, { error: "缺少 query" }, 400);
-        if (!sharedDb) return json(res, { error: "db unavailable" }, 500);
+        // v14.11.2：降级端无嵌入模型 → 诚实降级为全文匹配（数据不丢，仍可检索）
+        if (!sharedDb) {
+          const q = String(query).toLowerCase();
+          const hits = (db.kbAll() || []).filter(r => String(r.chunk || "").toLowerCase().includes(q))
+            .slice(0, Math.min(topK || 4, 8))
+            .map(r => ({ path: r.path, chunk: r.chunk, score: 1 }));
+          return json(res, { hits, degraded: "fulltext" });
+        }
         if (db.kbCount() === 0) return json(res, { hits: [] });
         const [qv] = await kbEmbedTexts([String(query).slice(0, 1000)]);
         const rows = kbRowsCached();

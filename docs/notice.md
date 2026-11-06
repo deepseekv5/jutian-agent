@@ -1,8 +1,10 @@
 # 巨天agent 公告
 
-<!-- id: 2026-11-06-v1411 -->
+<!-- id: 2026-11-06-v14111 -->
 <!-- level: info -->
 <!-- date: 2026-11-06 -->
+
+v14.11.1：Agent 内核新增「Harness」选项——设置里选中后可配置 the agent harness 服务地址（默认 127.0.0.1:3080），应用内直接嵌入其 WebUI 面板（独立 partition 隔离）。语义说明：Harness 是独立 Cordis 应用，不提供可嵌入的 npm 内核或 OpenAI 兼容端点，因此巨天只当壳展示，不会替换自身的对话循环；需用户自行 npx @deepseek-ai/dsh web 启动，未启动时有明确指引。零新依赖、与官方更新不冲突。
 
 v14.11.0：用户扩展层（UXL）——AI 可以自己创建界面面板了。对 AI 说「给我做个番茄钟面板」，它会用 create_extension 工具生成 HTML 面板 + manifest 写入 ~/.lyclaw/extensions/；到「扩展」页批准后即可打开使用，可随时禁用/删除。官方更新只替换 app.asar，用户层扩展完整保留，与发版不冲突。扩展运行在无同源权限的 iframe 沙箱中，拿不到密钥/Cookie，只能通过白名单桥读数据；manifest 带 apiVersion，宿主升级不兼容时自动禁用不白屏。设计取向学习 the agent harness Creator Mode（检查运行时→写插件→批准→热挂载→可回滚）。
 

@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | `ext:${string}`
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | 'harness' | `ext:${string}`
 
 export interface WorkTab {
   id: string
@@ -53,6 +53,7 @@ export const PAGE_META: Record<string, { label: string; labelEn?: string; icon: 
   newtab: { label: '新建标签页', labelEn: 'New Tab', icon: 'M12 4v16m8-8H4' },
   freemodels: { label: '免费模型', labelEn: 'Free AI', icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z' },
   extensions: { label: '扩展', labelEn: 'Extensions', icon: 'M4 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v3H4V5zm0 5h16v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9z' },
+  harness: { label: 'Harness', labelEn: 'Harness', icon: 'M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z' },
 }
 
 /** 动态注册扩展页面（v14.11）：渲染层拉到 active 扩展后写入 PAGE_META，
@@ -63,7 +64,7 @@ export function registerExtMeta(type: string, label: string, icon = '🧩') {
 export function unregisterExtMeta(type: string) { delete PAGE_META[type] }
 export function getAllExtMetaKeys(): string[] { return Object.keys(PAGE_META).filter(k => k.startsWith('ext:')) }
 
-export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research']
+export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'harness', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research']
 
 interface Props {
   tabs: WorkTab[]

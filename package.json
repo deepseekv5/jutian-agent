@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "14.11.0",
+  "version": "14.11.1",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -67,6 +67,8 @@
       "node_modules/better-sqlite3/lib/**/*",
       "node_modules/better-sqlite3/package.json",
       "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "node_modules/file-uri-to-path/**/*",
+      "node_modules/bindings/**/*",
       "node_modules/@codemirror/**/*",
       "node_modules/@lezer/**/*",
       "node_modules/qrcode/**/*",

@@ -863,14 +863,35 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Agent 内核', 'Agent engine')}</label>
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                      {([['vercel', 'Vercel'], ['server', '服务端'], ['client', '兼容']] as const).map(([v, zh]) => (
+                      {([['vercel', 'Vercel'], ['server', '服务端'], ['client', '兼容'], ['harness', 'Harness']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
-                          className="flex-1 px-2 py-1 text-[10.5px] transition-colors"
+                          className="flex-1 px-1 py-1 text-[10px] transition-colors"
                           style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || '#10a37f') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
-                          {t(zh, v === 'vercel' ? 'Vercel' : v === 'server' ? 'Server' : 'Legacy')}
+                          {t(zh, v === 'vercel' ? 'Vercel' : v === 'server' ? 'Server' : v === 'client' ? 'Legacy' : 'Harness')}
                         </button>
                       ))}
                     </div>
+                    {/* v14.11：选中 Harness 时配置服务地址（独立应用，不替换巨天自身的对话循环） */}
+                    {(form.agentEngine as string) === 'harness' && (
+                      <div className="mt-2 rounded-lg p-2.5" style={{ background: c.bgInput }}>
+                        <div className="text-[10.5px] mb-1.5 leading-relaxed" style={{ color: c.textTertiary }}>
+                          {t('Harness 是独立应用（npx @deepseek-ai/dsh web）。巨天只把它的界面嵌进来，不会安装它、也不替换自身的对话内核。',
+                             'Harness is a standalone app (npx @deepseek-ai/dsh web). Jutian only embeds its UI; it does not install it or replace its own chat engine.')}
+                        </div>
+                        <input
+                          value={form.harnessUrl || 'http://127.0.0.1:3080'}
+                          onChange={e => persistNow({ harnessUrl: e.target.value })}
+                          placeholder="http://127.0.0.1:3080"
+                          className="w-full h-8 px-2.5 rounded-lg text-[11.5px] font-mono outline-none"
+                          style={{ background: c.surfaceCard || '#fff', color: c.text, border: `1px solid ${c.borderLight}` }} />
+                        <button type="button"
+                          onClick={() => window.dispatchEvent(new CustomEvent('open-panel', { detail: 'harness' }))}
+                          className="mt-2 px-3 h-7 rounded-full text-[11px] font-medium"
+                          style={{ background: c.accent || '#10a37f', color: '#fff' }}>
+                          {t('打开 Harness 面板', 'Open Harness panel')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Hermes 工具协议', 'Hermes tool protocol')}</label>

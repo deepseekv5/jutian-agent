@@ -9,6 +9,7 @@ import { refreshExts, subscribeExts, extType } from './extensions';
 import { registerExtMeta, unregisterExtMeta, getAllExtMetaKeys } from './TabBar';
 import ExtPanel from './ExtPanel';
 import ExtensionsPanel from '../panels/ExtensionsPanel';
+import DshPanel from '../panels/HarnessPanel';
 import StatusBar from './StatusBar';
 import MobileTabBar from './MobileTabBar';
 import RuntimeHints from './RuntimeHints';
@@ -759,6 +760,8 @@ function MainApp() {
         return <AboutPage embedded onClose={() => closeTab(tab.id)} />;
       case 'extensions':
         return <ExtensionsPanel />;
+      case 'harness':
+        return <DshPanel />;
       default:
         // UXL 动态扩展：ext:<id> → ExtPanel（iframe 沙箱）
         if (String(tab.type).startsWith('ext:')) return <ExtPanel type={String(tab.type)} />;
