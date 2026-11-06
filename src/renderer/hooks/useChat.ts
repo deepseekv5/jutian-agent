@@ -184,6 +184,8 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
   // 修复（v14.9）：send 入口到 setStreamingId 之间隔着多个 await（音频识别可达数秒），
   // 期间二次发送不会被拦。inFlight 在入口同步置位、finally 清除。
   const inFlightRef = useRef(false)
+  // 本次挂载里用户发过消息的会话 id（供 loadMessages 跳过过期覆盖）
+  const ownSentForSessionRef = useRef<string | null>(null)
   // perf8：持最新 messages 供 send 内本地 append（避免闭包读旧数组）
   const messagesRef = useRef<Message[]>([])
   messagesRef.current = messages
@@ -323,10 +325,19 @@ export function useChat(sessionId: string | null, settings: Settings, onFirstMes
     const reqId = sessionId
     const msgs = await listMessages(reqId)
     if (sessionIdRef.current !== reqId) return
+    // v14.10.1：仅当「同一次挂载里本会话刚发过消息」时跳过覆盖——
+    // 加载是异步的，用户可能在它返回前就发送（本地已 append userMsg/占位），
+    // 此时服务端快照与本地状态不一致，覆盖会丢消息或重复。
+    // 用 ownSentForSessionRef 精确限定，避免误伤「切换到老会话」的正常加载。
+    if (ownSentForSessionRef.current === reqId) return
     setMessages(msgs)
   }, [sessionId])
 
-  useEffect(() => { loadMessages() }, [sessionId, loadMessages])
+  useEffect(() => {
+    // 切换会话即重置「本会话已发送」标记：否则切走再切回时加载会被永久跳过
+    ownSentForSessionRef.current = null
+    loadMessages()
+  }, [sessionId, loadMessages])
 
   // 切换会话即中止在途请求：否则旧会话的流式/调研结果会继续写进新会话的消息列表
   useEffect(() => {
@@ -629,6 +640,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
   const send = useCallback(async (content: string, selectedSkillIds?: string[], attachedFiles?: AttachedFile[], sendOpts?: { accessLevel?: string; thinking?: string; swarm?: boolean; team?: any; chatMode?: 'general' | 'coding'; kb?: boolean; goal?: string; goalContinue?: boolean }) => {
     if (!sessionId || streamingRef.current !== null || inFlightRef.current) return
     inFlightRef.current = true
+    ownSentForSessionRef.current = sessionId
     setError(null)
 
     // Store for potential rollback
@@ -698,8 +710,12 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
     }
     // perf8（v14.9）：本地 append 替代整段 listMessages re-fetch——
     // re-fetch 换掉全部历史对象引用，击穿所有气泡 memo；userMsg 本地就有
-    const updated = messagesRef.current
-    const appended = [...updated, userMsg]
+    // v14.10.1 关键修复：apiMessages 必须基于 appended（含刚创建的 userMsg），
+    // 不能用 messagesRef.current——新建会话首条消息时 ref 还停在渲染期的空数组，
+    // 过滤掉 system 后 messages 为空 → 上游报 "Invalid prompt: messages must not be empty"
+    // （再发一条就好了，因为那时 ref 已同步）。
+    const appended = [...messagesRef.current, userMsg]
+    const updated = appended
     if (sessionIdRef.current === sessionId) setMessages(appended)
     // 自动标题：仅首条消息时立即生成（避免后续消息不断改写标题）
     if (!titleDoneRef.current) {
@@ -1075,9 +1091,11 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
               .catch(() => {})
           }
         } catch { /* ignore */ }
-        // 首次对话完成后生成标题：先截断兜底，AI 标题随后替换
-        // 语义保持与原版一致：本会话第一条用户消息（发送前历史里用户消息数为 0）
-        if (messagesRef.current.filter(m => m.role === 'user').length === 0 && onFirstMessageDoneRef.current) {
+        // 首次对话完成后生成标题：本会话第一条用户消息才生成
+        // v14.10.1：用发送前快照 updated（含本轮 userMsg）判断——
+        // 此前误用 messagesRef.current，onDone 时 ref 已含本轮消息 → 判定恒 false，
+        // AI 标题永远不生成（只剩截断兜底）。
+        if (updated.filter(m => m.role === 'user').length === 1 && onFirstMessageDoneRef.current) {
           onFirstMessageDoneRef.current(userContent)
           generateAiTitle(sessionId, userContent, fullContent)
         }
@@ -1207,6 +1225,22 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
 
     const controller = new AbortController()
     abortRef.current = controller
+
+    // 兜底（v14.10.1）：上游对空 messages 报 "Invalid prompt: messages must not be empty"，
+    // 用户看到的是「发生未知错误」。任何历史拼接路径出错都不能把空请求发出去——
+    // 补回本轮用户输入，并把异常上报诊断（而不是静默）。
+    if (apiMessages.filter(m => m.role !== 'system').length === 0) {
+      apiMessages = [
+        { role: 'system', content: typeof apiMessages[0]?.content === 'string' ? apiMessages[0].content : '' },
+        { role: 'user', content: userContent },
+      ]
+      try {
+        fetch('/api/client-error', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: '[useChat] apiMessages 为空，已兜底补回用户输入', url: location.href }),
+        }).catch(() => {})
+      } catch { /* ignore */ }
+    }
 
     // 记录本次请求的输入规模（含工具定义）供用量统计
     const sentPromptTokens = apiMessages.reduce((s, m) => s + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')) + estimateTokens(m.tool_calls ? JSON.stringify(m.tool_calls) : ''), 0)
