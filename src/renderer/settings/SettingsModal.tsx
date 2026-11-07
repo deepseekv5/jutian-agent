@@ -73,6 +73,10 @@ const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string;
   { tab: 'security', label: 'AI 权限等级', labelEn: 'AI permission level', desc: '安全', keywords: 'permission 权限 受限 标准 完全访问 restricted full' },
   { tab: 'security', label: 'Shell 命令执行', labelEn: 'Shell command execution', desc: '安全', keywords: 'shell 命令 执行 终端 命令执行' },
   { tab: 'security', label: '集群敏感操作拦截', labelEn: 'Swarm sensitive-op blocking', desc: '安全', keywords: 'sensitive 敏感 拦截 删除 集群 高危' },
+  { tab: 'security', label: '巨天安全·危险命令拦截', labelEn: 'Shield: dangerous command guard', desc: '安全', keywords: 'shield 安全 危险命令 拦截 rm -rf 巨天安全 cmdGuard' },
+  { tab: 'security', label: '巨天安全·提示词注入扫描', labelEn: 'Shield: prompt injection scan', desc: '安全', keywords: 'shield 安全 注入 提示词 扫描 巨天安全 injectionScan' },
+  { tab: 'security', label: '巨天安全·密钥屏蔽与占位符', labelEn: 'Shield: key mask & placeholders', desc: '安全', keywords: 'shield 安全 密钥 key 打码 占位符 {{KEY}} 巨天安全 keyShield' },
+  { tab: 'security', label: '巨天安全·安全记录', labelEn: 'Shield: security log', desc: '安全', keywords: 'shield 安全记录 日志 拦截记录 巨天安全' },
   { tab: 'security', label: '可访问文件夹', labelEn: 'Allowed folders', desc: '安全', keywords: 'folders 授权 文件夹 目录 白名单' },
   { tab: 'appearance', label: '主题模式', labelEn: 'Theme mode', desc: '外观', keywords: 'theme 主题 深色 浅色 dark light 暗色 黑色' },
   { tab: 'appearance', label: '发送键行为', labelEn: 'Send key behavior', desc: '外观', keywords: 'enter 发送 回车 换行 enterToSend' },
@@ -132,6 +136,108 @@ const Field = ({ label, children, c }: { label: string; children: React.ReactNod
     {children}
   </div>
 );
+
+/** 巨天安全·安全记录（v14.12.0）：读 /api/security/log，可刷新/清空 */
+function ShieldLog({ c, t, lang }: { c: any; t: (a: string, b?: string) => string; lang: 'zh' | 'en' }) {
+  const [events, setEvents] = useState<any[]>([])
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(() => {
+    fetchCompat('/api/security/log').then(r => r.json()).then(d => setEvents(Array.isArray(d?.events) ? d.events : [])).catch(() => {})
+  }, [])
+  useEffect(() => { load() }, [load])
+  const fmtTime = (ts: number) => {
+    const d = new Date(ts)
+    const now = new Date()
+    const sameDay = d.toDateString() === now.toDateString()
+    const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return sameDay ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`
+  }
+  const TYPE_META: Record<string, { label: string; labelEn: string; color: string }> = {
+    cmd_blocked: { label: '已拦截', labelEn: 'Blocked', color: '#ef4444' },
+    injection_flagged: { label: '注入标记', labelEn: 'Injection', color: '#f59e0b' },
+    key_masked: { label: '密钥打码', labelEn: 'Key masked', color: '#3b82f6' },
+    key_placeholder: { label: '占位符', labelEn: 'Placeholder', color: '#22c55e' },
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px]" style={{ color: c.textTertiary }}>{events.length ? t(`最近 ${events.length} 条`, `Latest ${events.length}`) : t('暂无记录', 'No events yet')}</span>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={load} disabled={busy} className="text-[11px] px-2 py-1 rounded-lg" style={{ color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>{t('刷新', 'Refresh')}</button>
+          {events.length > 0 && (
+            <button type="button" disabled={busy}
+              onClick={async () => { setBusy(true); try { await fetchCompat('/api/security/log', { method: 'DELETE' }); setEvents([]) } finally { setBusy(false) } }}
+              className="text-[11px] px-2 py-1 rounded-lg" style={{ color: '#ef4444', border: '1px solid #ef444455' }}>{t('清空', 'Clear')}</button>
+          )}
+        </div>
+      </div>
+      {events.length === 0 ? (
+        <div className="rounded-lg p-4 text-center text-[11px]" style={{ border: `1px dashed ${c.border}`, color: c.textMuted, background: c.bgInput }}>
+          {t('拦截/标记/打码事件会记录在这里', 'Blocks, flags and masks will appear here')}
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
+          {events.map((e) => {
+            const meta = TYPE_META[e.type] || { label: e.type, labelEn: e.type, color: c.textMuted }
+            return (
+              <div key={e.id || e.ts} className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 mt-0.5" style={{ color: meta.color, background: `${meta.color}14` }}>{lang === 'en' ? meta.labelEn : meta.label}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11.5px] break-all" style={{ color: c.textSecondary }}>{e.detail}</div>
+                  <div className="text-[10px] mt-0.5 flex items-center gap-1.5" style={{ color: c.textMuted }}>
+                    <span>{e.tool}</span><span>·</span><span>{fmtTime(e.ts)}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 巨天安全·防护库（v14.12.0）：内置+远程恶意命令库版本展示与实时更新 */
+function PackStatus({ c, t }: { c: any; t: (a: string, b?: string) => string }) {
+  const [st, setSt] = useState<any>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const load = useCallback(() => {
+    fetchCompat('/api/security/pack').then(r => r.json()).then(setSt).catch(() => {})
+  }, [])
+  useEffect(() => { load() }, [load])
+  const update = async () => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await fetchCompat('/api/security/pack/update', { method: 'POST' })
+      const d = await r.json()
+      if (d?.ok) { setMsg(t(`已更新至 ${d.version}（${d.count} 条）`, `Updated to ${d.version} (${d.count})`)); load() }
+      else setMsg(t(`更新失败：${d?.error || '未知错误'}`, `Update failed: ${d?.error || 'unknown'}`))
+    } catch (e: any) { setMsg(t(`更新失败：${e?.message || e}`, `Update failed: ${e?.message || e}`)) }
+    finally { setBusy(false) }
+  }
+  return (
+    <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('恶意命令库', 'Malicious Command Pack')}</div>
+        <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>
+          {st ? (
+            <>
+              内置 {st.bundled ? `v${st.bundled.version} · ${st.bundled.count} 条` : '—'}
+              {st.remote ? ` ＋ 远程 v${st.remote.version} · ${st.remote.count} 条` : ''}
+              <span style={{ color: c.textMuted }}>（生效 {st.active} 条）</span>
+            </>
+          ) : t('加载中…', 'Loading…')}
+        </div>
+        {msg && <div className="text-[10.5px] mt-0.5" style={{ color: c.textMuted }}>{msg}</div>}
+      </div>
+      <button type="button" onClick={update} disabled={busy}
+        className="text-[11px] px-2.5 py-1 rounded-lg font-medium shrink-0" style={{ background: c.accent, color: c.accentText, opacity: busy ? 0.6 : 1 }}>
+        {busy ? t('更新中…', 'Updating…') : t('检查更新', 'Check Update')}
+      </button>
+    </div>
+  )
+}
 
 export default function SettingsModal({ settings, onSave, onClose, embedded = false, onOpenFreeModels }: Props) {
   const { c, theme, setTheme } = useTheme();
@@ -1049,6 +1155,37 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
             </>)}
 
             {tab === 'security' && (<>
+              <Sub c={c} title={t('巨天安全', 'Jutian Shield')}>
+                <p className="text-[10.5px] mb-2" style={{ color: c.textTertiary }}>{t('三道防线默认开启，所有事件落安全记录；密钥永远不进对话上下文。', 'Three defenses on by default; every event is logged. Keys never enter the chat context.')}</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                    <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('危险命令拦截', 'Dangerous Command Guard')}</div><div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('拦截 rm -rf 根目录 / 抹盘 / 关机等毁灭性命令', 'Block rm -rf /, disk wipes, shutdown and other destructive commands')}</div></div>
+                    <button type="button" role="switch" aria-checked={form.cmdGuard !== false} onClick={() => applySecurityNow({ cmdGuard: form.cmdGuard === false })} className="relative w-10 h-5 rounded-full transition-colors shrink-0" style={{ background: form.cmdGuard !== false ? c.accent : `${c.textMuted}44` }}>
+                      <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: form.cmdGuard !== false ? 'calc(100% - 18px)' : '2px' }} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                    <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('提示词注入扫描', 'Prompt Injection Scan')}</div><div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('工具输出中的「忽略之前的指令」等注入话术打标提醒', 'Flag injection phrases like "ignore previous instructions" in tool output')}</div></div>
+                    <button type="button" role="switch" aria-checked={form.injectionScan !== false} onClick={() => applySecurityNow({ injectionScan: form.injectionScan === false })} className="relative w-10 h-5 rounded-full transition-colors shrink-0" style={{ background: form.injectionScan !== false ? c.accent : `${c.textMuted}44` }}>
+                      <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: form.injectionScan !== false ? 'calc(100% - 18px)' : '2px' }} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                    <div><div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('密钥屏蔽与占位符', 'Key Shield & Placeholders')}</div><div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('输出中的 key 自动打码；AI 可用 {{KEY}}/{{BASE}} 引用密钥，不回显明文', 'Mask keys in output; AI can reference keys via {{KEY}}/{{BASE}} — never echoed')}</div></div>
+                    <button type="button" role="switch" aria-checked={form.keyShield !== false} onClick={() => applySecurityNow({ keyShield: form.keyShield === false })} className="relative w-10 h-5 rounded-full transition-colors shrink-0" style={{ background: form.keyShield !== false ? c.accent : `${c.textMuted}44` }}>
+                      <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform" style={{ left: form.keyShield !== false ? 'calc(100% - 18px)' : '2px' }} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-[12px] font-medium mb-1.5" style={{ color: c.textSecondary }}>{t('安全记录', 'Security Log')}</div>
+                  <ShieldLog c={c} t={t} lang={lang} />
+                </div>
+                <div className="mt-3">
+                  <div className="text-[12px] font-medium mb-1.5" style={{ color: c.textSecondary }}>{t('防护库', 'Protection Pack')}</div>
+                  <PackStatus c={c} t={t} />
+                </div>
+              </Sub>
               <Sub c={c} title={t('MCP 外部工具', 'MCP Tools')}>
                 <McpSection c={c} t={t} />
               </Sub>

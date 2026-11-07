@@ -64,6 +64,12 @@ export interface Settings {
   allowedFolders: string[]
   shellAccess: boolean
   sensitiveBlock: boolean
+  /** 巨天安全（v14.12.0）：危险命令拦截（默认开） */
+  cmdGuard?: boolean
+  /** 巨天安全：提示词注入扫描（默认开） */
+  injectionScan?: boolean
+  /** 巨天安全：密钥屏蔽 + {{KEY}} 占位符（默认开） */
+  keyShield?: boolean
   // 合盖保持运行（默认开启）
   keepAwake?: boolean
   /** Hermes 文本协议注入（v13.10.1）：auto=免费/小模型线路自动注入（默认）；on=恒注入；off=关闭 */

@@ -76,6 +76,9 @@ const DEFAULT_SETTINGS: Settings = {
   allowedFolders: [],
   shellAccess: false,
   sensitiveBlock: true,
+  cmdGuard: true,
+  injectionScan: true,
+  keyShield: true,
   enterToSend: true,
   chatFontSize: 'standard',
   autoTitle: true,
@@ -131,6 +134,9 @@ export async function getSettings(): Promise<Settings> {
       permissionLevel: (result.permissionLevel as PermissionLevel) || localSettings.permissionLevel || DEFAULT_SETTINGS.permissionLevel,
       allowedFolders: Array.isArray(result.allowedFolders) ? localSettings.allowedFolders : localSettings.allowedFolders,
       shellAccess: result.shellAccess !== undefined ? result.shellAccess === 'true' : localSettings.shellAccess,
+      cmdGuard: result.security_cmd_guard !== undefined ? result.security_cmd_guard === 'true' : localSettings.cmdGuard !== false,
+      injectionScan: result.security_injection_scan !== undefined ? result.security_injection_scan === 'true' : localSettings.injectionScan !== false,
+      keyShield: result.security_key_shield !== undefined ? result.security_key_shield === 'true' : localSettings.keyShield !== false,
       keepAwake: result.keepAwake !== undefined ? result.keepAwake === 'true' : localSettings.keepAwake !== false,
       providerName: result.providerName || localSettings.providerName || 'custom',
       contextWindow: Math.max(4000, result.contextWindow ? parseInt(result.contextWindow, 10) || 128000 : (localSettings.contextWindow || 128000)),
@@ -183,6 +189,10 @@ export async function saveSettings(s: Settings): Promise<void> {
   await put('permissionLevel', s.permissionLevel)
   await put('allowedFolders', JSON.stringify(s.allowedFolders))
   await put('shellAccess', String(s.shellAccess))
+  // 巨天安全三开关（v14.12.0）
+  await put('security_cmd_guard', String(s.cmdGuard !== false))
+  await put('security_injection_scan', String(s.injectionScan !== false))
+  await put('security_key_shield', String(s.keyShield !== false))
   await put('keepAwake', String(s.keepAwake !== false))
   await put('providerName', s.providerName || '')
   await put('contextWindow', String(Math.max(4000, s.contextWindow || 1000000)))

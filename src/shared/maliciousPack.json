@@ -1,0 +1,281 @@
+{
+ "version": "2026.11.07",
+ "source": "curated from SigmaHQ/sigma & LOLBAS public detection rules",
+ "patterns": [
+  {
+   "p": "find\\s+/\\s+(-exec\\s+rm|-delete)\\b",
+   "k": "删库清盘",
+   "r": "对根目录执行 find 删除"
+  },
+  {
+   "p": "\\bshred\\s+[^;&|]*\\/dev\\/(disk|sd[a-z]|nvme)",
+   "k": "删库清盘",
+   "r": "shred 擦除物理磁盘"
+  },
+  {
+   "p": "\\btruncate\\s+-s\\s*0\\s+\\/etc\\/",
+   "k": "删库清盘",
+   "r": "清空 /etc 系统配置"
+  },
+  {
+   "p": "\\bcp\\s+\\/dev\\/(zero|null|urandom)\\s+\\/dev\\/(disk|sd[a-z]|nvme)",
+   "k": "删库清盘",
+   "r": "向物理磁盘写零/随机数"
+  },
+  {
+   "p": ">\\s*\\/dev\\/(nvme\\d|disk\\d|mmcblk\\d)",
+   "k": "删库清盘",
+   "r": "重定向覆盖裸设备"
+  },
+  {
+   "p": "\\bmkfifo\\s+.*\\s+\\/dev\\/",
+   "k": "删库清盘",
+   "r": "对裸设备建管道"
+  },
+  {
+   "p": "chmod\\s+\\+?s\\s+(\\/usr?\\/bin\\/|\\/bin\\/)(ba|z|)sh\\b",
+   "k": "权限后门",
+   "r": "给 shell 设置 SUID 位"
+  },
+  {
+   "p": ">>?\\s*\\/etc\\/sudoers\\b",
+   "k": "权限后门",
+   "r": "改写 sudoers 提权"
+  },
+  {
+   "p": "\\buseradd\\b[^;&|]*-u\\s*0\\b|\\buseradd\\b[^;&|]*-o\\b[^;&|]*-u\\s*0",
+   "k": "权限后门",
+   "r": "创建 UID=0 的后门账户"
+  },
+  {
+   "p": "\\bnet\\s+user\\b[^;&|]*\\/add\\b",
+   "k": "权限后门",
+   "r": "Windows 添加用户"
+  },
+  {
+   "p": "\\bnet\\s+localgroup\\s+administrators\\b[^;&|]*\\/add",
+   "k": "权限后门",
+   "r": "Windows 添加管理员组成员"
+  },
+  {
+   "p": "\\bpasswd\\s+-d\\s+root\\b",
+   "k": "权限后门",
+   "r": "删除 root 密码"
+  },
+  {
+   "p": "\\bdscl\\s+\\.\\s+-passwd\\s+\\/Users\\/(root|admin)",
+   "k": "权限后门",
+   "r": "修改 root/admin 密码"
+  },
+  {
+   "p": "id_(rsa|ed25519|ecdsa)\\.pub\\b[^;&|]*>>?\\s*[^;&|]*authorized_keys",
+   "k": "权限后门",
+   "r": "向 authorized_keys 注入公钥"
+  },
+  {
+   "p": "\\becho\\b[^;&|]*>>?\\s*~\\/\\.ssh\\/authorized_keys",
+   "k": "权限后门",
+   "r": "向 authorized_keys 追加内容"
+  },
+  {
+   "p": "\\bchmod\\s+4777\\s+\\/",
+   "k": "权限后门",
+   "r": "设置全可写 SUID"
+  },
+  {
+   "p": "\\bsetenforce\\s+0\\b",
+   "k": "防御破坏",
+   "r": "关闭 SELinux 强制模式"
+  },
+  {
+   "p": "\\bsystemctl\\s+(stop|disable|mask)\\s+(firewalld|ufw|apparmor|iptables|nftables)\\b",
+   "k": "防御破坏",
+   "r": "停用防火墙/强制访问控制"
+  },
+  {
+   "p": "\\bufw\\s+disable\\b",
+   "k": "防御破坏",
+   "r": "关闭 UFW 防火墙"
+  },
+  {
+   "p": "\\bnetsh\\s+advfirewall\\s+set\\s+[^;&|]*state\\s+off",
+   "k": "防御破坏",
+   "r": "关闭 Windows 防火墙"
+  },
+  {
+   "p": "Set-MpPreference\\b[^;&|]*-?Disable",
+   "k": "防御破坏",
+   "r": "关闭 Windows Defender 实时防护"
+  },
+  {
+   "p": "\\bwevtutil\\s+cl\\b",
+   "k": "防御破坏",
+   "r": "清除 Windows 事件日志"
+  },
+  {
+   "p": "\\bvssadmin\\s+delete\\s+shadows",
+   "k": "防御破坏",
+   "r": "删除卷影副本（勒索软件前兆）"
+  },
+  {
+   "p": "\\bwmic\\s+shadowcopy\\s+delete",
+   "k": "防御破坏",
+   "r": "删除卷影副本"
+  },
+  {
+   "p": "\\bbcdedit\\s+\\/set\\s+[^;&|]*safeboot",
+   "k": "防御破坏",
+   "r": "改启动项进安全模式"
+  },
+  {
+   "p": "\\bcsrutil\\s+disable\\b",
+   "k": "防御破坏",
+   "r": "关闭 macOS SIP"
+  },
+  {
+   "p": "powershell\\b[^;&|]*-ExecutionPolicy\\s*Bypass",
+   "k": "防御破坏",
+   "r": "绕过 PowerShell 执行策略"
+  },
+  {
+   "p": "bash\\s+-i\\s+>&\\s+\\/dev\\/(tcp|udp)\\/",
+   "k": "反弹远控",
+   "r": "bash 反弹 shell"
+  },
+  {
+   "p": "\\bnc(\\.traditional|at)?\\b[^;&|]*\\s-e\\s+[^;&|]*(ba|z|)sh\\b",
+   "k": "反弹远控",
+   "r": "nc -e 反弹 shell"
+  },
+  {
+   "p": "\\bmkfifo\\b[^;&|]*\\bnc\\b",
+   "k": "反弹远控",
+   "r": "FIFO 管道反弹 shell"
+  },
+  {
+   "p": "\\bsocat\\b[^;&|]*EXEC:(\\/bin\\/)?(ba|z|)sh",
+   "k": "反弹远控",
+   "r": "socat 反弹 shell"
+  },
+  {
+   "p": "\\bpython3?\\s+-c\\s*['\"][^'\"]*socket\\.socket[^'\"]*(\\.send|system|popen|subprocess)",
+   "k": "反弹远控",
+   "r": "Python 反弹 shell 单行"
+  },
+  {
+   "p": "\\bperl\\s+-e\\s*['\"][^'\"]*socket[^'\"]*exec",
+   "k": "反弹远控",
+   "r": "Perl 反弹 shell"
+  },
+  {
+   "p": "\\bruby\\s+-rsocket\\s+-e",
+   "k": "反弹远控",
+   "r": "Ruby 反弹 shell"
+  },
+  {
+   "p": "\\bngrok\\b",
+   "k": "反弹远控",
+   "r": "启动内网穿透隧道"
+  },
+  {
+   "p": "\\bxmrig\\b|\\bminerd\\b|\\bcpuminer\\b|\\bcgminer\\b|\\b_ethminer\\b|\\bphoenixminer\\b",
+   "k": "挖矿木马",
+   "r": "运行挖矿程序"
+  },
+  {
+   "p": "stratum\\+(tcp|ssl):\\/\\/",
+   "k": "挖矿木马",
+   "r": "连接矿池协议"
+  },
+  {
+   "p": "\\bcurl\\b(?=[^;]*\\|\\s*(sudo\\s+)?(ba|z|da|k)?sh\\b)",
+   "k": "脚本注入",
+   "r": "curl 输出管道执行远程脚本（应先下载检查）"
+  },
+  {
+   "p": "\\bwget\\b(?=[^;]*\\|\\s*(sudo\\s+)?(ba|z|da|k)?sh\\b)",
+   "k": "脚本注入",
+   "r": "wget 输出管道执行远程脚本"
+  },
+  {
+   "p": "\\biex\\s*\\(\\s*(iwr|invoke-webrequest|new-object\\s+net\\.webclient)",
+   "k": "脚本注入",
+   "r": "PowerShell 下载即执行"
+  },
+  {
+   "p": "\\binvoke-expression\\b[^;&|]*\\(\\s*(new-object|invoke-webrequest|downloadstring)",
+   "k": "脚本注入",
+   "r": "PowerShell IEX 下载执行"
+  },
+  {
+   "p": "\\bpowershell\\b[^;&|]*\\s-enc(odedcommand)?\\s",
+   "k": "脚本注入",
+   "r": "Base64 混淆的 PowerShell 执行"
+  },
+  {
+   "p": "(curl|wget|nc|scp)\\b[^;&|]*@(\\/etc\\/(shadow|passwd|sudoers)|~?\\/?(\\.ssh\\/id_[a-z]+|\\.aws\\/credentials|\\.config\\/gcloud))",
+   "k": "敏感外带",
+   "r": "上传密钥/凭据文件"
+  },
+  {
+   "p": "\\btar\\s+[czf]+\\b[^;&|]*\\/etc\\b[^;&|]*\\|\\s*(curl|nc|wget)\\b",
+   "k": "敏感外带",
+   "r": "打包 /etc 后外传"
+  },
+  {
+   "p": "\\bgpg\\b[^;&|]*--encrypt[^;&|]*\\/etc\\/",
+   "k": "敏感外带",
+   "r": "加密打包系统目录"
+  },
+  {
+   "p": "\\|\\s*crontab\\s+-\\b",
+   "k": "持久化",
+   "r": "管道写入计划任务"
+  },
+  {
+   "p": ">>?\\s*\\/etc\\/(cron\\.daily|cron\\.hourly|cron\\.d\\/|rc\\.local)\\b",
+   "k": "持久化",
+   "r": "写入系统启动/计划任务"
+  },
+  {
+   "p": "\\bschtasks\\s+\\/create\\b[^;&|]*\\/sc\\s+",
+   "k": "持久化",
+   "r": "Windows 创建计划任务"
+  },
+  {
+   "p": "\\bchattr\\s+\\+i\\s+\\/etc\\/(passwd|shadow)",
+   "k": "持久化",
+   "r": "锁定账户文件防修改"
+  },
+  {
+   "p": "\\bcertutil\\s+-urlcache",
+   "k": "LOLBAS",
+   "r": "certutil 下载文件"
+  },
+  {
+   "p": "\\bbitsadmin\\s+\\/transfer",
+   "k": "LOLBAS",
+   "r": "bitsadmin 下载任务"
+  },
+  {
+   "p": "\\bmshta\\s+(http|\\\\\\\\)",
+   "k": "LOLBAS",
+   "r": "mshta 执行远程 HTA"
+  },
+  {
+   "p": "\\bregsvr32\\s+\\/[siu]+\\b[^;&|]*http",
+   "k": "LOLBAS",
+   "r": "regsvr32 远程加载"
+  },
+  {
+   "p": "\\brundll32\\b[^;&|]*(javascript:|url\\.dll)",
+   "k": "LOLBAS",
+   "r": "rundll32 执行脚本"
+  },
+  {
+   "p": "\\bmsiexec\\s+\\/i\\s+https?:",
+   "k": "LOLBAS",
+   "r": "msiexec 安装远程包"
+  }
+ ]
+}

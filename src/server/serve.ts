@@ -241,6 +241,34 @@ var ARGS_MOD = (() => { try { return require("./src/shared/toolArgs.cjs"); } cat
 // 公告解析（GitHub 仓库 docs/notice.md → 进应用自动读取显示）
 var ANNOUNCE_MOD = (() => { try { return require("./src/shared/announcement.cjs"); } catch (e) { console.error("announcement.cjs load failed:", e.message); return null; } })();
 var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); } catch (e) { console.error("shellGuard.cjs load failed:", e.message); return null; } })();
+// 巨天安全（v14.12.0）：危险命令拦截 / 注入扫描 / 密钥屏蔽 + {{KEY}} 占位符 / 安全记录
+var SHIELD = (() => { try { return require("./src/shared/securityShield.cjs"); } catch (e) { console.error("securityShield.cjs load failed:", e.message); return null; } })();
+// 恶意命令库：内置精选（Sigma/LOLBAS 提炼）+ 远程更新叠加（Gitee 镜像 raw，失败回落内置）
+var MAL_PACK: any = (() => { try { return require("./src/shared/maliciousPack.json"); } catch (e) { return null; } })();
+var MAL_REMOTE: any = null;
+var MAL_COMPILED: any[] | null = null;
+function malLoadRemote() {
+  MAL_REMOTE = null;
+  try { MAL_REMOTE = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "malicious-commands-remote.json"), "utf-8")); } catch { /* 无远程库 */ }
+  MAL_COMPILED = null;
+}
+function malRules(): any[] {
+  if (!SHIELD) return [];
+  if (!MAL_COMPILED) {
+    const out: any[] = [];
+    const addOne = (pack: any) => {
+      if (!pack || !Array.isArray(pack.patterns)) return;
+      for (const p of pack.patterns.slice(0, 3000)) {
+        if (!p || typeof p.p !== "string" || p.p.length > 500) continue;
+        try { out.push({ kind: String(p.k || "恶意命令").slice(0, 40), reason: String(p.r || "命中恶意命令库").slice(0, 120), re: new RegExp(p.p, "i") }); } catch { /* 跳过坏正则 */ }
+      }
+    };
+    addOne(MAL_PACK); addOne(MAL_REMOTE);
+    MAL_COMPILED = out;
+  }
+  return MAL_COMPILED;
+}
+malLoadRemote();
 var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
 var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"); } catch (e) { console.error("permission.cjs load failed:", e.message); return null; } })();
@@ -1902,11 +1930,16 @@ function securityConfig() {
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   let dirs = [];
   try { const d = JSON.parse(s.allowedFolders || "[]"); if (Array.isArray(d)) dirs = d; } catch {}
+  // 巨天安全三开关（v14.12.0）：security_* KV 缺省即开启
+  const shield = SHIELD ? SHIELD.shieldToggles(rows) : { cmdGuard: true, injectionScan: true, keyShield: true };
   return {
     level: s.permissionLevel === "restricted" ? "restricted" : s.permissionLevel === "full" ? "full" : "standard",
     dirs,
     shellAccess: s.shellAccess !== "false",
     sensitiveBlock: s.sensitiveBlock !== "false",
+    ...shield,
+    /** 真密钥清单（keyShield exact 打码源；含 kilo/本地 API 等全部 key/token 类字段） */
+    secrets: SHIELD ? SHIELD.collectSecrets(rows) : [],
   };
 }
 
@@ -1915,7 +1948,9 @@ function inDirs(p, dirs) {
   return dirs.some((d) => { try { return rp.startsWith(path.resolve(d)); } catch { return false; } });
 }
 
-const DANGEROUS_SHELL_RE = /rm\s+-rf|del\s+\/f|rd\s+\/s|format\s+[a-z]:|shutdown|diskpart|mkfs/;
+// v14.12.0：shutdown 移除——关机/重启类改由巨天安全的「执行意图」判定接管（带只读白名单，
+// 不再误伤 man shutdown / grep shutdown 等只读场景；此处保留其余粗粒度硬规则兜底）
+const DANGEROUS_SHELL_RE = /rm\s+-rf|del\s+\/f|rd\s+\/s|format\s+[a-z]:|diskpart|mkfs/;
 const FILE_TOOLS = ["read_file", "list_dir", "search_files", "search_content", "get_file_info", "write_file", "edit_file", "delete_file", "move_file"];
 const WRITE_TOOLS = ["write_file", "edit_file", "move_file", "delete_file", "create_skill", "install_skill", "create_extension"];
 
@@ -1928,6 +1963,19 @@ function checkSecurity(name, args, sec) {
   // Shell 开关 / 高危命令
   if (name === "shell") {
     if (!sec.shellAccess) return "Shell 命令执行已在设置中关闭";
+    // 巨天安全·危险命令拦截（v14.12.0）：毁灭性命令直接拦 + 落安全记录（可在设置 → 巨天安全关闭）
+    if (sec.cmdGuard && SHIELD) {
+      const hit = SHIELD.checkDangerousCommand(String(args.command || ""), malRules());
+      if (hit.hit) {
+        try {
+          SHIELD.appendSecurityEvent(path.join(DATA_DIR, SHIELD.SEC_FILE), {
+            type: "cmd_blocked", tool: "shell",
+            detail: `${hit.kind}：${String(args.command || "").slice(0, 80)}`, action: "blocked",
+          });
+        } catch { /* 记录失败不影响拦截 */ }
+        return SHIELD.dangerousMessage(hit);
+      }
+    }
     if (DANGEROUS_SHELL_RE.test(String(args.command || "").toLowerCase())) {
       if (sec.level === "standard" || (sec.level === "full" && sec.sensitiveBlock)) return "高危命令已被安全策略拦截";
     }
@@ -2409,6 +2457,25 @@ if (spec) {
 }
 let r;
 try {
+  // 巨天安全·密钥占位符（v14.12.0）：shell 命令里的 {{KEY}}/{{BASE}} 执行时才替换成真值，
+  // 密钥不进对话上下文；关闭 keyShield 时原样透传
+  if (SHIELD && name === "shell" && typeof callArgs.command === "string") {
+    const __sec0 = securityConfig();
+    if (__sec0.keyShield) {
+      let __kv: Record<string, string> = {};
+      try { __kv = Object.fromEntries(db.getAllSettings().map((x) => [x.key, x.value])) } catch {}
+      const ph = SHIELD.applyKeyPlaceholders(callArgs.command, { apiKey: __kv.apiKey || "", apiBaseUrl: __kv.apiBaseUrl || "" });
+      if (ph.replaced) {
+        callArgs = { ...callArgs, command: ph.text };
+        try {
+          SHIELD.appendSecurityEvent(path.join(DATA_DIR, SHIELD.SEC_FILE), {
+            type: "key_placeholder", tool: "shell",
+            detail: `命令使用了 ${ph.kinds.join("、")} 占位符（执行时替换，不回显）`, action: "substituted",
+          });
+        } catch {}
+      }
+    }
+  }
   // 统一超时（v13.9.5）：任何工具挂死 180 秒后中止，不再无限等待
   r = await Promise.race([
     h(callArgs),
@@ -2417,6 +2484,43 @@ try {
 }
 catch (e) { r = { success: false, error: String((e && e.message) || e || "工具执行异常") }; }
 if (!r || typeof r !== "object") r = { success: true, output: String(r) };
+// ─── 巨天安全（v14.12.0）：输出回给模型前的最后两道关卡 ───
+// 1) keyShield：真实密钥/令牌打码（exact 配置密钥 + sk-/ghp_/Bearer 等通用形态兜底）
+// 2) injectionScan：网页/文件里藏的「忽略之前的指令」等注入话术 → 打标提醒模型 + 记录
+try {
+  const __sec = SHIELD ? securityConfig() : null;
+  if (SHIELD && __sec) {
+    if (__sec.keyShield) {
+      if (typeof r.output === "string" && r.output) {
+        const m = SHIELD.maskSecrets(r.output, __sec.secrets);
+        if (m.masked > 0) {
+          r.output = m.text;
+          try {
+            SHIELD.appendSecurityEvent(path.join(DATA_DIR, SHIELD.SEC_FILE), {
+              type: "key_masked", tool: String(name),
+              detail: `输出包含 ${m.masked} 处密钥/令牌，已打码后返回给模型`, action: "masked",
+            });
+          } catch {}
+        }
+      }
+      if (typeof r.error === "string" && r.error) {
+        r.error = SHIELD.maskSecrets(r.error, __sec.secrets).text;
+      }
+    }
+    if (__sec.injectionScan && typeof r.output === "string" && r.output) {
+      const scan = SHIELD.scanInjection(r.output);
+      if (scan.flagged) {
+        r.output = r.output + SHIELD.injectionBanner(scan);
+        try {
+          SHIELD.appendSecurityEvent(path.join(DATA_DIR, SHIELD.SEC_FILE), {
+            type: "injection_flagged", tool: String(name),
+            detail: `${scan.hits.join("、")}：${scan.sample}`, action: "flagged",
+          });
+        } catch {}
+      }
+    }
+  }
+} catch { /* 安全层异常绝不阻断工具结果 */ }
 console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
   return r;
 }
@@ -4611,6 +4715,45 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
 
     // GET /api/settings — 统一走 SQLite
     // ─── 本地 API 实时活动（v14.11.2）：供设置页轮询「谁在用、正在回复什么」───
+    // ─── 巨天安全记录（v14.12.0）：设置页展示 + 一键清空 ───
+    if (url.pathname === "/api/security/log" && req.method === "GET") {
+      if (!SHIELD) return json(res, { events: [] });
+      return json(res, { events: SHIELD.listSecurityEvents(path.join(DATA_DIR, SHIELD.SEC_FILE), 100) });
+    }
+    if (url.pathname === "/api/security/log" && req.method === "DELETE") {
+      if (SHIELD) { try { SHIELD.clearSecurityEvents(path.join(DATA_DIR, SHIELD.SEC_FILE)); } catch {} }
+      return json(res, { ok: true });
+    }
+    // ─── 恶意命令库状态与实时更新（v14.12.0）：内置 + 远程叠加 ───
+    if (url.pathname === "/api/security/pack" && req.method === "GET") {
+      return json(res, {
+        bundled: MAL_PACK ? { version: MAL_PACK.version, count: (MAL_PACK.patterns || []).length } : null,
+        remote: MAL_REMOTE ? { version: MAL_REMOTE.version, count: (MAL_REMOTE.patterns || []).length } : null,
+        active: malRules().length,
+      });
+    }
+    if (url.pathname === "/api/security/pack/update" && req.method === "POST") {
+      // 依次尝试 Gitee（国内直连）→ GitHub raw；仓库镜像自动同步同一份 JSON
+      const sources = [
+        "https://gitee.com/deepseekv5/jutian-agent/raw/main/src/shared/maliciousPack.json",
+        "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/src/shared/maliciousPack.json",
+      ];
+      let lastErr = "";
+      for (const src of sources) {
+        try {
+          const resp = await fetch(src, { signal: AbortSignal.timeout(20_000), headers: { "User-Agent": UA } });
+          if (!resp.ok) { lastErr = `${new URL(src).host}: HTTP ${resp.status}`; continue; }
+          const data = await resp.json();
+          const v = SHIELD ? SHIELD.validatePack(data) : { ok: false, error: "shield 未加载" };
+          if (!v.ok) { lastErr = `校验失败：${v.error}`; continue; }
+          // 比内置还旧就不落盘（防回退）
+          fs.writeFileSync(path.join(DATA_DIR, "malicious-commands-remote.json"), JSON.stringify(data, null, 1));
+          malLoadRemote();
+          return json(res, { ok: true, version: data.version, count: v.count, active: malRules().length, source: new URL(src).host });
+        } catch (e: any) { lastErr = `${new URL(src).host}: ${String(e?.message || e).slice(0, 80)}`; }
+      }
+      return json(res, { ok: false, error: lastErr || "所有源都不可达" }, 502);
+    }
     if (url.pathname === "/api/local-api/activity" && req.method === "GET") {
       return json(res, { items: __laList });
     }

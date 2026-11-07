@@ -277,13 +277,13 @@
  },
  {
   "name": "shell",
-  "description": "执行 Shell 命令并返回输出。默认前台执行（30 秒超时，上限 600 秒）。长驻进程（开发服务器、watch、大型构建）必须传 background:true 后台启动，否则会超时。",
+  "description": "执行 Shell 命令并返回输出。默认前台执行（30 秒超时，上限 600 秒）。长驻进程（开发服务器、watch、大型构建）必须传 background:true 后台启动，否则会超时。命令中可用 {{KEY}} / {{BASE}} 占位符引用已配置的 API 密钥/地址——执行时由巨天安全替换为真实值，密钥不会出现在对话或输出中。",
   "parameters": {
    "type": "object",
    "properties": {
     "command": {
      "type": "string",
-     "description": "要执行的 shell 命令"
+     "description": "要执行的 shell 命令（可用 {{KEY}}/{{BASE}} 占位符引用密钥/地址，明文写 key 会在输出中被屏蔽）"
     },
     "workdir": {
      "type": "string",
