@@ -256,10 +256,12 @@ function malRules(): any[] {
   if (!SHIELD) return [];
   if (!MAL_COMPILED) {
     const out: any[] = [];
+    const seen = new Set<string>();
     const addOne = (pack: any) => {
       if (!pack || !Array.isArray(pack.patterns)) return;
       for (const p of pack.patterns.slice(0, 3000)) {
-        if (!p || typeof p.p !== "string" || p.p.length > 500) continue;
+        if (!p || typeof p.p !== "string" || p.p.length > 500 || seen.has(p.p)) continue;
+        seen.add(p.p);
         try { out.push({ kind: String(p.k || "恶意命令").slice(0, 40), reason: String(p.r || "命中恶意命令库").slice(0, 120), re: new RegExp(p.p, "i") }); } catch { /* 跳过坏正则 */ }
       }
     };
@@ -4733,24 +4735,33 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       });
     }
     if (url.pathname === "/api/security/pack/update" && req.method === "POST") {
-      // 依次尝试 Gitee（国内直连）→ GitHub raw；仓库镜像自动同步同一份 JSON
-      const sources = [
-        "https://gitee.com/deepseekv5/jutian-agent/raw/main/src/shared/maliciousPack.json",
-        "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/src/shared/maliciousPack.json",
+      // GitHub raw（公开仓库，无网墙时首选）→ Gitee API contents（私有仓友好，需 gitee_token 设置，base64 解码）
+      let giteeToken = "";
+      try { giteeToken = String(Object.fromEntries((sharedDb ? db.getAllSettings() : []).map((r) => [r.key, r.value])).gitee_token || ""); } catch {}
+      const sources: { url: string; kind: "json" | "gitee" }[] = [
+        { url: "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/src/shared/maliciousPack.json", kind: "json" },
+        { url: `https://gitee.com/api/v5/repos/deepseekv5/jutian-agent/contents/src/shared/maliciousPack.json${giteeToken ? `?access_token=${encodeURIComponent(giteeToken)}` : ""}`, kind: "gitee" },
       ];
       let lastErr = "";
       for (const src of sources) {
         try {
-          const resp = await fetch(src, { signal: AbortSignal.timeout(20_000), headers: { "User-Agent": UA } });
-          if (!resp.ok) { lastErr = `${new URL(src).host}: HTTP ${resp.status}`; continue; }
-          const data = await resp.json();
+          const resp = await fetch(src.url, { signal: AbortSignal.timeout(20_000), headers: { "User-Agent": UA } });
+          if (!resp.ok) { lastErr = `${new URL(src.url).host}: HTTP ${resp.status}`; continue; }
+          let data: any = null;
+          if (src.kind === "gitee") {
+            // Gitee contents API：{content: base64(带换行)}
+            const env = await resp.json();
+            if (!env?.content) { lastErr = "gitee.com: 响应缺少 content"; continue; }
+            data = JSON.parse(Buffer.from(String(env.content).replace(/\s+/g, ""), "base64").toString("utf-8"));
+          } else {
+            data = await resp.json();
+          }
           const v = SHIELD ? SHIELD.validatePack(data) : { ok: false, error: "shield 未加载" };
           if (!v.ok) { lastErr = `校验失败：${v.error}`; continue; }
-          // 比内置还旧就不落盘（防回退）
           fs.writeFileSync(path.join(DATA_DIR, "malicious-commands-remote.json"), JSON.stringify(data, null, 1));
           malLoadRemote();
-          return json(res, { ok: true, version: data.version, count: v.count, active: malRules().length, source: new URL(src).host });
-        } catch (e: any) { lastErr = `${new URL(src).host}: ${String(e?.message || e).slice(0, 80)}`; }
+          return json(res, { ok: true, version: data.version, count: v.count, active: malRules().length, source: new URL(src.url).host });
+        } catch (e: any) { lastErr = `${new URL(src.url).host}: ${String(e?.message || e).slice(0, 80)}`; }
       }
       return json(res, { ok: false, error: lastErr || "所有源都不可达" }, 502);
     }

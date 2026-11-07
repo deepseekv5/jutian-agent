@@ -1,5 +1,5 @@
 {
- "version": "2026.11.07",
+ "version": "2026.11.08",
  "source": "curated from SigmaHQ/sigma & LOLBAS public detection rules",
  "patterns": [
   {
@@ -213,9 +213,9 @@
    "r": "Base64 混淆的 PowerShell 执行"
   },
   {
-   "p": "(curl|wget|nc|scp)\\b[^;&|]*@(\\/etc\\/(shadow|passwd|sudoers)|~?\\/?(\\.ssh\\/id_[a-z]+|\\.aws\\/credentials|\\.config\\/gcloud))",
+   "p": "(curl|wget|nc|scp)\\b[^;&|]*@(\\/etc\\/(shadow|passwd|sudoers)|~?\\/?(\\.ssh\\/id_[a-z]+|\\.aws\\/credentials|\\.config\\/gcloud|\\.kube\\/config|\\.netrc|\\.npmrc))",
    "k": "敏感外带",
-   "r": "上传密钥/凭据文件"
+   "r": "上传密钥/凭据/配置文件"
   },
   {
    "p": "\\btar\\s+[czf]+\\b[^;&|]*\\/etc\\b[^;&|]*\\|\\s*(curl|nc|wget)\\b",
@@ -276,6 +276,146 @@
    "p": "\\bmsiexec\\s+\\/i\\s+https?:",
    "k": "LOLBAS",
    "r": "msiexec 安装远程包"
+  },
+  {
+   "p": "find\\s+\\/(etc|var|usr|lib|bin|sbin)\\s+[^;&|]*-exec\\s+(rm|shred)\\b",
+   "k": "删库清盘",
+   "r": "对系统目录 find 执行删除/擦除"
+  },
+  {
+   "p": "\\bsrm\\s+(-r[f]?\\s+)?\\/(Users|etc|usr)\\b",
+   "k": "删库清盘",
+   "r": "srm 安全擦除系统目录"
+  },
+  {
+   "p": "\\bmv\\s+\\/etc\\/(passwd|shadow|sudoers)\\b",
+   "k": "删库清盘",
+   "r": "移走系统账户文件"
+  },
+  {
+   "p": "\\btruncate\\s+-s\\s*0\\s+\\/var\\/log\\/",
+   "k": "防御破坏",
+   "r": "清空系统日志"
+  },
+  {
+   "p": "\\bshred\\b[^;&|]*\\/var\\/log\\/",
+   "k": "防御破坏",
+   "r": "擦除系统日志"
+  },
+  {
+   "p": "\\bwbadmin\\s+delete\\s+catalog",
+   "k": "防御破坏",
+   "r": "删除备份目录（勒索前兆）"
+  },
+  {
+   "p": "taskkill\\s+\\/f\\s+\\/im\\s+msmpeng",
+   "k": "防御破坏",
+   "r": "强杀 Windows Defender 进程"
+  },
+  {
+   "p": "powershell\\b[^;&|]*\\s-w\\s+(hidden|1)\\b",
+   "k": "脚本注入",
+   "r": "PowerShell 隐藏窗口执行"
+  },
+  {
+   "p": "\\btee\\s+(-a\\s+)?\\/etc\\/(sudoers|shadow|crontab)\\b",
+   "k": "持久化",
+   "r": "tee 直写系统敏感文件"
+  },
+  {
+   "p": ">\\s*\\/etc\\/systemd\\/system\\/[^;&|]*\\.service",
+   "k": "持久化",
+   "r": "直写 systemd 服务单元"
+  },
+  {
+   "p": "\\bupdate-rc\\.d\\s+\\S+\\s+defaults",
+   "k": "持久化",
+   "r": "注册 SysV 启动项"
+  },
+  {
+   "p": "\\busermod\\s+-aG\\s+(sudo|wheel|admin|root)\\b",
+   "k": "权限后门",
+   "r": "把用户加进 sudo 组"
+  },
+  {
+   "p": "\\bdsenableroot\\b",
+   "k": "权限后门",
+   "r": "启用 macOS root 账户"
+  },
+  {
+   "p": "\\bsc\\s+config\\b[^;&|]*binpath\\s*=",
+   "k": "权限后门",
+   "r": "劫持 Windows 服务二进制路径"
+  },
+  {
+   "p": "\\bodbcconf\\b\\s+\\/[fao]",
+   "k": "LOLBAS",
+   "r": "odbcconf 加载 DLL"
+  },
+  {
+   "p": "\\batbroker\\b\\s+(install|install_usertypedef)",
+   "k": "LOLBAS",
+   "r": "atbroker 劫持辅助功能"
+  },
+  {
+   "p": "\\binstallutil\\b\\s+\\/logfile=\\s*\\/logtoconsole=",
+   "k": "LOLBAS",
+   "r": "InstallUtil 无日志执行"
+  },
+  {
+   "p": "\\bwmic\\s+\\/node:",
+   "k": "LOLBAS",
+   "r": "wmic 远程执行"
+  },
+  {
+   "p": "\\bnetsh\\s+interface\\s+portproxy\\s+add",
+   "k": "LOLBAS",
+   "r": "netsh 端口转发后门"
+  },
+  {
+   "p": "\\bmsiexec\\b\\s+\\/i\\s+(https?:|\\\\\\\\)",
+   "k": "LOLBAS",
+   "r": "msiexec 安装远程/UNC 包"
+  },
+  {
+   "p": "\\bmsfvenom\\b|\\bmsfconsole\\b|\\bmeterpreter\\b",
+   "k": "反弹远控",
+   "r": "Metasploit 框架"
+  },
+  {
+   "p": "\\bchisel\\s+(server|client)\\b",
+   "k": "反弹远控",
+   "r": "chisel 反向隧道"
+  },
+  {
+   "p": "\\bfrp[cs]\\b\\s+(-c|-f)\\b",
+   "k": "反弹远控",
+   "r": "frp 隧道客户端/服务端"
+  },
+  {
+   "p": "docker\\s+run\\b[^;&|]*-v\\s+\\/:/",
+   "k": "容器逃逸",
+   "r": "把宿主机根目录挂进容器"
+  },
+  {
+   "p": "\\bnsenter\\s+(-t|--target)\\s+1\\b",
+   "k": "容器逃逸",
+   "r": "nsenter 切入宿主命名空间"
+  },
+  {
+   "p": "\\bmimikatz\\b",
+   "k": "凭据转储",
+   "r": "mimikatz 凭据提取"
+  },
+  {
+   "p": "comsvcs\\.dll[^;&|]*MiniDump",
+   "k": "凭据转储",
+   "r": "LSASS 内存转储"
+  },
+  {
+   "p": "\\bsecretsdump\\.py\\b",
+   "k": "凭据转储",
+   "r": " secretsdump 远程转储哈希"
   }
  ]
 }
