@@ -54,14 +54,19 @@ export async function refreshExts(): Promise<RegisteredExt[]> {
     if (!r.ok) return registry
     const d = await r.json()
     const items = Array.isArray(d?.items) ? d.items : []
-    registry = items.map((x: any) => ({
+    const next = items.map((x: any) => ({
       id: String(x.id), name: String(x.name || x.id), icon: String(x.icon || '🧩'),
       description: String(x.description || ''), entry: String(x.entry || 'panel.html'),
       capabilities: Array.isArray(x.capabilities) ? x.capabilities.map(String) : [],
       slot: String(x.slot || 'tab'),
     }))
+    registry = next
+    // 无变化不 emit（v14.13.1 CPU 修复）：sync 自身订阅了本事件源，
+    // 成功即 emit 会形成 sync→fetch→emit→sync 的 550 req/s 自激循环（主进程 130% CPU 的元凶）。
+    // 只有注册表真正变化时才广播。
+    const changed = JSON.stringify(syncCache) !== JSON.stringify(registry)
     syncCache = registry.slice()
-    emit()
+    if (changed) emit()
   } catch { /* 离线/服务未就绪：保留旧注册表 */ }
   return registry
 }

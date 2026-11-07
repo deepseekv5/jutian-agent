@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "14.13.1",
+  "version": "14.13.2",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -255,6 +255,7 @@
     "mermaid": "^12.2.0",
     "postcss": "^8.4.49",
     "pptxgenjs": "^4.0.1",
+    "puppeteer-core": "^25.16.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
