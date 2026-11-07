@@ -1,5 +1,7 @@
 # 架构
 
+**简体中文** | [English](../en/dev/architecture.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 巨天agent 是三层结构,每一层都可以独立理解:

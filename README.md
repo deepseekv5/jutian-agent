@@ -196,14 +196,16 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 
 | 文档 | 一句话 |
 |---|---|
-| [📥 安装与启动](docs/guide/install.md) | 安装包 / 源码 / 手动三种方式,首次配置,常见安装问题 |
-| [🧠 模型接入](docs/guide/models.md) | OpenAI 兼容配置、拉取模型、思考档位、模式开关、语音 |
-| [🧩 子代理集群](docs/guide/swarm.md) | 集群指挥室 vs 并行池、团队模板、@接力、通知聚合 |
-| [🎁 免费模型](docs/guide/free-models.md) | Kilo 免 key 免费档一键切换、账户密钥配置、付费档解锁 |
-| [📱 手机远程](docs/guide/remote.md) | 扫码配对、能力清单、局域网信任模型、常见问题 |
-| [🔌 LY HARNESS](docs/guide/harness.md) | 38 工具逐个开关、MCP 管理、Skills 挂载 |
-| [📚 知识库与记忆](docs/guide/knowledge.md) | RAG 检索、embedding 配置、记忆与知识库怎么选 |
-| [🔒 数据与隐私](docs/guide/privacy.md) | 数据目录总表、什么会上网、密钥掩码、备份、彻底删除 |
+| 文档 | English | 一句话 |
+|---|---|---|
+| [📥 安装与启动](docs/guide/install.md) | [Install](docs/en/guide/install.md) | 安装包 / 源码 / 手动三种方式,首次配置,常见安装问题 |
+| [🧠 模型接入](docs/guide/models.md) | [Models](docs/en/guide/models.md) | OpenAI 兼容配置、拉取模型、思考档位、模式开关、语音 |
+| [🧩 子代理集群](docs/guide/swarm.md) | [Swarm](docs/en/guide/swarm.md) | 集群指挥室 vs 并行池、团队模板、@接力、通知聚合 |
+| [🎁 免费模型](docs/guide/free-models.md) | [Free models](docs/en/guide/free-models.md) | Kilo 免 key 免费档一键切换、账户密钥配置、付费档解锁 |
+| [📱 手机远程](docs/guide/remote.md) | [Remote](docs/en/guide/remote.md) | 扫码配对、能力清单、局域网信任模型、常见问题 |
+| [🔌 LY HARNESS](docs/guide/harness.md) | [Harness](docs/en/guide/harness.md) | 51 工具逐个开关、MCP 管理、Skills 挂载 |
+| [📚 知识库与记忆](docs/guide/knowledge.md) | [Knowledge](docs/en/guide/knowledge.md) | RAG 检索、embedding 配置、记忆与知识库怎么选 |
+| [🔒 数据与隐私](docs/guide/privacy.md) | [Privacy](docs/en/guide/privacy.md) | 数据目录总表、什么会上网、密钥掩码、备份、彻底删除 |
 
 ### 开发者
 

@@ -1,5 +1,7 @@
 # 免费模型与模型接入
 
+**简体中文** | [English](../en/guide/free-models.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 **科技不是高高在上,而是服务于人民。** 巨天agent 内置免费模型面板:不注册、不付费、不填密钥,一键切换 **26 个免费模型**(Pollinations 1 + Kilo 网关 19 + OpenCode Zen Free 6,均免 key,按 IP 限速)。

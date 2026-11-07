@@ -1,5 +1,7 @@
 # 模型接入
 
+**简体中文** | [English](../en/guide/models.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 ## 基本配置

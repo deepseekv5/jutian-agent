@@ -1,5 +1,7 @@
 # 新增一个工具
 
+**简体中文** | [English](../en/dev/add-tool.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 给巨天agent 加一个模型可调用的工具,总共两步:**serve.ts 里写实现 + builtin-tools.json 里写 schema**。不需要动任何前端代码。

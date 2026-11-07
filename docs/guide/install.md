@@ -1,5 +1,7 @@
 # 安装与启动
 
+**简体中文** | [English](../en/guide/install.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 ## 系统要求

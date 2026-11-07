@@ -188,22 +188,22 @@ All lazy-loaded: sessions without charts or math pay nothing; the main bundle gr
 
 | Doc | In one line |
 |---|---|
-| [📥 Install & run](docs/guide/install.md) | Installer / source / manual paths, first-run config, troubleshooting |
-| [🧠 Model setup](docs/guide/models.md) | Any OpenAI-compatible endpoint, model fetch, thinking levels |
-| [🧩 Swarm](docs/guide/swarm.md) | Command room vs parallel pool, team templates, @-relay, notification digest |
-| [🎁 Free models](docs/guide/free-models.md) | Kilo keyless tiers, account key, unlocking paid tiers |
-| [📱 Phone remote](docs/guide/remote.md) | QR pairing, capabilities, LAN trust model, FAQ |
-| [🔌 LY HARNESS](docs/guide/harness.md) | Per-tool toggles, MCP management, Skills mounting |
-| [📚 Knowledge & memory](docs/guide/knowledge.md) | RAG retrieval, embedding config, memory vs knowledge |
-| [🔒 Data & privacy](docs/guide/privacy.md) | Data directory map, what goes online, key masking, backup, deletion |
+| [📥 Install & run](docs/en/guide/install.md) | Installer / source / manual paths, first-run config, troubleshooting |
+| [🧠 Model setup](docs/en/guide/models.md) | Any OpenAI-compatible endpoint, model fetch, thinking levels |
+| [🧩 Swarm](docs/en/guide/swarm.md) | Command room vs parallel pool, team templates, @-relay, notification digest |
+| [🎁 Free models](docs/en/guide/free-models.md) | Kilo keyless tiers, account key, unlocking paid tiers |
+| [📱 Phone remote](docs/en/guide/remote.md) | QR pairing, capabilities, LAN trust model, FAQ |
+| [🔌 LY HARNESS](docs/en/guide/harness.md) | Per-tool toggles, MCP management, Skills mounting |
+| [📚 Knowledge & memory](docs/en/guide/knowledge.md) | RAG retrieval, embedding config, memory vs knowledge |
+| [🔒 Data & privacy](docs/en/guide/privacy.md) | Data directory map, what goes online, key masking, backup, deletion |
 
 ### Developer
 
 | Doc | In one line |
 |---|---|
-| [🏗 Architecture](docs/dev/architecture.md) | Three layers, one chat turn's data flow, port conventions, directory tour |
-| [📦 Build & release](docs/dev/build.md) | Command table, mac/win packaging, patch updates, CI strategy, release checklist |
-| [🛠 Add a tool](docs/dev/add-tool.md) | From implementation to schema to all three ends — complete walkthrough |
+| [🏗 Architecture](docs/en/dev/architecture.md) | Three layers, one chat turn's data flow, port conventions, directory tour |
+| [📦 Build & release](docs/en/dev/build.md) | Command table, mac/win packaging, patch updates, CI strategy, release checklist |
+| [🛠 Add a tool](docs/en/dev/add-tool.md) | From implementation to schema to all three ends — complete walkthrough |
 
 ### Engineering
 
@@ -211,8 +211,8 @@ All lazy-loaded: sessions without charts or math pay nothing; the main bundle gr
 |---|---|
 | [🤝 Contributing](CONTRIBUTING.md) | Environment, commit conventions, red lines |
 | [🔐 Security](SECURITY.md) | Private vulnerability reporting, security model, supported versions |
-| [📜 Changelog](CHANGELOG.md) | What changed in every version |
-| [⚖️ Copyright](COPYRIGHT.md) | MIT + third-party components |
+| [📜 Changelog](CHANGELOG.md) | What changed in every version (中文) |
+| [⚖️ Copyright](COPYRIGHT.md) | MIT + third-party components (中文) |
 
 <br>
 
@@ -362,9 +362,9 @@ Web AI makes you come to it. Desktop AI lives where the work already is.
 
 ## ✦ Contributing
 
-Issues and PRs welcome: see [CONTRIBUTING.md](./CONTRIBUTING.md). Security vulnerabilities go through the private channel in [SECURITY.md](./SECURITY.md). Changelog in [CHANGELOG.md](./CHANGELOG.md); third-party components in [COPYRIGHT.md](./COPYRIGHT.md).
+Issues and PRs welcome: see [CONTRIBUTING.md](docs/en/CONTRIBUTING.md). Security vulnerabilities go through the private channel in [SECURITY.md](docs/en/SECURITY.md). Changelog in [CHANGELOG.md](CHANGELOG.md); third-party components in [COPYRIGHT.md](./COPYRIGHT.md).
 
-Want to add a tool? It starts at eleven lines: [Add a tool](docs/dev/add-tool.md).
+Want to add a tool? It starts at eleven lines: [Add a tool](docs/en/dev/add-tool.md).
 
 <br>
 

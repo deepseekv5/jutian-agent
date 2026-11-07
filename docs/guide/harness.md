@@ -1,5 +1,7 @@
 # LY HARNESS — 插件中心
 
+**简体中文** | [English](../en/guide/harness.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 **一切皆插件。**LY HARNESS 是巨天agent 的能力中枢:每个内置工具都能单独开关,每个 MCP 服务即插即用,每条经验都能沉淀为 Skill。

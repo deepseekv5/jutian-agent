@@ -1,5 +1,7 @@
 # 贡献指南
 
+**简体中文** | [English](docs/en/CONTRIBUTING.md)
+
 感谢关注巨天agent。本仓库接受 Issue 与 PR,以下几条能让协作更顺。
 
 ## 环境准备

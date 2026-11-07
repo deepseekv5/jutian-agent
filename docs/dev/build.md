@@ -1,5 +1,7 @@
 # 构建与发布
 
+**简体中文** | [English](../en/dev/build.md)
+
 > [← 返回文档索引](../../README.md#docs)
 
 ## 命令总表
