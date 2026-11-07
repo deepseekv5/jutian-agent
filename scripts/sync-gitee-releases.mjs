@@ -108,6 +108,8 @@ console.log(`Gitee 已有: ${have.size}`)
 // ── 3. 只补缺失的文本 ──
 let done = 0, fail = 0
 for (const rel of releases) {
+  // 跳过 GitHub 匿名草稿（CI 残片）：镜像它们只会在 Gitee 造出删不掉顺序的垃圾记录
+  if (rel.draft || String(rel.tag_name || '').startsWith('untagged-')) continue
   if (have.has(rel.tag)) continue
   let ok = false
   for (let i = 0; i < 3 && !ok; i++) {
