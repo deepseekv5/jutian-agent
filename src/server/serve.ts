@@ -3546,7 +3546,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const apiKey = String(payload.apiKey || st.apiKey || "");
       const model = String(payload.model || st.model || "");
       if (!model) return json(res, { error: "未选择模型" }, 400);
+      // workDir 请求级隔离（v14.13.1）：jtcode/TUI 传入的 cwd 只在本轮 agent 循环内生效，
+      // 结束后恢复桌面端原工作区——否则终端在 /tmp 跑一句，桌面端的全局工作区就被永久带跑
+      const __prevWorkDir = globalWorkDir;
       if (payload.workDir) { try { setWorkDir(String(payload.workDir)) } catch {} }
+      const __restoreWorkDir = () => { if (payload.workDir) { try { setWorkDir(__prevWorkDir) } catch {} } };
 
       // SSE 头
       res.writeHead(200, {
@@ -3647,6 +3651,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           send({ type: "error", message: String((e && e.message) || e) });
         }
       } finally {
+        __restoreWorkDir();
         try { res.end() } catch {}
       }
       return;

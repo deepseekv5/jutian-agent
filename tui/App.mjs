@@ -389,6 +389,8 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
   const [histIdx, setHistIdx] = useState(-1);
   const [plan, setPlan] = useState(null);
   const [session, setSession] = useState(initialSession || null);
+  const [queued, setQueued] = useState([]);
+  const queueRef = useRef([]);
   const abortRef = useRef(null);
   const convoRef = useRef([]);
   const inputHistRef = useRef([]);
@@ -482,7 +484,13 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
         }
       }, controller.signal);
       const finalText = liveTextRef.current;
-      if (finalText.trim()) push({ kind: "assistant", text: finalText });
+      if (finalText.trim()) {
+        push({ kind: "assistant", text: finalText });
+        try {
+          process.stdout.write("\x07");
+        } catch {
+        }
+      }
       convoRef.current = [...convoRef.current, { role: "user", content: trimmed }, { role: "assistant", content: finalText }];
       if (sid) saveMessage(sid, { id: `tui-a-${Date.now()}`, role: "assistant", content: finalText });
     } catch (e) {
@@ -492,14 +500,23 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
       setRunningTools([]);
       setLive(null);
       abortRef.current = null;
+      if (queueRef.current.length) {
+        const next = queueRef.current.shift();
+        setQueued([...queueRef.current]);
+        setTimeout(() => sendRef.current?.(next), 60);
+      }
     }
   }, [push, session, sysPrompt, tools, settings]);
+  const sendRef = useRef(null);
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
   const handleCommand = useCallback(async (raw) => {
     const [cmd, ...rest] = raw.split(/\s+/);
     const arg = rest.join(" ");
     switch (cmd) {
       case "/help":
-        push({ kind: "info", text: "\u547D\u4EE4\uFF1A/new \u65B0\u5BF9\u8BDD \xB7 /resume [\u5E8F\u53F7] \u6062\u590D\u4F1A\u8BDD \xB7 /status \u72B6\u6001 \xB7 /plan \u8BA1\u5212 \xB7 /security \u5B89\u5168\u5F00\u5173 \xB7 /pack \u66F4\u65B0\u9632\u62A4\u5E93 \xB7 /quit \u9000\u51FA\n\u5FEB\u6377\u952E\uFF1AEsc \u4E2D\u65AD\u8F93\u51FA \xB7 \u2191\u2193 \u8F93\u5165\u5386\u53F2 \xB7 Ctrl+C \u4E2D\u65AD/\u9000\u51FA" });
+        push({ kind: "info", text: "\u547D\u4EE4\uFF1A/new \u65B0\u5BF9\u8BDD \xB7 /resume [\u5E8F\u53F7] \u6062\u590D \xB7 /model [n] \u5207\u6A21\u578B \xB7 /status \u72B6\u6001 \xB7 /plan \u8BA1\u5212 \xB7 /security \u5B89\u5168\u5F00\u5173 \xB7 /pack \u66F4\u65B0\u9632\u62A4\u5E93 \xB7 /quit \u9000\u51FA\n\u5FEB\u6377\u952E\uFF1AEsc \u4E2D\u65AD\u8F93\u51FA \xB7 \u2191\u2193 \u8F93\u5165\u5386\u53F2 \xB7 Ctrl+C \u4E2D\u65AD/\u9000\u51FA \xB7 \u5FD9\u65F6\u8F93\u5165\u81EA\u52A8\u6392\u961F" });
         return;
       case "/new":
         convoRef.current = [];
@@ -550,6 +567,29 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
         }
         return;
       }
+      case "/model": {
+        const models = (() => {
+          try {
+            return JSON.parse(settings.models || "[]");
+          } catch {
+            return [];
+          }
+        })();
+        if (!arg) {
+          push({ kind: "info", text: `\u5F53\u524D\u6A21\u578B\uFF1A${settings.model || "default"}` + (models.length ? "\n\u53EF\u9009\uFF08/model <\u5E8F\u53F7> \u5207\u6362\uFF09\uFF1A\n" + models.map((m, i) => `${m === settings.model ? "\u25CF" : "\u25CB"} ${i + 1}. ${m}`).join("\n") : "\n\u65E0\u5019\u9009\u5217\u8868\uFF08\u684C\u9762\u7AEF\u8BBE\u7F6E\u9875\u62C9\u53D6\u540E\u53EF\u7528\uFF09") });
+          return;
+        }
+        const n = parseInt(arg, 10);
+        const target = models[n - 1] && !arg.includes(".") ? models[n - 1] : arg;
+        try {
+          await fetch(`http://127.0.0.1:${port}/api/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "model", value: target }) });
+          settings.model = target;
+          push({ kind: "info", text: `\u6A21\u578B\u5DF2\u5207\u6362\uFF1A${target}` });
+        } catch (e) {
+          push({ kind: "error", text: "\u5207\u6362\u5931\u8D25\uFF1A" + String(e?.message || e) });
+        }
+        return;
+      }
       case "/pack": {
         push({ kind: "info", text: "\u6B63\u5728\u66F4\u65B0\u6076\u610F\u547D\u4EE4\u5E93\u2026" });
         try {
@@ -571,6 +611,10 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
   }, [push, info, model, workDir, session, plan, port]);
   useInput((ch, key) => {
     if (confirm) {
+      if (key.ctrl && ch === "c") {
+        exit();
+        return;
+      }
       if (ch === "y") confirm.resolve("allow");
       else if (ch === "a") confirm.resolve("always");
       else if (ch === "n" || key.escape) confirm.resolve("deny");
@@ -588,12 +632,16 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
       abortRef.current?.abort();
       return;
     }
-    if (busyRef.current) return;
     if (key.return) {
       const v = inputRef.current.trim();
       inputRef.current = "";
       setInput("");
       if (!v) return;
+      if (busyRef.current) {
+        queueRef.current.push(v);
+        setQueued([...queueRef.current]);
+        return;
+      }
       if (v.startsWith("/")) {
         handleCommand(v);
         return;
@@ -601,6 +649,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
       send(v);
       return;
     }
+    if (busyRef.current) return;
     if (key.upArrow) {
       const next = Math.min(histIdx + 1, inputHistRef.current.length - 1);
       if (next >= 0) {
@@ -665,7 +714,12 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
     /* @__PURE__ */ jsxs(Box, { marginTop: 1, children: [
       /* @__PURE__ */ jsx(Text, { color: ACCENT, bold: true, children: busy ? "  \u2026 " : "\u276F " }),
       /* @__PURE__ */ jsx(Text, { color: "white", children: input }),
-      !busy && /* @__PURE__ */ jsx(Text, { color: DIM, children: "\u258C" })
+      !busy && /* @__PURE__ */ jsx(Text, { color: DIM, children: "\u258C" }),
+      busy && queued.length > 0 && /* @__PURE__ */ jsxs(Text, { color: DIM, children: [
+        " \uFF08\u961F\u5217 ",
+        queued.length,
+        " \u6761\uFF09"
+      ] })
     ] }),
     /* @__PURE__ */ jsx(Box, { children: /* @__PURE__ */ jsxs(Text, { color: DIM, children: [
       " ",

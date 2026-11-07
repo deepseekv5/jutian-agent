@@ -59,7 +59,21 @@ async function main() {
     tools = list.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))
   } catch { /* 工具清单缺失时服务端仍有兜底 */ }
 
-  // 4) 进入 TUI（ink 为 ESM，App.jsx 由 esbuild 编译成 App.mjs）
+  // 4) 进入 TUI（ink 为 ESM，App.jsx 由 esbuild 编译成 App.mjs；缺失时自动构建兜底）
+  const appMjs = resolve(REPO_ROOT, 'tui', 'App.mjs')
+  if (!existsSync(appMjs)) {
+    console.log(dim('  首次运行：正在编译 TUI…'))
+    const { spawnSync } = await import('node:child_process')
+    const esbuild = resolve(REPO_ROOT, 'node_modules', '.bin', 'esbuild')
+    const r = spawnSync(esbuild, ['tui/App.jsx', '--bundle', '--platform=node', '--format=esm', '--jsx=automatic',
+      '--outfile=tui/App.mjs', '--external:react-devtools-core', '--external:ink', '--external:react',
+      '--external:react-reconciler', '--external:marked', '--external:marked-terminal', '--external:ink-spinner', '--external:yoga-layout'],
+      { cwd: REPO_ROOT, stdio: 'inherit' })
+    if (r.status !== 0 || !existsSync(appMjs)) {
+      console.error('\x1b[31m✗ TUI 编译失败——请先在仓库目录执行 npm install\x1b[0m')
+      process.exit(1)
+    }
+  }
   const { startTui } = await import('./App.mjs')
   await startTui({ info, tools, settings, port: PORT })
 }

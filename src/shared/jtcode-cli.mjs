@@ -160,6 +160,18 @@ async function* sseLines(body) {
   }
 }
 
+
+/** 行级 Markdown → 终端 ANSI（零依赖精简版：标题/加粗/行内码/围栏/列表） */
+function mdLine(s) {
+  let t = s
+  if (/^\s*```/.test(t)) return C.dim('  ─────')
+  t = t.replace(/^\s*(#{1,6})\s+(.*)$/, (_, h, txt) => C.cyan(C.bold('  ' + txt)))
+  t = t.replace(/\*\*([^*]+)\*\*/g, (_, x) => C.bold(x))
+  t = t.replace(/`([^`]+)`/g, (_, x) => C.yellow(x))
+  t = t.replace(/^\s*[-*]\s+/, '  • ').replace(/^\s*\d+\.\s+/, (m) => '  ' + m)
+  return t
+}
+
 function argsLine(name, argsStr) {
   let a = {}
   try { a = JSON.parse(argsStr || '{}') } catch { /* ignore */ }
@@ -256,11 +268,24 @@ function spinnerStart(label) {
   return () => { clearInterval(timer); process.stdout.write('\r\x1b[K') }
 }
 
-async function ask(settings, history, question, tools) {
+async function ask(settings, history, question, tools, store) {
   history.push({ role: 'user', content: question })
   const stopSpinner = spinnerStart('思考中…')
   let reasoningLine = false
+  let lineBuf = ''
   try {
+    // 会话落盘：首轮建会话（桌面端可见），之后每轮写用户/助手消息
+    if (store && !store.sid) {
+      try { const s2 = await fetch(`${BASE}/api/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: question.slice(0, 18) || '终端对话' }) }).then((r) => r.json()); if (s2?.id) store.sid = s2.id } catch { /* 落盘失败不影响对话 */ }
+    }
+    const sid = store?.sid
+    if (sid) { try { await fetch(`${BASE}/api/sessions/${encodeURIComponent(sid)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: `jt-u-${Date.now()}`, role: 'user', content: question, created_at: new Date().toISOString() }) }) } catch {} }
+
+    const flushLine = (final) => {
+      if (!lineBuf) return
+      process.stdout.write(mdLine(lineBuf) + '\n')
+      lineBuf = ''
+    }
     const reply = await chatRun({
       settings, messages: history, tools,
       hooks: {
@@ -268,14 +293,18 @@ async function ask(settings, history, question, tools) {
         if (!process.stdout.isTTY) return
         if (ev.type === 'chunk') {
           if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
-          if (reasoningLine) { process.stdout.write(C.dim('\n└\n')); reasoningLine = false }
-          process.stdout.write(ev.text || '')
+          if (reasoningLine) { process.stdout.write(C.dim('└\n')); reasoningLine = false }
+          lineBuf += ev.text || ''
+          const nl = lineBuf.lastIndexOf('\n')
+          if (nl >= 0) { process.stdout.write(mdLine(lineBuf.slice(0, nl)) + '\n'); lineBuf = lineBuf.slice(nl + 1) }
         } else if (ev.type === 'thinking') {
           if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
-          if (!reasoningLine) { process.stdout.write(C.dim('\n┌ 思考\n')); reasoningLine = true }
+          if (!reasoningLine) { process.stdout.write(C.dim('\n┌ 思考 ')); reasoningLine = true }
+          process.stdout.write(C.dim(String(ev.text || '').replace(/\n/g, ' ')))
         } else if (ev.type === 'tool_start' && ev.tool) {
           if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
           if (reasoningLine) { process.stdout.write(C.dim('└\n')); reasoningLine = false }
+          flushLine(true)
           process.stdout.write(C.dim(`\n  ⚙ ${argsLine(ev.tool.name, ev.tool.arguments)} …\n`))
         } else if (ev.type === 'tool_end' && ev.tool) {
           const ok = ev.tool.status !== 'error'
@@ -285,6 +314,7 @@ async function ask(settings, history, question, tools) {
       },
       onConfirm: (tool, _scopeKey) => new Promise((resolve) => {
         if (reasoningLine) { process.stdout.write(C.dim('└\n')); reasoningLine = false }
+        flushLine(true)
         console.log(C.yellow(`\n⚠ 需要确认：${tool.name}`))
         console.log(C.dim(`  ${argsLine(tool.name, tool.arguments)}`))
         const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -296,15 +326,18 @@ async function ask(settings, history, question, tools) {
       }),
       onPlan: (steps) => {
         console.log(C.dim('  ┌ 计划'))
-        for (const s of steps) console.log(C.dim(`  │ ${s.status === 'done' ? '☑' : '☐'} ${s.content || ''}`))
+        for (const s2 of steps) console.log(C.dim(`  │ ${s2.status === 'done' ? '☑' : '☐'} ${s2.content || ''}`))
         console.log(C.dim('  └'))
       },
       onError: (m) => { stopSpinner(); console.error(C.red(`✗ ${m}`)) },
       },
     })
     if (reasoningLine) process.stdout.write(C.dim('└\n'))
-    if (reply) process.stdout.write('\n')
+    flushLine(true)
+    if (reply) { process.stdout.write('\n' + C.dim('(完成 · 已存入会话)' + '\x07\n')) }
     history.push({ role: 'assistant', content: reply })
+    const sid2 = store?.sid
+    if (sid2 && reply) { try { await fetch(`${BASE}/api/sessions/${encodeURIComponent(sid2)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: `jt-a-${Date.now()}`, role: 'assistant', content: reply, created_at: new Date().toISOString() }) }) } catch {} }
   } catch (e) {
     stopSpinner()
     console.error(C.red(`✗ ${e.message || e}`))
@@ -344,7 +377,18 @@ async function main() {
   console.log(C.dim('  /tools 工具列表  /status 状态  /security 安全开关  /pack 更新防护库\n'))
   const tools = await getTools()
   const history = [{ role: 'system', content: sysPrompt(osName) }]
+  const store = { sid: null }
+  let busy = false
+  const queue = []
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: C.cyan('❯ ') })
+  const drain = async () => {
+    if (busy || !queue.length) return
+    busy = true
+    const item = queue.shift()
+    try { await ask(settings, history, item.q, tools, store) } finally { busy = false }
+    if (queue.length) { console.log(C.dim(`\n继续处理队列（${queue.length} 条）`)); setTimeout(drain, 50) }
+    rl.prompt()
+  }
   rl.prompt()
   rl.on('line', async (line) => {
     const q = line.trim()
@@ -373,8 +417,28 @@ async function main() {
       } catch (e) { console.error(C.red('  ' + (e.message || e))) }
       rl.prompt(); return
     }
-    await ask(settings, history, q, tools)
-    rl.prompt()
+    if (q.startsWith('/model')) {
+      const models = (() => { try { return JSON.parse(settings.models || '[]') } catch { return [] } })()
+      if (!q.includes(' ')) {
+        console.log(`  当前模型：${C.bold(settings.model || 'default')}`)
+        if (models.length) console.log('  可选（/model <序号> 切换）：\n' + models.map((m, i) => `   ${m === settings.model ? C.green('●') : '○'} ${i + 1}. ${m}`).join('\n'))
+        else console.log(C.dim('  无候选列表（在桌面端设置页拉取模型列表后可用）'))
+        rl.prompt(); return
+      }
+      const arg = q.split(/\s+/)[1]
+      const n = parseInt(arg, 10)
+      const target = models[n - 1] && !arg.includes('.') ? models[n - 1] : arg
+      try {
+        await fetch(`${BASE}/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'model', value: target }) })
+        settings.model = target
+        console.log(`  ${C.green('✓')} 模型已切换：${C.bold(target)}`)
+      } catch (e) { console.error(C.red('  切换失败：' + (e.message || e))) }
+      rl.prompt(); return
+    }
+    // 忙时排队（Claude Code 同款语义），完成后自动继续
+    if (busy) { queue.push(q); console.log(C.dim(`  已排队（第 ${queue.length} 条）`)); return }
+    queue.push(q)
+    await drain()
   })
   rl.on('close', () => { console.log(C.dim('\n再见')); process.exit(0) })
 }

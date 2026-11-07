@@ -105,6 +105,8 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
   const [histIdx, setHistIdx] = useState(-1)
   const [plan, setPlan] = useState(null)
   const [session, setSession] = useState(initialSession || null)
+  const [queued, setQueued] = useState([])
+  const queueRef = useRef([])
   const abortRef = useRef(null)
   const convoRef = useRef([])
   const inputHistRef = useRef([])
@@ -190,7 +192,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
 
       // 收尾：流式文本落历史块
       const finalText = liveTextRef.current
-      if (finalText.trim()) push({ kind: 'assistant', text: finalText })
+      if (finalText.trim()) { push({ kind: 'assistant', text: finalText }); try { process.stdout.write('\x07') } catch {} }
       convoRef.current = [...convoRef.current, { role: 'user', content: trimmed }, { role: 'assistant', content: finalText }]
       if (sid) saveMessage(sid, { id: `tui-a-${Date.now()}`, role: 'assistant', content: finalText })
     } catch (e) {
@@ -200,8 +202,16 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
       setRunningTools([])
       setLive(null)
       abortRef.current = null
+      // 排队消息自动继续（Claude Code 同款）
+      if (queueRef.current.length) {
+        const next = queueRef.current.shift()
+        setQueued([...queueRef.current])
+        setTimeout(() => sendRef.current?.(next), 60)
+      }
     }
   }, [push, session, sysPrompt, tools, settings])
+  const sendRef = useRef(null)
+  useEffect(() => { sendRef.current = send }, [send])
 
   // ─── 斜杠命令 ───
   const handleCommand = useCallback(async (raw) => {
@@ -209,7 +219,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
     const arg = rest.join(' ')
     switch (cmd) {
       case '/help':
-        push({ kind: 'info', text: '命令：/new 新对话 · /resume [序号] 恢复会话 · /status 状态 · /plan 计划 · /security 安全开关 · /pack 更新防护库 · /quit 退出\n快捷键：Esc 中断输出 · ↑↓ 输入历史 · Ctrl+C 中断/退出' })
+        push({ kind: 'info', text: '命令：/new 新对话 · /resume [序号] 恢复 · /model [n] 切模型 · /status 状态 · /plan 计划 · /security 安全开关 · /pack 更新防护库 · /quit 退出\n快捷键：Esc 中断输出 · ↑↓ 输入历史 · Ctrl+C 中断/退出 · 忙时输入自动排队' })
         return
       case '/new':
         convoRef.current = []
@@ -250,6 +260,21 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
         } catch { push({ kind: 'error', text: '读取失败' }) }
         return
       }
+      case '/model': {
+        const models = (() => { try { return JSON.parse(settings.models || '[]') } catch { return [] } })()
+        if (!arg) {
+          push({ kind: 'info', text: `当前模型：${settings.model || 'default'}` + (models.length ? '\n可选（/model <序号> 切换）：\n' + models.map((m, i) => `${m === settings.model ? '●' : '○'} ${i + 1}. ${m}`).join('\n') : '\n无候选列表（桌面端设置页拉取后可用）') })
+          return
+        }
+        const n = parseInt(arg, 10)
+        const target = models[n - 1] && !arg.includes('.') ? models[n - 1] : arg
+        try {
+          await fetch(`http://127.0.0.1:${port}/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'model', value: target }) })
+          settings.model = target
+          push({ kind: 'info', text: `模型已切换：${target}` })
+        } catch (e) { push({ kind: 'error', text: '切换失败：' + String(e?.message || e) }) }
+        return
+      }
       case '/pack': {
         push({ kind: 'info', text: '正在更新恶意命令库…' })
         try {
@@ -266,6 +291,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
   // ─── 键盘 ───
   useInput((ch, key) => {
     if (confirm) {
+      if (key.ctrl && ch === 'c') { exit(); return }
       if (ch === 'y') confirm.resolve('allow')
       else if (ch === 'a') confirm.resolve('always')
       else if (ch === 'n' || key.escape) confirm.resolve('deny')
@@ -276,16 +302,22 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
       exit(); return
     }
     if (key.escape && busyRef.current) { abortRef.current?.abort(); return }
-    if (busyRef.current) return
     if (key.return) {
       const v = inputRef.current.trim()
       inputRef.current = ''
       setInput('')
       if (!v) return
+      // 忙时排队（Claude Code 同款）：完成后自动发送
+      if (busyRef.current) {
+        queueRef.current.push(v)
+        setQueued([...queueRef.current])
+        return
+      }
       if (v.startsWith('/')) { handleCommand(v); return }
       send(v)
       return
     }
+    if (busyRef.current) return
     if (key.upArrow) {
       const next = Math.min(histIdx + 1, inputHistRef.current.length - 1)
       if (next >= 0) { setHistIdx(next); inputRef.current = inputHistRef.current[next]; setInput(inputRef.current) }
@@ -345,6 +377,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
         <Text color={ACCENT} bold>{busy ? '  … ' : '❯ '}</Text>
         <Text color="white">{input}</Text>
         {!busy && <Text color={DIM}>▌</Text>}
+        {busy && queued.length > 0 && <Text color={DIM}> （队列 {queued.length} 条）</Text>}
       </Box>
       <Box>
         <Text color={DIM}> {model} · {workDir} · /help 命令 · Ctrl+C 退出</Text>
