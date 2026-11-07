@@ -164,9 +164,13 @@ jobs:
           cp /tmp/mobile-out/jutian-mobile-*.zip /tmp/out/
           ls -la /tmp/out/
 
+      - name: 生成发行说明（notice.md 单一来源）
+        shell: bash
+        run: node scripts/release-notes.mjs --tag ${{ github.ref_name }} --platform android > release-body.md
       - name: 上传到 Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-body.md
           files: /tmp/out/*
           fail_on_unmatched_files: true
 

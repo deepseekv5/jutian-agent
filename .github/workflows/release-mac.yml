@@ -79,9 +79,13 @@ jobs:
           [ -n "$ZIP" ] && mv "$ZIP" "dist-out/jutian-agent-$VER-$ARCH-mac.zip" || echo "WARN: ZIP not found for $ARCH"
           ls -la dist-out/
 
+      - name: 生成发行说明（notice.md 单一来源）
+        shell: bash
+        run: node scripts/release-notes.mjs --tag ${{ github.ref_name }} --platform mac > release-body.md
       - name: 上传到 Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-body.md
           files: dist-out/*
           fail_on_unmatched_files: true
 

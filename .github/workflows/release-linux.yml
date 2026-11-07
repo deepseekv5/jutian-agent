@@ -71,9 +71,13 @@ jobs:
           cp release/*.tar.gz dist-out/ 2>/dev/null || true
           ls -la dist-out/
 
+      - name: 生成发行说明（notice.md 单一来源）
+        shell: bash
+        run: node scripts/release-notes.mjs --tag ${{ github.ref_name }} --platform linux > release-body.md
       - name: 上传到 Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-body.md
           files: dist-out/*
           fail_on_unmatched_files: true
 
