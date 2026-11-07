@@ -204,10 +204,14 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 消息内搜索（Cmd/Ctrl+F）
   // msgWindow（v14.9.2）：长会话只渲染最近 60 条，顶部「加载更早」按 120 条/次前移。
   // 绝对下标基准 windowBase 保持 daySeps/搜索命中/跳转的 idx 语义不变。
-  const [msgWindow, setMsgWindow] = useState(60)
-  const windowBase = Math.max(0, messages.length - msgWindow)
+  // 分级窗口化（v14.11.4）：60 条会话测出渲染才是切换耗时的大头（网络仅 22ms），
+  // 大会话首屏只挂最近 30 条——DOM 减半、markdown 解析减半；中小会话仍全量渲染。
+  // null = 未定：messages 异步加载完成后按长度分级（>200 只留 30，否则全量）
+  const [msgWindow, setMsgWindow] = useState<number | null>(null)
+  const effectiveWindow = msgWindow ?? (messages.length > 200 ? 30 : messages.length)
+  const windowBase = Math.max(0, messages.length - effectiveWindow)
   const visibleMessages = messages.slice(windowBase)
-  const loadEarlier = () => setMsgWindow(w => w + 120)
+  const loadEarlier = () => setMsgWindow(w => (w ?? effectiveWindow) + 120)
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQ, setSearchQ] = useState('')
@@ -242,7 +246,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
 
   const scrollToMessage = useCallback((idx: number) => {
     // 窗口化（v14.9.2）：目标在窗口外时先展开到全部，等一帧 DOM 挂载再滚
-    if (idx < messages.length - msgWindow) {
+    if (idx < messages.length - effectiveWindow) {
       setMsgWindow(messages.length)
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const el = scrollRef.current?.querySelector(`[data-msg-idx="${idx}"]`) as HTMLElement | null
