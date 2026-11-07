@@ -65,3 +65,4 @@ android/app/src/main/cpp/include/
 android/app/src/local/assets/
 android/app/build/
 android/app/.cxx/
+.tmp-*
