@@ -253,7 +253,10 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const panelRef = useRef<HTMLDivElement>(null)
   const { c, theme } = useTheme()
   const { t } = useLanguage()
-  const glass = theme === 'dark' ? 'rgba(45,45,48,0.62)' : 'rgba(255,255,255,0.66)'
+  // 读设计 token（v14.11.5）：不再各写一份玻璃色，与 --glass-bg-strong 保持同源
+  const glass = theme === 'dark'
+    ? 'var(--glass-bg-strong, rgba(36,36,40,0.72))'
+    : 'var(--glass-bg-strong, rgba(255,255,255,0.72))'
 
   // --- 语音输入 ---
   const sendWav = useCallback(async (chunks: Float32Array[]) => {
@@ -289,15 +292,18 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     source.connect(analyser)
     analyserRef.current = analyser
     const data = new Uint8Array(analyser.frequencyBinCount)
-    const loop = () => {
+    // 节流 ~10Hz（v14.11.5）：每帧 setVolume 会让整个 MessageInput 60fps 重渲染；
+    // 波形是视觉动画，10Hz 足够顺滑
+    let lastEmit = 0
+    const loop = (t: number) => {
       analyser.getByteFrequencyData(data)
       let sum = 0
       for (let i = 0; i < data.length; i++) sum += data[i]
       const avg = sum / data.length / 255
-      setVolume(Math.min(1, avg * 2.2))
+      if (t - lastEmit >= 100) { lastEmit = t; setVolume(Math.min(1, avg * 2.2)) }
       rafRef.current = requestAnimationFrame(loop)
     }
-    loop()
+    loop(0)
   }, [])
 
   const stopVolumeMeter = useCallback(() => {
@@ -649,6 +655,20 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
       .finally(() => { if (!cancelled) setMentionLoading(false) })
     return () => { cancelled = true }
   }, [settings])
+
+  // 防抖（v14.11.5）：@ 后每敲一个字符都会触发一次 find-files 请求，
+  // 此前无防抖且取消回调被丢弃——竞态请求互相覆盖结果
+  const mentionTimerRef = useRef<number | null>(null)
+  const mentionCancelRef = useRef<(() => void) | null>(null)
+  const scheduleMention = useCallback((text: string, caret: number) => {
+    if (mentionTimerRef.current != null) { clearTimeout(mentionTimerRef.current); mentionTimerRef.current = null }
+    mentionCancelRef.current?.()
+    mentionCancelRef.current = null
+    mentionTimerRef.current = window.setTimeout(() => {
+      mentionTimerRef.current = null
+      mentionCancelRef.current = detectMention(text, caret) || null
+    }, 180)
+  }, [detectMention])
 
   const mentionActive = !!mentionRange
   const applyMention = (file: { name: string; path: string }) => {
@@ -1587,12 +1607,12 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                 if (hit && snippetVars(hit.snippet.body).length === 0) {
                   const expanded = hit.rest ? `${hit.snippet.body}\n${hit.rest}` : hit.snippet.body
                   setValue(expanded)
-                  requestAnimationFrame(() => detectMention(expanded, expanded.length))
+                  scheduleMention(expanded, expanded.length)
                   return
                 }
               }
               setValue(next)
-              requestAnimationFrame(() => detectMention(next, e.target.selectionStart ?? next.length))
+              scheduleMention(next, e.target.selectionStart ?? next.length)
             }}
             onPaste={handlePaste} onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}

@@ -222,7 +222,7 @@
   .transition-base { transition: all var(--transition-base); }
   .transition-slow { transition: all var(--transition-slow); }
 
-  .glass { backdrop-filter: blur(20px) saturate(180%); }
+  /* .glass 的磨砂由全局 .global-veil 单次提供（多面 backdrop-filter 叠加是最大 GPU 开销） */
 }
 
 /* ============================================================
@@ -382,34 +382,6 @@
 .hljs-function, .hljs-class .hljs-title, .hljs-params { color: #d2a8ff; }
 .hljs-keyword, .hljs-selector-tag { font-weight: 500; }
 .hljs-attr, .hljs-variable, .hljs-property { color: #79c0ff; }
-
-/* ============================================================
-   Input / Textarea - ChatGPT 圆角 composer
-   ============================================================ */
-.input-capsule {
-  background: var(--surface-card);
-  border: 1px solid var(--border);
-  border-radius: 26px;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
-}
-.input-capsule:focus-within {
-  border-color: var(--border-focus);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-.input-capsule textarea {
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--text);
-  caret-color: var(--accent);
-  min-height: 24px;
-  max-height: 200px;
-}
-.input-capsule textarea::placeholder { color: var(--text-tertiary); }
 
 /* ============================================================
    思考程度滑块（参考 ChatGPT / Codex 的强度选择器）
@@ -605,31 +577,8 @@
 }
 
 /* ============================================================
-   Loading / Empty states
-   ============================================================ */
-.loading-dots { display: inline-flex; gap: 3px; }
-.loading-dots span {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary);
-  animation: loading-dot 1.2s ease-in-out infinite;
-}
-.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes loading-dot {
-  0%, 100% { transform: scale(1); opacity: 0.4; }
-  50% { transform: scale(1.3); opacity: 1; }
-}
-
-/* ============================================================
    Welcome / Empty state - ChatGPT 风格
    ============================================================ */
-.welcome-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 2rem; text-align: center; }
-.welcome-logo {
-  width: 56px; height: 56px; border-radius: 16px;
-  background: transparent;
-  display: flex; align-items: center; justify-content: center;
-  margin-bottom: 1.5rem;
-  color: var(--text-head);
-}
 .welcome-title { font-size: 30px; font-weight: 600; color: var(--text-head); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
 .welcome-subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 2.5rem; max-width: 440px; line-height: 1.6; }
 .welcome-prompts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 560px; }
@@ -664,20 +613,6 @@
 }
 .tooltip:hover::after { opacity: 1; }
 
-/* ============================================================
-   Sidebar item
-   ============================================================ */
-.sidebar-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius-md);
-  color: var(--text-secondary); font-size: 13.5px;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-  cursor: pointer; width: 100%; border: none; background: transparent;
-  text-align: left; font-family: inherit;
-}
-.sidebar-item:hover { background: var(--sidebar-hover); color: var(--text); }
-.sidebar-item.active { background: var(--sidebar-active); color: var(--sidebar-active-text); font-weight: 500; }
-
 /* 会话分组标题 */
 .sidebar-group-label {
   padding: 14px 10px 6px;
@@ -691,18 +626,9 @@
    Tab bar
    ============================================================ */
 .tab-strip { display: flex; gap: 2px; padding: 0 8px; }
-.tab {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 0 12px; height: 36px; border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: transparent; border: 1px solid transparent; border-bottom: none;
-  font-size: 12.5px; font-weight: 500; color: var(--text-tertiary);
-  cursor: pointer; transition: color var(--transition-fast), background var(--transition-fast);
-}
-.tab:hover { color: var(--text); background: var(--surface-hover); }
-.tab.active { color: var(--text-head); background: var(--surface); border-color: var(--border); border-bottom-color: var(--surface); }
-.tab .close { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: var(--radius-pill); opacity: 0; transition: opacity var(--transition-fast), background var(--transition-fast); }
-.tab:hover .close { opacity: 1; }
-.tab .close:hover { background: var(--surface-hover); }
+/* 桌面端同样隐藏滚动条（此前只在移动端媒体查询里隐藏，标签溢出时拖拽区会露出 8px 滚动条） */
+.tab-strip { scrollbar-width: none; }
+.tab-strip::-webkit-scrollbar { display: none; }
 
 /* ============================================================
    Context gauge
@@ -866,7 +792,7 @@ html[data-wallpaper="off"] .glass-strong {
    content-visibility: auto 让浏览器跳过视口外消息的渲染/布局/绘制，
    千条消息的会话滚动与流式重排代价从 O(n) 降到 O(可见)。
    contain-intrinsic-size 给离屏消息一个估算高度，防止滚动条跳动。 */
-.msg-cv { content-visibility: auto; contain-intrinsic-size: auto 140px; }
+.msg-cv { content-visibility: auto; contain-intrinsic-size: auto 220px; }
 
 /* ══════════════════════════════════════════════════════════════
    多端适配（v13.5）：手机 / 平板 / 桌面
@@ -906,8 +832,6 @@ body {
   /* 顶栏与页签在窄屏收紧 */
   .tab-strip { overflow-x: auto; scrollbar-width: none; }
   .tab-strip::-webkit-scrollbar { display: none; }
-  /* 面板内边距收紧，多留内容宽度 */
-  .panel-pad { padding-left: 12px; padding-right: 12px; }
   /* 弹窗全屏（设置/命令面板/技能市场） */
   .modal-fullscreen-mobile { position: fixed; inset: 0; width: 100vw !important; height: 100dvh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
   /* 底部输入区留出手势条 */

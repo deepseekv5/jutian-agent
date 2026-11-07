@@ -56,10 +56,15 @@ export const PAGE_META: Record<string, { label: string; labelEn?: string; icon: 
   harness: { label: 'Harness', labelEn: 'Harness', icon: 'M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z' },
 }
 
+/** 扩展页缺省图标：拼图 SVG 路径（emoji 不是合法 path data，渲染为空白） */
+const EXT_FALLBACK_ICON = 'M10.5 3.5a1.75 1.75 0 013.5 0V5H18a1 1 0 011 1v4h-1.5a1.75 1.75 0 000 3.5H19V18a1 1 0 01-1 1h-4v-1.5a1.75 1.75 0 00-3.5 0V19H6a1 1 0 01-1-1v-4H3.5a1.75 1.75 0 000-3.5H5V6a1 1 0 011-1h4.5V3.5z'
+
 /** 动态注册扩展页面（v14.11）：渲染层拉到 active 扩展后写入 PAGE_META，
- *  TabBar/NewTabPage/FestivalHome 的所有 PAGE_META[...] 索引点自动兼容。 */
-export function registerExtMeta(type: string, label: string, icon = '🧩') {
-  PAGE_META[type] = { label, labelEn: label, icon }
+ *  TabBar/NewTabPage/FestivalHome 的所有 PAGE_META[...] 索引点自动兼容。
+ *  扩展自带的 icon 可能是 emoji/文字——不是合法 SVG path data 就回退到拼图图标。 */
+export function registerExtMeta(type: string, label: string, icon?: string) {
+  const valid = !!icon && /^[MmHhVvLlCcSsQqTtAaZz0-9,.\s-]+$/.test(icon) && /[MmHhVvLlCcSsQqTtAaZz]/.test(icon)
+  PAGE_META[type] = { label, labelEn: label, icon: valid ? icon! : EXT_FALLBACK_ICON }
 }
 export function unregisterExtMeta(type: string) { delete PAGE_META[type] }
 export function getAllExtMetaKeys(): string[] { return Object.keys(PAGE_META).filter(k => k.startsWith('ext:')) }
@@ -108,7 +113,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
       <div className="tab-strip flex-1 flex items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {tabs.map(tab => {
           const active = tab.id === activeTabId
-          const meta = PAGE_META[tab.type] || { label: "扩展", icon: "🧩" }
+          const meta = PAGE_META[tab.type] || { label: "扩展", icon: EXT_FALLBACK_ICON }
           const isWorking = !!(tab.sessionId && workingSessionIds?.has(tab.sessionId))
           return (
             <div key={tab.id}

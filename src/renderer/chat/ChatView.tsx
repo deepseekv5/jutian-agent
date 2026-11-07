@@ -86,6 +86,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickToBottomRef = useRef(true)
+  const scrollRafRef = useRef<number | null>(null)
   const isStreaming = streamingId !== null
   const { c } = useTheme()
 
@@ -231,12 +232,18 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }, [])
   const contentWidth = wide ? 1100 : 860
 
+  // rAF 节流 + 翻转守卫：滚动事件高频触发，scrollHeight 读取与 setState 每帧一次足够
   const onScroll = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-    stickToBottomRef.current = dist < 200
-    setShowJump(dist > 360)
+    if (scrollRafRef.current != null) return
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null
+      const el = scrollRef.current
+      if (!el) return
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      stickToBottomRef.current = dist < 200
+      const jump = dist > 360
+      setShowJump(prev => (prev === jump ? prev : jump))
+    })
   }, [])
 
   const jumpToBottom = () => {
@@ -283,8 +290,10 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   }, [c.accent])
 
   // 只有用户本就停留在底部时才自动跟随滚动（否则显示「{t('回到底部', 'Back to bottom')}」）
+  // behavior:'auto'（v14.11.5）：流式期间每 ~50ms 一次 flush，smooth 动画每次被重启反而卡顿抖动；
+  // 逐步瞬时贴底在视觉上就是平滑跟随（ChatGPT 同款）
   useEffect(() => {
-    if (stickToBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (stickToBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [messages, streamingId])
 
   // 搜索：内容过滤命中 → ↑↓ 循环定位
@@ -463,8 +472,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
             )}
             <div key={msg.id} data-msg-idx={idx} data-msg-id={msg.id}
               style={{
-                // 长对话性能:非尾部消息视口外跳过绘制
-                ...(idx < messages.length - 8 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 220px' } : null),
+                // 视口外跳过绘制由 .msg-cv 统一提供（contain-intrinsic-size 与 CSS 同源，避免两套占位高度跳滚动条）
                 ...(searchOpen && searchHits[hitCursor] === idx ? { boxShadow: `inset 3px 0 0 ${c.accent}`, transition: 'box-shadow .2s' } : null),
               }}>
               <MessageBubble

@@ -330,7 +330,7 @@ function MainApp() {
       const live = new Set(list.map(x => extType(x.id)))
       // 清掉不再活跃的注册项
       getAllExtMetaKeys().forEach(k => { if (!live.has(k)) unregisterExtMeta(k) })
-      for (const x of list) registerExtMeta(extType(x.id), x.icon + ' ' + x.name, x.icon)
+      for (const x of list) registerExtMeta(extType(x.id), x.name, x.icon)
     }
     sync()
     const off = subscribeExts(sync)
@@ -653,6 +653,13 @@ function MainApp() {
     setTabs(prev => prev.map(t => t.sessionId === sid && t.type === 'chat' ? { ...t, title: title.slice(0, 12) || '对话' } : t));
   }, [updateTitle]);
 
+  // ChatTab props 稳定化（v14.11.5）：配合 memo(ChatTab)，任一标签开始/结束流式时
+  // 不再把所有已挂载会话的 ChatView+MessageInput 拖着重渲染
+  const settingsRef = useRef(settings); settingsRef.current = settings;
+  const handleOpenResearch = useCallback((seed?: string) => { if (seed) sendResearchSeed(seed); openTab('research') }, [openTab]);
+  const handleModelChange = useCallback((m: string) => { saveSettings({ ...settingsRef.current, model: m }) }, [saveSettings]);
+  const handleScreenshotConsumed = useCallback(() => setPendingScreenshot(null), []);
+
   // 视觉设置实时读取（设置页改动即时生效，含默认动态视频壁纸）。
   // 默认值与回落规则统一走 store/visual，避免这里与设置页各写一份导致漂移
   const [visualSettings, setVisualSettings] = useState<VisualSettings>(loadVisualSettings)
@@ -696,7 +703,7 @@ function MainApp() {
     switch (tab.type) {
       case 'chat':
         return tab.sessionId ? (
-          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onOpenResearch={seed => { if (seed) sendResearchSeed(seed); openTab('research') }} onStreamingChange={handleStreamingChange} onModelChange={(m) => saveSettings({ ...settings, model: m })} onProjectChange={setProject} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={() => setPendingScreenshot(null)} />
+          <ChatTab key={tab.id} sessionId={tab.sessionId} settings={settings} onTitleGenerated={handleTitleGenerated} onAiTitle={handleAiTitle} onOpenBrowser={handleOpenBrowser} onOpenResearch={handleOpenResearch} onStreamingChange={handleStreamingChange} onModelChange={handleModelChange} onProjectChange={setProject} active={tab.id === activeTabId} incomingScreenshot={pendingScreenshot} onScreenshotConsumed={handleScreenshotConsumed} />
         ) : null;
       case 'call':
         return <VoiceCall settings={settings} onClose={() => closeTab(tab.id)} />;
@@ -781,7 +788,7 @@ function MainApp() {
 
   const mainAreaStyle = { position: 'relative' as const, zIndex: 1, ['--kb-inset' as string]: `${kbInset}px` } as React.CSSProperties;
   return (
-    <div className="h-screen overflow-hidden flex relative" style={{ background: bgImage ? "transparent" : "transparent" }}>
+    <div className="h-screen overflow-hidden flex relative">
       <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
       {bgImage && <div className="global-veil" aria-hidden />}
       {/* 氛围模式：全屏氛围光晕（顶栏「氛围」按钮开关，Esc 退出） */}
@@ -794,7 +801,7 @@ function MainApp() {
       <div
         onTouchStart={vp.isMobile ? onDrawerTouchStart : undefined}
         onTouchEnd={vp.isMobile ? onDrawerTouchEnd : undefined}
-        className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : 'jt-in-left transition-all duration-300 overflow-hidden shrink-0'}
+        className={vp.isMobile ? `sidebar-shell${mobileNavOpen ? ' is-open' : ''}` : `jt-in-left duration-300 overflow-hidden shrink-0 transition-[width,min-width] ease-[cubic-bezier(0.32,0.72,0,1)]`}
         style={vp.isMobile
           ? { background: 'var(--glass-bg, #fff)' }
           : { width: sidebarCollapsed ? 0 : 280, minWidth: sidebarCollapsed ? 0 : 280, position: 'relative', zIndex: 1 }}>

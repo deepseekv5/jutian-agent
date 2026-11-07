@@ -145,14 +145,21 @@ function readThinkMs(msgId?: string): number | null {
   return v > 500 ? v : null
 }
 
-/** 读取消息的「目标」侧车标记（useChat 在目标模式发送时写入），返回目标文本或 null */
+/** 读取消息的「目标」侧车标记（useChat 在目标模式发送时写入），返回目标文本或 null
+ *  性能（v14.11.5）：模块级缓存对齐 readThinkMs——此前每条用户气泡每次渲染都 JSON.parse 一遍 */
+let goalMsgCache: { map: Record<string, string>; at: number } | null = null
+function readGoalMsgRaw(): Record<string, string> {
+  const now = Date.now()
+  if (goalMsgCache && now - goalMsgCache.at < 1500) return goalMsgCache.map
+  try {
+    goalMsgCache = { map: JSON.parse(localStorage.getItem('lyclaw_msg_goal') || '{}'), at: now }
+    return goalMsgCache.map
+  } catch { return {} }
+}
 function readGoalMsg(msgId?: string): string | null {
   if (!msgId) return null
-  try {
-    const map = JSON.parse(localStorage.getItem('lyclaw_msg_goal') || '{}')
-    const v = map[msgId]
-    return typeof v === 'string' && v ? v : null
-  } catch { return null }
+  const v = readGoalMsgRaw()[msgId]
+  return typeof v === 'string' && v ? v : null
 }
 
 function fmtThink(ms: number): string {
