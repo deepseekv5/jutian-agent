@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Settings } from '../types'
 import { pushNotice } from '../notify'
+import { REPO_URL } from '../app/StarGate'
 import { fetchCompat } from '../api'
 
 interface ModelInfo {
@@ -52,6 +53,14 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   // 不等 settings 往返，避免"点了没反应"的观感
   const [switching, setSwitching] = useState('')
   const [latency, setLatency] = useState<Record<string, number | string>>({})
+  // 求星横幅（v14.11.3）：默认显示，可关；点 Star 跳仓库
+  const [starBanner, setStarBanner] = useState(() => {
+    try { return localStorage.getItem('lyclaw_star_banner_hide') !== '1' } catch { return true }
+  })
+  const hideStarBanner = () => {
+    setStarBanner(false)
+    try { localStorage.setItem('lyclaw_star_banner_hide', '1') } catch { /* ignore */ }
+  }
   // Kilo 账户密钥(解锁付费档):存 DB 的 kilo_api_key,GET 回显为掩码
 
   const load = useCallback(async () => {
@@ -192,6 +201,21 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           <button onClick={load} className="px-2 py-1 rounded-md text-[11px]" style={{ background: c.bgInput, color: c.textSecondary }}>{t('刷新', 'Refresh')}</button>
         </div>
       </div>
+
+      {starBanner && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 border-b shrink-0" style={{ borderColor: c.borderLight, background: 'rgba(16,163,127,.06)' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#f5b301"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7L5.8 20.9l1.6-7L2 9.2l7.1-.6L12 2z" /></svg>
+          <span className="text-[11.5px] flex-1 min-w-0" style={{ color: c.textSecondary }}>
+            {t('免费模型完全免费提供——如果好用，给仓库点个 Star 支持一下？', 'Free models are provided for free — if they help, a GitHub Star keeps them coming.')}
+          </span>
+          <a href={REPO_URL} target="_blank" rel="noreferrer" onClick={hideStarBanner}
+            className="px-2.5 h-6 rounded-full text-[10.5px] font-semibold flex items-center shrink-0"
+            style={{ background: '#10a37f', color: '#fff' }}>⭐ Star</a>
+          <button onClick={hideStarBanner} className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
+            {t('不再提示', 'Dismiss')}
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-4 min-h-0">
         {error && (

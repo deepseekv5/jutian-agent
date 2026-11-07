@@ -63,6 +63,7 @@ const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
 const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
+import StarGate, { shouldShowStarGate } from './StarGate';
 import { isMac as platformIsMac } from '../utils/platform';
 import AnnouncementBanner from './AnnouncementBanner';
 import FestivalEgg from './FestivalEgg';
@@ -398,6 +399,15 @@ function MainApp() {
 
   // 首次启动强制同意门：同意后置 true 移除 gate（localStorage 版本化，协议更新会重新征求）
   const [legalOk, setLegalOk] = useState(hasLegalConsent)
+  // 求星门（v14.11.3）：法务同意后 + 未点过「不再提示」时显示；
+  // 延迟 2.5s 让主界面先渲染完（LegalGate 关闭瞬间连弹两个全屏太压迫）
+  const [starGate, setStarGate] = useState(false)
+  useEffect(() => {
+    if (!legalOk) return
+    const t = setTimeout(() => setStarGate(shouldShowStarGate()), 2500)
+    return () => clearTimeout(t)
+  }, [legalOk])
+  // 求星门（v14.11.3）：首次启动强制显示，可稍后/永不再提示
   const [cliPrompt, setCliPrompt] = useState(false);
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -878,6 +888,8 @@ function MainApp() {
       </div>
 
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
+
+      {legalOk && starGate && <StarGate onClose={() => setStarGate(false)} />}
 
       {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}
 

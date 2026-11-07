@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "14.11.2",
+  "version": "14.11.3",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
