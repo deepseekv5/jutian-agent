@@ -5742,6 +5742,19 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         return json(res, { ok: true });
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
+    // 跨平台「用系统默认浏览器打开 URL」（v14.11.3）：求星门/免费模型横幅等
+    // 场景需要跳出 Electron，window.open 只会开应用内新窗口。
+    // darwin=open；win32=cmd /c start（URL 含 & 需整体加引号）；linux=xdg-open。
+    if (url.pathname === "/api/open-external" && req.method === "GET") {
+      try {
+        const u = String(url.searchParams.get("url") || "");
+        if (!/^https?:\/\//i.test(u)) return json(res, { ok: false, error: "仅允许 http/https URL" }, 400);
+        if (process.platform === "darwin") await execAsync("open", [u], { timeout: 5e3 });
+        else if (process.platform === "win32") await execAsync("cmd", ["/c", "start", "", u], { timeout: 5e3 });
+        else await execAsync("xdg-open", [u], { timeout: 5e3 });
+        return json(res, { ok: true });
+      } catch (e) { return json(res, { ok: false, error: e.message }, 500); }
+    }
     if (url.pathname === "/api/trash-file" && req.method === "POST") {
       try {
         const { path: fp } = await body(req);

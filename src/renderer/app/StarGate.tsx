@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react'
+import { fetchCompat } from '../api'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 
@@ -37,7 +38,8 @@ export default function StarGate({ onClose }: { onClose: () => void }) {
   const [leaving, setLeaving] = useState(false)
 
   const openRepo = () => {
-    try { window.open(REPO_URL, '_blank') } catch { /* ignore */ }
+    // v14.11.3：走系统默认浏览器（window.open 在 Electron 里只会开应用内窗口）
+    fetchCompat('/api/open-external?url=' + encodeURIComponent(REPO_URL)).catch(() => {})
     // 点过 Star 后本次不再打扰（用户可能还没点，所以只算「稍后」）
     dismissStarGate(false)
     onClose()

@@ -208,9 +208,9 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           <span className="text-[11.5px] flex-1 min-w-0" style={{ color: c.textSecondary }}>
             {t('免费模型完全免费提供——如果好用，给仓库点个 Star 支持一下？', 'Free models are provided for free — if they help, a GitHub Star keeps them coming.')}
           </span>
-          <a href={REPO_URL} target="_blank" rel="noreferrer" onClick={hideStarBanner}
+          <button onClick={() => { fetchCompat('/api/open-external?url=' + encodeURIComponent(REPO_URL)).catch(() => {}); hideStarBanner() }}
             className="px-2.5 h-6 rounded-full text-[10.5px] font-semibold flex items-center shrink-0"
-            style={{ background: '#10a37f', color: '#fff' }}>⭐ Star</a>
+            style={{ background: '#10a37f', color: '#fff' }}>⭐ Star</button>
           <button onClick={hideStarBanner} className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
             {t('不再提示', 'Dismiss')}
           </button>
