@@ -29,7 +29,7 @@
 >
 > 浏览器里的 AI 要你迁就它。装在桌面上的 AI,直接住进你的文件、终端和工作流。
 > 下载地址:https://github.com/deepseekv5/jutian-agent/releases/latest
-
+初中生开发，请求支持，
 <br>
 
 ## 📖 目录
