@@ -32,16 +32,19 @@ function noticeSection(ver) {
     const text = part.replace(/^\s*(<!--[^>]*-->\s*)+/, '').trim()
     if (re.test(text)) return text
   }
-  // 旧式条目：直接扫描「vX.Y.Z：」开头的段落，到下一条目/注释/标题为止
+  // 旧式条目：直接扫描「vX.Y.Z：」开头的段落；要点体（网页版）匹配「* **vX.Y.Z**：」单行
   const lines = md.split('\n')
   for (let i = 0; i < lines.length; i++) {
-    if (!re.test(lines[i])) continue
-    const out = [lines[i]]
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^(<!--|v\d+\.\d+\.\d+：|#)/.test(lines[j].trim())) break
-      out.push(lines[j])
+    if (re.test(lines[i])) {
+      const out = [lines[i]]
+      for (let j = i + 1; j < lines.length; j++) {
+        if (/^(<!--|v\d+\.\d+\.\d+：|\* \*\*v\d+\.\d+|#)/.test(lines[j].trim())) break
+        out.push(lines[j])
+      }
+      return out.join('\n').trim()
     }
-    return out.join('\n').trim()
+    const bullet = lines[i].match(new RegExp(`^\\*\\s+\\*\\*v${ver.replace(/\./g, '\\.')}\\b[^*]*\\*\\*(.*)$`))
+    if (bullet) return `v${version}：` + bullet[1].trim().replace(/^[：:]\s*/, '')
   }
   return null
 }
