@@ -12,7 +12,7 @@ Jutian Agent is a three-layer architecture, and each layer can be understood on 
 │  ┌──────────────┐   ┌──────────────────────────────┐ │
 │  │   serve.cjs  │   │  Window / tray / global      │ │
 │  │  (HTTP :3211)│   │  shortcuts                   │ │
-│  │  38 built-in │   │  Window-state persistence    │ │
+│  │  51 built-in │   │  Window-state persistence    │ │
 │  │  tools       │   │                              │ │
 │  │  llm-proxy   │   └──────────────────────────────┘ │
 │  │  MCP client  │   ┌──────────────────────────────┐ │
@@ -33,7 +33,7 @@ Jutian Agent is a three-layer architecture, and each layer can be understood on 
 
 ### 1. serve.ts — single-process backend (sole source: `src/server/serve.ts`)
 
-- **Tool API**: implementations of the 38 built-in tools, all returning the `{ success, output }` shape
+- **Tool API**: implementations of the 51 built-in tools, all returning the `{ success, output }` shape
 - **llm-proxy**: `/api/llm-proxy` forwards OpenAI-compatible streaming requests; upstream errors are passed through with their status code unchanged
 - **MCP client**: stdio JSON-RPC 2.0, manages the external tool ecosystem
 - **Gatekeeper chain**: OPTIONS preflight → untrusted Origin gets 403 → DNS rebinding gets 421 → non-local requests go through the pairing code

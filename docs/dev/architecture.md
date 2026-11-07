@@ -31,7 +31,7 @@
 
 ### 1. serve.ts — 单进程后端(唯一源码 `src/server/serve.ts`)
 
-- **工具 API**:38 个内置工具的实现,全部返回 `{ success, output }` 形状
+- **工具 API**:51 个内置工具的实现,全部返回 `{ success, output }` 形状
 - **llm-proxy**:`/api/llm-proxy` 转发 OpenAI 兼容流式请求;上游错误原样透传状态码
 - **MCP 客户端**:stdio JSON-RPC 2.0,管理外部工具生态
 - **门卫链**:OPTIONS 预检 → 不可信 Origin 403 → DNS-rebinding 421 → 非本机走配对码
