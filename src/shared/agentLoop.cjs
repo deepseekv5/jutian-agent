@@ -157,7 +157,17 @@ function accumulateToolCallDelta(map, tc) {
   const name = tc.function?.name;
   if (name && !slot.name) slot.name = name;
   const args = tc.function?.arguments;
-  if (args) slot.arguments += args;
+  if (args) {
+    if (args.trimStart().startsWith("{")) {
+      try {
+        JSON.parse(slot.arguments);
+        slot.arguments = args;
+        return;
+      } catch {
+      }
+    }
+    slot.arguments += args;
+  }
 }
 function adoptNonStreamToolCalls(map, messageToolCalls) {
   if (map.size > 0) return;

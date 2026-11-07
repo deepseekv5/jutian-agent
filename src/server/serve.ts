@@ -244,20 +244,23 @@ var SHELL_GUARD = (() => { try { return require("./src/shared/shellGuard.cjs"); 
 // 巨天安全（v14.12.0）：危险命令拦截 / 注入扫描 / 密钥屏蔽 + {{KEY}} 占位符 / 安全记录
 var SHIELD = (() => { try { return require("./src/shared/securityShield.cjs"); } catch (e) { console.error("securityShield.cjs load failed:", e.message); return null; } })();
 // 恶意命令库：内置精选（Sigma/LOLBAS 提炼）+ 远程更新叠加（Gitee 镜像 raw，失败回落内置）
-var MAL_PACK: any = (() => { try { return require("./src/shared/maliciousPack.json"); } catch (e) { return null; } })();
-var MAL_REMOTE: any = null;
-var MAL_COMPILED: any[] | null = null;
+interface MalPackPattern { p: string; k?: string; r?: string }
+interface MalPack { version?: string; patterns?: MalPackPattern[] }
+type MalRule = { kind: string; reason: string; re: RegExp }
+var MAL_PACK: MalPack | null = (() => { try { return require("./src/shared/maliciousPack.json"); } catch (e) { return null; } })();
+var MAL_REMOTE: MalPack | null = null;
+var MAL_COMPILED: MalRule[] | null = null;
 function malLoadRemote() {
   MAL_REMOTE = null;
   try { MAL_REMOTE = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "malicious-commands-remote.json"), "utf-8")); } catch { /* 无远程库 */ }
   MAL_COMPILED = null;
 }
-function malRules(): any[] {
+function malRules(): MalRule[] {
   if (!SHIELD) return [];
   if (!MAL_COMPILED) {
-    const out: any[] = [];
+    const out: MalRule[] = [];
     const seen = new Set<string>();
-    const addOne = (pack: any) => {
+    const addOne = (pack: MalPack | null) => {
       if (!pack || !Array.isArray(pack.patterns)) return;
       for (const p of pack.patterns.slice(0, 3000)) {
         if (!p || typeof p.p !== "string" || p.p.length > 500 || seen.has(p.p)) continue;
@@ -2765,6 +2768,23 @@ async function clipboard_write(a) {
 }
 
 async function open_path(a) {
+  // URL 支持（v14.13）：open_path("https://…") 用系统默认浏览器打开（jtcode/TUI 的「帮我打开浏览器」）
+  const raw = String(a.path || "").trim();
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      if (IS_WIN) {
+        const cp2 = require("child_process");
+        cp2.spawn("cmd.exe", ["/c", "start", "", raw], { detached: true, stdio: "ignore", env: shellEnv() }).unref();
+      } else if (process.platform === "darwin") {
+        const cp2 = require("child_process");
+        cp2.spawn("open", [raw], { detached: true, stdio: "ignore" }).unref();
+      } else {
+        const cp2 = require("child_process");
+        cp2.spawn("xdg-open", [raw], { detached: true, stdio: "ignore" }).unref();
+      }
+      return { success: true, output: `已在系统默认浏览器打开：${raw}` };
+    } catch (e) { return { success: false, error: e.message }; }
+  }
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "路径不允许" };
   try {
@@ -4747,21 +4767,21 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         try {
           const resp = await fetch(src.url, { signal: AbortSignal.timeout(20_000), headers: { "User-Agent": UA } });
           if (!resp.ok) { lastErr = `${new URL(src.url).host}: HTTP ${resp.status}`; continue; }
-          let data: any = null;
+          let data: MalPack | null = null;
           if (src.kind === "gitee") {
             // Gitee contents API：{content: base64(带换行)}
-            const env = await resp.json();
+            const env = (await resp.json()) as { content?: string };
             if (!env?.content) { lastErr = "gitee.com: 响应缺少 content"; continue; }
             data = JSON.parse(Buffer.from(String(env.content).replace(/\s+/g, ""), "base64").toString("utf-8"));
           } else {
-            data = await resp.json();
+            data = (await resp.json()) as MalPack;
           }
           const v = SHIELD ? SHIELD.validatePack(data) : { ok: false, error: "shield 未加载" };
           if (!v.ok) { lastErr = `校验失败：${v.error}`; continue; }
           fs.writeFileSync(path.join(DATA_DIR, "malicious-commands-remote.json"), JSON.stringify(data, null, 1));
           malLoadRemote();
           return json(res, { ok: true, version: data.version, count: v.count, active: malRules().length, source: new URL(src.url).host });
-        } catch (e: any) { lastErr = `${new URL(src.url).host}: ${String(e?.message || e).slice(0, 80)}`; }
+        } catch (err) { lastErr = `${new URL(src.url).host}: ${String((err as Error)?.message || err).slice(0, 80)}`; }
       }
       return json(res, { ok: false, error: lastErr || "所有源都不可达" }, 502);
     }

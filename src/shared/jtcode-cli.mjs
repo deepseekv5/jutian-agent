@@ -1,20 +1,28 @@
 #!/usr/bin/env node
 /**
- * jtcode —— 巨天agent 命令行客户端
+ * jtcode —— 巨天agent 命令行客户端（Claude Code 式）
  *
- * 由桌面 App 一键安装（/usr/local/bin 或 ~/.local/bin）。
- * 连接本机运行的巨天agent 服务（localhost:3211/3210），在终端直接对话。
+ * 由桌面 App 一键安装（/usr/local/bin 或 ~/.local/bin）。零依赖单文件。
+ * 走 /api/agent/run —— 与桌面端同一条 agent 循环：51 工具、巨天安全门禁、
+ * 权限确认（y/n/a）、计划卡、密钥占位符全部同源。
+ *
+ * 关键语义：
+ *   - 工作目录 = jtcode 启动时所在的文件夹（process.cwd()），在哪个目录打开就操作哪个目录
+ *   - 巨天未运行时自动拉起（已安装的桌面 App）
  *
  * 用法：
  *   jtcode                    交互模式（REPL）
  *   jtcode "帮我写个快排"     单次提问
  *   jtcode status             查看服务状态与当前模型
- *   jtcode -m <model>         指定模型
- *   jtcode --help             帮助
+ *   jtcode -m <model> "..."   指定模型
  */
 import readline from 'node:readline'
 
 const VERSION = '__APP_VERSION__'  // 安装时由 serve.cjs 注入真实版本(单一来源 package.json)
+const PORT = Number(process.env.JUTIAN_PORT || 3211)
+const BASE = `http://127.0.0.1:${PORT}`
+const CWD = process.cwd()
+
 const C = {
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
@@ -22,12 +30,11 @@ const C = {
   cyan: (s) => `\x1b[36m${s}\x1b[0m`,
   yellow: (s) => `\x1b[33m${s}\x1b[0m`,
   red: (s) => `\x1b[31m${s}\x1b[0m`,
-  magenta: (s) => `\x1b[35m${s}\x1b[0m`,
 }
 const BANNER = `
 ${C.cyan('   ▄▄▄·  ▄▄· ')}  ${C.bold('jtcode')} ${C.dim('v' + VERSION)}
-${C.cyan('  ▐█ ▀█ ▐█ ▌▪')}  ${C.dim('巨天agent 命令行客户端')}
-${C.cyan('  ▄▀▀▀▌ ██ ▄▄')}  ${C.dim('连接本机桌面服务，终端直接对话')}
+${C.cyan('  ▐█ ▀█ ▐█ ▌▪')}  ${C.dim('巨天agent 命令行客户端 · Claude Code 式')}
+${C.cyan('  ▄▀▀▀▌ ██ ▄▄')}  ${C.dim('工作目录：' + CWD)}
 ${C.cyan('  ▐█▄▪▘ ▐███▌')}
 ${C.cyan('   ▀▀▀  ·▀▀▀ ')}
 `
@@ -46,234 +53,327 @@ const command = rest[0] || ''
 function printHelp() {
   console.log(BANNER)
   console.log(`  ${C.bold('用法')}`)
-  console.log(`    jtcode                  ${C.dim('交互对话（REPL，可用工具）')}`)
+  console.log(`    jtcode                  ${C.dim('交互对话（在当前目录操作电脑）')}`)
   console.log(`    jtcode "你的问题"       ${C.dim('单次提问')}`)
   console.log(`    jtcode status           ${C.dim('服务状态 / 当前模型')}`)
   console.log(`    jtcode -m <model> "..." ${C.dim('指定模型')}`)
   console.log('')
-  console.log(`  ${C.bold('交互模式命令')}`)
-  console.log(`    /tools ${C.dim('查看可用工具')}   /clear ${C.dim('清空上下文')}   /status ${C.dim('查看状态')}   /exit ${C.dim('退出')}`)
+  console.log(`  ${C.bold('交互命令')}`)
+  console.log(`    /tools /status /security /pack /clear /help /exit`)
 }
 
-async function findServer() {
-  for (const port of [3211, 3210]) {
-    try {
-      const r = await fetch(`http://localhost:${port}/api/health`, { signal: AbortSignal.timeout(1200) })
-      if (r.ok) return port
-    } catch { /* 下一端口 */ }
+async function health() {
+  try {
+    const r = await fetch(`${BASE}/api/health`, { signal: AbortSignal.timeout(1500) })
+    return r.ok ? await r.json() : null
+  } catch { return null }
+}
+
+/** 巨天未运行时拉起：优先已安装的桌面 App（其主进程自带后端） */
+async function ensureServer() {
+  const h = await health()
+  if (h) return h
+  const plat = process.platform
+  const candidates = plat === 'darwin'
+    ? ['/Applications/巨天agent.app', `${process.env.HOME}/Applications/巨天agent.app`]
+    : plat === 'win32'
+      ? [`${process.env.LOCALAPPDATA}\\Programs\\巨天agent\\巨天agent.exe`, `C:\\Program Files\\巨天agent\\巨天agent.exe`]
+      : ['/opt/巨天agent/巨天agent']
+  const { spawn } = await import('node:child_process')
+  const { existsSync } = await import('node:fs')
+  const found = candidates.find((p) => existsSync(p))
+  if (found) {
+    process.stdout.write(C.dim('巨天未运行 → 正在启动桌面 App…\n'))
+    if (plat === 'darwin') spawn('open', ['-a', found], { detached: true, stdio: 'ignore' }).unref()
+    else spawn(found, [], { detached: true, stdio: 'ignore' }).unref()
+  } else {
+    process.stdout.write(C.yellow('巨天未运行（未找到已安装的桌面 App，仅尝试等待服务）…\n'))
+  }
+  const t0 = Date.now()
+  while (Date.now() - t0 < 90_000) {
+    const h2 = await health()
+    if (h2) return h2
+    await new Promise((r) => setTimeout(r, 800))
   }
   return null
 }
 
-async function getSettings(port) {
+function sysPrompt(osName) {
+  return `你叫巨天，是「巨天agent」的命令行客户端 jtcode，运行在${osName}。用户在终端里与你对话，你可以真实操作这台电脑：写文件、改文件、执行命令、打开网页和文件。不要说自己"无法操作计算机/受限环境"——你可以，工具都可用。
+
+【关键语义】
+- 工作目录：${CWD}（jtcode 在此目录启动，shell/读写默认都在此目录内进行；write_file 的 path 只放文件路径本身）
+- 打开网页/URL 用 open_path（https://… 会用系统默认浏览器打开）；打开文件/文件夹也用 open_path
+- 命令里可用 {{KEY}}/{{BASE}} 占位符引用已配置的密钥/地址，不要索要明文密钥
+- 关机/重启/登出只能由用户手动操作，AI 不得用任何命令或脚本变体执行
+
+【响应风格】
+- 直接高效：先给结论/方案；不写客套话
+- 终端宽度有限：回答紧凑，列表最多 5 点
+
+【执行纪律】
+◆ 一次说清：需要多个信息时一轮并行调用多个工具
+◆ 先看后写：改文件前先 read_file 确认真实内容
+◆ 小步验证：每改完一处就验证（读回/跑测试）
+◆ 遇错即停：连续失败两次换方法
+◆ 说人话：不贴工具原始输出，提炼成结论
+
+【多步任务】≥3 步先调用 update_plan 列清单，每完成一步更新状态。`
+}
+
+async function getSettings() {
   try {
-    const r = await fetch(`http://localhost:${port}/api/settings`, { signal: AbortSignal.timeout(2000) })
+    const r = await fetch(`${BASE}/api/settings`, { signal: AbortSignal.timeout(3000) })
     if (r.ok) return await r.json()
   } catch { /* ignore */ }
   return {}
 }
 
-async function cmdStatus() {
-  const port = await findServer()
-  if (!port) {
-    console.error(C.red('✗ 未检测到巨天agent 服务（localhost:3211/3210 均不可达）'))
-    console.error(C.dim('  请先启动巨天agent 桌面应用'))
-    process.exit(1)
-  }
-  const h = await fetch(`http://localhost:${port}/api/health`).then((r) => r.json()).catch(() => ({}))
-  const s = await getSettings(port)
-  console.log(BANNER)
-  console.log(`  ${C.green('●')} 服务在线 ${C.dim(`localhost:${port}`)}`)
-  console.log(`  ${C.dim('工具数:')} ${h.tools ?? '?'}   ${C.dim('平台:')} ${h.platform ?? '?'}`)
-  console.log(`  ${C.dim('模型:')}  ${C.bold(s.model || 'default')}${s.provider ? C.dim(` (${s.provider})`) : ''}`)
-  if (h.workDir) console.log(`  ${C.dim('工作区:')} ${h.workDir}`)
-}
-
-/** 从服务拉取内置工具 schema(单一来源,与桌面端/手机端一致) */
-async function getTools(port) {
+/** 从服务拉取内置工具 schema（单一来源，与桌面/手机/TUI 一致） */
+async function getTools() {
   try {
-    const r = await fetch(`http://localhost:${port}/api/remote/tools`, { signal: AbortSignal.timeout(2000) })
+    const r = await fetch(`${BASE}/api/remote/tools`, { signal: AbortSignal.timeout(3000) })
     if (r.ok) {
       const d = await r.json()
-      return Array.isArray(d.tools) ? d.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })) : []
+      return Array.isArray(d.tools) ? d.tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) : []
     }
-  } catch { /* 忽略,工具不可用 */ }
+  } catch { /* ignore */ }
   return []
 }
 
-/** 执行一个工具调用,结果回给模型 */
-async function execTool(port, name, args, cwd) {
-  try {
-    const r = await fetch(`http://localhost:${port}/api/tools/execute`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', ...(cwd ? { 'X-Work-Dir': encodeURIComponent(cwd) } : {}) },
-      body: JSON.stringify({ name, args: typeof args === 'string' ? JSON.parse(args || '{}') : (args || {}) }),
-      signal: AbortSignal.timeout(120000),
-    })
-    const j = await r.json().catch(() => ({}))
-    if (j.success === false || r.status >= 400) {
-      return typeof (j.error || j.output) === 'string' ? (j.error || j.output) : JSON.stringify(j)
-    }
-    return typeof j.output === 'string' ? j.output : JSON.stringify(j)
-  } catch (e) { return `工具执行失败: ${e.message || e}` }
-}
-
-/** 调 /api/llm-proxy 流式对话，返回完整回复 */
-async function chatStream(port, settings, messages, onDelta, tools, _workDir) {
-  const isLocal = settings.provider === 'local'
-  const targetBase = isLocal ? 'http://localhost:1234/v1' : (settings.apiBaseUrl || 'https://openrouter.ai/api/v1')
-  const apiKey = isLocal ? 'lm-studio' : (settings.apiKey || '')
-  const model = modelOverride || settings.model || 'default'
-
-  const body = { model, messages, stream: true }
-  if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = 'auto' }
-
-  const res = await fetch(`http://localhost:${port}/api/llm-proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Target-Base': targetBase, 'X-Api-Key': apiKey },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(180000),
-  })
-  if (!res.ok) {
-    const t = await res.text().catch(() => '')
-    let friendly = `请求失败 (${res.status})`
-    try {
-      const j = JSON.parse(t)
-      if (res.status === 429) friendly = '今日 API 免费额度已用完，请明天再试'
-      else if (res.status === 401) friendly = 'API 密钥无效或已过期，请在桌面 App 设置中检查'
-      if (j.error) friendly = typeof j.error === 'string' ? j.error : JSON.stringify(j.error)
-    } catch {}
-    throw new Error(friendly)
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
+// ─── SSE ───
+async function* sseLines(body) {
+  const reader = body.getReader()
+  const dec = new TextDecoder()
   let buf = ''
-  let full = ''
-  const toolCalls = []
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    buf += decoder.decode(value, { stream: true })
-    const lines = buf.split('\n')
-    buf = lines.pop() || ''
-    for (const line of lines) {
-      const t = line.trim()
-      if (!t.startsWith('data:')) continue
-      const payload = t.slice(5).trim()
-      if (payload === '[DONE]') continue
-      try {
-        const j = JSON.parse(payload)
-        const d = j.choices?.[0]?.delta
-        if (d?.content) { full += d.content; onDelta?.(d.content, false) }
-        if (d?.reasoning_content || d?.reasoning) onDelta?.(d.reasoning_content || d.reasoning, true)
-        for (const tc of d?.tool_calls || []) {
-          const i = tc.index ?? 0
-          if (!toolCalls[i]) toolCalls[i] = { id: tc.id || '', name: '', argStr: '' }
-          if (tc.id) toolCalls[i].id = tc.id
-          if (tc.function?.name) toolCalls[i].name += tc.function.name
-          if (tc.function?.arguments) toolCalls[i].argStr += tc.function.arguments
-        }
-      } catch { /* 忽略非 JSON 行 */ }
+    buf += dec.decode(value, { stream: true })
+    let idx
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      for (const line of buf.slice(0, idx).split('\n')) {
+        if (line.startsWith('data: ')) yield line.slice(6)
+      }
+      buf = buf.slice(idx + 2)
     }
   }
-  return { text: full, toolCalls: toolCalls.filter(Boolean) }
+}
+
+function argsLine(name, argsStr) {
+  let a = {}
+  try { a = JSON.parse(argsStr || '{}') } catch { /* ignore */ }
+  const pick = [a.command, a.path, a.file_path, a.query, a.pattern, a.url, a.name, a.topic].find((v) => typeof v === 'string' && v)
+  return `${name}(${String(pick || JSON.stringify(a)).replace(/\s+/g, ' ').slice(0, 80)})`
+}
+
+/**
+ * 一轮完整对话：走 /api/agent/run（服务端 agent 循环），
+ * needs_client 时终端里问用户（y/n/a），与桌面端同一门禁。
+ */
+async function chatRun({ settings, messages, tools, hooks }) {
+  let msgs = messages
+  let resume
+  let pendingTool
+  const confirmations = {}
+  const approvedScopes = []
+
+  for (let hop = 0; hop < 30; hop++) {
+    let res
+    try {
+      res = await fetch(`${BASE}/api/agent/run`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: msgs,
+          tools,
+          model: modelOverride || settings.model || '',
+          apiBase: settings.apiBaseUrl || '',
+          apiKey: '', // 留空 → 服务端回落本机存储的真实密钥（密钥不出电脑）
+          contextWindow: Number(settings.contextWindow) || 0,
+          hermesMode: settings.hermesProtocol,
+          workDir: CWD,
+          permissionLevel: settings.permissionLevel === 'full' ? 'full' : 'standard',
+          resume, pendingTool, confirmations, approvedScopes,
+        }),
+        signal: AbortSignal.timeout(300_000),
+      })
+    } catch (e) { hooks.onError(`无法连接本地服务：${e.message || e}`); return '' }
+    if (!res.ok || !res.body) {
+      const t = await res.text().catch(() => '')
+      hooks.onError(`agent 启动失败（HTTP ${res.status}）${t ? '：' + t.slice(0, 160) : ''}`)
+      return ''
+    }
+
+    let needs = null
+    for await (const data of sseLines(res.body)) {
+      let ev
+      try { ev = JSON.parse(data) } catch { continue }
+      if (ev.type === 'needs_client') { needs = ev; break }
+      if (ev.type === 'done') return ev.content || ''
+      if (ev.type === 'error') { hooks.onError(ev.message || '未知错误'); return '' }
+      if (ev.type === 'aborted') return ''
+      hooks.onEvent?.(ev)
+    }
+    if (!needs) { hooks.onError('连接中断：服务端未返回结果'); return '' }
+    msgs = needs.messages || msgs
+    resume = needs.partial
+
+    if (needs.kind === 'client_tool' && needs.tool) {
+      let out = '{"ok":true}'
+      if (needs.tool.name === 'update_plan') {
+        try {
+          const steps = JSON.parse(needs.tool.arguments || '{}').steps || []
+          hooks.onPlan?.(steps)
+        } catch { /* ignore */ }
+      } else {
+        out = '{"ok":false,"error":"该客户端工具需要在桌面端使用"}'
+      }
+      msgs = [...msgs, { role: 'tool', tool_call_id: needs.tool.id, content: out }]
+      pendingTool = undefined
+      continue
+    }
+    if (needs.kind === 'confirm' && needs.tool) {
+      const verdict = await hooks.onConfirm?.(needs.tool, needs.scopeKey)
+      if (verdict === 'deny') pendingTool = { toolCall: needs.tool, decision: '用户拒绝了此操作。不要尝试绕过，直接说明并继续。' }
+      else {
+        confirmations[needs.tool.id] = true
+        pendingTool = { toolCall: needs.tool, decision: null }
+        if (verdict === 'always' && needs.scopeKey) approvedScopes.push(needs.scopeKey)
+      }
+      continue
+    }
+    hooks.onError('agent 需要未知的客户端操作，已停止')
+    return ''
+  }
+  hooks.onError('agent 续跑次数过多，已停止')
+  return ''
 }
 
 function spinnerStart(label) {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
   let i = 0
-  const timer = setInterval(() => {
-    process.stdout.write(`\r${C.cyan(frames[i++ % frames.length])} ${C.dim(label)}`)
-  }, 90)
+  const timer = setInterval(() => { process.stdout.write(`\r${C.cyan(frames[i++ % frames.length])} ${C.dim(label)}`) }, 90)
   return () => { clearInterval(timer); process.stdout.write('\r\x1b[K') }
 }
 
-/** 一轮完整对话:模型可调工具,循环执行直到给出最终文本(v9.0:与桌面端同构) */
-async function chatOnce(port, settings, history, onDelta) {
-  const tools = await getTools(port)
-  const workDir = settings.workDir || ''
-  for (let turn = 0; turn < 10; turn++) {
-    const r = await chatStream(port, settings, history, onDelta, tools, workDir)
-    if (r.toolCalls.length === 0) return r.text
-    // 模型要求调工具:执行,把结果回传,继续下一轮
-    for (const tc of r.toolCalls) {
-      history.push({ role: 'assistant', tool_calls: [{ id: tc.id || ('call_' + Math.random().toString(36).slice(2, 8)), type: 'function', function: { name: tc.name, arguments: tc.argStr || '{}' } }] })
-      let args = {}
-      try { args = JSON.parse(tc.argStr || '{}') } catch { /* 模型偶发输出半个 JSON */ }
-      const result = await execTool(port, tc.name, args, workDir)
-      if (process.stdout.isTTY) process.stdout.write(C.dim(`\n  ⚙ ${tc.name}\n`))
-      history.push({ role: 'tool', tool_call_id: tc.id || ('call_' + Math.random().toString(36).slice(2, 8)), content: result.slice(0, 12000) })
-    }
-  }
-  return '(达到工具调用轮数上限)'
-}
-
-async function ask(port, settings, history, question) {
+async function ask(settings, history, question, tools) {
   history.push({ role: 'user', content: question })
-  const stopSpinner = process.stdout.isTTY ? spinnerStart('思考中…') : () => {}
+  const stopSpinner = spinnerStart('思考中…')
   let reasoningLine = false
   try {
-    const reply = await chatOnce(port, settings, history, (delta, reasoning) => {
-      if (!process.stdout.isTTY) return
-      if (!stopSpinner.done) { stopSpinner(); stopSpinner.done = true }
-      if (reasoning) {
-        if (!reasoningLine) { process.stdout.write(C.dim('\n┌ 思考')); reasoningLine = true }
-        process.stdout.write(C.dim(reasoning.replace(/\n/g, ' ')))
-        return
-      }
-      if (reasoningLine) { process.stdout.write(C.dim('\n└\n')); reasoningLine = false }
-      process.stdout.write(delta)
+    const reply = await chatRun({
+      settings, messages: history, tools,
+      hooks: {
+      onEvent: (ev) => {
+        if (!process.stdout.isTTY) return
+        if (ev.type === 'chunk') {
+          if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
+          if (reasoningLine) { process.stdout.write(C.dim('\n└\n')); reasoningLine = false }
+          process.stdout.write(ev.text || '')
+        } else if (ev.type === 'thinking') {
+          if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
+          if (!reasoningLine) { process.stdout.write(C.dim('\n┌ 思考\n')); reasoningLine = true }
+        } else if (ev.type === 'tool_start' && ev.tool) {
+          if (stopSpinner.done !== true) { stopSpinner(); stopSpinner.done = true }
+          if (reasoningLine) { process.stdout.write(C.dim('└\n')); reasoningLine = false }
+          process.stdout.write(C.dim(`\n  ⚙ ${argsLine(ev.tool.name, ev.tool.arguments)} …\n`))
+        } else if (ev.type === 'tool_end' && ev.tool) {
+          const ok = ev.tool.status !== 'error'
+          const preview = String(ev.tool.result || '').trim().split('\n')[0]?.slice(0, 100) || ''
+          process.stdout.write(C.dim(`\r\x1b[K  ${ok ? C.green('✓') : C.red('✗')} ${argsLine(ev.tool.name, ev.tool.arguments)}${preview ? C.dim('  ' + preview) : ''}\n`))
+        }
+      },
+      onConfirm: (tool, _scopeKey) => new Promise((resolve) => {
+        if (reasoningLine) { process.stdout.write(C.dim('└\n')); reasoningLine = false }
+        console.log(C.yellow(`\n⚠ 需要确认：${tool.name}`))
+        console.log(C.dim(`  ${argsLine(tool.name, tool.arguments)}`))
+        const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout })
+        rl2.question('  [y] 允许 · [n] 拒绝 · [a] 本会话始终允许 > ', (ans) => {
+          rl2.close()
+          const v = String(ans || '').trim().toLowerCase()
+          resolve(v === 'y' ? 'allow' : v === 'a' ? 'always' : 'deny')
+        })
+      }),
+      onPlan: (steps) => {
+        console.log(C.dim('  ┌ 计划'))
+        for (const s of steps) console.log(C.dim(`  │ ${s.status === 'done' ? '☑' : '☐'} ${s.content || ''}`))
+        console.log(C.dim('  └'))
+      },
+      onError: (m) => { stopSpinner(); console.error(C.red(`✗ ${m}`)) },
+      },
     })
-    if (reasoningLine) { if (process.stdout.isTTY) process.stdout.write(C.dim('\n└\n')); reasoningLine = false }
-    if (!process.stdout.isTTY && reply) console.log(reply)
-    else if (reply) process.stdout.write('\n')
+    if (reasoningLine) process.stdout.write(C.dim('└\n'))
+    if (reply) process.stdout.write('\n')
     history.push({ role: 'assistant', content: reply })
-    return reply
   } catch (e) {
     stopSpinner()
-    console.error(C.red(`✗ ${e.message}`))
+    console.error(C.red(`✗ ${e.message || e}`))
     history.pop()
-    return null
   }
+}
+
+async function cmdStatus() {
+  const h = await ensureServer()
+  if (!h) { console.error(C.red('✗ 后端启动超时')); process.exit(1) }
+  const s = await getSettings()
+  console.log(BANNER)
+  console.log(`  ${C.green('●')} 服务在线 ${C.dim(`localhost:${PORT}`)}`)
+  console.log(`  ${C.dim('工具数:')} ${h.tools ?? '?'}   ${C.dim('平台:')} ${h.platform ?? '?'}`)
+  console.log(`  ${C.dim('模型:')}  ${C.bold(modelOverride || s.model || 'default')}`)
+  console.log(`  ${C.dim('工作目录:')} ${CWD}${s.workDir ? C.dim(`  (桌面端工作区: ${s.workDir})`) : ''}`)
 }
 
 async function main() {
-  const port = await findServer()
-  if (!port) {
-    console.error(C.red('✗ 未检测到巨天agent 服务，请先启动桌面 App'))
-    process.exit(1)
-  }
-  const settings = await getSettings(port)
+  const h = await ensureServer()
+  if (!h) { console.error(C.red('✗ 巨天agent 服务启动失败')); process.exit(1) }
+  const settings = await getSettings()
+  const osName = h.platform === 'darwin' ? 'macOS' : h.platform === 'win32' ? 'Windows' : 'Linux'
 
-  // 单次提问
-  if (command && command !== 'status') {
-    const history = []
-    await ask(port, settings, history, rest.join(' '))
+  if (command === 'status') { await cmdStatus(); return }
+  if (command) {
+    const tools = await getTools()
+    const history = [{ role: 'system', content: sysPrompt(osName) }]
+    await ask(settings, history, rest.join(' '), tools)
     return
   }
-  if (command === 'status') { await cmdStatus(); return }
 
   // 交互模式
   console.log(BANNER)
-  console.log(`  ${C.green('●')} 已连接 ${C.dim(`localhost:${port} · ${settings.model || 'default'}`)}`)
-  console.log(C.dim('  输入问题开始对话(模型可调用工具),/exit 退出'))
-  console.log(C.dim('  /tools 查看可用工具 /status 查看状态\n'))
-  const history = []
+  console.log(`  ${C.green('●')} 已连接 ${C.dim(`localhost:${PORT} · ${settings.model || 'default'}`)}`)
+  console.log(C.dim('  在当前目录操作电脑 · 权限操作会向你确认 · /exit 退出'))
+  console.log(C.dim('  /tools 工具列表  /status 状态  /security 安全开关  /pack 更新防护库\n'))
+  const tools = await getTools()
+  const history = [{ role: 'system', content: sysPrompt(osName) }]
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: C.cyan('❯ ') })
   rl.prompt()
   rl.on('line', async (line) => {
     const q = line.trim()
     if (!q) { rl.prompt(); return }
     if (q === '/exit' || q === '/quit' || q === 'exit') { rl.close(); return }
-    if (q === '/clear') { history.length = 0; console.log(C.dim('已清空上下文')); rl.prompt(); return }
+    if (q === '/clear') { history.length = 1; console.log(C.dim('已清空上下文')); rl.prompt(); return }
+    if (q === '/help') { printHelp(); rl.prompt(); return }
     if (q === '/status') { await cmdStatus(); rl.prompt(); return }
     if (q === '/tools') {
-      const tools = await getTools(port)
       console.log(`  ${C.bold('可用工具')} ${tools.length} 个:`)
-      for (const t of tools) console.log(`  ${C.green('·')} ${t.function.name} ${C.dim(t.function.description.slice(0, 60))}`)
+      for (const t of tools) console.log(`  ${C.green('·')} ${t.name} ${C.dim(String(t.description || '').slice(0, 60))}`)
       rl.prompt(); return
     }
-    await ask(port, settings, history, q)
+    if (q === '/security') {
+      try {
+        const r = await fetch(`${BASE}/api/settings`).then((x) => x.json())
+        console.log(`  巨天安全：危险命令拦截 ${r.security_cmd_guard !== '0' ? C.green('开') : C.red('关')} · 注入扫描 ${r.security_injection_scan !== '0' ? C.green('开') : C.red('关')} · 密钥屏蔽 ${r.security_key_shield !== '0' ? C.green('开') : C.red('关')}`)
+      } catch { console.error(C.red('  读取失败')) }
+      rl.prompt(); return
+    }
+    if (q === '/pack') {
+      console.log(C.dim('  正在更新恶意命令库…'))
+      try {
+        const r = await fetch(`${BASE}/api/security/pack/update`, { method: 'POST' }).then((x) => x.json())
+        console.log(r?.ok ? `  ${C.green('✓')} 防护库 v${r.version}（${r.count} 条，生效 ${r.active} 条）` : `  ${C.red('✗')} ${r?.error}`)
+      } catch (e) { console.error(C.red('  ' + (e.message || e))) }
+      rl.prompt(); return
+    }
+    await ask(settings, history, q, tools)
     rl.prompt()
   })
   rl.on('close', () => { console.log(C.dim('\n再见')); process.exit(0) })

@@ -64,9 +64,21 @@ export function accumulateToolCallDelta(
   if (tc.id && !slot.id) slot.id = tc.id
   const name = tc.function?.name
   if (name && !slot.name) slot.name = name
-  // arguments：增量语义，逐块拼接
+  // arguments：增量语义，逐块拼接。
+  // 快照型上游兼容（v14.13）：spark-x2.6 等中转的每个 delta 携带【完整】arguments 对象
+  // 而非增量分片，朴素拼接会得到 {"a":1}{"a":1}… 的废串 → 执行时参数全丢。
+  // 判据：已累积内容本身是完整 JSON 且新片段以 '{' 开头 → 以新快照为准（取最后一份）。
   const args = tc.function?.arguments
-  if (args) slot.arguments += args
+  if (args) {
+    if (args.trimStart().startsWith("{")) {
+      try {
+        JSON.parse(slot.arguments)
+        slot.arguments = args
+        return
+      } catch { /* 已累积的不完整 → 正常拼接 */ }
+    }
+    slot.arguments += args
+  }
 }
 
 /**

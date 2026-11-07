@@ -249,6 +249,24 @@ export default function AboutContent() {
         </p>
       </div>
 
+      {/* 终端版 TUI（v14.13.0）：Claude Code 式终端对话 */}
+      <div className="py-2">
+        <div className="px-4 py-3 rounded-xl glass">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(16,163,127,.12)' }}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="#10a37f" strokeWidth={2} strokeLinecap="round"><path d="M4 17l6-5-6-5M12 19h8" /></svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{t('终端版（TUI）', 'Terminal (TUI)')}</div>
+              <div className="text-[11px] mt-0.5 font-mono truncate" style={{ color: c.textMuted }}>npm run tui · node tui/index.mjs · npm link 后全局 jt</div>
+            </div>
+          </div>
+          <p className="text-[11.5px] mt-2 leading-relaxed" style={{ color: c.textSecondary }}>
+            {t('在仓库目录的终端里运行 npm run tui（或 npm link 后直接 jt）即可进入 Claude Code 式终端对话——同样的 51 个工具、巨天安全门禁与权限确认。巨天未运行时它会自动拉起后端；TUI 里的会话在桌面端同样可见。', 'Run npm run tui in the repo (or jt after npm link) for a Claude-Code-style terminal chat — same 51 tools, security shield and permission prompts. It auto-starts the backend if not running; TUI sessions are visible in the desktop app.')}
+          </p>
+        </div>
+      </div>
+
       {/* 用户协议与隐私政策（应用级入口） */}
       <button onClick={() => window.dispatchEvent(new CustomEvent('open-legal'))}
         className="w-full flex items-center justify-between px-4 py-3 rounded-xl glass">

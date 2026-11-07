@@ -118,3 +118,33 @@ describe('toolCallsToArray', () => {
     expect(toolCallsToArray(map())).toEqual([])
   })
 })
+
+describe('快照型上游（spark-x2.6 实测）：每个 delta 都是完整 arguments', () => {
+  it('重复全量快照 → 取最后一份完整对象，不拼接', () => {
+    const map = new Map()
+    accumulateToolCallDelta(map, { index: 0, id: 'call_1', function: { name: 'shell', arguments: '{"command":"echo jt-ok"}' } })
+    accumulateToolCallDelta(map, { index: 0, function: { arguments: '{"command": "echo jt-ok"}' } })
+    accumulateToolCallDelta(map, { index: 0, function: { arguments: '{"command":"echo jt-ok"}' } })
+    const acc = toolCallsToArray(map)[0]
+    expect(acc.name).toBe('shell')
+    expect(() => JSON.parse(acc.arguments)).not.toThrow()
+    expect(JSON.parse(acc.arguments).command).toBe('echo jt-ok')
+  })
+
+  it('正常增量分片不受影响', () => {
+    const map = new Map()
+    accumulateToolCallDelta(map, { index: 0, id: 'call_2', function: { name: 'shell', arguments: '{"comm' } })
+    accumulateToolCallDelta(map, { index: 0, function: { arguments: 'and":"ls -la"}' } })
+    const acc = toolCallsToArray(map)[0]
+    expect(JSON.parse(acc.arguments).command).toBe('ls -la')
+  })
+
+  it('嵌套对象开头的分片不被误判为快照', () => {
+    const map = new Map()
+    accumulateToolCallDelta(map, { index: 0, id: 'c', function: { name: 'write_file', arguments: '{"path":"a.json","content":{"x"' } })
+    accumulateToolCallDelta(map, { index: 0, function: { arguments: ':1}' } })
+    accumulateToolCallDelta(map, { index: 0, function: { arguments: '}' } })
+    const acc = toolCallsToArray(map)[0]
+    expect(JSON.parse(acc.arguments).content.x).toBe(1)
+  })
+})
