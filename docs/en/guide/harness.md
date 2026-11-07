@@ -12,7 +12,7 @@ Next to the bell in the top bar, open the notification center — the **Plugins 
 
 ## Built-in tool toggles
 
-38 built-in tools, each with its own toggle and a one-line description:
+51 built-in tools, each with its own toggle and a one-line description:
 
 | Category | Representative tools |
 |---|---|
@@ -44,4 +44,4 @@ MCP (Model Context Protocol) servers are registered and managed here:
 
 ## Single source of truth for tool schemas
 
-Every tool's definition lives in `src/shared/builtin-tools.json`. The desktop app, the phone remote, and the server all read that same file — add a tool once and it is available on all three. Want to add your own? See [Add a new tool](../../dev/add-tool.md) (中文).
+Every tool's definition lives in `src/shared/builtin-tools.json`. The desktop app, the phone remote, and the server all read that same file — add a tool once and it is available on all three. Want to add your own? See [Add a new tool](../dev/add-tool.md).

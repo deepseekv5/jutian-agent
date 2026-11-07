@@ -39,7 +39,7 @@ The app itself: zero telemetry, zero analytics, zero built-in services.
 - Masked values are **never written back** to storage — saving the whole settings form cannot overwrite a real key with its mask
 - Cross-site protection: malicious web pages cannot read local APIs through your browser (same-host gatekeeper 403 + DNS-rebinding 421)
 
-See [SECURITY.md](../../../SECURITY.md) (中文) at the repository root for details.
+See [SECURITY.md](../SECURITY.md) for details.
 
 ## Backup and restore
 
