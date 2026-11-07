@@ -6,10 +6,11 @@
 
 一句话,它把活干完。
 
-[English](README_EN.md) | **简体中文**
+[English · 完整英文版](README_EN.md) | **简体中文**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/deepseekv5/jutian-agent/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/v14.4.1-10a37f?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Release](https://img.shields.io/github/v/release/deepseekv5/jutian-agent?style=for-the-badge&labelColor=0a0a0b&color=10a37f)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Stars](https://img.shields.io/github/stars/deepseekv5/jutian-agent?style=for-the-badge&labelColor=0a0a0b&color=f5b301)](https://github.com/deepseekv5/jutian-agent/stargazers)
 [![Platform](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux%20·%20Android-3b82f6?style=for-the-badge&labelColor=0a0a0b)](https://github.com/deepseekv5/jutian-agent/releases)
 [![Docs](https://img.shields.io/badge/docs-12%20篇-8b5cf6?style=for-the-badge&labelColor=0a0a0b)](#docs)
 [![License](https://img.shields.io/badge/MIT-10a37f?style=for-the-badge&labelColor=0a0a0b)](./LICENSE)
@@ -36,6 +37,7 @@
 | | | |
 |---|---|---|
 | [六件事,做到位](#highlights) | [子代理 — AI 派出 AI](#swarm) | [免费模型 — AI 没有门槛](#free-models) |
+| [用户扩展层 — AI 编辑界面](#uxl) | [手机远程](#remote) | [📖 文档导航](#docs) |
 | [手机远程](#remote) | [三条原则](#principles) | [📖 文档导航](#docs) |
 | [快速开始](#quick-start) | [架构](#architecture) | [数据一览](#stats) |
 | [路线图](#roadmap) | [常见问题](#faq) | [参与贡献](#contributing) |
@@ -48,7 +50,7 @@
 
 **01 — 说人话,它动手**
 
-50 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
+51 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
 
 **02 — 代码模式**
 
@@ -64,7 +66,7 @@
 
 **05 — 一切皆插件**
 
-LY HARNESS 插件中心:50 个工具逐个开关、MCP 服务即插即用、Skills 按消息挂载。工具 schema 单一来源,桌面 / 手机 / 服务端三方同步。
+LY HARNESS 插件中心:51 个工具逐个开关、MCP 服务即插即用、Skills 按消息挂载。工具 schema 单一来源,桌面 / 手机 / 服务端三方同步。
 
 **06 — 越用越懂你**
 
@@ -157,6 +159,20 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 - **HTML Artifacts**:Agent 生成的完整网页,代码块头部一键「预览」,iframe 沙箱隔离
 
 三者全部按需加载:不用图表和公式的会话零开销,主程序包仅增 0.4 KB。
+
+<br>
+
+<a id="uxl"></a>
+
+## ✦ 用户扩展层 — AI 编辑自己的界面
+
+对它说「给我做个番茄钟面板」或「加个日历小工具」,它会用 `create_extension` 工具生成一个独立 HTML 面板 + manifest,写入 `~/.lyclaw/extensions/`。到「扩展」页批准后,它就以一等公民标签页出现——运行在无同源权限的 iframe 沙箱里,只能通过白名单只读桥与宿主通信。
+
+- **官方更新不覆盖** — 发版只替换 app.asar,扩展层在它外面
+- **完全可逆** — 每个扩展可批准 / 禁用 / 删除;apiVersion 不兼容自动禁用,不白屏
+- **契约可测** — manifest 校验逻辑服务端/渲染层共用,带测试
+
+相关:设置 → Agent 内核 新增「Harness」选项,可嵌入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 WebUI 作为外部内核(独立应用,以视图方式嵌入)。
 
 <br>
 
@@ -255,7 +271,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 │                  Electron 主进程                   │
 │  ┌─────────────┐  ┌────────────────────────────┐ │
 │  │  serve.cjs  │  │    窗口 / 托盘 / 状态记忆     │ │
-│  │  38 工具     │  │    窗口 / 托盘 / 状态记忆     │ │
+│  │  51 工具     │  │    窗口 / 托盘 / 状态记忆     │ │
 │  │  llm-proxy  │  └────────────────────────────┘ │
 │  │  MCP 客户端  │                                  │
 │  │  定时任务    │    ┌─────────────────────┐     │
@@ -305,7 +321,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 
 ## ✦ 数据一览
 
-| **50** | **5+** | **6** | **0** |
+| **51** | **5+** | **6** | **0** |
 |:---:|:---:|:---:|:---:|
 | 内置工具 | 数字员工 | 核心界面 | 字节上云 |
 
@@ -377,6 +393,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-10a37f?style=flat-square)](./LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/deepseekv5/jutian-agent?style=flat-square&color=10a37f)](https://github.com/deepseekv5/jutian-agent/releases)
+[![Stars](https://img.shields.io/github/stars/deepseekv5/jutian-agent?style=flat-square&color=f5b301)](https://github.com/deepseekv5/jutian-agent/stargazers)
 [![Platform](https://img.shields.io/badge/platform-macOS%20·%20Windows-3b82f6?style=flat-square)]()
 
 **巨天工作室** · 本地优先 · 数据归你
