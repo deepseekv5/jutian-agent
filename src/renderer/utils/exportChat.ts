@@ -18,7 +18,7 @@ export interface ExportMessage {
 
 import { wrapGongwenDocument } from '../../shared/exportHtml'
 
-export type ExportFormat = 'md' | 'txt' | 'json' | 'html' | 'doc' | 'gongwen'
+export type ExportFormat = 'md' | 'txt' | 'json' | 'html' | 'doc' | 'gongwen' | 'gongwen-doc'
 
 /** HTML 转义：导出的任何内容都必须过这里 */
 export function escapeHtml(s: string): string {
@@ -158,6 +158,7 @@ export const EXPORT_META: Record<ExportFormat, { ext: string; mime: string; labe
   json: { ext: 'json', mime: 'application/json;charset=utf-8', label: 'JSON 数据' },
   html: { ext: 'html', mime: 'text/html;charset=utf-8', label: '网页（可打印）' },
   gongwen: { ext: 'html', mime: 'text/html;charset=utf-8', label: '公文红头（可打印）' },
+  'gongwen-doc': { ext: 'doc', mime: 'application/msword', label: '公文红头 Word' },
   doc: { ext: 'doc', mime: 'application/msword;charset=utf-8', label: 'Word 文档' },
 }
 
@@ -175,6 +176,7 @@ export function buildExport(
     : fmt === 'html' ? toHtml(messages, stamp)
     : fmt === 'gongwen' ? toGongwenHtml(messages, stamp)
     : fmt === 'doc' ? toWordHtml(messages, stamp)
+    : fmt === 'gongwen-doc' ? toGongwenHtml(messages, stamp)
     : toMarkdown(messages, stamp)
   return { text, name: `巨天对话-${date}.${meta.ext}` }
 }
