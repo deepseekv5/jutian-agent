@@ -3,6 +3,7 @@
  * ChatGPT / Raycast 风格：居中浮层、↑↓ 选择、Enter 执行、Esc 关闭。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { loadFavorites } from '../store/favorites'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import type { Session } from '../types'
@@ -39,7 +40,17 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
   useEffect(() => { if (open) { setQ(''); setCursor(0) } }, [open])
 
   const items = useMemo<CmdItem[]>(() => {
-    const cmds: CmdItem[] = [
+    const favs = loadFavorites().slice(0, 5)
+    const cmds: CmdItem[] = favs.map(f => ({
+      id: 'fav-' + f.id,
+      label: '★ ' + (f.excerpt || '收藏').slice(0, 40),
+      labelEn: '★ ' + (f.excerpt || 'Favorite').slice(0, 40),
+      hint: '收藏 · 跳转原消息',
+      hintEn: 'Favorite · jump to message',
+      icon: 'M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z',
+      run: () => { onSelectSession(f.sessionId); setTimeout(() => window.dispatchEvent(new CustomEvent('chat-jump-to-message', { detail: f.msgId })), 400); onClose() },
+    }))
+    cmds.push(
       { id: 'new', label: '新建对话', labelEn: "New chat", hint: '开始一段新对话', hintEn: "Start a new conversation", icon: 'M12 4v16m8-8H4', run: () => { onCreateSession(); onClose() } },
       { id: 'persona', label: '打开 AI 角色', labelEn: "Open AI personas", hint: '有长期记忆的对话角色 · 免费直接聊', hintEn: "Personas with long-term memory — free", icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', run: () => { onOpenTab('persona'); onClose() } },
       { id: 'research', label: '打开深度调研', labelEn: "Deep research", hint: '多路检索 → 交叉验证 → 带引用的报告', hintEn: "Multi-source search → cross-check → cited report", icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z', run: () => { onOpenTab('research'); onClose() } },
@@ -64,7 +75,7 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
       { id: 'backup', label: '数据备份', labelEn: "Backup & restore", hint: '选范围导出 / 导入恢复', hintEn: "Export a range / import to restore", icon: 'M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8', run: () => { onOpenTab('backup'); onClose() } },
       { id: 'shortcuts', label: '快捷键一览', labelEn: "Keyboard shortcuts", hint: '查看全部快捷键', hintEn: "See all shortcuts", icon: 'M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6zm4 4h.01M11 10h.01M15 10h.01M7 14h10', run: () => { onOpenTab('shortcuts'); onClose() } },
       { id: 'settings', label: '打开设置', labelEn: "Open settings", hint: '推理 / 外观 / 安全', hintEn: "Reasoning / appearance / security", icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', run: () => { onOpenTab('settings'); onClose() } },
-    ]
+    )
     const chatCmds: CmdItem[] = sessions.slice(0, 30).map(s => ({
       id: `chat_${s.id}`,
       label: typeof s.title === 'string' && s.title.trim() ? s.title : '新对话',
