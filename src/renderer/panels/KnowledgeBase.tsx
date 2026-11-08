@@ -38,6 +38,11 @@ export default function KnowledgeBase({ onClose }: { onClose: () => void }) {
     } catch { /* ignore */ }
   }, [])
   useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    const h = () => refresh()
+    window.addEventListener('kb-refresh', h)
+    return () => window.removeEventListener('kb-refresh', h)
+  }, [refresh])
 
   const byId = useMemo(() => new Map(entries.map(e => [e.id, e])), [entries])
   const selected = selectedId ? byId.get(selectedId) || null : null
@@ -133,6 +138,26 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
     )
   }, [entries, query, notebook, tagFilter])
 
+  const [clipOpen, setClipOpen] = useState(false)
+  const [clipUrl, setClipUrl] = useState('')
+  const [clipping, setClipping] = useState(false)
+  const doClip = async () => {
+    const url = clipUrl.trim()
+    if (!url || clipping) return
+    setClipping(true)
+    try {
+      const r = await fetchCompat('/api/tools/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'web_fetch', args: { url } }) })
+      const d = await r.json()
+      const text = String(d?.output || '').slice(0, 12000)
+      if (!text) throw new Error('抓取失败')
+      let host = url
+      try { host = new URL(url).hostname } catch {}
+      await fetchCompat('/api/kb/entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `剪藏：${host}`, content: `来源：${url}\n\n${text}`, tags: ['剪藏'], source: 'clip' }) })
+      setClipOpen(false); setClipUrl('')
+      try { window.dispatchEvent(new CustomEvent('kb-refresh')) } catch {}
+    } catch (e) { try { window.dispatchEvent(new CustomEvent('chat-error-toast', { detail: '剪藏失败：' + String((e as Error).message || e) })) } catch {} }
+    finally { setClipping(false) }
+  }
   const newNote = () => { onSelect(null); setPreview(false); setEditing(true); setTitle(''); setContent(''); setNb(notebook === '__all__' || notebook === '__none__' ? '' : notebook); setTagStr(''); setDirty(false); setTimeout(() => taRef.current?.focus(), 40) }
 
   // 每日笔记：存在「YYYY-MM-DD」标题则直接打开，否则在「日记」笔记本新建
@@ -256,6 +281,28 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
             新建笔记
           </button>
+          {/* 网页剪藏（v14.19.1）：抓 URL 正文存为条目 */}
+          {clipOpen ? (
+            <div className="mt-1.5 flex gap-1">
+              <input value={clipUrl} onChange={e => setClipUrl(e.target.value)} autoFocus
+                placeholder="https://…"
+                className="flex-1 min-w-0 h-8 px-2 rounded-lg text-[12px] outline-none"
+                style={{ background: dark ? '#1d1d21' : '#fff', color: c.text, border: `1px solid ${dark ? '#2a2a30' : '#e8e8ee'}` }}
+                onKeyDown={e => { if (e.key === 'Enter') doClip() }} />
+              <button onClick={doClip} disabled={clipping || !clipUrl.trim()}
+                className="px-2.5 h-8 rounded-lg text-[12px] font-medium disabled:opacity-40 shrink-0"
+                style={{ background: dark ? '#22c55e18' : '#e7f6ee', color: dark ? '#34d399' : '#0b6b4f' }}>
+                {clipping ? '抓取中…' : '剪藏'}
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setClipOpen(true)}
+              className="mt-1.5 w-full h-8 rounded-lg text-[12.5px] flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              style={{ background: dark ? '#1d1d21' : '#fff', color: c.textSecondary, border: `1px solid ${dark ? '#2a2a30' : '#e8e8ee'}` }}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" /></svg>
+              剪藏网页
+            </button>
+          )}
           <button onClick={todayNote}
             className="mt-1.5 w-full h-8 rounded-lg text-[12.5px] font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
             style={{ background: dark ? '#1d1d21' : '#fff', color: c.textSecondary, border: `1px solid ${dark ? '#2a2a30' : '#e8e8ee'}` }}>

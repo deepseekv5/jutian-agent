@@ -193,6 +193,38 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
 
   // 消息队列：流式回复中发送不丢失，排队等待上一条完成自动发出
   const [showExportMenu, setShowExportMenu] = useState(false)
+  // 连续朗读（v14.19.1）：从头到尾顺序播放全部 assistant 回复，Esc/再点停止
+  const [ttsPlay, setTtsPlay] = useState<{ running: boolean; idx: number; total: number } | null>(null)
+  const ttsStopRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const playAllTts = useCallback(async () => {
+    if (ttsPlay?.running) { ttsStopRef.current = true; audioRef.current?.pause(); setTtsPlay(null); return }
+    const items = messages.filter(m => m.role === 'assistant' && String(m.content || '').trim())
+    if (!items.length) return
+    let voice = 'zh-CN-XiaoxiaoNeural'; let speed = '1.0'
+    try { const raw = localStorage.getItem('lyclaw_settings'); if (raw) { const ls = JSON.parse(raw); voice = ls.voiceId || voice; speed = ls.ttsSpeed || speed } } catch {}
+    ttsStopRef.current = false
+    setTtsPlay({ running: true, idx: 0, total: items.length })
+    for (let i = 0; i < items.length; i++) {
+      if (ttsStopRef.current) break
+      setTtsPlay({ running: true, idx: i, total: items.length })
+      const spoken = String(items[i].content).replace(/```[\s\S]*?```/g, '（代码已省略）').replace(/[*_#>|]/g, '').slice(0, 1500)
+      try {
+        const r = await fetchCompat('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice, speed: Number(speed) || 1.0 }) })
+        if (!r.ok) continue
+        const b = await r.blob()
+        if (ttsStopRef.current) break
+        await new Promise<void>((resolve) => {
+          const a = new Audio(URL.createObjectURL(b))
+          audioRef.current = a
+          a.onended = () => resolve()
+          a.onerror = () => resolve()
+          a.play().catch(() => resolve())
+        })
+      } catch { /* 跳过失败段继续 */ }
+    }
+    setTtsPlay(null)
+  }, [messages, ttsPlay?.running])
   const [kbSavedTip, setKbSavedTip] = useState(false)
   const [showOutline, setShowOutline] = useState(false)
   const doExport = useCallback((fmt: ExportFormat | 'kb') => {
@@ -372,9 +404,15 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
             )}
           </div>
         )}
+        <button onClick={playAllTts} disabled={messages.length === 0}
+          className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0 disabled:opacity-30"
+          style={{ color: ttsPlay?.running ? c.accent : c.textTertiary }}
+          title={ttsPlay?.running ? `连续朗读中（${(ttsPlay.idx || 0) + 1}/${ttsPlay.total}）· 点击停止` : '连续朗读全部回复（再点停止）'} aria-label="连续朗读">
+          {ttsPlay?.running ? `朗读 ${(ttsPlay.idx || 0) + 1}/${ttsPlay.total}` : '连续朗读'}
+        </button>
         <button onClick={() => setShowExportMenu(v => !v)} disabled={messages.length === 0}
           className="px-2 py-0.5 rounded-md text-[10.5px] shrink-0 disabled:opacity-30"
-          style={{ color: c.textTertiary }} title="导出对话（Markdown / 纯文本 / JSON）" aria-label="导出对话">
+          style={{ color: c.textTertiary }} title="导出对话（Markdown / 公文红头 / 纯文本 / JSON）" aria-label="导出对话">
           导出
         </button>
         </div>
