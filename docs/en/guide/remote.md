@@ -17,7 +17,7 @@ Put the entire workstation in your pocket: chat from your phone, the computer do
 | Capability | Description |
 |---|---|
 | Chat | Full Markdown rendering and code highlighting, identical to the desktop app |
-| Tool calls | All 51 tools plus MCP — anything the desktop can do, it can do |
+| Tool calls | All 52 tools plus MCP — anything the desktop can do, it can do |
 | Ask with a screenshot | Send a screenshot to the model and it answers by reading the image |
 | Sub-agent progress | Parallel sub-agents dispatched on the computer, with progress cards synced in real time |
 | Notifications | Task completions are pushed into the phone's message stream |

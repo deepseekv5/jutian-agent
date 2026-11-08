@@ -1216,5 +1216,49 @@
     "html"
    ]
   }
+ },
+ {
+  "name": "schedule_task",
+  "description": "创建定时任务或提醒。用户说「明早9点提醒我…」「每天整理下载」时调用。type=once 用 schedule=延迟分钟数；daily/weekly 用 cron（分 时 日 月 周）。mode=agent 时任务会用工具真实执行。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "title": {
+     "type": "string",
+     "description": "任务标题（简短）"
+    },
+    "content": {
+     "type": "string",
+     "description": "到点要执行/提醒的内容（AI 指令）"
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "once",
+      "daily",
+      "weekly"
+     ],
+     "description": "once=一次性（延迟分钟）；daily=每天；weekly=每周"
+    },
+    "schedule": {
+     "type": "string",
+     "description": "once：延迟分钟数（如 30）；daily/weekly：cron 表达式（如 0 9 * * *）"
+    },
+    "mode": {
+     "type": "string",
+     "enum": [
+      "text",
+      "agent"
+     ],
+     "description": "text=纯文本产出；agent=带工具真实执行（默认 text）"
+    }
+   },
+   "required": [
+    "title",
+    "content",
+    "type",
+    "schedule"
+   ]
+  }
  }
 ]

@@ -64,7 +64,7 @@ The `jtcode` CLI invokes the agent from any shell, script, or CI. No window swit
 
 **05 — Everything is a plugin.**
 
-The LY HARNESS center: toggle each of the 51 tools individually, hot-plug MCP servers (HTTP/SSE/stdio), mount Skills per message. One tool-schema source, synced across desktop / phone / server.
+The LY HARNESS center: toggle each of the 52 tools individually, hot-plug MCP servers (HTTP/SSE/stdio), mount Skills per message. One tool-schema source, synced across desktop / phone / server.
 
 **06 — Learns you.**
 
@@ -140,7 +140,7 @@ Two APKs, pick one:
 | **jutian-local-\<abi\>.apk** | ~55MB | **Local**: bundles a Node runtime + the full frontend. The whole agent runs on the phone, data stays on the phone. Per-ABI builds: arm64-v8a (mainstream), armeabi-v7a (older devices), x86_64 (emulator) |
 | jutian-remote-*.apk | ~60KB | Remote: a thin shell that connects to your desktop or a Termux-hosted service |
 
-The local build runs the exact same backend as desktop: chat, 51 tools, skill market, memory, voice. A Termux deployment package (`jutian-mobile-*.zip`) is also available — on Node 22+ it uses built-in SQLite (real SQL, knowledge base included); older Node versions fall back to JSON storage with full data persistence.
+The local build runs the exact same backend as desktop: chat, 52 tools, skill market, memory, voice. A Termux deployment package (`jutian-mobile-*.zip`) is also available — on Node 22+ it uses built-in SQLite (real SQL, knowledge base included); older Node versions fall back to JSON storage with full data persistence.
 
 <br>
 
@@ -262,7 +262,7 @@ Grab from [Releases](https://github.com/deepseekv5/jutian-agent/releases):
 │                Electron main process              │
 │  ┌─────────────┐  ┌────────────────────────────┐ │
 │  │  serve.cjs  │  │  Window / Tray / State      │ │
-│  │  51 tools   │  └────────────────────────────┘ │
+│  │  52 tools   │  └────────────────────────────┘ │
 │  │  llm-proxy  │                                  │
 │  │  MCP client │    ┌─────────────────────┐     │
 │  │  Cron jobs  │────│  Phone remote (pair) │     │

@@ -4,7 +4,7 @@
 
 > [← Back to documentation index](../../../README_EN.md#docs)
 
-Talk to Jutian from your terminal — Claude Code style. Same 51 tools, same security shield, same permission prompts, same sessions as the desktop app.
+Talk to Jutian from your terminal — Claude Code style. Same 52 tools, same security shield, same permission prompts, same sessions as the desktop app.
 
 ## Two entry points
 
@@ -27,7 +27,7 @@ Talk to Jutian from your terminal — Claude Code style. Same 51 tools, same sec
 | `/new` | Fresh conversation |
 | `/resume [n]` | List / restore recent sessions (TUI) |
 | `/model [n]` | Show / switch model |
-| `/tools` | List all 51 tools |
+| `/tools` | List all 52 tools |
 | `/security` | Show the three shield toggles |
 | `/pack` | Update the malicious-command pack |
 | `/status` | Backend version, model, workspace |

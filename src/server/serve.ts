@@ -1631,6 +1631,37 @@ function saveMarket(skills) {
 
 /** 计算任务下次触发时间（v14）：一次性按 delayMinutes，其余按 cron 或默认周期。
  *  返回 { nextRun } 或 { error }（cron 非法时给用户可操作提示）。 */
+/** schedule_task（v14.28.0）：AI 自然语言创建定时任务/提醒 */
+async function scheduleTaskTool(a) {
+  const title = String(a.title || "").trim();
+  const content = String(a.content || "").trim();
+  const type = ["once", "daily", "weekly"].includes(String(a.type)) ? String(a.type) : "once";
+  if (!title) return { success: false, error: "缺少 title（任务标题）" };
+  if (!content) return { success: false, error: "缺少 content（要执行/提醒的内容）" };
+  let schedule = String(a.schedule || "").trim();
+  if (type === "once") {
+    const mins = Number(schedule);
+    if (!Number.isFinite(mins) || mins <= 0) return { success: false, error: "once 类型需要 schedule = 延迟分钟数（正数）" };
+    schedule = String(Math.min(Math.round(mins), 60 * 24 * 30));
+  } else if (!schedule) {
+    return { success: false, error: `${type} 类型需要 cron 表达式（分 时 日 月 周），例如每天9点 = 0 9 * * *` };
+  }
+  const mode = a.mode === "agent" ? "agent" : "text";
+  const task = {
+    id: "task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+    title, content, type, schedule, mode,
+    enabled: true,
+    createdAt: (new Date()).toISOString(),
+  };
+  const nr = computeNextRun(task);
+  if (nr.error) return { success: false, error: nr.error };
+  task.nextRun = nr.nextRun;
+  const tasks = loadTasks();
+  tasks.push(task);
+  saveTasks(tasks);
+  return { success: true, output: JSON.stringify({ ok: true, id: task.id, title, nextRun: task.nextRun, mode }, null, 2) };
+}
+
 function computeNextRun(task) {
   const now = new Date();
   const type = task.type || "once";
@@ -2557,7 +2588,8 @@ var TOOLS = {
   list_skills, load_skill, install_skill, create_skill, create_extension,
   remember, recall, forget,
   save_knowledge: toolSaveKnowledge,
-  consult_guidance: consultGuidance
+  consult_guidance: consultGuidance,
+  schedule_task: scheduleTaskTool
 };
 
 /* ─── v12 新工具实现 ─────────────────────────────────────────────
