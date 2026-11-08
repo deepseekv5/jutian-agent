@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback} from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo} from 'react'
 import { Fragment } from 'react'
 import { post } from '../api'
 import { planBranch } from '../../shared/branch'
@@ -89,6 +89,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   const scrollRafRef = useRef<number | null>(null)
   const isStreaming = streamingId !== null
   const { c } = useTheme()
+  const { t } = useLanguage()
 
 
   // 网络阶段条（v13.5.2）：免费线路（OpenCode 等）高峰期首字节要排队很久，
