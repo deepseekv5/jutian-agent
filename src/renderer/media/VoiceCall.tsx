@@ -368,7 +368,22 @@ export default function VoiceCall({ settings, onClose }: Props) {
     }
   }, [startMic])
 
-  const hangUp = useCallback(() => {
+  const hangUp = useCallback(async () => {
+    // 通话转写存档（v14.25.0）：有实质对话时自动落成会话，桌面/手机端可见
+    const history = historyRef.current.filter(m => (m.content || '').trim())
+    if (history.length >= 2) {
+      try {
+        const first = history[0].content.slice(0, 18) || '语音通话'
+        const created = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `📞 ${first}`.slice(1) }) }).then(r => r.json())
+        const sid = created?.id
+        if (sid) {
+          for (let i = 0; i < history.length; i++) {
+            const m = history[i]
+            await fetch(`/api/sessions/${encodeURIComponent(sid)}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: `call-${Date.now()}-${i}`, role: m.role, content: m.content, created_at: new Date().toISOString() }) })
+          }
+        }
+      } catch { /* 存档失败不影响挂断 */ }
+    }
     stopAllRef.current()
   }, [])
 
