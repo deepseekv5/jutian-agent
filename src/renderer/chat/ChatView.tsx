@@ -209,7 +209,20 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 大会话首屏只挂最近 30 条——DOM 减半、markdown 解析减半；中小会话仍全量渲染。
   // null = 未定：messages 异步加载完成后按长度分级（>200 只留 30，否则全量）
   const [msgWindow, setMsgWindow] = useState<number | null>(null)
+  // 会话图片画廊（v14.22.0）：聚合全部消息里的图片，覆盖层浏览/放大/下载
+  const [gallery, setGallery] = useState<{ open: boolean; cur: number }>({ open: false, cur: 0 })
   const effectiveWindow = msgWindow ?? (messages.length > 200 ? 30 : messages.length)
+  const galleryImages = useMemo(() => {
+    const out: string[] = []
+    const re = /!\[[^\]]*\]\((data:image\/[a-z+]+;base64,[^)]+|https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^)\s]*)?)\)/gi
+    for (const msg of messages) {
+      const text = String(msg.content || '')
+      let m2: RegExpExecArray | null
+      re.lastIndex = 0
+      while ((m2 = re.exec(text))) { if (!out.includes(m2[1])) out.push(m2[1]) }
+    }
+    return out
+  }, [messages])
   const windowBase = Math.max(0, messages.length - effectiveWindow)
   const visibleMessages = messages.slice(windowBase)
   const loadEarlier = () => setMsgWindow(w => (w ?? effectiveWindow) + 120)
@@ -519,6 +532,40 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
           <div ref={bottomRef} />
         </div>
       </div>
+
+      {/* 图片画廊（v14.22.0） */}
+      {galleryImages.length > 0 && !gallery.open && (
+        <button onClick={() => setGallery({ open: true, cur: 0 })}
+          className="absolute top-3 right-5 h-8 px-3 rounded-full flex items-center gap-1.5 text-[12px] z-10 glass"
+          style={{ border: `1px solid ${c.border}`, color: c.textSecondary }} title="浏览本会话全部图片">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          {t('图片', 'Images')} {galleryImages.length}
+        </button>
+      )}
+      {gallery.open && (
+        <div className="absolute inset-0 z-30 flex flex-col" style={{ background: 'rgba(12,10,8,.82)' }} onClick={() => setGallery(g => ({ ...g, open: false }))}>
+          <div className="flex items-center gap-3 px-5 py-3" onClick={e => e.stopPropagation()}>
+            <span className="text-[13px] font-medium" style={{ color: '#fff' }}>{t('会话图片', 'Images')} · {galleryImages.length}</span>
+            <span className="flex-1" />
+            <a href={galleryImages[gallery.cur]} download={`jutian-img-${gallery.cur + 1}.png`}
+              className="text-[12px] px-2.5 py-1 rounded-lg" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.25)' }}
+              onClick={e => e.stopPropagation()}>{t('下载此图', 'Download')}</a>
+            <button onClick={() => setGallery(g => ({ ...g, open: false }))} className="text-[12px] px-2.5 py-1 rounded-lg" style={{ color: '#fff' }}>{t('关闭', 'Close')}</button>
+          </div>
+          <div className="flex-1 flex items-center justify-center min-h-0 px-6" onClick={e => e.stopPropagation()}>
+            <img src={galleryImages[gallery.cur]} alt="" className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: '70vh' }} />
+          </div>
+          <div className="flex gap-2 px-5 py-3 overflow-x-auto" onClick={e => e.stopPropagation()}>
+            {galleryImages.map((src, i) => (
+              <button key={i} onClick={() => setGallery(g => ({ ...g, cur: i }))}
+                className="w-16 h-16 rounded-lg overflow-hidden shrink-0"
+                style={{ outline: i === gallery.cur ? `2.5px solid ${c.accent}` : 'none', opacity: i === gallery.cur ? 1 : 0.65 }}>
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* {t('回到底部', 'Back to bottom')} —— 右下悬浮 */}
       {showJump && !isStreaming && (
