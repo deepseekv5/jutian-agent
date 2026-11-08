@@ -86,7 +86,7 @@ interface Props {
   onPick: (type: PageType) => void
 }
 
-export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: PageType) => void; sessions?: { id: string; updated_at?: string; created_at?: string }[] }) {
+export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: PageType) => void; sessions?: { id: string; title?: string; updated_at?: string; created_at?: string }[] }) {
   const [exts, setExts] = useState(getRegisteredExts)
   useEffect(() => subscribeExts(() => setExts(getRegisteredExts())), [])
   const { c } = useTheme()
