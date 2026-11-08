@@ -87,7 +87,7 @@ export default function OnboardingTour({ onDone }: { onDone: () => void }) {
   }, [measure])
 
   const finish = () => { markTourDone(); onDone() }
-  const next = () => { idx + 1 >= STEPS.length ? finish() : setIdx(idx + 1) }
+  const next = () => { if (idx + 1 >= STEPS.length) finish(); else setIdx(idx + 1) }
 
   // 弹层位置：目标下方优先，放不下放上方；无目标居中
   const boxW = 380

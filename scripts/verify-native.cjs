@@ -47,6 +47,19 @@ function findResources(explicit) {
       if (fs.existsSync(r) && !candidates.includes(r)) candidates.push(r)
     }
   } catch { /* 目录不存在 */ }
+  // mac 产物在 .app 包内（v14.24.1 修复）：release/mac-arm64/巨天agent.app/Contents/Resources
+  // 此前只扫 *-unpacked/resources，mac 永远报「缺原生模块」的假阴性红灯
+  try {
+    for (const d of fs.readdirSync(out)) {
+      const app = path.join(out, d)
+      if (!fs.statSync(app).isDirectory()) continue
+      for (const sub of fs.readdirSync(app)) {
+        if (!sub.endsWith('.app')) continue
+        const r = path.join(app, sub, 'Contents', 'Resources')
+        if (fs.existsSync(r) && !candidates.includes(r)) candidates.push(r)
+      }
+    }
+  } catch { /* 目录不存在 */ }
   return candidates
 }
 
