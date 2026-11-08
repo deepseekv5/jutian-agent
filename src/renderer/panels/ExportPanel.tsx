@@ -62,7 +62,7 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
 
   /** 导出 HTML / PDF（v14）：HTML 可直接发给别人看；PDF 走 Electron printToPDF，
    *  非桌面端退回「打开打印预览」（浏览器里另存为 PDF 效果一致）。 */
-  const runRich = async (kind: 'html' | 'pdf' | 'gongwen') => {
+  const runRich = async (kind: 'html' | 'pdf' | 'gongwen' | 'gongwen-doc') => {
     if (!picked.size) { setMsg('先选至少一个会话'); return }
     setBusy(true); setMsg('')
     try {
@@ -73,9 +73,10 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
       const html = isGw
         ? wrapGongwenDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
         : wrapHtmlDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
-      if (kind === 'html' || kind === 'gongwen') {
-        const name = exportFileName(title + (isGw ? '-公文红头' : ''), 'html')
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+      if (kind === 'html' || kind === 'gongwen' || kind === 'gongwen-doc') {
+        const name = exportFileName(title + (isGw ? '-公文红头' : ''), kind === 'gongwen-doc' ? 'doc' : 'html')
+        const mime = kind === 'gongwen-doc' ? 'application/msword' : 'text/html;charset=utf-8'
+        const blob = new Blob([html], { type: mime })
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
         a.download = name
@@ -234,6 +235,12 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
           className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
           style={{ background: c.bgInput, color: c.textSecondary }}>
           HTML
+        </button>
+        <button onClick={() => runRich('gongwen-doc')} disabled={busy || !picked.size}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+          style={{ background: '#c7000b0d', color: '#c7000b', border: '1px solid #c7000b33' }}
+          title="红头文电 .doc（Word/WPS 可编辑）">
+          红头Word
         </button>
         <button onClick={() => runRich('pdf')} disabled={busy || !picked.size}
           className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"

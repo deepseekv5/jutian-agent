@@ -173,6 +173,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
             {[
               { n: todaySessions, label: '今日会话', labelEn: 'Chats today' },
               { n: favs.length, label: '收藏', labelEn: 'Favorites' },
+              { n: sessions.filter(x => x.title === '速记').length, label: '速记', labelEn: 'Quick notes' },
             ].map((it, i) => (
               <div key={i} className="flex items-baseline gap-1.5">
                 <span className="text-[20px] font-bold tabular-nums" style={{ color: c.textHead }}>{it.n}</span>
