@@ -16,7 +16,9 @@ export interface ExportMessage {
   created_at?: string
 }
 
-export type ExportFormat = 'md' | 'txt' | 'json' | 'html' | 'doc'
+import { wrapGongwenDocument } from '../../shared/exportHtml'
+
+export type ExportFormat = 'md' | 'txt' | 'json' | 'html' | 'doc' | 'gongwen'
 
 /** HTML 转义：导出的任何内容都必须过这里 */
 export function escapeHtml(s: string): string {
@@ -155,6 +157,7 @@ export const EXPORT_META: Record<ExportFormat, { ext: string; mime: string; labe
   txt: { ext: 'txt', mime: 'text/plain;charset=utf-8', label: '纯文本' },
   json: { ext: 'json', mime: 'application/json;charset=utf-8', label: 'JSON 数据' },
   html: { ext: 'html', mime: 'text/html;charset=utf-8', label: '网页（可打印）' },
+  gongwen: { ext: 'html', mime: 'text/html;charset=utf-8', label: '公文红头（可打印）' },
   doc: { ext: 'doc', mime: 'application/msword;charset=utf-8', label: 'Word 文档' },
 }
 
@@ -170,7 +173,19 @@ export function buildExport(
   const text = fmt === 'json' ? toJson(opts.sessionId || '', messages)
     : fmt === 'txt' ? toPlainText(messages)
     : fmt === 'html' ? toHtml(messages, stamp)
+    : fmt === 'gongwen' ? toGongwenHtml(messages, stamp)
     : fmt === 'doc' ? toWordHtml(messages, stamp)
     : toMarkdown(messages, stamp)
   return { text, name: `巨天对话-${date}.${meta.ext}` }
+}
+
+/** 公文红头导出（v14.19.0）：正文仿宋红头版式，标题取用户第一条消息摘要 */
+export function toGongwenHtml(messages: ExportMessage[], stamp: string): string {
+  const first = messages.find(m => m.role === 'user')?.content || ''
+  const title = first.replace(/\s+/g, ' ').slice(0, 30) + (first.length > 30 ? '…' : '') || '公文'
+  const body = messages.map(m => {
+    const who = m.role === 'user' ? '请示事项' : '答复意见'
+    return `<h2>${who}</h2><p>${(m.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>`
+  }).join('\n')
+  return wrapGongwenDocument(title, body, stamp)
 }

@@ -385,6 +385,7 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
               ['md', EXPORT_META.md.label],
               ['doc', EXPORT_META.doc.label],
               ['html', EXPORT_META.html.label],
+              ['gongwen', EXPORT_META.gongwen.label],
               ['txt', EXPORT_META.txt.label],
               ['json', EXPORT_META.json.label],
               ['kb', '存入知识库'],

@@ -155,3 +155,38 @@ ${bodyHtml}
 <footer>由巨天agent 导出 · ${new Date().toLocaleString('zh-CN')}</footer>
 </div></body></html>`
 }
+
+/** 公文红头样式（v14.19.0）：仿 GB/T 9704 版式——红标题小标宋、红色分隔线、正文仿宋 */
+export function wrapGongwenDocument(title: string, bodyHtml: string, metaLine = ''): string {
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { margin: 3.7cm 2.8cm 3.5cm 2.6cm; }
+  body { margin: 0; background: #f5f1e8; }
+  .gw { max-width: 780px; margin: 0 auto; padding: 48px 56px 64px; background: #fff; box-shadow: 0 2px 24px rgba(0,0,0,.08); }
+  .gw-head { text-align: center; color: #c7000b; font-family: 'STZhongsong', 'Songti SC', 'SimSun', serif; font-size: 30px; letter-spacing: .12em; font-weight: 700; padding: 18px 0 10px; }
+  .gw-sub { text-align: center; color: #8a8378; font-size: 12px; font-family: 'Songti SC', 'SimSun', serif; letter-spacing: .3em; padding-bottom: 14px; }
+  .gw-line { border: none; border-top: 2.5px solid #c7000b; margin: 0 0 26px; }
+  .gw-title { text-align: center; font-family: 'STZhongsong', 'Songti SC', 'SimSun', serif; font-size: 22px; color: #1d150d; margin: 6px 0 22px; }
+  .gw-meta { text-align: center; color: #6b5d4a; font-size: 12px; margin-bottom: 24px; }
+  .gw-body { font-family: 'Fangsong', 'FangSong_GB2312', 'STFangsong', 'Songti SC', serif; font-size: 16px; line-height: 2; color: #241c12; }
+  .gw-body p { margin: 0 0 14px; text-indent: 2em; }
+  .gw-body h2 { font-family: 'Heiti SC', 'SimHei', sans-serif; font-size: 16px; margin: 18px 0 8px; }
+  .gw-body pre, .gw-body code { font-family: inherit; background: transparent; }
+  .gw-body blockquote { margin: 12px 0; padding: 4px 16px; border-left: 3px solid #c7000b; color: #4a4034; }
+  .gw-body table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+  .gw-body th, .gw-body td { border: 1px solid #b9ab90; padding: 6px 10px; }
+  .gw-foot { margin-top: 40px; text-align: center; color: #b0a794; font-size: 11px; font-family: 'Songti SC', serif; }
+</style></head>
+<body><div class="gw">
+<div class="gw-head">巨 天 文 电</div>
+<div class="gw-sub">JUTIAN OFFICIAL</div>
+<hr class="gw-line">
+<div class="gw-title">${escapeHtml(title)}</div>
+${metaLine ? `<div class="gw-meta">${escapeHtml(metaLine)}</div>` : ''}
+<div class="gw-body">${bodyHtml}</div>
+<div class="gw-foot">由巨天agent 导出 · ${new Date().toLocaleString('zh-CN')}</div>
+</div></body></html>`
+}
