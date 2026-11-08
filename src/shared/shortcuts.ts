@@ -177,3 +177,30 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
   { id: 'toggle-theme', combo: 'mod+shift+l', label: '切换明暗主题', group: '界面' },
   { id: 'shortcuts-help', combo: 'mod+/', label: '快捷键一览', group: '帮助' },
 ]
+
+// ─── 快捷键自定义（v14.20.0）：覆盖层存 localStorage，默认键不变 ───
+const OVERRIDES_KEY = 'lyclaw_hotkey_overrides'
+
+export function getBindingOverrides(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}') } catch { return {} }
+}
+export function setBindingOverride(id: string, combo: string | null): void {
+  const o = getBindingOverrides()
+  if (combo) o[id] = combo
+  else delete o[id]
+  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)) } catch {}
+  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch {}
+}
+export function resetBindingOverrides(): void {
+  try { localStorage.removeItem(OVERRIDES_KEY) } catch {}
+  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch {}
+}
+/** 生效键位：默认表 + 用户覆盖（覆盖为空串 = 停用该快捷键） */
+export function effectiveBindings(): KeyBinding[] {
+  const o = getBindingOverrides()
+  return DEFAULT_BINDINGS.map((b) => (b.id in o ? { ...b, combo: o[b.id] } : b)).filter((b) => b.combo !== '')
+}
+export function comboFor(id: string): string {
+  const o = getBindingOverrides()
+  return o[id] ?? DEFAULT_BINDINGS.find((b) => b.id === id)?.combo ?? ''
+}

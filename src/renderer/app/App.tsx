@@ -67,6 +67,7 @@ import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import StarGate, { shouldShowStarGate } from './StarGate';
 const OnboardingTour = lazy(() => import('./OnboardingTour'));
 import { shouldShowTour } from './OnboardingTour';
+import { effectiveBindings, matchesCombo, parseCombo, detectMac } from '../../shared/shortcuts';
 import { isMac as platformIsMac } from '../utils/platform';
 import AnnouncementBanner from './AnnouncementBanner';
 import FestivalEgg from './FestivalEgg';
@@ -525,8 +526,16 @@ function MainApp() {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       const k = e.key.toLowerCase();
+      // 快捷键自定义（v14.20.0）：按生效键位表匹配（用户可在快捷键页改键）
+      const __binds = effectiveBindings();
+      const hit = (id: string) => {
+        const b = __binds.find(x => x.id === id);
+        if (!b) return false;
+        const pc = parseCombo(b.combo);
+        return pc ? matchesCombo(e, pc, detectMac()) : false;
+      };
       // 复制最后一条 AI 回复（v14.8）：从当前会话消息里取最后一条 assistant 正文
-      if (mod && e.shiftKey && k === 'c') {
+      if (hit('copy-last-reply')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
         e.preventDefault();
@@ -544,48 +553,49 @@ function MainApp() {
         })()
         return
       }
-      if (mod && e.shiftKey && k === 'e') { e.preventDefault(); openTabRef.current('export'); return }
+      if (hit('open-export')) { e.preventDefault(); openTabRef.current('export'); return }
       // 剪贴板历史面板（v14.9）
-      if (mod && e.shiftKey && k === 'b') {
+      if (hit('clip-history')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('open-clip-history'))
         return
       }
       // 朗读最后回复（v14.8）
-      if (mod && e.shiftKey && k === 'd') { e.preventDefault(); openTabRef.current('diagnostics'); return }
-      if (mod && e.shiftKey && k === 'r') {
+      if (hit('open-diagnostics')) { e.preventDefault(); openTabRef.current('diagnostics'); return }
+      if (hit('read-aloud-last')) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('read-aloud-last'))
         return
       }
       // Ctrl/Cmd+Tab：循环切换标签（v14.8）
       if (k === 'tab') {
+        const dir = e.shiftKey ? -1 : 1;
+        if (!hit(dir === -1 ? 'prev-tab' : 'next-tab')) return;
         e.preventDefault();
         const order = tabsOrderRef.current;
         if (order.length > 1) {
           const cur = order.findIndex(t => t.id === activeTabRef.current);
-          const dir = e.shiftKey ? -1 : 1;
           const nextTab = order[(cur + dir + order.length) % order.length];
           if (nextTab) switchTabRef.current?.(nextTab.id)
         }
         return
       }
       // Cmd+Shift+T：重新打开刚关闭的标签（v14.8）
-      if (mod && e.shiftKey && k === 't') {
+      if (hit('reopen-tab')) {
         e.preventDefault();
         reopenClosedTabRef.current?.()
         return
       }
       // Cmd+加/减/0 快速调节聊天字号（v14.8）
-      if (k === '=' || k === '-' || k === '0') {
+      if (hit('font-up') || hit('font-down') || hit('font-reset')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
         e.preventDefault();
         const sizes = ['small', 'standard', 'large'] as const;
         const cur = sizes.indexOf((localStorage.getItem('lyclaw_font_size') as typeof sizes[number]) || 'standard');
         let next = cur;
-        if (k === '=') next = Math.min(sizes.length - 1, cur + 1);
-        else if (k === '-') next = Math.max(0, cur - 1);
+        if (hit('font-up')) next = Math.min(sizes.length - 1, cur + 1);
+        else if (hit('font-down')) next = Math.max(0, cur - 1);
         else next = 1;
         if (next !== cur) {
           localStorage.setItem('lyclaw_font_size', sizes[next]);
@@ -593,10 +603,10 @@ function MainApp() {
         }
         return
       }
-      if (k === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
-      else if (k === 'n') { e.preventDefault(); handleCreateSessionRef.current?.() }
-      else if (k === 't') { e.preventDefault(); openTabRef.current('newtab') }
-      else if (k === 'w') {
+      if (hit('palette')) { e.preventDefault(); setCmdOpen(v => !v) }
+      else if (hit('new-chat')) { e.preventDefault(); handleCreateSessionRef.current?.() }
+      else if (hit('new-tab')) { e.preventDefault(); openTabRef.current('newtab') }
+      else if (hit('close-tab')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return; // 输入框内留给系统关闭行为
         e.preventDefault();
