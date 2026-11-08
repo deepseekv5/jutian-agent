@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { getRegisteredExts, subscribeExts, extType } from './extensions'
 import NewTabSearch from './NewTabSearch'
 import { festivalBanner, nextTapCount } from '../../shared/festival1024'
+import { loadFavorites, type Favorite } from '../store/favorites'
 import FestivalEgg from './FestivalEgg'
 import FestivalHome from './FestivalHome'
 
@@ -104,6 +105,13 @@ export default function NewTabPage({ onPick }: Props) {
     setTap({ count: r.count, lastAt: r.lastAt })
     if (r.fired) { setEggOpen(true); setTap({ count: 0, lastAt: 0 }) }
   }
+  // 消息收藏（v14.16.0）：最近 5 条直达原消息
+  const [favs, setFavs] = useState<Favorite[]>(loadFavorites)
+  useEffect(() => {
+    const h = () => setFavs(loadFavorites())
+    window.addEventListener('favorites-changed', h)
+    return () => window.removeEventListener('favorites-changed', h)
+  }, [])
   // 节日整页（hooks 已全部执行完，这里分流是安全的）
   if (festivalNow) return <FestivalHome onPick={onPick} />
 
@@ -158,6 +166,24 @@ export default function NewTabPage({ onPick }: Props) {
         </div>
 
         <div className="mb-5 flex items-center gap-2">
+          {favs.length > 0 && (
+            <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('收藏的消息', 'Favorites')}</span>
+                <span className="text-[10.5px] font-mono" style={{ color: c.textMuted }}>{favs.length}</span>
+              </div>
+              <div className="space-y-1">
+                {favs.slice(0, 5).map(f => (
+                  <button key={f.id} onClick={() => window.dispatchEvent(new CustomEvent('jutian-open-favorite', { detail: f }))}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:opacity-80" style={{ background: c.bgHover }}>
+                    <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="#d4a017" stroke="#d4a017" strokeWidth={1.5}><path d="M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z" /></svg>
+                    <span className="text-[12px] truncate flex-1" style={{ color: c.textSecondary }}>{f.excerpt}</span>
+                    <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{f.role === 'user' ? '问' : '答'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('工作区入口', 'Workspace')}</span>
           <div className="flex-1 h-px" style={{ background: c.borderLight }} />
           <span className="text-[10.5px]" style={{ color: c.textMuted }}>{t('选择后本标签页自动关闭', 'This tab closes after you pick')}</span>

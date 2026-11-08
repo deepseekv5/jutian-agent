@@ -12,6 +12,7 @@ import type { Settings } from '../types'
 import { dateTimeCN, hhmmss } from '../utils/datetime'
 import { buildExport, EXPORT_META, type ExportFormat } from '../utils/exportChat'
 import { fetchCompat } from '../api'
+import { toggleFavorite } from '../store/favorites'
 
 const WD_KEY = 'lyclaw_session_workdirs'
 const CP_KEY = 'lyclaw_last_checkpoint'
@@ -57,6 +58,15 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
     } catch { /* ignore */ }
     return typeof window !== 'undefined' ? window.innerWidth >= 1200 : false
   })
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail || {}
+      if (!d.msgId) return
+      toggleFavorite({ sessionId, msgId: d.msgId, role: d.role === 'user' ? 'user' : 'assistant', excerpt: String(d.excerpt || '').slice(0, 140) })
+    }
+    window.addEventListener('toggle-favorite', h)
+    return () => window.removeEventListener('toggle-favorite', h)
+  }, [sessionId])
   useEffect(() => { try { localStorage.setItem('lyclaw_side_panel', showPanel ? '1' : '0') } catch { /* ignore */ } }, [showPanel])
   const [panelTab, setPanelTab] = useState<SideTab>(() => {
     try {

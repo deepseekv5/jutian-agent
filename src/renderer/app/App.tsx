@@ -418,6 +418,17 @@ function MainApp() {
     window.addEventListener('jutian-tour', h)
     return () => window.removeEventListener('jutian-tour', h)
   }, [])
+  // 收藏直达（v14.16.0）：打开会话标签 → 跳转高亮原消息
+  useEffect(() => {
+    const h = (e: Event) => {
+      const f = (e as CustomEvent).detail || {}
+      if (!f.sessionId || !f.msgId) return
+      openTab('chat', { sessionId: f.sessionId })
+      setTimeout(() => window.dispatchEvent(new CustomEvent('chat-jump-to-message', { detail: f.msgId })), 450)
+    }
+    window.addEventListener('jutian-open-favorite', h)
+    return () => window.removeEventListener('jutian-open-favorite', h)
+  }, [openTab])
   useEffect(() => {
     if (!legalOk) return
     const t = setTimeout(() => setStarGate(shouldShowStarGate()), 2500)

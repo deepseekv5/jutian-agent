@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, memo, Fragment, lazy, Suspense, useMemo } from 'react'
+import { isFavorited } from '../store/favorites'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -271,6 +272,7 @@ const MdInner = memo(function MdInner({ text, remark, rehype, link, math }: {
 function CodeBlock({ children }: { children?: any }) {
   const { c } = useTheme()
   const [copied, setCopied] = useState(false)
+
   const [view, setView] = useState<'code' | 'preview'>('code')
   // 长代码块折叠（v14.9）：>25 行默认只显示前 18 行，点「展开全部」还原
   const [expanded, setExpanded] = useState(false)
@@ -452,6 +454,12 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
   const [showRollbackConfirm, setShowRollbackConfirm] = useState(false)
   const [expandedAgent, setExpandedAgent] = useState<number | null>(null)
   const [hovered, setHovered] = useState(false)
+  const [fav, setFav] = useState(() => isFavorited(msgId || ''))
+  useEffect(() => {
+    const h = () => setFav(isFavorited(msgId || ''))
+    window.addEventListener('favorites-changed', h)
+    return () => window.removeEventListener('favorites-changed', h)
+  }, [msgId])
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -930,6 +938,14 @@ const MessageBubble = memo(function MessageBubble({ content, thinking, role, isS
               const q = shownContent.length > 400 ? shownContent.slice(0, 400) + '…' : shownContent
               window.dispatchEvent(new CustomEvent('quote-message', { detail: q }))
             }} />
+            <IconAction
+              label={fav ? '已收藏' : '收藏'}
+              icon={fav
+                ? 'M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z'
+                : 'M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z'}
+              onClick={() => window.dispatchEvent(new CustomEvent('toggle-favorite', {
+                detail: { msgId, role, excerpt: String(shownContent || '').slice(0, 140) },
+              }))} active={fav} />
             <IconAction label={copied ? '已复制' : '复制'} icon={copied ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z'} onClick={copyContent} active={copied} />
             <IconAction label={sharedImg ? '已导出' : '分享图'} icon={sharedImg ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'} onClick={shareAsImage} active={sharedImg} />
             <IconAction label={speaking ? '停止朗读' : '朗读'} icon={speaking ? 'M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z' : 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14'} onClick={speakContent} active={speaking} />

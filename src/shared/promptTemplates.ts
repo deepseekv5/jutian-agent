@@ -33,7 +33,7 @@ export const PROMPT_CATEGORIES: { id: PromptTemplate['category']; label: string;
 ]
 
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
-  {
+{
     id: 'code-review',
     name: '代码审查',
     nameEn: 'Code review',
@@ -189,3 +189,36 @@ export function searchTemplates(query: string, list: PromptTemplate[] = PROMPT_T
     [t.name, t.nameEn || '', t.description, t.body].some((s) => s.toLowerCase().includes(q))
   )
 }
+
+// ── 公文模板（v14.16.0）：GB/T 9704 党政机关公文六大文种 ──
+const gwVar = [{ key: '事项', label: '核心事项/背景', multiline: true, placeholder: '例如：定于 12 月 8 日召开年度工作会议…' }]
+const gwTpl = (id: string, name: string, nameEn: string, desc: string, header: string, ending: string): PromptTemplate => ({
+  id, name, nameEn, category: 'office', description: desc,
+  body: `${header}
+
+${'{{事项}}'}
+
+${ending}`,
+  vars: gwVar,
+})
+
+PROMPT_TEMPLATES.push(
+  gwTpl('gw-tongzhi', '公文·通知', 'Notice (official)', '告知事项、要求执行（特此通知）',
+    '【公文模式】请按 GB/T 9704 输出一份正式「通知」，含标题、主送机关、正文分层（一、（一）、1.）、结尾惯用语「特此通知」与落款成文日期。事项如下：',
+    '输出后不要再附加任何解释。'),
+  gwTpl('gw-qingshi', '公文·请示', 'Request for instructions', '向上级请求指示批准（一文一事，妥否请批示）',
+    '【公文模式】请按 GB/T 9704 输出一份「请示」，一文一事：请示缘由 → 请示事项 → 结尾「妥否，请批示」。含标题、主送机关、落款成文日期。事项如下：',
+    '输出后不要再附加任何解释。'),
+  gwTpl('gw-baogao', '公文·报告', 'Report (official)', '向上级汇报工作（不得夹带请示事项）',
+    '【公文模式】请按 GB/T 9704 输出一份「报告」：工作情况 → 存在问题 → 下一步安排，结尾「专此报告」。含标题、主送机关、落款成文日期。汇报内容：',
+    '输出后不要再附加任何解释。'),
+  gwTpl('gw-pifu', '公文·批复', 'Official reply', '答复下级机关请示（同意/不同意 + 依据 + 要求）',
+    '【公文模式】请按 GB/T 9704 输出一份「批复」：引述来文（来文标题及文号）→ 批复意见（同意/不同意及依据）→ 执行要求。含标题、主送机关、落款成文日期。批复事项：',
+    '输出后不要再附加任何解释。'),
+  gwTpl('gw-han', '公文·函', 'Official letter', '不相隶属机关之间商洽工作（盼复）',
+    '【公文模式】请按 GB/T 9704 输出一份「函」：商洽缘由 → 商洽事项 → 结尾「盼复」「此函」。含标题、主送机关、落款成文日期。事项如下：',
+    '输出后不要再附加任何解释。'),
+  gwTpl('gw-jiyao', '公文·纪要', 'Meeting minutes', '记载会议情况与议定事项（会议纪要格式）',
+    '【公文模式】请按 GB/T 9704 输出一份「会议纪要」：会议概况（时间/地点/主持/参加）→ 会议议定事项（分条）→ 工作要求。材料如下：',
+    '输出后不要再附加任何解释。'),
+)
