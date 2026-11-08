@@ -173,9 +173,6 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
       <div className="flex items-center gap-1 shrink-0 titlebar-nodrag">
 
         {/* 版本芯片 */}
-        <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded-md select-none" style={{ background: c.bgInput, color: c.textMuted }} title={`巨天agent v${APP_VERSION}`}>
-          v{APP_VERSION}
-        </span>
         {/* 氛围模式：全屏氛围光晕（再点一次关闭，Esc 也可退出） */}
         <button
           onClick={() => {

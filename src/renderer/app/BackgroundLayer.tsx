@@ -35,6 +35,16 @@ export default function BackgroundLayer({ bgImage, opacity: bgOpacity }: Props) 
   if (!bgImage) {
     // 关闭壁纸 → 高级渐变背景（随主题，双层径向光晕 + 细网格；纯静态无动画，GPU 友好）
     const dark = theme === 'dark'
+    const party = theme === 'party'
+    if (party) return (
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }} aria-hidden>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #faf4e6 0%, #f6ecd9 55%, #f3e6cf 100%)' }} />
+        <div style={{ position: 'absolute', width: '60vw', height: '60vw', right: '-16vw', top: '-22vw', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(199,0,11,.10), transparent 62%)' }} />
+        <div style={{ position: 'absolute', width: '46vw', height: '46vw', left: '-14vw', bottom: '-18vw', borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(212,160,23,.10), transparent 64%)' }} />
+      </div>
+    )
     return (
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }} aria-hidden>
         <div style={{ position: 'absolute', inset: 0, background: dark ? '#0a0a0c' : '#f7f7f9' }} />

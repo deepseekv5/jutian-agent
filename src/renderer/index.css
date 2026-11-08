@@ -677,6 +677,23 @@
   --glass-bg-strong: rgba(36, 36, 40, 0.72);
   --glass-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
+[data-theme="party"] {
+  --glass-bg: rgba(255, 251, 240, 0.6);
+  --glass-bg-strong: rgba(255, 252, 245, 0.78);
+  --glass-hairline: inset 0 1px 0 rgba(255, 245, 225, 0.5);
+  --accent: #c7000b;
+  --accent-soft: rgba(199, 0, 11, 0.12);
+  --accent-soft2: rgba(199, 0, 11, 0.28);
+}
+/* 党政风：宣纸暖底 + 标题宋黑、正文墨色 */
+[data-theme="party"] .global-veil { background: rgba(246, 236, 216, 0.3); }
+[data-theme="party"] .md-inner h1,
+[data-theme="party"] .md-inner h2,
+[data-theme="party"] .md-inner h3 {
+  font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif;
+  letter-spacing: 0.02em;
+}
+[data-theme="party"] .bubble-user { border-radius: 4px 14px 14px 14px; }
 .glass {
   /* 着色层：磨砂由全局 .global-veil 统一提供（单次模糊，全覆盖） */
   background: var(--glass-bg) !important;

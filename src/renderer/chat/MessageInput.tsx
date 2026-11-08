@@ -8,7 +8,7 @@ import { buildChatSystemPrompt } from '../engine/chatPrompt'
 import { refreshSkillManifest } from '../engine/skillManifest'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
-import { MODE_ACCENT } from '../../shared/chatModes'
+import { MODE_ACCENT, GONGWEN_PROMPT } from '../../shared/chatModes'
 import { hhmmss } from '../utils/datetime'
 import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 import { selfCheck, shouldBlock } from '../engine/selfCheck'
@@ -62,13 +62,14 @@ const THINK_COLORS: Record<string, string> = {
 }
 
 /** 单次任务模式开关 */
-type ModeKey = 'plan' | 'search' | 'draw' | 'dev' | 'swarm'
+type ModeKey = 'plan' | 'search' | 'draw' | 'dev' | 'swarm' | 'gongwen'
 
 const MODES: { key: ModeKey; label: string; color: string; title: string; icon: string }[] = [
   { key: 'plan', label: '规划', color: '#d97706', title: '任务规划：先拆解步骤再逐步执行', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
   { key: 'search', label: '联网', color: '#2563eb', title: '联网搜索（web_search）', icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9' },
   { key: 'draw', label: '画画', color: '#0891b2', title: 'AI 画画（image_generate）', icon: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z' },
   { key: 'dev', label: '造技能', color: '#16a34a', title: '开发新的 Skill（create_skill）', icon: 'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z' },
+  { key: 'gongwen', label: '公文', color: '#c7000b', title: '公文写作（GB/T 9704 规范：通知/请示/报告/批复/函/纪要）', icon: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5' },
   { key: 'swarm', label: '集群', color: '#0891b2', title: 'Agent 集群：多智能体拆解并协作执行', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
 ]
 
@@ -86,6 +87,7 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { cmd: '联网', label: '联网搜索', hint: '开启 web_search 联网模式', key: 'search' },
   { cmd: '规划', label: '任务规划', hint: '先拆解步骤再逐步执行', key: 'plan' },
   { cmd: '画画', label: 'AI 画画', hint: 'image_generate 生成图片', key: 'draw' },
+  { cmd: '公文', label: '公文写作', hint: 'GB/T 9704 党政机关公文规范', key: 'gongwen' },
   { cmd: '造技能', label: '开发技能', hint: 'create_skill 开发新 Skill', key: 'dev' },
   { cmd: '集群', label: 'Agent 集群', hint: '多智能体拆解协作', key: 'swarm' },
 
@@ -113,7 +115,7 @@ const SLASH_COMMANDS: SlashCmd[] = [
   { cmd: '1024', label: '1024 彩蛋', hint: '程序员节快乐', key: 'egg1024' },
 ]
 
-const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false }
+const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false, gongwen: false }
 
 // ─── composer 状态条：模式 · 模型 · 工作目录 · git 分支（学 ClerkBox 输入框上方的状态行）───
 function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMode: 'general' | 'coding'; modelLabel: string; workDir: string; disabled?: boolean }) {
@@ -994,6 +996,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     if (modes.plan) content = `【任务规划模式】\n请先分析此任务，拆解为清晰的步骤清单，然后按步骤逐一执行。格式：\n1. 第一步：xxx\n2. 第二步：xxx\n...\n然后开始执行。\n\n用户任务：${content}`
     if (modes.draw) content = `请使用 image_generate 工具生成图片，内容：${content}`
     if (modes.search) content = `请使用 web_search 工具联网搜索以下内容：\n\n${content}`
+    if (modes.gongwen) content = `${GONGWEN_PROMPT}\n\n【写作任务】${content}`
 
     onSend(
       content,
@@ -1143,6 +1146,37 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
           <div className="absolute bottom-full left-0 right-0 mb-3 z-40 rounded-2xl border shadow-lg animate-fade-in overflow-hidden glass-strong"
             style={{ borderColor: c.border, maxHeight: '45vh', overflowY: 'auto' }}>
             <div className="p-3 space-y-3">
+              {/* 会话控制（v14.14.1）：从主行收编的目标/调研/计划/权限，一处集中 */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-1" style={{ borderBottom: `1px solid \${c.borderLight}` }}>
+                <button onClick={() => setGoalOn(v => !v)} aria-pressed={goalOn}
+                  title="目标模式：把这轮输入当作目标，评估器逐轮检查完成度，未达成自动续跑（最多 3 轮）"
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                  style={{ background: goalOn ? '#7c3aed1a' : 'transparent', border: `1px solid \${goalOn ? '#7c3aed66' : c.border}`, color: goalOn ? '#7c3aed' : c.textSecondary }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" /></svg>
+                  <span className="text-[12px] font-medium">目标模式</span>
+                </button>
+                <button onClick={() => { setShowToolbar(false); onOpenResearch?.(value.trim()) }}
+                  title="深度调研：多路检索 → 交叉验证 → 带引用的报告（打开专属工作台）"
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                  style={{ border: `1px solid \${c.border}`, color: c.textSecondary }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg>
+                  <span className="text-[12px] font-medium">深度调研</span>
+                </button>
+                <button onClick={() => { onTogglePlanMode?.(); setShowToolbar(false) }}
+                  title={planMode ? '计划模式已开启 · 点击退出' : '计划模式：先出方案，你批准后我才动手'}
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                  style={{ background: planMode ? '#7c3aed1a' : 'transparent', border: `1px solid \${planMode ? '#7c3aed66' : c.border}`, color: planMode ? '#7c3aed' : c.textSecondary }}>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" /></svg>
+                  <span className="text-[12px] font-medium">计划模式</span>
+                </button>
+                <button onClick={() => pickAccess(access === 'ask' ? 'edit' : access === 'edit' ? 'full' : 'ask')}
+                  title={`本次权限：\${access === 'ask' ? '需要我确认（写/删/命令先问后做）' : access === 'edit' ? '可以编辑（删除前确认）' : '完全访问（自主完成）'} · 点击切换`}
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                  style={{ background: access === 'full' ? '#dc262614' : access === 'ask' ? '#d9770614' : 'transparent', border: `1px solid \${access === 'full' ? '#dc262659' : access === 'ask' ? '#d9770659' : c.border}`, color: access === 'full' ? '#dc2626' : access === 'ask' ? '#d97706' : c.textSecondary }}>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+                  <span className="text-[12px] font-medium">{access === 'ask' ? '需确认' : access === 'edit' ? '可编辑' : '完全访问'}</span>
+                </button>
+              </div>
               {attachedFiles.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {attachedFiles.map((file, idx) => (
@@ -1634,67 +1668,26 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
               </svg>
             </button>
 
-            {/* 目标模式开关 */}
-            <button onClick={() => setGoalOn(v => !v)} aria-pressed={goalOn}
-              title="目标模式：把这轮输入当作目标，评估器逐轮检查完成度，未达成自动续跑（最多 3 轮）"
-              className="h-8 pl-2.5 pr-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
-              style={{
-                background: goalOn ? '#7c3aed1a' : 'transparent',
-                border: `1px solid ${goalOn ? '#7c3aed66' : c.border}`,
-                color: goalOn ? '#7c3aed' : c.textSecondary,
-              }}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="0.75" fill="currentColor" />
-              </svg>
-              <span className="text-[12px] font-medium">目标</span>
-            </button>
 
-            {/* 深度调研：跳到专属工作台（有实时进度/来源清单/历史归档）。
-                在聊天里内联跑会把进度塞进一条消息反复覆写，来源也没地方呈现 */}
-            <button onClick={() => onOpenResearch?.(value.trim())}
-              title="深度调研：多路检索 → 交叉验证 → 带引用的报告（打开专属工作台）"
-              className="h-8 pl-2.5 pr-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
-              style={{
-                background: 'transparent',
-                border: `1px solid ${c.border}`,
-                color: c.textSecondary,
-              }}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
-              </svg>
-              <span className="text-[12px] font-medium">调研</span>
-            </button>
-
-            {/* 计划模式：只读探索 → 出计划 → 批准后才执行 */}
-            <button onClick={() => onTogglePlanMode?.()}
-              title={planMode ? '计划模式已开启：现在我只读探索、不动文件，方案给你确认后再执行 · 点击退出' : '计划模式：先出方案，你批准后我才动手 · 点击开启'}
-              className="h-8 pl-2.5 pr-2 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
-              style={{
-                background: planMode ? '#7c3aed1a' : 'transparent',
-                border: `1px solid ${planMode ? '#7c3aed66' : c.border}`,
-                color: planMode ? '#7c3aed' : c.textSecondary,
-              }}>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-              </svg>
-              <span className="text-[12px] font-medium">计划模式</span>
-            </button>
-
-            {/* 本次权限档位：需确认 / 可编辑 / 完全访问 */}
-            <button onClick={() => pickAccess(access === 'ask' ? 'edit' : access === 'edit' ? 'full' : 'ask')}
-              title={`本次权限：${access === 'ask' ? '需要我确认（写/删/命令先问后做）' : access === 'edit' ? '可以编辑（删除前确认）' : '完全访问（自主完成）'} · 点击切换`}
-              className="h-8 pl-2.5 pr-2 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
-              style={{
-                background: access === 'full' ? '#dc262614' : access === 'ask' ? '#d9770614' : 'transparent',
-                border: `1px solid ${access === 'full' ? '#dc262659' : access === 'ask' ? '#d9770659' : c.border}`,
-                color: access === 'full' ? '#dc2626' : access === 'ask' ? '#d97706' : c.textSecondary,
-              }}>
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-              </svg>
-              <span className="text-[12px] font-medium">{access === 'ask' ? '需确认' : access === 'edit' ? '可编辑' : '完全访问'}</span>
-            </button>
-
+            {/* 高频能力直排（开启后由右侧已启用 chip 接管，避免重复） */}
+            {!modes.search && (
+              <button onClick={() => toggleMode('search')} aria-pressed={false}
+                title="联网搜索（web_search）" aria-label="联网搜索"
+                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+                style={{ border: `1px solid ${c.border}`, color: c.textSecondary }}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c1.657 0 3 4.03 3 9s-1.343 9-3 9-3-4.03-3-9 1.343-9 3-9z" /></svg>
+                <span className="text-[12px] font-medium">联网</span>
+              </button>
+            )}
+            {!modes.gongwen && (
+              <button onClick={() => toggleMode('gongwen')} aria-pressed={false}
+                title="公文写作（GB/T 9704 规范）" aria-label="公文写作"
+                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+                style={{ border: `1px solid ${c.border}`, color: c.textSecondary }}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5" /></svg>
+                <span className="text-[12px] font-medium">公文</span>
+              </button>
+            )}
             {/* 已启用项：ChatGPT 的 tools chip 位（点击即关闭，全部功能保留在 + 菜单内） */}
             {MODES.filter(m => modes[m.key]).map(m => (
               <button key={m.key} onClick={() => toggleMode(m.key)} title={`关闭${m.label}`}

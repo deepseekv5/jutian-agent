@@ -162,10 +162,45 @@ const dark: typeof light = {
 }
 
 export type ThemeColors = typeof light
-export type Theme = 'light' | 'dark' | 'auto'
+
+/** 党政风（v14.14.0）：红金庄重 + 宣纸暖底。数据来自 light 色板同构覆盖。 */
+const party: ThemeColors = {
+  ...light,
+  bg: '#f8f3e9',
+  bgAlt: 'rgba(246, 239, 226, 0.6)',
+  bgCard: 'rgba(255, 252, 244, 0.66)',
+  bgInput: 'rgba(250, 245, 234, 0.6)',
+  bgHover: 'rgba(140, 26, 26, 0.05)',
+  bgActive: 'rgba(166, 32, 32, 0.1)',
+  surface: '#fffcf5',
+  surfaceAlt: 'rgba(246, 239, 226, 0.6)',
+  surfaceCard: 'rgba(255, 252, 244, 0.66)',
+  surfaceInput: 'rgba(250, 245, 234, 0.62)',
+  surfaceHover: 'rgba(140, 26, 26, 0.05)',
+  surfaceActive: 'rgba(166, 32, 32, 0.1)',
+  border: 'rgba(120, 30, 30, 0.16)',
+  borderLight: 'rgba(160, 110, 60, 0.12)',
+  borderFocus: '#a62020',
+  text: '#2b2118',
+  textHead: '#1d150d',
+  textSecondary: '#6b5d4a',
+  textTertiary: '#98876e',
+  textMuted: '#b8a888',
+  accent: '#c7000b',
+  accentBg: 'rgba(199, 0, 11, 0.07)',
+  accentBorder: 'rgba(199, 0, 11, 0.35)',
+  accentLight: '#e05555',
+  accentText: '#ffffff',
+  userBubbleBg: 'rgba(199, 0, 11, 0.92)',
+  userBubbleText: '#fff8ee',
+  sidebarActiveText: '#a62020',
+  sidebarActiveBg: 'rgba(199, 0, 11, 0.1)',
+}
+export type Theme = 'light' | 'dark' | 'auto' | 'party'
 
 /** 强调色预设：light/dark 各配一个变体（graphite 即默认） */
 export const ACCENT_PRESETS: Record<string, { label: string; light: string; dark: string }> = {
+  red: { label: '党政红', light: '#c7000b', dark: '#e05555' },
   graphite: { label: '石墨', light: '#0d0d0d', dark: '#ffffff' },
   teal: { label: '青绿', light: '#0f766e', dark: '#2dd4bf' },
   amber: { label: '琥珀', light: '#b45309', dark: '#f59e0b' },
@@ -248,7 +283,7 @@ const THEME_KEY = 'lyclaw_theme'
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [systemDark, setSystemDark] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
   const [themePref, setThemePref] = useState<Theme>(() => {
-    try { const raw = localStorage.getItem(THEME_KEY); if (raw === 'dark' || raw === 'light' || raw === 'auto') return raw } catch {}
+    try { const raw = localStorage.getItem(THEME_KEY); if (raw === 'dark' || raw === 'light' || raw === 'auto' || raw === 'party') return raw } catch {}
     return 'auto'
   })
   const theme = themePref === 'auto' ? (systemDark ? 'dark' : 'light') : themePref
@@ -260,7 +295,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('accent-changed', h)
     return () => window.removeEventListener('accent-changed', h)
   }, [])
-  const cRaw = theme === 'dark' ? dark : light
+  const cRaw = theme === 'dark' ? dark : theme === 'party' ? party : light
   const c = useMemo(() => {
     if (accentKey === 'custom') {
       const cu = getCustomAccent()
@@ -297,9 +332,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const s = getSettingsSync()
     const t = (s as any).theme
-    if (t === 'dark' || t === 'light' || t === 'auto') setThemePref(t)
+    if (t === 'dark' || t === 'light' || t === 'auto' || t === 'party') setThemePref(t)
     fetchCompat('/api/settings').then(r => r.json()).then((server: any) => {
-      if (server.theme === 'dark' || server.theme === 'light' || server.theme === 'auto') setThemePref(server.theme)
+      if (server.theme === 'dark' || server.theme === 'light' || server.theme === 'auto' || server.theme === 'party') setThemePref(server.theme)
     }).catch(() => {})
   }, [])
 

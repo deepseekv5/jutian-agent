@@ -566,7 +566,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
           </div>
         )}
         {/* 功能入口：单行纯图标（悬停见 tooltip），市场/任务半宽对 —— 压缩竖向空间，功能全保留 */}
-        <div className="flex items-center gap-1 mt-1.5">
+        <div className="flex items-center gap-1 mt-1.5 [&>button]:flex-1 [&>button]:min-w-0">
           {([
             { tab: 'call', title: t('通话：语音对话，可执行任务','Voice call mode'), icon: 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2a1 1 0 011.11-.21 11.36 11.36 0 003.57.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.57 1 1 0 01-.21 1.11z', fill: true },
             { tab: 'persona', title: t('AI 角色：有记忆/能说话/会画画，免费直接聊','AI personas: memory, voice, paint'), icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', fill: false },

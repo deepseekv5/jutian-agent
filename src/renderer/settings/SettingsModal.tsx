@@ -1417,7 +1417,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               {/* 宣传标签置顶 */}
               <Sub c={c} title={t('主题模式', 'Theme')}>
                 <div className="flex gap-2">
-                  {([['light', '纯白（Codex）'], ['dark', '深色'], ['auto', '跟随系统']] as const).map(([t2, label]) => {
+                  {([['light', '纯白（Codex）'], ['dark', '深色'], ['party', '党政红（红金）'], ['auto', '跟随系统']] as const).map(([t2, label]) => {
                     const active = (settings as any).theme === t2 || (!(settings as any).theme && t2 === 'light')
                     return (
                       <button key={t2} type="button" onClick={() => setTheme(t2)}

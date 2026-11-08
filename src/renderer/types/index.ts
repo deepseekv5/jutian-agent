@@ -56,7 +56,7 @@ export interface Settings {
   provider: 'api' | 'local'
   localModel: string
   voiceId: string
-  theme?: 'light' | 'dark'
+  theme?: 'light' | 'dark' | 'party'
   // 工作区（AI 默认工作目录，实时生效）
   workDir: string
   // 安全设置
