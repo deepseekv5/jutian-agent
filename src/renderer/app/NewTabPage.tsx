@@ -110,6 +110,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
   const todaySessions = sessions.filter(x => String(x.updated_at || x.created_at || '') >= dayStart.toISOString()).length
   // 消息收藏（v14.16.0）：最近 5 条直达原消息
   const [favs, setFavs] = useState<Favorite[]>(loadFavorites)
+  const [showAllFavs, setShowAllFavs] = useState(false)
   useEffect(() => {
     const h = () => setFavs(loadFavorites())
     window.addEventListener('favorites-changed', h)
@@ -188,6 +189,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('收藏的消息', 'Favorites')}</span>
                 <div className="flex items-center gap-2">
+                  <button onClick={() => setShowAllFavs(v => !v)} className="text-[10.5px]" style={{ color: c.textSecondary }}>{showAllFavs ? '收起' : '全部'}</button>
                   <button onClick={() => {
                     const md = favs.map(f => `- [${f.role === 'user' ? '问' : '答'}] ${f.excerpt.replace(/\n/g, ' ')}`).join('\n')
                     const blob = new Blob([`# 收藏的消息\n\n${md}\n`], { type: 'text/markdown' })
@@ -200,7 +202,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
                 </div>
               </div>
               <div className="space-y-1">
-                {favs.slice(0, 5).map(f => (
+                {(showAllFavs ? favs : favs.slice(0, 5)).map(f => (
                   <button key={f.id} onClick={() => window.dispatchEvent(new CustomEvent('jutian-open-favorite', { detail: f }))}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:opacity-80" style={{ background: c.bgHover }}>
                     <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="#d4a017" stroke="#d4a017" strokeWidth={1.5}><path d="M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z" /></svg>
