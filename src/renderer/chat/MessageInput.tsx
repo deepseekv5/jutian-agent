@@ -938,6 +938,18 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     return () => window.removeEventListener('quote-message', h)
   }, [])
 
+  // ─── 快速追问（v14.18.0）：回复后 chips 直接把指令填进输入框 ───
+  useEffect(() => {
+    const h = (e: Event) => {
+      const text = (e as CustomEvent).detail as string
+      if (!text) return
+      setValue(text)
+      setTimeout(() => textareaRef.current?.focus(), 30)
+    }
+    window.addEventListener('followup-fill', h)
+    return () => window.removeEventListener('followup-fill', h)
+  }, [])
+
   // ─── 快捷粘贴：Cmd/Ctrl+Shift+V 把剪贴板图片直接加为附件 ───
   useEffect(() => {
     const h = async (e: KeyboardEvent) => {
@@ -1824,6 +1836,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
               </svg>
             </button>
 
+            {value.trim().length >= 1 && (
+              <span className="text-[10px] font-mono mr-1 shrink-0 select-none" style={{ color: c.textMuted }} title="字数">
+                {value.replace(/\s/g, '').length}
+              </span>
+            )}
             <button onClick={handleSend} disabled={!canSend}
               className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${thinking === 'max' && canSend ? 'think-halo-glow' : ''}`}
               style={{

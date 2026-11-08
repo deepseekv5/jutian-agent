@@ -498,6 +498,24 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
             </Fragment>
           )
           })}
+          {/* 快速追问（v14.18.0）：最后一轮 assistant 完成后给三个常用续写指令，一键填充输入框 */}
+          {!isStreaming && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && (
+            <div className="flex flex-wrap gap-1.5 px-1 pb-1">
+              {[
+                { label: '深入展开', text: '就上面的内容继续深入展开：补充细节、示例与边界情况，分节输出。' },
+                { label: '提炼要点', text: '把上面的内容提炼成要点清单（每条一行，最多 8 条），直接给结论。' },
+                { label: '生成待办', text: '把上面的内容转成可执行待办清单：每条含动作、负责方、建议时限。' },
+              ].map(q => (
+                <button key={q.label} onClick={() => window.dispatchEvent(new CustomEvent('followup-fill', { detail: q.text }))}
+                  className="h-7 px-2.5 rounded-full text-[11.5px] flex items-center gap-1 transition-colors"
+                  style={{ border: `1px solid ${c.border}`, color: c.textSecondary, background: c.surfaceCard }}
+                  title={q.text}>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 12h14" /></svg>
+                  {q.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
