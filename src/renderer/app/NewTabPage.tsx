@@ -186,7 +186,17 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
             <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('收藏的消息', 'Favorites')}</span>
-                <span className="text-[10.5px] font-mono" style={{ color: c.textMuted }}>{favs.length}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => {
+                    const md = favs.map(f => `- [${f.role === 'user' ? '问' : '答'}] ${f.excerpt.replace(/\n/g, ' ')}`).join('\n')
+                    const blob = new Blob([`# 收藏的消息\n\n${md}\n`], { type: 'text/markdown' })
+                    const a = document.createElement('a')
+                    a.href = URL.createObjectURL(blob)
+                    a.download = `jutian-favorites-${new Date().toISOString().slice(0, 10)}.md`
+                    a.click(); URL.revokeObjectURL(a.href)
+                  }} className="text-[10.5px]" style={{ color: c.accent }}>{t('导出', 'Export')}</button>
+                  <span className="text-[10.5px] font-mono" style={{ color: c.textMuted }}>{favs.length}</span>
+                </div>
               </div>
               <div className="space-y-1">
                 {favs.slice(0, 5).map(f => (

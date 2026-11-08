@@ -235,6 +235,24 @@ export default function ScheduledTasksPanel({ onClose, embedded: _embedded }: { 
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: c.modalOverlay }} onClick={() => setShowNewForm(false)}>
           <div className="rounded-xl p-5 space-y-3 glass-strong" style={{ width: 460, border: `1px solid ${c.border}` }} onClick={e => e.stopPropagation()}>
             <h3 className="text-[15px] font-semibold" style={{ color: c.textHead }}>新建定时任务</h3>
+            {/* 预设（v14.23.0）：一键填好常见自动化 */}
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { label: '每日晨报', mode: 'agent' as const, type: 'daily' as const, schedule: '0 9 * * *', title: '每日晨报',
+                  content: '生成今日晨报：1) 汇总昨天更新的会话与未完成事项（读取工作目录里最近的笔记/待办）；2) 列出今天日期与天气提醒占位；3) 给出 3 条优先级建议。用简洁清单输出。' },
+                { label: '每周周报', mode: 'agent' as const, type: 'weekly' as const, schedule: '0 10 * * 1', title: '每周周报',
+                  content: '生成本周工作周报：汇总本周会话要点、完成的文件改动、知识库新增；按「本周成果 / 问题 / 下周计划」三段输出。' },
+                { label: '下载整理', mode: 'agent' as const, type: 'daily' as const, schedule: '30 20 * * *', title: '下载目录整理',
+                  content: '整理 ~/Downloads：按文件类型归类（图片/文档/压缩包/安装包），列出移动清单与释放空间，不删除任何文件。' },
+              ]).map(p => (
+                <button key={p.label} type="button"
+                  onClick={() => { setNewTitle(p.title); setNewContent(p.content); setNewMode(p.mode); setNewType(p.type); setNewSchedule(p.schedule) }}
+                  className="px-2 py-1 rounded-lg text-[11px] transition-colors"
+                  style={{ background: c.accentBg, color: c.accent, border: `1px solid ${c.accentBorder || c.border}` }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="任务标题" autoFocus
               className="w-full px-3 py-2 rounded-lg text-[13px] outline-none" style={{ border: `1px solid ${c.border}`, background: c.bgInput, color: c.text }} />
             <textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="任务内容（AI 指令，例如：总结 ~/Downloads 里今天新增的文件并列出清单）" rows={3}

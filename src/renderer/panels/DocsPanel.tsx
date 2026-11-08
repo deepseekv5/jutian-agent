@@ -125,13 +125,18 @@ export default function DocsPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
   const { t, lang } = useLanguage()
   const [cur, setCur] = useState(DOCS[0].id)
+  const [q, setQ] = useState('')
   const doc = DOCS.find(d => d.id === cur) || DOCS[0]
+  const filtered = DOCS.filter(d => !q.trim() || d.title.includes(q.trim()) || d.body.includes(q.trim()))
   return (
     <PageShell onClose={onClose} title={t('使用文档', 'Documentation')} description={t('内置指南 · 无需联网', 'Built-in guides · offline')} icon="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
       <div className="flex gap-4 h-full min-h-0">
         {/* 目录 */}
         <div className="w-52 shrink-0 space-y-1 overflow-y-auto scrollbar-thin">
-          {DOCS.map(d => (
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('搜索文档…', 'Search docs…')}
+            className="w-full px-2.5 py-1.5 rounded-lg text-[11.5px] outline-none mb-1"
+            style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
+          {filtered.map(d => (
             <button key={d.id} onClick={() => setCur(d.id)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors"
               style={{ background: cur === d.id ? c.accentBg : 'transparent', color: cur === d.id ? c.accent : c.textSecondary }}>
