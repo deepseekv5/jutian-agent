@@ -85,6 +85,7 @@ const DEFAULT_SETTINGS: Settings = {
   restoreLastSession: false,
   autoBackup: 'off',
   notifyDone: false,
+  notifyQuiet: true,
   autoCompactPct: 70,
   harnessUrl: 'http://127.0.0.1:3080',
   ttsSpeed: '1.0',
@@ -149,6 +150,7 @@ export async function getSettings(): Promise<Settings> {
       chatFontSize: (result.chatFontSize as Settings['chatFontSize']) || localSettings.chatFontSize || 'standard',
       autoTitle: result.autoTitle !== undefined ? result.autoTitle === 'true' : localSettings.autoTitle !== false,
       notifyDone: result.notifyDone !== undefined ? result.notifyDone === 'true' : !!localSettings.notifyDone,
+      notifyQuiet: result.notifyQuiet !== undefined ? result.notifyQuiet === 'true' : localSettings.notifyQuiet !== false,
       autoCompactPct: result.autoCompactPct ? parseInt(result.autoCompactPct, 10) || 70 : (localSettings.autoCompactPct ?? 70),
       ttsSpeed: result.ttsSpeed || localSettings.ttsSpeed || '1.0',
       autoSpeak: result.autoSpeak !== undefined ? result.autoSpeak === 'true' : !!localSettings.autoSpeak,
@@ -205,6 +207,7 @@ export async function saveSettings(s: Settings): Promise<void> {
   await put('chatFontSize', s.chatFontSize || 'standard')
   await put('autoTitle', String(s.autoTitle !== false))
   await put('notifyDone', String(!!s.notifyDone))
+  await put('notifyQuiet', String(s.notifyQuiet !== false))
   await put('autoCompactPct', String(s.autoCompactPct ?? 70))
   await put('ttsSpeed', s.ttsSpeed || '1.0')
   await put('autoSpeak', String(!!s.autoSpeak))

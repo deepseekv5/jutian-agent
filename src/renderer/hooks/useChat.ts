@@ -1054,7 +1054,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         })
         // 回复完成系统通知（设置开启且窗口在后台时）
         try {
-          if ((settings as any)?.notifyDone && document.hidden && typeof Notification !== 'undefined') {
+          const __hour = new Date().getHours()
+          const __quiet = (settings as any)?.notifyQuiet !== false && (__hour >= 22 || __hour < 8)
+          if ((settings as any)?.notifyDone && !__quiet && document.hidden && typeof Notification !== 'undefined') {
             if (Notification.permission === 'granted') {
               new Notification('巨天agent', { body: '回复已完成，回来看看吧' })
             } else if (Notification.permission !== 'denied') {

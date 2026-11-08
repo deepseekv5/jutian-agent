@@ -1573,7 +1573,14 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('窗口在后台时弹系统通知', 'System notification when window is hidden')}</div>
                   </div>
                   <Toggle c={c} on={!!form.notifyDone} onClick={() => { if (!form.notifyDone && typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission().catch(() => {}); applyPrefNow({ notifyDone: !form.notifyDone }) }} />
-                </div>
+
+                <div className="p-3 rounded-lg mb-2 flex items-center justify-between" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('夜间勿扰', 'Quiet hours')}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('22:00–8:00 不弹系统通知（消息仍正常接收）', 'No system notifications 22:00–8:00 (messages still arrive)')}</div>
+                  </div>
+                  <Toggle c={c} on={form.notifyQuiet !== false} onClick={() => applyPrefNow({ notifyQuiet: form.notifyQuiet === false })} />
+                </div>                </div>
                 {/* 朗读音色与语速 */}
                 <div className="p-3 rounded-lg mb-2" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
                   <div className="text-[13px] font-medium mb-2" style={{ color: c.textHead }}>{t('朗读音色', 'Read-aloud Voice')}</div>

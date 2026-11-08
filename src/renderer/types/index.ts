@@ -64,6 +64,10 @@ export interface Settings {
   allowedFolders: string[]
   shellAccess: boolean
   sensitiveBlock: boolean
+  /** 回复完成系统通知（v14.8） */
+  notifyDone?: boolean
+  /** 夜间勿扰（v14.24.0）：22:00–8:00 不弹系统通知（默认开） */
+  notifyQuiet?: boolean
   /** 巨天安全（v14.12.0）：危险命令拦截（默认开） */
   cmdGuard?: boolean
   /** 巨天安全：提示词注入扫描（默认开） */
@@ -106,7 +110,6 @@ export interface Settings {
   /** 自动备份（v14.8）：off / weekly / daily，导出到 ~/.lyclaw/backups 保留最近 4 份 */
   autoBackup?: 'off' | 'weekly' | 'daily'
   /** 回复完成后系统通知（窗口在后台时，默认 false） */
-  notifyDone?: boolean
   /** 上下文自动压缩阈值百分比（默认 70） */
   autoCompactPct?: number
   /** 朗读语速（Edge-TTS rate，默认 1.0） */

@@ -8,6 +8,7 @@ import type { PageType } from './TabBar'
 import { APP_NAME, APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 import { useMetaMap, saveMeta } from '../store/sessionMeta'
+import { normalizeTag } from '../../shared/sessionMeta'
 import { filterByTags, tagCloud } from '../../shared/sessionMeta'
 import { translate } from '../../shared/i18n'
 import { tokenize, highlight } from '../../shared/searchIndex'
@@ -555,6 +556,19 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               className="text-[11px] px-1.5 py-0.5 rounded" style={{ color: c.textTertiary }}>清空</button>
             <span className="flex-1" />
             <span className="text-[11px] font-mono" style={{ color: c.textMuted }}>{selectedIds.size}</span>
+            <button onClick={() => {
+              if (selectedIds.size === 0) return
+              const tag = prompt('给选中会话打标签（如：工作 / 重要）')
+              if (!tag || !tag.trim()) return
+              for (const id of selectedIds) { try { const cur = metaMap[id] || {}; saveMeta(id, { ...cur, tags: [...new Set([...(cur.tags || []), normalizeTag(tag.trim())])] }) } catch {} }
+            }} disabled={selectedIds.size === 0}
+              className="text-[11px] px-2 py-1 rounded-lg disabled:opacity-40" style={{ color: c.textSecondary }}>打标签</button>
+            <button onClick={async () => {
+              if (selectedIds.size === 0) return
+              for (const id of selectedIds) { try { const cur = metaMap[id] || {}; saveMeta(id, { ...cur, archived: true }) } catch {} }
+              setManageMode(false); setSelectedIds(new Set())
+            }} disabled={selectedIds.size === 0}
+              className="text-[11px] px-2 py-1 rounded-lg disabled:opacity-40" style={{ color: c.textSecondary }}>归档</button>
             <button onClick={async () => {
               if (selectedIds.size === 0) return
               if (!confirm(`确定删除选中的 ${selectedIds.size} 个会话？不可恢复。`)) return
