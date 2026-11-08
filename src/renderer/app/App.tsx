@@ -444,6 +444,11 @@ function MainApp() {
     return () => window.removeEventListener('jutian-open-favorite', h)
   }, [openTab])
   useEffect(() => {
+    const h = () => openTab('tasks')
+    window.addEventListener('jutian-open-tab-tasks', h)
+    return () => window.removeEventListener('jutian-open-tab-tasks', h)
+  }, [openTab])
+  useEffect(() => {
     if (!legalOk) return
     const t = setTimeout(() => setStarGate(shouldShowStarGate()), 2500)
     return () => clearTimeout(t)

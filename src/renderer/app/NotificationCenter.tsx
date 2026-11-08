@@ -134,8 +134,11 @@ export default function NotificationCenter() {
                   }
                   return shown.map(n => {
                   const meta = TYPE_META[n.type] || TYPE_META.system
+                  const isTask = (n.title || '').includes('定时任务')
                   return (
-                    <div key={n.id} className="flex gap-2.5 px-3.5 py-2.5 border-b" style={{ borderColor: c.borderLight, background: n.read ? 'transparent' : 'rgba(16,163,127,.05)' }}>
+                    <div key={n.id} className={`flex gap-2.5 px-3.5 py-2.5 border-b ${isTask ? 'cursor-pointer' : ''}`}
+                      style={{ borderColor: c.borderLight, background: n.read ? 'transparent' : 'rgba(16,163,127,.05)' }}
+                      onClick={() => { if (isTask) { setOpen(false); window.dispatchEvent(new CustomEvent('jutian-open-tab-tasks')) } }}>
                       <span className="w-6 h-6 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: 'rgba(16,163,127,.12)' }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round"><path d={meta.icon} /></svg>
                       </span>
