@@ -435,6 +435,66 @@ function setupIPC() {
     } catch { /* ignore */ }
   })
 
+  // ─── 全局速记（v14.26.0）：Cmd+Shift+Space 唤起迷你输入窗，一条进「速记」会话 ───
+  let quickNoteWin = null
+  const showQuickNote = () => {
+    try {
+      if (quickNoteWin && !quickNoteWin.isDestroyed()) { quickNoteWin.show(); quickNoteWin.focus(); return }
+      const { width: sw } = screen.getPrimaryDisplay().workArea
+      quickNoteWin = new BrowserWindow({
+        width: 460, height: 150, frame: false, resizable: false, alwaysOnTop: true,
+        skipTaskbar: true, show: false, fullscreenable: false,
+        x: Math.max(0, Math.round(sw / 2 - 230)), y: 120,
+        webPreferences: { contextIsolation: true, nodeIntegration: false, partition: 'quicknote' },
+        backgroundColor: '#18181b',
+      })
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        *{box-sizing:border-box;margin:0}body{font-family:-apple-system,'PingFang SC',sans-serif;background:#18181b;height:100vh;overflow:hidden;display:flex;align-items:center;gap:8px;padding:10px 12px}
+        input{flex:1;height:42px;background:#232328;border:1px solid #3f3f46;border-radius:12px;color:#fafafa;font-size:14px;padding:0 14px;outline:none}
+        input:focus{border-color:#10a37f}
+        button{height:42px;padding:0 16px;border:0;border-radius:12px;background:#10a37f;color:#fff;font-size:13px;cursor:pointer}
+        button:disabled{opacity:.5}
+        .tip{position:absolute;bottom:6px;left:14px;font-size:10px;color:#52525b}
+      </style></head><body>
+        <input id="q" placeholder="速记一条…（Enter 保存，Esc 关闭）" autofocus>
+        <button id="go">存入</button>
+        <div class="tip">巨天速记 · Enter 保存 · Esc 关闭</div>
+        <script>
+          const q = document.getElementById('q'), go = document.getElementById('go')
+          const save = async () => {
+            const text = q.value.trim()
+            if (!text) return
+            go.disabled = true; go.textContent = '保存中…'
+            try {
+              const base = 'http://127.0.0.1:3211'
+              const headers = { 'Content-Type': 'application/json' }
+              // 找/建「速记」会话（带 App 令牌的请求走不到这里——速记来自本机主进程，直接用会话 API）
+              const sessions = await fetch(base + '/api/sessions').then(r => r.json())
+              let sid = (Array.isArray(sessions) ? sessions.find(s => s.title === '速记') : null)?.id
+              if (!sid) { const c = await fetch(base + '/api/sessions', { method: 'POST', headers, body: JSON.stringify({ title: '速记' }) }).then(r => r.json()); sid = c.id }
+              await fetch(base + '/api/sessions/' + encodeURIComponent(sid) + '/messages', { method: 'POST', headers, body: JSON.stringify({ id: 'qn-' + Date.now(), role: 'user', content: text, created_at: new Date().toISOString() }) })
+              window.close()
+            } catch (e) { go.textContent = '失败'; setTimeout(() => { go.textContent = '存入'; go.disabled = false }, 1500) }
+          }
+          go.onclick = save
+          q.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') window.close() })
+          document.addEventListener('keydown', e => { if (e.key === 'Escape') window.close() })
+        </script></body></html>`
+      // 剥 Origin（data: 页面 Origin=null 会被同宿主门卫 403）
+      quickNoteWin.webContents.session.webRequest.onBeforeSendHeaders({ urls: ['http://127.0.0.1:3211/*', 'http://localhost:3211/*'] }, (details, callback) => {
+        const headers = { ...details.requestHeaders }
+        delete headers.Origin
+        delete headers.origin
+        callback({ requestHeaders: headers })
+      })
+      quickNoteWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+      quickNoteWin.once('ready-to-show', () => quickNoteWin.show())
+      quickNoteWin.on('closed', () => { quickNoteWin = null })
+      quickNoteWin.on('blur', () => { try { quickNoteWin?.close() } catch {} })
+    } catch { /* ignore */ }
+  }
+  try { globalShortcut.register('CommandOrControl+Shift+Space', showQuickNote) } catch { /* 注册失败静默 */ }
+
   // ─── 窗口置顶开关（设置页）───
   ipcMain.handle('set-always-on-top', (_event, enabled) => {
     try {
