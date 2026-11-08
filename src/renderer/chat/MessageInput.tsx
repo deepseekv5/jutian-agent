@@ -9,6 +9,7 @@ import { refreshSkillManifest } from '../engine/skillManifest'
 import { estimateTokens, guessModelContext } from '../utils/tokens'
 import { ASSISTANT_NAME } from '../brand'
 import { MODE_ACCENT, GONGWEN_PROMPT } from '../../shared/chatModes'
+import { PROMPT_TEMPLATES } from '../../shared/promptTemplates'
 import { hhmmss } from '../utils/datetime'
 import { pickDroppedFiles, dragHint } from '../utils/dragDrop'
 import { selfCheck, shouldBlock } from '../engine/selfCheck'
@@ -1643,6 +1644,21 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             </div>
           )}
 
+          {modes.gongwen && (
+            <div className="flex flex-wrap gap-1.5 px-1 pt-2">
+              {PROMPT_TEMPLATES.filter(tp => tp.id.startsWith('gw-')).map(tp => (
+                <button key={tp.id} onClick={() => {
+                  setValue(v => `${tp.body}\n\n【写作任务】${v.trim() || '……'}`)
+                  setTimeout(() => textareaRef.current?.focus(), 30)
+                }}
+                  className="h-7 px-2.5 rounded-full text-[11.5px] flex items-center gap-1 transition-colors"
+                  style={{ border: '1px solid #c7000b44', color: '#c7000b', background: '#c7000b0d' }}
+                  title={tp.description}>
+                  {tp.name.replace('公文·', '')}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea ref={textareaRef} value={value}
             onChange={e => {
               const next = e.target.value
