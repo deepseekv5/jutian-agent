@@ -7317,6 +7317,7 @@ function finishTask(taskId, type, result) {
   // 运行历史（v14.2）：最近 20 次，面板可查——只有 lastResult 时无法回答「最近几次成没成」
   item.history = [{ ts: Date.now(), status: "done", summary: String(result || "").slice(0, 120) }, ...(item.history || [])].slice(0, 20);
   postWebhook("task_done", { taskId, title: item.title || item.content, result: item.lastResult });
+  pushServerNotice({ type: "system", title: `定时任务完成：${item.title || item.content}`.slice(0, 80), body: String(item.lastResult || "").slice(0, 200) });
   if (type === "once") item.enabled = false;
   else {
     // v14：优先按 cron 算下一次（支持任意表达式），无 cron 时退回周期顺延
