@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { buildMultiExport, collectStats, exportFileName, type ExportFilter, type ExportSession } from '../../shared/exportSessions'
-import { markdownToHtml, wrapHtmlDocument } from '../../shared/exportHtml'
+import { markdownToHtml, wrapHtmlDocument, wrapGongwenDocument } from '../../shared/exportHtml'
 import type { Session } from '../types'
 
 interface Props {
@@ -62,16 +62,19 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
 
   /** 导出 HTML / PDF（v14）：HTML 可直接发给别人看；PDF 走 Electron printToPDF，
    *  非桌面端退回「打开打印预览」（浏览器里另存为 PDF 效果一致）。 */
-  const runRich = async (kind: 'html' | 'pdf') => {
+  const runRich = async (kind: 'html' | 'pdf' | 'gongwen') => {
     if (!picked.size) { setMsg('先选至少一个会话'); return }
     setBusy(true); setMsg('')
     try {
       const list = await collect()
       const md = buildMultiExport(list, filter)
       const title = list.length === 1 ? (list[0].title || '会话') : `会话合集（${list.length} 个）`
-      const html = wrapHtmlDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
-      if (kind === 'html') {
-        const name = exportFileName(title, 'html')
+      const isGw = kind === 'gongwen'
+      const html = isGw
+        ? wrapGongwenDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
+        : wrapHtmlDocument(title, markdownToHtml(md), `巨天agent · ${list.length} 个会话 · ${new Date().toLocaleString('zh-CN')}`)
+      if (kind === 'html' || kind === 'gongwen') {
+        const name = exportFileName(title + (isGw ? '-公文红头' : ''), 'html')
         const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
@@ -221,6 +224,12 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
       <div className="px-5 py-3 border-t flex items-center gap-2" style={{ borderColor: c.borderLight }}>
         <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown 进知识库 · HTML/PDF 发给同事</span>
         <span className="flex-1" />
+        <button onClick={() => runRich('gongwen')} disabled={busy || !picked.size}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+          style={{ background: '#c7000b14', color: '#c7000b', border: '1px solid #c7000b44' }}
+          title="GB/T 9704 红头文电版式">
+          公文红头
+        </button>
         <button onClick={() => runRich('html')} disabled={busy || !picked.size}
           className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
           style={{ background: c.bgInput, color: c.textSecondary }}>
