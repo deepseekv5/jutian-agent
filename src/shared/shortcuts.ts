@@ -188,12 +188,12 @@ export function setBindingOverride(id: string, combo: string | null): void {
   const o = getBindingOverrides()
   if (combo) o[id] = combo
   else delete o[id]
-  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)) } catch {}
-  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch {}
+  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)) } catch { /* 隐私模式等场景忽略 */ }
+  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch { /* 非 DOM 环境忽略 */ }
 }
 export function resetBindingOverrides(): void {
-  try { localStorage.removeItem(OVERRIDES_KEY) } catch {}
-  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch {}
+  try { localStorage.removeItem(OVERRIDES_KEY) } catch { /* 同上 */ }
+  try { window.dispatchEvent(new CustomEvent('hotkeys-changed')) } catch { /* 非 DOM 环境忽略 */ }
 }
 /** 生效键位：默认表 + 用户覆盖（覆盖为空串 = 停用该快捷键） */
 export function effectiveBindings(): KeyBinding[] {

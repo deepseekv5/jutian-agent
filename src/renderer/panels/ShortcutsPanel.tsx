@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useTheme } from '../hooks/useTheme'
-import { DEFAULT_BINDINGS, formatCombo, findConflicts, detectMac, effectiveBindings, setBindingOverride, resetBindingOverrides, type KeyBinding } from '../../shared/shortcuts'
+import { formatCombo, findConflicts, detectMac, effectiveBindings, setBindingOverride, resetBindingOverrides, type KeyBinding } from '../../shared/shortcuts'
 
 /** 可重映射的动作（其余为固定实现，展示但不开放编辑） */
 const REMAPPABLE = new Set([
@@ -38,7 +38,9 @@ export default function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   const [captureId, setCaptureId] = useState<string | null>(null)
   const [tip, setTip] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const bindings = useMemo(() => effectiveBindings(), [version])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const conflicts = useMemo(() => findConflicts(bindings), [version, bindings])
 
   const groups = useMemo(() => {
