@@ -51,3 +51,8 @@ The row of toggles under the composer applies to the **next message only**, then
 
 - Keys live only in local `~/.lyclaw/data.db`; every UI echo is masked (`sk-6****9Ylc`)
 - Chat content goes only to the model service **you configured**; the app itself has no telemetry and no built-in provider
+
+## Scheduled tasks (schedule_task)
+
+Ask in natural language: "remind me tomorrow at 9am", "tidy Downloads every evening". The AI creates a scheduled task via schedule_task (once / daily / weekly; agent mode runs with tools). Results land in the notification center; tasks live in the sidebar Tasks page.
+
