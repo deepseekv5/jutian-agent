@@ -61,9 +61,12 @@ const GroupChatTab = lazy(() => import('../agents/GroupChatTab'));
 const HarnessPanel = lazy(() => import('./HarnessPanel'));
 const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
+const DocsPanel = lazy(() => import('../panels/DocsPanel'));
 const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import StarGate, { shouldShowStarGate } from './StarGate';
+const OnboardingTour = lazy(() => import('./OnboardingTour'));
+import { shouldShowTour } from './OnboardingTour';
 import { isMac as platformIsMac } from '../utils/platform';
 import AnnouncementBanner from './AnnouncementBanner';
 import FestivalEgg from './FestivalEgg';
@@ -402,6 +405,19 @@ function MainApp() {
   // 求星门（v14.11.3）：法务同意后 + 未点过「不再提示」时显示；
   // 延迟 2.5s 让主界面先渲染完（LegalGate 关闭瞬间连弹两个全屏太压迫）
   const [starGate, setStarGate] = useState(false)
+  // 新手引导（v14.15.0）：首次启动自动出现（在求星之后），About 页可重看
+  const [tour, setTour] = useState(false)
+  useEffect(() => {
+    if (legalOk && !starGate) {
+      const t = setTimeout(() => { if (shouldShowTour()) setTour(true) }, 2600)
+      return () => clearTimeout(t)
+    }
+  }, [legalOk, starGate])
+  useEffect(() => {
+    const h = () => setTour(true)
+    window.addEventListener('jutian-tour', h)
+    return () => window.removeEventListener('jutian-tour', h)
+  }, [])
   useEffect(() => {
     if (!legalOk) return
     const t = setTimeout(() => setStarGate(shouldShowStarGate()), 2500)
@@ -715,6 +731,8 @@ function MainApp() {
         return <HarnessPanel onClose={() => closeTab(tab.id)} />;
       case 'freemodels':
         return <FreeModelsPanel settings={settings} onSettingsChange={s => saveSettings(s)} />;
+      case 'docs':
+        return <DocsPanel onClose={() => closeTab(tab.id)} />;
       case 'persona':
         return <PersonaChatTab settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'employees':
@@ -897,6 +915,7 @@ function MainApp() {
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
 
       {legalOk && starGate && <StarGate onClose={() => setStarGate(false)} />}
+      {legalOk && tour && <Suspense fallback={null}><OnboardingTour onDone={() => setTour(false)} /></Suspense>}
 
       {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}
 

@@ -945,3 +945,16 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .session-row .row-actions { opacity: 0; pointer-events: none; transition: opacity .12s ease; }
 .session-row:hover .row-actions { opacity: 1; pointer-events: auto; }
 .session-row:hover .row-time { display: none !important; }
+
+/* ── 应用内文档（DocsPanel）markdown ── */
+.prose-chat h2 { font-size: 17px; font-weight: 650; margin: 18px 0 8px; color: var(--text-head); }
+.prose-chat h3 { font-size: 14.5px; font-weight: 620; margin: 14px 0 6px; color: var(--text-head); }
+.prose-chat p { margin: 7px 0; line-height: 1.75; font-size: 13.5px; }
+.prose-chat ul, .prose-chat ol { margin: 7px 0 7px 18px; }
+.prose-chat li { margin: 3px 0; line-height: 1.7; font-size: 13.5px; }
+.prose-chat code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--accent-soft); }
+.prose-chat pre { margin: 9px 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-input, rgba(127,127,127,.08)); overflow-x: auto; }
+.prose-chat pre code { background: transparent; padding: 0; }
+.prose-chat table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 5px 9px; text-align: left; }
+.prose-chat blockquote { margin: 9px 0; padding: 6px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; }

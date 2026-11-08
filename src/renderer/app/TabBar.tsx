@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | 'harness' | `ext:${string}`
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | 'harness' | `ext:${string}` | 'docs'
 
 export interface WorkTab {
   id: string
@@ -52,6 +52,7 @@ export const PAGE_META: Record<string, { label: string; labelEn?: string; icon: 
   compare: { label: '模型对比', labelEn: 'Compare', icon: 'M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h2m8-14h2a2 2 0 012 2v10a2 2 0 01-2 2h-2m-6-6h6' },
   newtab: { label: '新建标签页', labelEn: 'New Tab', icon: 'M12 4v16m8-8H4' },
   freemodels: { label: '免费模型', labelEn: 'Free AI', icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z' },
+  docs: { label: '使用文档', labelEn: 'Docs', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   extensions: { label: '扩展', labelEn: 'Extensions', icon: 'M4 5a2 2 0 012-2h4l2 2h6a2 2 0 012 2v3H4V5zm0 5h16v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-9z' },
   harness: { label: 'Harness', labelEn: 'Harness', icon: 'M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z' },
 }
@@ -69,7 +70,7 @@ export function registerExtMeta(type: string, label: string, icon?: string) {
 export function unregisterExtMeta(type: string) { delete PAGE_META[type] }
 export function getAllExtMetaKeys(): string[] { return Object.keys(PAGE_META).filter(k => k.startsWith('ext:')) }
 
-export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'harness', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research']
+export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'harness', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research', 'docs']
 
 interface Props {
   tabs: WorkTab[]

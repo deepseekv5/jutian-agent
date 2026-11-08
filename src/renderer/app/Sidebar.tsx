@@ -574,6 +574,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             { tab: 'code', title: t('代码模式','Code mode'), icon: 'M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z', fill: false },
             { tab: 'kb', title: t('知识库：文档索引 / 知识图谱','Knowledge base'), icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', fill: false },
             { tab: 'freemodels', title: t('免费模型：免 key 目录，一键切换','Free models: keyless catalog'), icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', fill: false },
+            { tab: 'docs', title: t('使用文档：内置指南与常见问题','Documentation: built-in guides & FAQ'), icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', fill: false },
           ] as { tab: string; title: string; icon: string; fill: boolean }[]).map(item => (
             <button key={item.tab} onClick={() => onOpenTab(item.tab as any)}
               className="flex-1 h-8 rounded-lg flex items-center justify-center transition-colors"

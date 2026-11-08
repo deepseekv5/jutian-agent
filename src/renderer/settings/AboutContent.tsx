@@ -249,6 +249,18 @@ export default function AboutContent() {
         </p>
       </div>
 
+      {/* 重看新手引导（v14.15.0） */}
+      <div className="py-2">
+        <button type="button" onClick={() => { try { localStorage.removeItem('lyclaw_tour_done') } catch {} ; window.dispatchEvent(new CustomEvent('jutian-tour')) }}
+          className="w-full px-4 py-3 rounded-xl glass flex items-center gap-3 text-left">
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#c7000b" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 010-5.656l5.657-5.657a4 4 0 010 5.657l-2.828 2.828M7.242 7.242L4.414 10.07a4 4 0 000 5.657l2.828 2.828a4 4 0 005.657 0" /></svg>
+          <div>
+            <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('重看新手引导', 'Replay onboarding tour')}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: c.textMuted }}>{t('分步过一遍关键入口（模型 / 输入框 / 搜索 / 工作台）', 'Step through the key spots again')}</div>
+          </div>
+        </button>
+      </div>
+
       {/* 终端版 TUI（v14.13.0）：Claude Code 式终端对话 */}
       <div className="py-2">
         <div className="px-4 py-3 rounded-xl glass">

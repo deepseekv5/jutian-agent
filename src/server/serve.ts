@@ -1926,12 +1926,24 @@ async function delete_memory(args) {
   } catch (e) { console.error("[ly-next] JSON 合并迁移失败:", e.message); }
 })();
 
+
+// ─── settings 微缓存（v14.15.1）：事件循环内去重，写操作即失效 ───
+var __settingsCache: { rows: { key: string; value: string }[] | null; at: number } = { rows: null, at: 0 };
+function getAllSettingsCached() {
+  const now = Date.now();
+  if (__settingsCache.rows && now - __settingsCache.at < 250) return __settingsCache.rows;
+  const rows = sharedDb ? db.getAllSettings() : [];
+  __settingsCache = { rows, at: now };
+  return rows;
+}
+function invalidateSettingsCache() { __settingsCache = { rows: null, at: 0 }; }
+
 // --- 新增工具函数 ---
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 // ─── 安全策略：从设置实时读取，工具入口强制生效（主对话 + 集群统一）───
 function securityConfig() {
-  const rows = sharedDb ? db.getAllSettings() : [];
+  const rows = getAllSettingsCached();
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   let dirs = [];
   try { const d = JSON.parse(s.allowedFolders || "[]"); if (Array.isArray(d)) dirs = d; } catch {}
@@ -2468,7 +2480,7 @@ try {
     const __sec0 = securityConfig();
     if (__sec0.keyShield) {
       let __kv: Record<string, string> = {};
-      try { __kv = Object.fromEntries(db.getAllSettings().map((x) => [x.key, x.value])) } catch {}
+      try { __kv = Object.fromEntries(getAllSettingsCached().map((x) => [x.key, x.value])) } catch {}
       const ph = SHIELD.applyKeyPlaceholders(callArgs.command, { apiKey: __kv.apiKey || "", apiBaseUrl: __kv.apiBaseUrl || "" });
       if (ph.replaced) {
         callArgs = { ...callArgs, command: ph.text };
@@ -4815,6 +4827,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       if (hasDb) {
         try {
           db.setSetting(key, value == null ? "" : String(value));
+          invalidateSettingsCache();
           if (key === "keepAwake") syncKeepAwake();
           if (isLocalApiKey) { try { syncLocalApi(); } catch (e) { console.error("同步本地 API 失败:", e.message); } }
           return json(res, { ok: true });
@@ -4823,6 +4836,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const settings = loadJson("settings.json");
       settings[key] = value;
       saveJson("settings.json", settings);
+      invalidateSettingsCache();
       if (key === "keepAwake") syncKeepAwake();
       if (isLocalApiKey) { try { syncLocalApi(); } catch (e) { console.error("同步本地 API 失败:", e.message); } }
       return json(res, { ok: true });
