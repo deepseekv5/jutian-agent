@@ -86,7 +86,7 @@ interface Props {
   onPick: (type: PageType) => void
 }
 
-export default function NewTabPage({ onPick }: Props) {
+export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: PageType) => void; sessions?: { id: string; updated_at?: string; created_at?: string }[] }) {
   const [exts, setExts] = useState(getRegisteredExts)
   useEffect(() => subscribeExts(() => setExts(getRegisteredExts())), [])
   const { c } = useTheme()
@@ -105,6 +105,9 @@ export default function NewTabPage({ onPick }: Props) {
     setTap({ count: r.count, lastAt: r.lastAt })
     if (r.fired) { setEggOpen(true); setTap({ count: 0, lastAt: 0 }) }
   }
+  // 每日概览（v14.17.0）：今日活跃会话 / 今日轮次 / 收藏
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0)
+  const todaySessions = sessions.filter(x => String(x.updated_at || x.created_at || '') >= dayStart.toISOString()).length
   // 消息收藏（v14.16.0）：最近 5 条直达原消息
   const [favs, setFavs] = useState<Favorite[]>(loadFavorites)
   useEffect(() => {
@@ -166,6 +169,19 @@ export default function NewTabPage({ onPick }: Props) {
         </div>
 
         <div className="mb-5 flex items-center gap-2">
+          <div className="mb-4 rounded-2xl border p-3.5 flex items-center gap-6" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
+            {[
+              { n: todaySessions, label: '今日会话', labelEn: 'Chats today' },
+              { n: favs.length, label: '收藏', labelEn: 'Favorites' },
+            ].map((it, i) => (
+              <div key={i} className="flex items-baseline gap-1.5">
+                <span className="text-[20px] font-bold tabular-nums" style={{ color: c.textHead }}>{it.n}</span>
+                <span className="text-[11px]" style={{ color: c.textTertiary }}>{lang === 'en' ? it.labelEn : it.label}</span>
+              </div>
+            ))}
+            <span className="flex-1" />
+            <span className="text-[11px]" style={{ color: c.textMuted }}>{lang === 'en' ? 'Have a productive day.' : '今天也请多指教。'}</span>
+          </div>
           {favs.length > 0 && (
             <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
               <div className="flex items-center justify-between mb-2">

@@ -418,6 +418,19 @@ function MainApp() {
     window.addEventListener('jutian-tour', h)
     return () => window.removeEventListener('jutian-tour', h)
   }, [])
+  // 焦点模式（v14.17.0）：隐藏标签栏/状态栏，只留对话——命令面板或 Ctrl+Shift+F 触发，Esc 退出
+  const [immersive, setImmersive] = useState(false)
+  useEffect(() => {
+    const h = () => setImmersive(v => !v)
+    window.addEventListener('jutian-immersive', h)
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && immersive) setImmersive(false)
+      if (e.ctrlKey && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); setImmersive(v => !v) }
+    }
+    window.addEventListener('keydown', k)
+    return () => { window.removeEventListener('jutian-immersive', h); window.removeEventListener('keydown', k) }
+  }, [immersive])
+  useEffect(() => { if (immersive) setSidebarCollapsed(true) }, [immersive])
   // 收藏直达（v14.16.0）：打开会话标签 → 跳转高亮原消息
   useEffect(() => {
     const h = (e: Event) => {
@@ -753,7 +766,7 @@ function MainApp() {
       case 'group':
         return tab.refId ? <GroupChatTab key={tab.id} groupId={tab.refId} settings={settings} onClose={() => closeTab(tab.id)} /> : null;
       case 'newtab':
-        return <NewTabPage onPick={handleNewTabPick} />;
+        return <NewTabPage onPick={handleNewTabPick} sessions={sessions} />;
       case 'files':
         return <FilesTab settings={settings} />;
       case 'terminal':
@@ -865,7 +878,7 @@ function MainApp() {
 
       {/* Main content: TabBar + tabs */}
       <div className="jt-in-fade jt-d1 flex-1 flex flex-col min-w-0 h-screen overflow-hidden" style={mainAreaStyle}>
-        <TabBar
+        {!immersive && <TabBar
           tabs={tabs}
           activeTabId={activeTab?.id || ''}
           onSelect={setActiveTabId}
@@ -877,7 +890,7 @@ function MainApp() {
           workingSessionIds={streamingSessionIds}
           isMobile={vp.isMobile}
           onToggleSidebar={() => setMobileNavOpen(v => !v)}
-        />
+        />}
         {/* 应用公告横幅（v11.7）：进应用自动读取 GitHub docs/notice.md；关同条不再打扰 */}
         <AnnouncementBanner />
         {isAndroid && (
@@ -920,7 +933,7 @@ function MainApp() {
         {/* 全局状态栏（桌面）；手机换成底部导航，省高度 */}
         {vp.isMobile
           ? <MobileTabBar activeType={activeTab?.type || null} onPick={(t) => openTab(t)} />
-          : <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />}
+          : (!immersive && <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />)}
       </div>
 
       {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
