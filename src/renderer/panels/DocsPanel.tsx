@@ -148,6 +148,15 @@ export default function DocsPanel({ onClose }: { onClose: () => void }) {
         {/* 正文 */}
         <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin rounded-2xl border p-5"
           style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => { try { localStorage.removeItem('lyclaw_tour_done') } catch {}; window.dispatchEvent(new CustomEvent('jutian-tour')) }}
+              className="text-[11.5px] px-2.5 py-1 rounded-lg" style={{ background: c.accentBg, color: c.accent }}>
+              {t('重看新手引导', 'Replay tour')}
+            </button>
+            <button onClick={() => window.dispatchEvent(new CustomEvent('jutian-tour'))}
+              className="text-[11.5px] px-2.5 py-1 rounded-lg hidden" style={{ color: c.textTertiary }} aria-hidden>
+            </button>
+          </div>
           <div className="prose-chat max-w-3xl">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.body}</ReactMarkdown>
           </div>
