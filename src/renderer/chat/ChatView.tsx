@@ -213,6 +213,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
   // 会话图片画廊（v14.22.0）：聚合全部消息里的图片，覆盖层浏览/放大/下载
   const [gallery, setGallery] = useState<{ open: boolean; cur: number }>({ open: false, cur: 0 })
   const effectiveWindow = msgWindow ?? (messages.length > 200 ? 30 : messages.length)
+
   const galleryImages = useMemo(() => {
     const out: string[] = []
     const re = /!\[[^\]]*\]\((data:image\/[a-z+]+;base64,[^)]+|https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^)\s]*)?)\)/gi
@@ -224,6 +225,17 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
     }
     return out
   }, [messages])
+  useEffect(() => {
+    if (!gallery.open) return
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') setGallery(g => ({ ...g, cur: Math.min(g.cur + 1, galleryImages.length - 1) }))
+      else if (e.key === 'ArrowLeft') setGallery(g => ({ ...g, cur: Math.max(g.cur - 1, 0) }))
+      else if (e.key === 'Escape') setGallery(g => ({ ...g, open: false }))
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [gallery.open, galleryImages.length])
+
   const windowBase = Math.max(0, messages.length - effectiveWindow)
   const visibleMessages = messages.slice(windowBase)
   const loadEarlier = () => setMsgWindow(w => (w ?? effectiveWindow) + 120)
