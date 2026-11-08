@@ -147,8 +147,8 @@ export default function NotificationCenter() {
                           <span className="text-[9.5px] px-1 py-0.5 rounded font-mono" style={{ background: c.bgInput, color: c.textTertiary }}>{meta.label}</span>
                           <span className="text-[9.5px] ml-auto" style={{ color: c.textTertiary }}>{rel(n.ts)}</span>
                         </div>
-                        <div className="text-[12px] font-medium mt-0.5 truncate" style={{ color: c.textHead }}>{n.title}</div>
-                        {n.body && <div className="text-[10.5px] truncate" style={{ color: c.textTertiary }}>{n.body}</div>}
+                        <div className="text-[12px] font-medium mt-0.5" style={{ color: c.textHead }}>{n.title}</div>
+                        {n.body && <TaskNoticeBody body={n.body} />}
                       </div>
                     </div>
                   )
@@ -259,6 +259,18 @@ function PluginsTab({ c }: { c: any }) {
           <button onClick={() => { window.dispatchEvent(new CustomEvent('open-skills-market')) }} className="text-[10.5px] font-medium" style={{ color: c.accent }}>去技能市场 →</button>
         </div>
       </div>
+    </div>
+  )
+}
+function TaskNoticeBody({ body }: { body: string }) {
+  const [full, setFull] = useState(false)
+  const long = body.length > 60
+  return (
+    <div className="text-[10.5px] cursor-pointer" style={{ color: useTheme().c.textTertiary }}
+      onClick={(e) => { if (!long) return; e.stopPropagation(); setFull(v => !v) }}
+      title={long ? '点击展开/收起' : undefined}>
+      {full ? <div className="whitespace-pre-wrap break-all">{body}</div> : <div className="truncate">{body}</div>}
+      {long && <span style={{ color: useTheme().c.accent }}>{full ? ' 收起' : ' 展开全文'}</span>}
     </div>
   )
 }
