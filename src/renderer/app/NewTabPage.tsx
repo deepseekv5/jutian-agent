@@ -204,7 +204,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:opacity-80" style={{ background: c.bgHover }}>
                     <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="#d4a017" stroke="#d4a017" strokeWidth={1.5}><path d="M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z" /></svg>
                     <span className="text-[12px] truncate flex-1" style={{ color: c.textSecondary }}>{f.excerpt}</span>
-                    <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{f.role === 'user' ? '问' : '答'}</span>
+                    <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{sessions.find(x => x.id === f.sessionId)?.title?.slice(0, 10) || (f.role === 'user' ? '问' : '答')}</span>
                   </button>
                 ))}
               </div>
