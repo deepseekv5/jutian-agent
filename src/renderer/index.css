@@ -968,3 +968,12 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 /* 党政风：欢迎语与快捷卡片宋体庄重 */
 [data-theme="party"] .hero-title,
 [data-theme="party"] .welcome-hero-title { font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif; letter-spacing: .04em; }
+
+/* 党政风：侧栏标题红字宋体 + 金色下划线点缀 */
+[data-theme="party"] .sidebar-app-title {
+  color: #c7000b;
+  font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif;
+  font-weight: 700;
+  border-bottom: 2px solid rgba(212, 160, 23, 0.55);
+  padding-bottom: 1px;
+}

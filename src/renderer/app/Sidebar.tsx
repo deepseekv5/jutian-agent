@@ -472,7 +472,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
       <div className="h-14 flex items-center justify-between shrink-0 titlebar-drag" style={{ paddingLeft: isMac ? 78 : 12, paddingRight: 12 }}>
         <div className="flex items-center gap-2.5 min-w-0">
           <BrandMark size={20} color={c.textHead} />
-          <span className="text-[14px] font-semibold tracking-tight truncate" style={{ color: c.textHead }}>{APP_NAME}</span>
+          <span className="sidebar-app-title text-[14px] font-semibold tracking-tight truncate" style={{ color: c.textHead }}>{APP_NAME}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0 titlebar-nodrag">
           {/* 编程 / 办公模式切换（同步到 composer 的 chatMode） */}
