@@ -977,3 +977,10 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
   border-bottom: 2px solid rgba(212, 160, 23, 0.55);
   padding-bottom: 1px;
 }
+
+/* 党政风：公告横幅红头样式 */
+[data-theme="party"] .announcement-banner {
+  background: linear-gradient(180deg, rgba(255, 251, 240, 0.92), rgba(255, 244, 224, 0.92));
+  border-left: 3px solid #c7000b;
+}
+[data-theme="party"] .announcement-banner .text { color: #5a3a12; }

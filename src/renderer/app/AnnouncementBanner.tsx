@@ -79,7 +79,7 @@ export default function AnnouncementBanner() {
   // 折叠态只占一行（约 32px）：公告是"告知"，不该长期占据主操作区。
   // 点击标题行展开全文，再点收起——展开状态不持久化，每次进来都是收起态。
   return (
-    <div className="border-b" style={{ background: s.bg, borderColor: c.borderLight }}>
+    <div className="border-b announcement-banner" style={{ background: s.bg, borderColor: c.borderLight }}>
       <div className="flex items-center gap-2 px-4 h-8 cursor-pointer select-none"
         onClick={() => hasBody && setExpanded(v => !v)}
         role={hasBody ? 'button' : undefined}
