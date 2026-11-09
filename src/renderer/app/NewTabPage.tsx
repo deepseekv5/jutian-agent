@@ -226,6 +226,16 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
               )}
             </div>
           )}
+          <button onClick={() => window.dispatchEvent(new CustomEvent('jutian-gongwen-new'))}
+            className="mb-4 w-full rounded-2xl border p-3.5 flex items-center gap-3 text-left transition-all hover:scale-[1.01]"
+            style={{ borderColor: 'rgba(199,0,11,.35)', background: 'linear-gradient(90deg, rgba(199,0,11,.06), rgba(255,251,240,.9))' }}>
+            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: '#c7000b', color: '#fff', fontFamily: "'Songti SC', serif", fontWeight: 700 }}>文</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{t('写公文', 'Write official documents')}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('通知 · 请示 · 报告 · 批复 · 函 · 纪要 — GB/T 9704 规范', 'Notice · Request · Report · Reply · Letter · Minutes — GB/T 9704')}</div>
+            </div>
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#c7000b" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 12h14" /></svg>
+          </button>
           <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('工作区入口', 'Workspace')}</span>
           <div className="flex-1 h-px" style={{ background: c.borderLight }} />
           <span className="text-[10.5px]" style={{ color: c.textMuted }}>{t('选择后本标签页自动关闭', 'This tab closes after you pick')}</span>

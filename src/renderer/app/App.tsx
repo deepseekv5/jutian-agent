@@ -449,6 +449,11 @@ function MainApp() {
     return () => window.removeEventListener('jutian-open-tab-tasks', h)
   }, [openTab])
   useEffect(() => {
+    const h = () => { handleCreateSessionRef.current?.(); setTimeout(() => { window.dispatchEvent(new CustomEvent('jutian-gongwen-on')) }, 300) }
+    window.addEventListener('jutian-gongwen-new', h)
+    return () => window.removeEventListener('jutian-gongwen-new', h)
+  }, [])
+  useEffect(() => {
     if (!legalOk) return
     const t = setTimeout(() => setStarGate(shouldShowStarGate()), 2500)
     return () => clearTimeout(t)

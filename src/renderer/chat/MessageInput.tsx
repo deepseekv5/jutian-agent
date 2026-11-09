@@ -939,6 +939,13 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
     return () => window.removeEventListener('quote-message', h)
   }, [])
 
+  // ─── 公文模式外部唤起（v14.45.0）：NewTab「写公文」卡片 → 新会话自动开公文 ───
+  useEffect(() => {
+    const h = () => setModes(m => ({ ...m, gongwen: true }))
+    window.addEventListener('jutian-gongwen-on', h)
+    return () => window.removeEventListener('jutian-gongwen-on', h)
+  }, [])
+
   // ─── 快速追问（v14.18.0）：回复后 chips 直接把指令填进输入框 ───
   useEffect(() => {
     const h = (e: Event) => {

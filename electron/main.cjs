@@ -442,7 +442,7 @@ function setupIPC() {
       if (quickNoteWin && !quickNoteWin.isDestroyed()) { quickNoteWin.show(); quickNoteWin.focus(); return }
       const { width: sw } = screen.getPrimaryDisplay().workArea
       quickNoteWin = new BrowserWindow({
-        width: 460, height: 150, frame: false, resizable: false, alwaysOnTop: true,
+        width: 460, height: 200, frame: false, resizable: false, alwaysOnTop: true,
         skipTaskbar: true, show: false, fullscreenable: false,
         x: Math.max(0, Math.round(sw / 2 - 230)), y: 120,
         webPreferences: { contextIsolation: true, nodeIntegration: false, partition: 'quicknote' },
@@ -450,13 +450,13 @@ function setupIPC() {
       })
       const html = `<!doctype html><html><head><meta charset="utf-8"><style>
         *{box-sizing:border-box;margin:0}body{font-family:-apple-system,'PingFang SC',sans-serif;background:#18181b;height:100vh;overflow:hidden;display:flex;align-items:center;gap:8px;padding:10px 12px}
-        input{flex:1;height:42px;background:#232328;border:1px solid #3f3f46;border-radius:12px;color:#fafafa;font-size:14px;padding:0 14px;outline:none}
+        textarea{flex:1;height:88px;resize:none;background:#232328;border:1px solid #3f3f46;border-radius:12px;color:#fafafa;font-size:14px;padding:0 14px;outline:none}
         input:focus{border-color:#10a37f}
         button{height:42px;padding:0 16px;border:0;border-radius:12px;background:#10a37f;color:#fff;font-size:13px;cursor:pointer}
         button:disabled{opacity:.5}
         .tip{position:absolute;bottom:6px;left:14px;font-size:10px;color:#52525b}
       </style></head><body>
-        <input id="q" placeholder="速记一条…（Enter 保存，Esc 关闭）" autofocus>
+        <textarea id="q" rows="3" placeholder="速记一条…（Ctrl+Enter 保存，Esc 关闭）" autofocus></textarea>
         <button id="go">存入</button>
         <div class="tip">巨天速记 · Enter 保存 · Esc 关闭</div>
         <script>
@@ -477,7 +477,7 @@ function setupIPC() {
             } catch (e) { go.textContent = '失败'; setTimeout(() => { go.textContent = '存入'; go.disabled = false }, 1500) }
           }
           go.onclick = save
-          q.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') window.close() })
+          q.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') save(); if (e.key === 'Escape') window.close() })
           document.addEventListener('keydown', e => { if (e.key === 'Escape') window.close() })
         </script></body></html>`
       // 剥 Origin（data: 页面 Origin=null 会被同宿主门卫 403）
