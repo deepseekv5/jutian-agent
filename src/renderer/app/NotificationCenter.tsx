@@ -264,13 +264,14 @@ function PluginsTab({ c }: { c: any }) {
 }
 function TaskNoticeBody({ body }: { body: string }) {
   const [full, setFull] = useState(false)
+  const { c } = useTheme()
   const long = body.length > 60
   return (
-    <div className="text-[10.5px] cursor-pointer" style={{ color: useTheme().c.textTertiary }}
+    <div className="text-[10.5px] cursor-pointer" style={{ color: c.textTertiary }}
       onClick={(e) => { if (!long) return; e.stopPropagation(); setFull(v => !v) }}
       title={long ? '点击展开/收起' : undefined}>
       {full ? <div className="whitespace-pre-wrap break-all">{body}</div> : <div className="truncate">{body}</div>}
-      {long && <span style={{ color: useTheme().c.accent }}>{full ? ' 收起' : ' 展开全文'}</span>}
+      {long && <span style={{ color: c.accent }}>{full ? ' 收起' : ' 展开全文'}</span>}
     </div>
   )
 }
