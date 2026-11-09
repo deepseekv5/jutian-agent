@@ -67,7 +67,7 @@ export default function WelcomeHero({ onPick }: Props) {
     <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto scrollbar-thin px-6 py-10">
       <div className="w-full max-w-2xl flex flex-col items-center m-auto">
         {/* 问候 —— ChatGPT 居中大字 */}
-        <h1 className="text-[28px] font-semibold tracking-tight text-center" style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
+        <h1 className="hero-title text-[28px] font-semibold tracking-tight text-center" style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
           {lang === 'en' ? `${greeting}. What can I do for you?` : `${greeting}，有什么可以帮忙的？`}
         </h1>
 
