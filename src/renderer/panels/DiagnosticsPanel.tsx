@@ -174,7 +174,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   }
 
   const tone = (s: CheckResult['status']) =>
-    s === 'pass' ? '#10a37f' : s === 'warn' ? '#f59e0b' : s === 'fail' ? '#ef4444' : '#8f8f8f'
+    s === 'pass' ? 'var(--brand, #10a37f)' : s === 'warn' ? '#f59e0b' : s === 'fail' ? '#ef4444' : '#8f8f8f'
   const label = (s: CheckResult['status']) =>
     s === 'pass' ? '通过' : s === 'warn' ? '警告' : s === 'fail' ? '失败' : '跳过'
 
@@ -193,7 +193,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
         </button>
         <button onClick={copy}
           className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-white transition-opacity hover:opacity-90"
-          style={{ background: c.accent || '#10a37f' }}>
+          style={{ background: c.accent || 'var(--brand, #10a37f)' }}>
           {copied ? '已复制' : '复制报告'}
         </button>
         <button onClick={onClose} className="px-2.5 py-1 rounded-lg text-[11.5px]" style={{ color: c.textTertiary }}>关闭</button>

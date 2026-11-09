@@ -66,7 +66,7 @@ export default function StarGate({ onClose }: { onClose: () => void }) {
         {/* GitHub Mark + Star */}
         <div className="flex justify-center mb-5">
           <span className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(16,163,127,.12)' }}>
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="#10a37f">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="var(--brand, #10a37f)">
               <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.26.8-.58v-2.04c-3.34.73-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 016 0c2.28-1.55 3.29-1.23 3.29-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.9 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58A12 12 0 0012 .3" />
             </svg>
           </span>
@@ -88,7 +88,7 @@ export default function StarGate({ onClose }: { onClose: () => void }) {
 
         <button onClick={openRepo}
           className="w-full h-11 rounded-full text-[13.5px] font-semibold flex items-center justify-center gap-2 mb-3 transition-transform hover:scale-[1.02]"
-          style={{ background: '#10a37f', color: '#fff' }}>
+          style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
           <svg className="w-4.5 h-4.5" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.26.8-.58v-2.04c-3.34.73-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.11-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 016 0c2.28-1.55 3.29-1.23 3.29-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.9 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58A12 12 0 0012 .3" />
           </svg>

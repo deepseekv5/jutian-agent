@@ -155,7 +155,7 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
       style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
       <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: c.borderLight }}>
         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{
-          background: side.status === 'streaming' ? '#f59e0b' : side.status === 'done' ? '#10a37f' : side.status === 'error' ? '#ef4444' : c.border,
+          background: side.status === 'streaming' ? '#f59e0b' : side.status === 'done' ? 'var(--brand, #10a37f)' : side.status === 'error' ? '#ef4444' : c.border,
         }} />
         <span className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
           {side.status === 'streaming' ? t('生成中', 'Streaming') : side.status === 'done' ? t('完成', 'Done') : side.status === 'error' ? t('失败', 'Error') : t('就绪', 'Ready')}
@@ -209,7 +209,7 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
           ) : (
             <button onClick={run} disabled={!prompt.trim() || !left.model || !right.model}
               className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-white disabled:opacity-40 shrink-0"
-              style={{ background: c.accent || '#10a37f' }}>{t('运行', 'Run')}</button>
+              style={{ background: c.accent || 'var(--brand, #10a37f)' }}>{t('运行', 'Run')}</button>
           )}
         </div>
       </div>

@@ -29,7 +29,7 @@ export const searchPanelTheme: Extension = EditorView.theme({
     background: 'var(--cm-input-bg, #fff)', color: 'inherit', outline: 'none',
     minWidth: '180px',
   },
-  '.cm-search input:focus': { borderColor: 'var(--cm-accent, #10a37f)' },
+  '.cm-search input:focus': { borderColor: 'var(--cm-accent, var(--brand, #10a37f))' },
   '.cm-search button': {
     padding: '4px 8px', borderRadius: '6px', fontSize: '11.5px', cursor: 'pointer',
     border: '1px solid var(--cm-panel-border, rgba(0,0,0,.12))',
@@ -40,7 +40,7 @@ export const searchPanelTheme: Extension = EditorView.theme({
   '.cm-search .cm-button': { backgroundImage: 'none', padding: '4px 8px' },
   '.cm-search .cm-textfield': { padding: '4px 8px', borderRadius: '6px' },
   '.cm-searchMatch': { background: 'rgba(255, 213, 0, .35)', outline: '1px solid rgba(255, 193, 7, .5)' },
-  '.cm-searchMatch.cm-searchMatch-selected': { background: 'rgba(16, 163, 127, .3)', outline: '1px solid #10a37f' },
+  '.cm-searchMatch.cm-searchMatch-selected': { background: 'rgba(16, 163, 127, .3)', outline: '1px solid var(--brand, #10a37f)' },
 })
 
 /**

@@ -185,7 +185,7 @@ function StatsPane({ messages }: { messages: Message[] }) {
           )}
           <button onClick={genSummary} disabled={summarizing || messages.length < 2}
             className="px-2.5 py-1 rounded-md text-[11px] font-medium disabled:opacity-40"
-            style={{ background: 'rgba(16,163,127,.12)', color: '#10a37f' }}>
+            style={{ background: 'rgba(16,163,127,.12)', color: 'var(--brand, #10a37f)' }}>
             {summarizing ? '总结中…' : aiSummary ? '重新生成' : '生成'}
           </button>
         </div>

@@ -25,7 +25,7 @@ function dismiss(id: string) {
 }
 
 const LEVEL_STYLE: Record<Announcement['level'], { bar: string; bg: string; icon: string }> = {
-  info: { bar: '#10a37f', bg: 'rgba(16,163,127,.08)', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  info: { bar: 'var(--brand, #10a37f)', bg: 'rgba(16,163,127,.08)', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   warn: { bar: '#f59e0b', bg: 'rgba(245,158,11,.09)', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
   critical: { bar: '#ef4444', bg: 'rgba(239,68,68,.08)', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
 }

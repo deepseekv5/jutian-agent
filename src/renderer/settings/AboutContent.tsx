@@ -146,7 +146,7 @@ export default function AboutContent() {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: 'rgba(16,163,127,.12)' }}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3v18m-7-9h14" /></svg>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3v18m-7-9h14" /></svg>
             </div>
             <div>
               <div className="text-[14px] font-semibold" style={{ color: c.textHead }}>巨天agent v{version}</div>
@@ -167,20 +167,20 @@ export default function AboutContent() {
         {/* 可更新状态行（v14.7.2）：之前按钮只放在 notes 区，notes 为空或未渲染时无任何可点入口 */}
       {hasUpdate && (
         <div className="py-1.5 flex items-center gap-2">
-          <span className="text-[12.5px] font-bold" style={{ color: '#10a37f' }}>
+          <span className="text-[12.5px] font-bold" style={{ color: 'var(--brand, #10a37f)' }}>
             {lang === 'en' ? `Update to v${upd?.latest} available` : `可更新至 v${upd?.latest}`}
           </span>
           <span className="flex-1" />
           {upd.asarUrl ? (
             <button onClick={apply} disabled={!!updating}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
-              style={{ background: '#10a37f', color: '#fff' }}>
+              style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
               {lang === 'en' ? 'Update now' : '立即更新'}
             </button>
           ) : upd.installerUrl ? (
             <a href={upd.installerUrl} target="_blank" rel="noreferrer"
               className="px-4 h-8 leading-8 rounded-full text-[12px] font-semibold inline-block"
-              style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Download installer' : '下载安装包'}</a>
+              style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Download installer' : '下载安装包'}</a>
           ) : (
             <span className="text-[11px]" style={{ color: c.textMuted }}>{lang === 'en' ? 'No update package' : '无更新包'}</span>
           )}
@@ -195,11 +195,11 @@ export default function AboutContent() {
             {!api()?.updateApply && upd.installerUrl ? (
               <a href={upd.installerUrl} target="_blank" rel="noreferrer"
                 className="mt-2.5 inline-block px-4 h-8 leading-8 rounded-full text-[12px] font-semibold"
-                style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Download update' : '下载更新'}</a>
+                style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Download update' : '下载更新'}</a>
             ) : (
               <button onClick={apply} disabled={!!updating || !upd.asarUrl}
                 className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
-                style={{ background: '#10a37f', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
+                style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
             )}
             {!upd.asarUrl && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>{lang === 'en' ? '(installer only for this version)' : '(该版本仅有完整安装包)'}</span>}
           </div>
@@ -212,7 +212,7 @@ export default function AboutContent() {
           <div className="px-4 py-3.5 rounded-xl glass" style={{ border: `1px solid ${c.border}` }}>
             <div className="flex items-center gap-3">
               <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(16,163,127,.12)' }}>
-                <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="#10a37f" strokeWidth={2.2} style={{ width: 18, height: 18 }}>
+                <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="var(--brand, #10a37f)" strokeWidth={2.2} style={{ width: 18, height: 18 }}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
               </span>
@@ -221,7 +221,7 @@ export default function AboutContent() {
                 <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>更新已下载并校验完成 — 重启应用后生效</div>
               </div>
               <button onClick={restartNow} className="shrink-0 h-8 px-4 rounded-full text-[12px] font-semibold"
-                style={{ background: '#10a37f', color: '#fff' }}>重启即用</button>
+                style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>重启即用</button>
             </div>
           </div>
         </div>
@@ -266,7 +266,7 @@ export default function AboutContent() {
         <div className="px-4 py-3 rounded-xl glass">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(16,163,127,.12)' }}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="#10a37f" strokeWidth={2} strokeLinecap="round"><path d="M4 17l6-5-6-5M12 19h8" /></svg>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="var(--brand, #10a37f)" strokeWidth={2} strokeLinecap="round"><path d="M4 17l6-5-6-5M12 19h8" /></svg>
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{t('终端版（TUI）', 'Terminal (TUI)')}</div>
@@ -317,7 +317,7 @@ export default function AboutContent() {
             <div className="relative w-32 h-32 mb-7">
               <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
                 <circle cx="60" cy="60" r="54" fill="none" stroke={c.border} strokeWidth="5" />
-                <circle cx="60" cy="60" r="54" fill="none" stroke="#10a37f" strokeWidth="5"
+                <circle cx="60" cy="60" r="54" fill="none" stroke="var(--brand, #10a37f)" strokeWidth="5"
                   strokeLinecap="round"
                   strokeDasharray={2 * Math.PI * 54}
                   strokeDashoffset={2 * Math.PI * 54 * (1 - (pct ?? 0) / 100)}

@@ -123,12 +123,12 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
                   <button key={t.name} onClick={() => toggleTool(t.name)}
                     className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
                     style={{ background: on ? 'rgba(16,163,127,.06)' : 'transparent', border: `1px solid ${on ? 'rgba(16,163,127,.3)' : c.borderLight}`, opacity: on ? 1 : 0.55 }}>
-                    <span className="w-3.5 h-3.5 rounded-full shrink-0 mt-0.5" style={{ background: on ? '#10a37f' : 'transparent', border: `2px solid ${on ? '#10a37f' : c.border}` }} />
+                    <span className="w-3.5 h-3.5 rounded-full shrink-0 mt-0.5" style={{ background: on ? 'var(--brand, #10a37f)' : 'transparent', border: `2px solid ${on ? 'var(--brand, #10a37f)' : c.border}` }} />
                     <span className="min-w-0 flex-1">
                       <span className="text-[12px] font-mono font-semibold block truncate" style={{ color: c.textHead }}>{t.name}</span>
                       <span className="text-[10.5px] leading-snug block mt-0.5 line-clamp-2" style={{ color: c.textTertiary, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</span>
                     </span>
-                    <span className="text-[9.5px] font-bold shrink-0 mt-0.5" style={{ color: on ? '#10a37f' : c.textTertiary }}>{on ? 'ON' : 'OFF'}</span>
+                    <span className="text-[9.5px] font-bold shrink-0 mt-0.5" style={{ color: on ? 'var(--brand, #10a37f)' : c.textTertiary }}>{on ? 'ON' : 'OFF'}</span>
                   </button>
                 )
               })}
@@ -151,14 +151,14 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))' }}>
               {mcp.map(s => (
                 <div key={s.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style={{ background: s.enabled ? 'rgba(16,163,127,.06)' : 'transparent', border: `1px solid ${s.enabled ? 'rgba(16,163,127,.3)' : c.borderLight}` }}>
-                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.running ? '#10a37f' : s.enabled ? '#f59e0b' : c.border }} title={s.running ? '运行中' : s.enabled ? '未运行' : '已停用'} />
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.running ? 'var(--brand, #10a37f)' : s.enabled ? '#f59e0b' : c.border }} title={s.running ? '运行中' : s.enabled ? '未运行' : '已停用'} />
                   <span className="min-w-0 flex-1">
                     <span className="text-[12px] font-mono font-semibold block truncate" style={{ color: c.textHead }}>{s.name}</span>
                     <span className="text-[10px] block truncate" style={{ color: c.textTertiary }}>
                       {s.running ? `${s.toolCount ?? '?'} 个工具 · 运行中` : s.enabled ? '已启用 · 未运行' : '已停用'}
                     </span>
                   </span>
-                  <button onClick={() => toggleMcp(s)} className="px-2 py-1 rounded-md text-[10.5px] font-semibold shrink-0" style={{ background: s.enabled ? c.bgInput : 'rgba(16,163,127,.15)', color: s.enabled ? c.textTertiary : '#10a37f' }}>
+                  <button onClick={() => toggleMcp(s)} className="px-2 py-1 rounded-md text-[10.5px] font-semibold shrink-0" style={{ background: s.enabled ? c.bgInput : 'rgba(16,163,127,.15)', color: s.enabled ? c.textTertiary : 'var(--brand, #10a37f)' }}>
                     {s.enabled ? t('停用', 'Off') : t('启用', 'On')}
                   </button>
                   <button onClick={() => removeMcp(s)} className="px-2 py-1 rounded-md text-[10.5px] shrink-0" style={{ color: '#ef4444' }}>删除</button>

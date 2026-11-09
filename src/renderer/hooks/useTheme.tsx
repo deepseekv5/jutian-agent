@@ -302,6 +302,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (cu) return { ...cRaw, accent: theme === 'dark' ? cu.dark : cu.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }
       return cRaw
     }
+    // 党政红主题（v14.40.0）：强调色锁定党政红，不随用户强调色预设漂移
+    if (theme === 'party') return { ...cRaw, sidebarActiveBg: 'rgba(199,0,11,.1)', bgActive: 'rgba(199,0,11,.1)', surfaceActive: 'rgba(199,0,11,.1)' }
     const preset = ACCENT_PRESETS[accentKey]
     if (!preset || accentKey === 'graphite') return cRaw
     const base = { ...cRaw, accent: theme === 'dark' ? preset.dark : preset.light, accentText: theme === 'dark' ? '#0b0b0c' : '#ffffff' }

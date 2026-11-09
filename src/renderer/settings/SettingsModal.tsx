@@ -748,7 +748,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               {/* 免费模型一键启用:不填任何东西,0 元用上 AI */}
               <div className="mb-4 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.12), rgba(255,255,255,.55) 70%)', border: '1px solid rgba(16,163,127,.35)' }}>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
                   <span className="text-[13.5px] font-bold" style={{ color: c.textHead }}>{t('不想配置?一键免费用 AI', 'No setup? Use AI for free')}</span>
                 </div>
                 <p className="text-[12px] leading-relaxed mb-3" style={{ color: c.textSecondary }}>
@@ -762,14 +762,14 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       onSave(next)
                       setSavedFlash('free')
                     }}
-                    className="px-4 h-9 rounded-full text-[12.5px] font-semibold" style={{ background: '#10a37f', color: '#fff' }}>
+                    className="px-4 h-9 rounded-full text-[12.5px] font-semibold" style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
                     {t('一键启用免费模型', 'Enable free models')}
                   </button>
                   <button type="button" onClick={() => onOpenFreeModels?.()}
                     className="px-4 h-9 rounded-full text-[12.5px] font-medium" style={{ background: 'rgba(255,255,255,.7)', color: '#0f766e', border: '1px solid rgba(16,163,127,.35)' }}>
                     {t('浏览全部免费模型（26 个）→', 'Browse all free models (26) →')}
                   </button>
-                  {savedFlash === 'free' && <span className="text-[11.5px]" style={{ color: '#10a37f' }}>{t('已启用,去对话试试', 'Enabled — try it in chat')}</span>}
+                  {savedFlash === 'free' && <span className="text-[11.5px]" style={{ color: 'var(--brand, #10a37f)' }}>{t('已启用,去对话试试', 'Enabled — try it in chat')}</span>}
                 </div>
               </div>
 
@@ -890,7 +890,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                               <span className="font-mono truncate flex-1">{r.model.id}</span>
                               {sr?.rate !== null && sr?.rate !== undefined && (
                                 <span className="text-[10px] shrink-0 font-mono"
-                                  style={{ color: (sr?.rate ?? 0) >= 90 ? '#10a37f' : (sr?.rate ?? 0) >= 60 ? '#f59e0b' : '#ef4444' }}>
+                                  style={{ color: (sr?.rate ?? 0) >= 90 ? 'var(--brand, #10a37f)' : (sr?.rate ?? 0) >= 60 ? '#f59e0b' : '#ef4444' }}>
                                   {sr?.rate}% ({sr?.total}次)
                                 </span>
                               )}
@@ -993,7 +993,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       {([['vercel', 'Vercel'], ['server', '服务端'], ['client', '兼容'], ['harness', 'Harness']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
                           className="flex-1 px-1 py-1 text-[10px] transition-colors"
-                          style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || '#10a37f') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
+                          style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || 'var(--brand, #10a37f)') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
                           {t(zh, v === 'vercel' ? 'Vercel' : v === 'server' ? 'Server' : v === 'client' ? 'Legacy' : 'Harness')}
                         </button>
                       ))}
@@ -1014,7 +1014,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                         <button type="button"
                           onClick={() => window.dispatchEvent(new CustomEvent('open-panel', { detail: 'harness' }))}
                           className="mt-2 px-3 h-7 rounded-full text-[11px] font-medium"
-                          style={{ background: c.accent || '#10a37f', color: '#fff' }}>
+                          style={{ background: c.accent || 'var(--brand, #10a37f)', color: '#fff' }}>
                           {t('打开 Harness 面板', 'Open Harness panel')}
                         </button>
                       </div>
@@ -1026,7 +1026,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       {([['auto', '自动'], ['on', '开'], ['off', '关']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ hermesProtocol: v })}
                           className="flex-1 px-2 py-1 text-[10.5px] transition-colors"
-                          style={{ background: (form.hermesProtocol || 'auto') === v ? (c.accent || '#10a37f') : 'transparent', color: (form.hermesProtocol || 'auto') === v ? '#fff' : c.textTertiary }}>
+                          style={{ background: (form.hermesProtocol || 'auto') === v ? (c.accent || 'var(--brand, #10a37f)') : 'transparent', color: (form.hermesProtocol || 'auto') === v ? '#fff' : c.textTertiary }}>
                           {t(zh, zh === '自动' ? 'Auto' : zh === '开' ? 'On' : 'Off')}
                         </button>
                       ))}
@@ -1462,7 +1462,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 <p className="text-[10.5px] mt-1.5" style={{ color: c.textTertiary }}>{t('影响新建对话、链接与选中态等强调元素。', 'Affects primary buttons, links and active states.')}</p>
                 {/* v11 自定义种子色：任意颜色，暗色变体自动派生 */}
                 <div className="flex items-center gap-2 mt-2">
-                  <input type="color" defaultValue="#10a37f"
+                  <input type="color" defaultValue="var(--brand, #10a37f)"
                     onChange={e => { setCustomAccent(e.target.value); setAccentTick(x => x + 1) }}
                     className="w-8 h-8 rounded-lg cursor-pointer bg-transparent"
                     style={{ border: `1px solid ${c.border}` }}
@@ -1548,7 +1548,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       <button key={id} type="button" onClick={() => applyPrefNow({ autoBackup: id })}
                         className="px-2.5 h-7 rounded-full text-[12px]"
                         style={form.autoBackup === id || (id === 'off' && !form.autoBackup)
-                          ? { background: c.accentBg || '#10a37f', color: '#fff' }
+                          ? { background: c.accentBg || 'var(--brand, #10a37f)', color: '#fff' }
                           : { background: c.bgHover || c.bgInput, color: c.textSecondary }}>
                         {label}
                       </button>
@@ -1679,7 +1679,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <span className="text-[12.5px]" style={{ color: c.text }}>{t('启用', 'Enable')}</span>
                   <button onClick={() => saveLocalApi({ enabled: !localApi.enabled })}
                     className="w-11 h-6 rounded-full transition-colors relative shrink-0"
-                    style={{ background: localApi.enabled ? '#10a37f' : c.bgInput, border: `1px solid ${c.border}` }}>
+                    style={{ background: localApi.enabled ? 'var(--brand, #10a37f)' : c.bgInput, border: `1px solid ${c.border}` }}>
                     <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
                       style={{ left: localApi.enabled ? 22 : 2 }} />
                   </button>
@@ -1709,7 +1709,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   </div>
                 </div>
 
-                {localApiMsg && <p className="text-[11px] mt-1" style={{ color: localApiMsg.startsWith('✓') ? '#10a37f' : '#d97706' }}>{localApiMsg}</p>}
+                {localApiMsg && <p className="text-[11px] mt-1" style={{ color: localApiMsg.startsWith('✓') ? 'var(--brand, #10a37f)' : '#d97706' }}>{localApiMsg}</p>}
               </Sub>
 
               {/* Key 管理：本机 Key 与局域网 Key 分开，任一泄露只轮换一侧 */}
@@ -1780,11 +1780,11 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                             <div className="flex items-center gap-2">
                               {running ? (
                                 <span className="relative flex h-2 w-2 shrink-0">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#10a37f' }} />
-                                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#10a37f' }} />
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: 'var(--brand, #10a37f)' }} />
+                                  <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: 'var(--brand, #10a37f)' }} />
                                 </span>
                               ) : (
-                                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: a.status === 'error' ? '#ef4444' : '#10a37f' }} />
+                                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: a.status === 'error' ? '#ef4444' : 'var(--brand, #10a37f)' }} />
                               )}
                               <span className="text-[11.5px] font-medium truncate" style={{ color: c.text }}>
                                 {running ? t('正在回复', 'Replying') + ' · ' : ''}{a.source}

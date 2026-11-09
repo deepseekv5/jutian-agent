@@ -89,7 +89,7 @@ export default function HarnessPanel({ url: initialUrl }: Props) {
           className="flex-1 min-w-0 h-8 px-3 rounded-lg text-[12px] font-mono outline-none"
           style={{ background: c.bgInput, color: c.text, border: `1px solid ${c.borderLight}` }} />
         <button onClick={go} className="px-3 h-8 rounded-lg text-[11.5px] font-medium shrink-0"
-          style={{ background: c.accent || '#10a37f', color: '#fff' }}>{t('前往', 'Go')}</button>
+          style={{ background: c.accent || 'var(--brand, #10a37f)', color: '#fff' }}>{t('前往', 'Go')}</button>
         <button onClick={refresh} className="px-2.5 h-8 rounded-lg text-[11.5px] shrink-0"
           style={{ background: c.bgInput, color: c.textSecondary }}>{t('刷新', 'Refresh')}</button>
       </div>
@@ -125,7 +125,7 @@ export default function HarnessPanel({ url: initialUrl }: Props) {
               </div>
               {loadError && <div className="text-[10.5px] mb-3" style={{ color: c.textMuted }}>{loadError}</div>}
               <button onClick={refresh} className="px-4 h-8 rounded-full text-[12px] font-medium"
-                style={{ background: c.accent || '#10a37f', color: '#fff' }}>
+                style={{ background: c.accent || 'var(--brand, #10a37f)', color: '#fff' }}>
                 {t('已启动，重试', 'Retry')}
               </button>
             </div>

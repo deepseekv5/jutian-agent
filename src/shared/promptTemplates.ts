@@ -16,7 +16,7 @@ export interface PromptVar {
 export interface PromptTemplate {
   id: string
   name: string
-  category: 'writing' | 'code' | 'analysis' | 'office' | 'study'
+  category: 'writing' | 'code' | 'analysis' | 'office' | 'study' | 'party'
   description: string
   body: string
   vars: PromptVar[]
@@ -30,6 +30,7 @@ export const PROMPT_CATEGORIES: { id: PromptTemplate['category']; label: string;
   { id: 'analysis', label: '分析', labelEn: 'Analysis' },
   { id: 'office', label: '办公', labelEn: 'Office' },
   { id: 'study', label: '学习', labelEn: 'Study' },
+  { id: 'party', label: '党建', labelEn: 'Party building' },
 ]
 
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
@@ -221,4 +222,28 @@ PROMPT_TEMPLATES.push(
   gwTpl('gw-jiyao', '公文·纪要', 'Meeting minutes', '记载会议情况与议定事项（会议纪要格式）',
     '【公文模式】请按 GB/T 9704 输出一份「会议纪要」：会议概况（时间/地点/主持/参加）→ 会议议定事项（分条）→ 工作要求。材料如下：',
     '输出后不要再附加任何解释。'),
+)
+
+// ── 党建模板（v14.40.0）：党政风配套 ──
+PROMPT_TEMPLATES.push(
+  { id: 'party-sixiang', name: '思想汇报', nameEn: 'Thought report', category: 'party',
+    description: '按党组织规范的思想汇报（学习内容 + 认识体会 + 努力方向）',
+    body: `【公文模式】请按党组织常用格式写一份「思想汇报」：标题居中；开头"敬爱的党组织："；正文分三部分——一、近期学习内容与背景；二、思想认识与体会（结合{{学习主题}}）；三、存在不足与今后努力方向。结尾"汇报人：{{姓名}}"与日期。语言庄重朴实，第一人称， total 800-1200 字。`,
+    vars: [{ key: '学习主题', label: '学习主题', placeholder: '如：学习党的二十大精神' }, { key: '姓名', label: '汇报人姓名', placeholder: '张三' }] },
+  { id: 'party-dangri', name: '主题党日方案', nameEn: 'Party day plan', category: 'party',
+    description: '主题党日活动方案（主题/流程/要求）',
+    body: `【公文模式】请制定一份「{{主题}}」主题党日活动方案：一、活动主题与时间地点；二、参加人员；三、活动流程（分环节，含主持人/时长）；四、活动要求（纪律/学习要求）。结尾落款支部名称与日期。`,
+    vars: [{ key: '主题', label: '活动主题', placeholder: '如：学党史、悟思想' }] },
+  { id: 'party-dangke', name: '党课讲稿', nameEn: 'Party lecture script', category: 'party',
+    description: '党课讲稿（开场/主体三层/结尾号召）',
+    body: `【公文模式】请写一份关于「{{授课主题}}」的党课讲稿：开场点题；主体分三个层次（理论内涵 → 结合实际 → 践行要求），每层用「一、二、三」；结尾发出号召。语言庄重有力，适合 30 分钟宣讲，2000 字左右。`,
+    vars: [{ key: '授课主题', label: '授课主题', placeholder: '如：重温入党初心' }] },
+  { id: 'party-duizhao', name: '组织生活会对照检查', nameEn: 'Self-examination', category: 'party',
+    description: '组织生活会个人对照检查材料（问题/原因/整改）',
+    body: `【公文模式】请写一份组织生活会个人对照检查材料：一、存在的问题（从政治信仰/组织纪律/作用发挥等维度分条，每条具体表现）；二、原因剖析（思想根源）；三、整改措施（对应问题逐条，可量化）。用第一人称，态度诚恳不空泛。围绕{{情况说明}}展开。`,
+    vars: [{ key: '情况说明', label: '个人情况/需要突出的问题', multiline: true }] },
+  { id: 'party-zongjie', name: '党建工作总结', nameEn: 'Party work summary', category: 'party',
+    description: '党支部党建工作总结（成绩/亮点/不足/计划）',
+    body: `【公文模式】请写一份{{周期}}党建工作总结：一、主要工作与成效（组织建设/学习教育/活动开展，分条列举）；二、工作亮点（1-2 个特色做法）；三、存在不足；四、下一步工作计划。含标题与落款。内容基于：{{工作要点}}。`,
+    vars: [{ key: '周期', label: '总结周期', placeholder: '如：2026 年度' }, { key: '工作要点', label: '工作要点/素材', multiline: true }] },
 )

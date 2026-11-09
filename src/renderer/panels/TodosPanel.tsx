@@ -73,7 +73,7 @@ export default function TodosPanel({ onClose }: { onClose: () => void }) {
         {todos.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: c.borderLight }}>
-              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: c.accent || '#10a37f' }} />
+              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: c.accent || 'var(--brand, #10a37f)' }} />
             </div>
             <span className="text-[10.5px] font-mono" style={{ color: c.textTertiary }}>{done}/{todos.length}</span>
           </div>
@@ -102,7 +102,7 @@ export default function TodosPanel({ onClose }: { onClose: () => void }) {
                 <div key={col.id}>
                   <div className="flex items-center gap-1.5 mb-2 px-1">
                     <span className="w-1.5 h-1.5 rounded-full" style={{
-                      background: col.id === 'completed' ? '#10a37f' : col.id === 'in_progress' ? '#f59e0b' : c.border,
+                      background: col.id === 'completed' ? 'var(--brand, #10a37f)' : col.id === 'in_progress' ? '#f59e0b' : c.border,
                     }} />
                     <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t(col.label, col.labelEn)}</span>
                     <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>{items.length}</span>

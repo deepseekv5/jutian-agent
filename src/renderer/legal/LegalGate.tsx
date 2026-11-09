@@ -36,7 +36,7 @@ export default function LegalGate({ onAgree }: { onAgree: () => void }) {
         <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: `1px solid ${c.borderLight}` }}>
           <div className="flex items-center gap-2.5">
             <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,163,127,.12)' }}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round">
                 <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </span>
@@ -83,7 +83,7 @@ export default function LegalGate({ onAgree }: { onAgree: () => void }) {
         <div className="px-6 py-4 shrink-0" style={{ borderTop: `1px solid ${c.borderLight}` }}>
           <label className="flex items-start gap-2.5 cursor-pointer mb-3">
             <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)}
-              className="mt-0.5 shrink-0" style={{ accentColor: '#10a37f' }} />
+              className="mt-0.5 shrink-0" style={{ accentColor: 'var(--brand, #10a37f)' }} />
             <span className="text-[12px] leading-relaxed" style={{ color: c.textSecondary }}>
               我已阅读并同意《用户协议》与《隐私政策》，并理解 AI 生成内容需自行核实、不得删除 AI 标识、不得用于违法违规用途。
             </span>
@@ -94,7 +94,7 @@ export default function LegalGate({ onAgree }: { onAgree: () => void }) {
             <div className="flex-1" />
             <button onClick={() => { grantLegalConsent(); onAgree() }} disabled={!checked}
               className="px-6 h-9 rounded-lg text-[13px] font-semibold disabled:opacity-30"
-              style={{ background: '#10a37f', color: '#fff' }}>
+              style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
               同意并进入
             </button>
           </div>

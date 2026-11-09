@@ -75,7 +75,7 @@ export default function SnippetsPanel({ onClose }: { onClose: () => void }) {
             style={{ background: c.bgInput, color: c.textHead, border: `1px solid ${c.borderLight}` }} />
           <button onClick={startNew}
             className="px-2.5 py-1.5 rounded-lg text-[11.5px] font-medium text-white shrink-0"
-            style={{ background: c.accent || '#10a37f' }}>新建</button>
+            style={{ background: c.accent || 'var(--brand, #10a37f)' }}>新建</button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin p-1.5">
           {shown.length === 0 && (
@@ -165,7 +165,7 @@ export default function SnippetsPanel({ onClose }: { onClose: () => void }) {
                 style={{ background: c.bgInput, color: c.textHead, border: `1px solid ${c.borderLight}` }}>保存</button>
               <button onClick={() => { save(); if (!err) insert(editing) }}
                 className="px-3.5 py-1.5 rounded-lg text-[11.5px] font-medium text-white"
-                style={{ background: c.accent || '#10a37f' }}>保存并插入</button>
+                style={{ background: c.accent || 'var(--brand, #10a37f)' }}>保存并插入</button>
             </div>
           </>
         )}

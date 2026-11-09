@@ -32,7 +32,7 @@ export default function SubAgentTracker() {
     <div className="mx-2 mb-2 rounded-xl border overflow-hidden shrink-0" style={{ borderColor: c.border, background: c.surfaceCard }}>
       {/* 标题行 */}
       <div className="flex items-center gap-2 px-2.5 h-8">
-        <span className="w-1.5 h-1.5 rounded-full" style={{ background: batch.running ? '#10a37f' : '#86868b', animation: batch.running ? 'b 1.6s ease-in-out infinite' : 'none' }} />
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: batch.running ? 'var(--brand, #10a37f)' : '#86868b', animation: batch.running ? 'b 1.6s ease-in-out infinite' : 'none' }} />
         <span className="text-[11px] font-bold" style={{ color: c.textHead }}>
           {batch.running ? '子代理执行中' : '子代理已完成'}
         </span>
@@ -58,9 +58,9 @@ export default function SubAgentTracker() {
             {/* 进度条：运行中=流动条纹,完成=满格 */}
             <div className="h-[3px] mt-1 rounded-full overflow-hidden" style={{ background: c.bgInput }}>
               {a.status === 'done' ? (
-                <div className="h-full rounded-full" style={{ width: '100%', background: 'linear-gradient(90deg,#10a37f,#34d399)' }} />
+                <div className="h-full rounded-full" style={{ width: '100%', background: 'linear-gradient(90deg,var(--brand, #10a37f),#34d399)' }} />
               ) : a.status === 'running' ? (
-                <div className="h-full rounded-full" style={{ width: '40%', background: '#10a37f', animation: 'subagent-slide 1.2s ease-in-out infinite' }} />
+                <div className="h-full rounded-full" style={{ width: '40%', background: 'var(--brand, #10a37f)', animation: 'subagent-slide 1.2s ease-in-out infinite' }} />
               ) : (
                 <div className="h-full rounded-full" style={{ width: '12%', background: c.border }} />
               )}

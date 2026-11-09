@@ -249,7 +249,7 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
         </button>
         <button onClick={run} disabled={busy || !picked.size}
           className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-white disabled:opacity-40"
-          style={{ background: c.accent || '#10a37f' }}>
+          style={{ background: c.accent || 'var(--brand, #10a37f)' }}>
           {busy ? '导出中…' : '导出'}
         </button>
       </div>

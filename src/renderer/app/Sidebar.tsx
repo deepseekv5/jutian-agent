@@ -421,7 +421,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
               const next = m.pinnedAt ? { ...m, pinnedAt: 0 } : { ...m, pinnedAt: Date.now() }
               saveMeta(session.id, next)
             }} title={metaMap[session.id]?.pinnedAt ? '取消置顶' : '置顶'} className="row-pin-btn"
-              style={{ color: metaMap[session.id]?.pinnedAt ? '#10a37f' : c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}>
+              style={{ color: metaMap[session.id]?.pinnedAt ? 'var(--brand, #10a37f)' : c.textTertiary, background: isActive ? c.sidebarActiveBg : c.surfaceHover }}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16 4v6l3 4v2h-6v6l-1 1-1-1v-6H5v-2l3-4V4a1 1 0 011-1h6a1 1 0 011 1z" />
               </svg>
@@ -484,9 +484,9 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             className="h-7 pl-2 pr-2.5 rounded-full flex items-center gap-1 text-[11px] font-medium transition-colors"
             style={{
               // 与空态/状态条同源的模式色（办公绿 / 编程蓝），切换时整个应用的「身份感」一起变
-              background: headerChatMode === 'coding' ? 'rgba(37,99,235,.09)' : 'rgba(16,163,127,.09)',
-              border: `1px solid ${headerChatMode === 'coding' ? 'rgba(37,99,235,.35)' : 'rgba(16,163,127,.35)'}`,
-              color: headerChatMode === 'coding' ? '#2563eb' : '#10a37f',
+              background: headerChatMode === 'coding' ? 'rgba(37,99,235,.09)' : 'var(--brand-soft, rgba(16,163,127,.09))',
+              border: `1px solid ${headerChatMode === 'coding' ? 'rgba(37,99,235,.35)' : 'var(--brand-border, rgba(16,163,127,.35))'}`,
+              color: headerChatMode === 'coding' ? '#2563eb' : 'var(--brand, #10a37f)',
             }}
             title={headerChatMode === 'coding' ? '编程模式（点击切到办公）' : '办公模式（点击切到编程）'}>
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

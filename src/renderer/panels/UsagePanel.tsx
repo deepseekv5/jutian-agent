@@ -84,7 +84,7 @@ export default function UsagePanel({ onClose }: { onClose: () => void }) {
               <span style={{ color: bud.over ? '#ef4444' : c.textTertiary }}>{bud.over ? '已超出预算' : `剩余 ${formatUSD(bud.remaining)}`}</span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: c.borderLight }}>
-              <div className="h-full rounded-full" style={{ width: `${Math.min(100, bud.pct)}%`, background: bud.over ? '#ef4444' : (c.accent || '#10a37f') }} />
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, bud.pct)}%`, background: bud.over ? '#ef4444' : (c.accent || 'var(--brand, #10a37f)') }} />
             </div>
           </div>
         )}
@@ -96,7 +96,7 @@ export default function UsagePanel({ onClose }: { onClose: () => void }) {
             {series.map((s) => (
               <div key={s.date} className="flex-1 flex flex-col items-center gap-1 group relative">
                 <div className="w-full rounded-t transition-all"
-                  style={{ height: `${Math.max(2, (s.tokens / maxTokens) * 88)}px`, background: s.tokens ? (c.accent || '#10a37f') : c.borderLight, opacity: s.tokens ? 0.85 : 0.5 }} />
+                  style={{ height: `${Math.max(2, (s.tokens / maxTokens) * 88)}px`, background: s.tokens ? (c.accent || 'var(--brand, #10a37f)') : c.borderLight, opacity: s.tokens ? 0.85 : 0.5 }} />
                 <span className="text-[8.5px] truncate w-full text-center" style={{ color: c.textTertiary }}>{s.date.slice(5)}</span>
                 <div className="absolute -top-7 hidden group-hover:block px-1.5 py-0.5 rounded text-[9.5px] whitespace-nowrap z-10"
                   style={{ background: c.surfaceCard, color: c.textHead, border: `1px solid ${c.borderLight}` }}>

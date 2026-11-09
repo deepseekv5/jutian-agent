@@ -157,9 +157,9 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[13px] font-medium truncate" style={{ color: c.textHead }}>{m.name}</span>
-            {isDefault && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('默认', 'Default')}</span>}
+            {isDefault && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: 'var(--brand, #10a37f)' }}>{t('默认', 'Default')}</span>}
             {m.vision && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(59,130,246,.14)', color: '#60a5fa' }}>{t('识图', 'Vision')}</span>}
-            {active && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('使用中', 'In use')}</span>}
+            {active && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(16,163,127,.16)', color: 'var(--brand, #10a37f)' }}>{t('使用中', 'In use')}</span>}
             {isPaid && <span className="text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(245,158,11,.14)', color: '#f59e0b' }}>{t('付费', 'Paid')}</span>}
           </div>
           <div className="font-mono text-[10.5px] mt-0.5 truncate" style={{ color: c.textTertiary }}>{m.id} · ctx {fmtCtx(m.context)}</div>
@@ -182,7 +182,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
         )}
         <button onClick={() => switchTo(m, src)} disabled={active || isSwitching}
           className="px-3 h-7 rounded-lg text-[11.5px] font-semibold shrink-0 disabled:opacity-40 transition-all duration-150"
-          style={{ background: isSwitching ? '#0d8a6a' : '#10a37f', color: '#fff' }}>
+          style={{ background: isSwitching ? '#0d8a6a' : 'var(--brand, #10a37f)', color: '#fff' }}>
           {isSwitching ? t('切换中…', 'Switching…') : t('切换', 'Use')}
         </button>
       </div>
@@ -192,7 +192,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
   return (
     <div className="flex-1 flex flex-col min-h-0" style={{ background: c.bg }}>
       <div className="flex items-center gap-2 px-4 h-12 border-b shrink-0" style={{ borderColor: c.border }}>
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
         <span className="text-[13px] font-bold" style={{ color: c.textHead }}>{t('免费模型', 'Free Models')}</span>
         <span className="text-[11px]" style={{ color: c.textTertiary }}>{t('免 key · 免注册', 'keyless · no signup')}</span>
         <div className="ml-auto flex items-center gap-1.5">
@@ -210,7 +210,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
           </span>
           <button onClick={() => { fetchCompat('/api/open-external?url=' + encodeURIComponent(REPO_URL)).catch(() => {}); hideStarBanner() }}
             className="px-2.5 h-6 rounded-full text-[10.5px] font-semibold flex items-center shrink-0"
-            style={{ background: '#10a37f', color: '#fff' }}>⭐ Star</button>
+            style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>⭐ Star</button>
           <button onClick={hideStarBanner} className="text-[10.5px] shrink-0" style={{ color: c.textTertiary }}>
             {t('不再提示', 'Dismiss')}
           </button>
@@ -226,7 +226,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
         {gh && gh.models.length > 0 && (
           <div className="mb-3 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.14), rgba(255,255,255,.6) 70%)', border: '1px solid rgba(16,163,127,.4)' }}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: '#10a37f' }}>{t('推荐', 'Top pick')}</span>
+              <span className="text-[9.5px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.16)', color: 'var(--brand, #10a37f)' }}>{t('推荐', 'Top pick')}</span>
               <span className="text-[13px] font-bold" style={{ color: c.textHead }}>Pollinations · GPT-OSS 20B</span>
               <span className="text-[10px]" style={{ color: c.textTertiary }}>{t('免 key 直连', 'keyless')}</span>
             </div>
@@ -236,7 +236,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
             <button onClick={() => { const src = sources.find(s => s.id === 'pollinations'); if (src) switchTo(src.models[0], src) }}
               disabled={!sources.some(s => s.id === 'pollinations')}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
-              style={{ background: '#10a37f', color: '#fff' }}>
+              style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
               {t('一键切换 GPT-OSS 20B', 'Switch to GPT-OSS 20B')}
             </button>
           </div>
@@ -254,7 +254,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
                   <span className="text-[10px]" style={{ color: c.textTertiary }}>{src.models.length} {t('个', 'models')}</span>
                   {src.note && <span className="text-[10px] truncate" style={{ color: c.textTertiary }}>{src.note}</span>}
                   {isSourceActive(src) && settings.model &&
-                    <span className="ml-auto text-[10.5px]" style={{ color: '#10a37f' }}>{t('当前:', 'Current:')} {settings.model}</span>}
+                    <span className="ml-auto text-[10.5px]" style={{ color: 'var(--brand, #10a37f)' }}>{t('当前:', 'Current:')} {settings.model}</span>}
                 </div>
                 <div className="space-y-1.5">
                   {filter(src.models).map(m => row(m, src, false,
@@ -304,7 +304,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
                   <div key={p.id} className="rounded-xl p-3" style={{ background: c.surfaceCard, border: `1px solid ${c.border}` }}>
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[12.5px] font-semibold" style={{ color: c.textHead }}>{p.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.12)', color: '#10a37f' }}>{p.free}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,163,127,.12)', color: 'var(--brand, #10a37f)' }}>{p.free}</span>
                       <a href={p.signup} target="_blank" rel="noopener" className="ml-auto text-[10.5px]" style={{ color: '#60a5fa' }}>{t('去注册 →', 'Sign up →')}</a>
                     </div>
                     <div className="font-mono text-[10px] mb-2 truncate" style={{ color: c.textTertiary }}>{p.base}</div>
@@ -315,7 +315,7 @@ export default function FreeModelsPanel({ settings, onSettingsChange }: { settin
                           style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.border}` }}
                           title={`${m.id} · ctx ${fmtCtx(m.context)}`}>
                           {m.name}
-                          <span style={{ color: '#10a37f' }}>{t('填入', 'Fill')}</span>
+                          <span style={{ color: 'var(--brand, #10a37f)' }}>{t('填入', 'Fill')}</span>
                         </button>
                       ))}
                     </div>

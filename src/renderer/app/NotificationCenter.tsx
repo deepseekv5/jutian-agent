@@ -80,7 +80,7 @@ export default function NotificationCenter() {
         </svg>
         {badge > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[13px] h-[13px] px-0.5 rounded-full text-[8.5px] font-bold grid place-items-center"
-            style={{ background: '#10a37f', color: '#fff' }}>{badge > 9 ? '9+' : badge}</span>
+            style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{badge > 9 ? '9+' : badge}</span>
         )}
       </button>
 
@@ -108,7 +108,7 @@ export default function NotificationCenter() {
                   <button key={k} onClick={() => setNoticeFilter(k)}
                     className="px-2 py-0.5 rounded-full text-[10px]"
                     style={noticeFilter === k
-                      ? { background: 'rgba(16,163,127,.15)', color: '#10a37f' }
+                      ? { background: 'rgba(16,163,127,.15)', color: 'var(--brand, #10a37f)' }
                       : { color: c.textTertiary }}>
                     {label}
                   </button>
@@ -140,7 +140,7 @@ export default function NotificationCenter() {
                       style={{ borderColor: c.borderLight, background: n.read ? 'transparent' : 'rgba(16,163,127,.05)' }}
                       onClick={() => { if (isTask) { setOpen(false); window.dispatchEvent(new CustomEvent('jutian-open-tab-tasks')) } }}>
                       <span className="w-6 h-6 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: 'rgba(16,163,127,.12)' }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10a37f" strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round"><path d={meta.icon} /></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round"><path d={meta.icon} /></svg>
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
@@ -226,9 +226,9 @@ function PluginsTab({ c }: { c: any }) {
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors"
               style={{ background: on ? 'rgba(16,163,127,.07)' : 'transparent', opacity: on ? 1 : 0.5 }}
               title={t.description}>
-              <span className="w-3 h-3 rounded-full shrink-0" style={{ background: on ? '#10a37f' : c.border }} />
+              <span className="w-3 h-3 rounded-full shrink-0" style={{ background: on ? 'var(--brand, #10a37f)' : c.border }} />
               <span className="text-[11px] font-mono truncate flex-1" style={{ color: c.textHead }}>{t.name}</span>
-              <span className="text-[9.5px] shrink-0" style={{ color: on ? '#10a37f' : c.textTertiary }}>{on ? 'ON' : 'OFF'}</span>
+              <span className="text-[9.5px] shrink-0" style={{ color: on ? 'var(--brand, #10a37f)' : c.textTertiary }}>{on ? 'ON' : 'OFF'}</span>
             </button>
           )
         })}
@@ -244,9 +244,9 @@ function PluginsTab({ c }: { c: any }) {
           <button key={s.id} onClick={() => toggleMcp(s)}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors"
             style={{ background: s.enabled ? 'rgba(16,163,127,.07)' : 'transparent', opacity: s.enabled ? 1 : 0.5 }}>
-            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.running ? '#10a37f' : s.enabled ? '#f59e0b' : c.border }} />
+            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: s.running ? 'var(--brand, #10a37f)' : s.enabled ? '#f59e0b' : c.border }} />
             <span className="text-[11px] font-mono truncate flex-1" style={{ color: c.textHead }}>{s.name}</span>
-            <span className="text-[9.5px] shrink-0" style={{ color: s.enabled ? '#10a37f' : c.textTertiary }}>{s.running ? `${s.toolCount ?? '?'} 工具` : s.enabled ? '未运行' : 'OFF'}</span>
+            <span className="text-[9.5px] shrink-0" style={{ color: s.enabled ? 'var(--brand, #10a37f)' : c.textTertiary }}>{s.running ? `${s.toolCount ?? '?'} 工具` : s.enabled ? '未运行' : 'OFF'}</span>
           </button>
         ))}
       </div>

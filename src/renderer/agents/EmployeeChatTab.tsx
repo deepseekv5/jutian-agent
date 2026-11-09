@@ -206,7 +206,7 @@ function ToolLines({ tools, c }: { tools: AgentToolLine[]; c: any }) {
       {tools.map((t, i) => (
         <span key={i} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10.5px] font-mono"
           style={{ background: 'rgba(127,127,127,.14)', color: c.textSecondary }}>
-          <span style={{ color: t.ok === false ? '#ef4444' : '#10a37f' }}>{t.ok === false ? '✕' : '⚙'}</span>{t.name}
+          <span style={{ color: t.ok === false ? '#ef4444' : 'var(--brand, #10a37f)' }}>{t.ok === false ? '✕' : '⚙'}</span>{t.name}
           {t.args && <span style={{ color: c.textTertiary }}>{t.args}</span>}
         </span>
       ))}

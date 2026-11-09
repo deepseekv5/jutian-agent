@@ -83,7 +83,7 @@ export function drawShareCard(input: ShareCardInput): string | null {
   const PAD = 56
   const TEXT_W = W - PAD * 2
   const role = ROLE_LABEL[input.role] || input.role || '巨天 Agent'
-  const accent = input.accent || '#10a37f'
+  const accent = input.accent || 'var(--brand, #10a37f)'
 
   // 正文测量与折行（上限 22 行，超出截断）
   const bodyFont = `19px ${BRAND_FONT}`

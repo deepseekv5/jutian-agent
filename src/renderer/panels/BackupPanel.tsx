@@ -195,7 +195,7 @@ export default function BackupPanel({ onClose }: { onClose: () => void }) {
         <span className="flex-1" />
         <button onClick={run} disabled={busy || !scopes.length}
           className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-white disabled:opacity-40"
-          style={{ background: c.accent || '#10a37f' }}>
+          style={{ background: c.accent || 'var(--brand, #10a37f)' }}>
           {busy ? '导出中…' : '导出备份'}
         </button>
       </div>

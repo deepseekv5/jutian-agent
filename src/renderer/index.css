@@ -665,6 +665,9 @@
    .glass-strong 弹出层：菜单 / 弹窗 / 命令面板（更实、更模糊）
    ============================================================ */
 :root {
+  --brand: #10a37f;
+  --brand-soft: rgba(16, 163, 127, 0.12);
+  --brand-border: rgba(16, 163, 127, 0.35);
   /* 浅色：更低不透明度 + 更高模糊，让磨砂质感在浅色下同样肉眼可见 */
   --glass-bg: rgba(255, 255, 255, 0.52);
   --glass-bg-strong: rgba(255, 255, 255, 0.72);
@@ -678,6 +681,9 @@
   --glass-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 [data-theme="party"] {
+  --brand: #c7000b;
+  --brand-soft: rgba(199, 0, 11, 0.12);
+  --brand-border: rgba(199, 0, 11, 0.4);
   --glass-bg: rgba(255, 251, 240, 0.6);
   --glass-bg-strong: rgba(255, 252, 245, 0.78);
   --glass-hairline: inset 0 1px 0 rgba(255, 245, 225, 0.5);

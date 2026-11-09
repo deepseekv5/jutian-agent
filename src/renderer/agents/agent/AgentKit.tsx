@@ -16,7 +16,7 @@ import type { Settings } from '../../types'
 
 /* ─── 配色（每位员工固定一个渐变，群聊里可一眼分辨） ─── */
 export const AGENT_GRADIENTS: [string, string][] = [
-  ['#10a37f', '#0b7a5e'], ['#f59e0b', '#d97706'], ['#3b82f6', '#1d4ed8'],
+  ['var(--brand, #10a37f)', '#0b7a5e'], ['#f59e0b', '#d97706'], ['#3b82f6', '#1d4ed8'],
   ['#a855f7', '#7c3aed'], ['#ec4899', '#be185d'], ['#14b8a6', '#0d9488'],
   ['#ef4444', '#b91c1c'], ['#6366f1', '#4338ca'],
 ]
@@ -140,7 +140,7 @@ export function AgentMarkdown({ text }: { text: string }) {
           h1: ({ children }) => <div style={{ fontSize: 18, fontWeight: 800, margin: '10px 0 6px' }}>{children}</div>,
           h2: ({ children }) => <div style={{ fontSize: 17, fontWeight: 800, margin: '10px 0 6px' }}>{children}</div>,
           h3: ({ children }) => <div style={{ fontSize: 15.5, fontWeight: 700, margin: '8px 0 4px' }}>{children}</div>,
-          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: '#10a37f', textDecoration: 'underline' }}>{children}</a>,
+          a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--brand, #10a37f)', textDecoration: 'underline' }}>{children}</a>,
           blockquote: ({ children }) => <blockquote style={{ margin: '6px 0', paddingLeft: 12, borderLeft: '2px solid rgba(128,128,128,.4)', opacity: 0.85 }}>{children}</blockquote>,
           code: ({ className, children, ...rest }: any) => {
             const isBlock = /language-/.test(className || '')
@@ -179,7 +179,7 @@ export function TypingDots({ color }: { color?: string }) {
     <span className="inline-flex items-center gap-1" style={{ height: 18 }}>
       {[0, 1, 2].map(i => (
         <span key={i} className="rounded-full" style={{
-          width: 6, height: 6, background: color || '#10a37f',
+          width: 6, height: 6, background: color || 'var(--brand, #10a37f)',
           animation: `agentBounce 1.15s ${i * 0.14}s ease-in-out infinite`,
         }} />
       ))}
@@ -189,7 +189,7 @@ export function TypingDots({ color }: { color?: string }) {
 
 /* ─── 输入胶囊（@ 成员菜单） ─── */
 export function AgentComposer({
-  onSend, disabled, placeholder, pool, accent = '#10a37f',
+  onSend, disabled, placeholder, pool, accent = 'var(--brand, #10a37f)',
 }: {
   onSend: (text: string) => void
   disabled?: boolean

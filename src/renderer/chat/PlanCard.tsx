@@ -102,9 +102,9 @@ export default function PlanCard({ plan, onClear, planModeOn = false, planApprov
       {/* 计划模式下的确认操作：批准即解除只读门禁；反馈让模型重出方案 */}
       {planModeOn && planApproved && (
         <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${c.border}` }}>
-          <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: '#10a37f' }}>
+          <div className="flex items-center gap-2 text-[12px] font-medium" style={{ color: 'var(--brand, #10a37f)' }}>
             <span className="inline-block w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: '#10a37f', borderTopColor: 'transparent' }} />
+              style={{ borderColor: 'var(--brand, #10a37f)', borderTopColor: 'transparent' }} />
             {t('已批准 · 正在按计划执行', 'Approved · executing plan')}
           </div>
         </div>

@@ -107,7 +107,7 @@ export default function TemplatesPanel({ onClose }: { onClose: () => void }) {
               <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-[12px]" style={{ color: c.textTertiary }}>取消</button>
               <button onClick={use}
                 className="px-3.5 py-1.5 rounded-lg text-[12px] font-medium text-white transition-opacity hover:opacity-90"
-                style={{ background: c.accent || '#10a37f' }}>
+                style={{ background: c.accent || 'var(--brand, #10a37f)' }}>
                 填入输入框
               </button>
             </div>

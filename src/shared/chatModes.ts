@@ -76,7 +76,7 @@ export const WELCOME: Record<ChatMode, {
 
 /* ─── 视觉信号：两个模式一个色相（状态条/切换器/空态共用）─── */
 export const MODE_ACCENT: Record<ChatMode, { zh: string; en: string; color: string }> = {
-  general: { zh: '办公模式', en: 'Office', color: '#10a37f' },
+  general: { zh: '办公模式', en: 'Office', color: 'var(--brand, #10a37f)' },
   coding: { zh: '编程模式', en: 'Coding', color: '#2563eb' },
 }
 

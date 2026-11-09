@@ -1874,7 +1874,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
         {/* 消息队列指示 */}
         {schedAt !== null && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11.5px] mx-auto w-full" style={{ maxWidth: wide ? 1100 : 860, background: 'rgba(16,163,127,.10)', color: '#10a37f' }}>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11.5px] mx-auto w-full" style={{ maxWidth: wide ? 1100 : 860, background: 'rgba(16,163,127,.10)', color: 'var(--brand, #10a37f)' }}>
             <svg className="w-3.5 h-3.5 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>

@@ -58,7 +58,7 @@ export default function ExtensionsPanel() {
   }
 
   const statusLabel: Record<string, string> = { active: '已启用', pending: '待批准', disabled: '已禁用', invalid: '异常' }
-  const statusColor: Record<string, string> = { active: '#10a37f', pending: '#f59e0b', disabled: c.textTertiary, invalid: '#ef4444' }
+  const statusColor: Record<string, string> = { active: 'var(--brand, #10a37f)', pending: '#f59e0b', disabled: c.textTertiary, invalid: '#ef4444' }
 
   return (
     <div className="h-full overflow-y-auto p-6" style={{ color: c.text }}>
@@ -112,7 +112,7 @@ export default function ExtensionsPanel() {
                   {r.status === 'pending' && (
                     <button disabled={busy === r.id + 'approve'} onClick={() => act(r.id, 'approve')}
                       className="px-3 h-7 rounded-full text-[11.5px] font-semibold disabled:opacity-40"
-                      style={{ background: '#10a37f', color: '#fff' }}>批准并启用</button>
+                      style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>批准并启用</button>
                   )}
                   {r.status === 'active' && (
                     <>

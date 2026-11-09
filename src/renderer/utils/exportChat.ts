@@ -94,7 +94,7 @@ export function toHtml(messages: ExportMessage[], stamp: string, title = '对话
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <style>
-  :root { --ink:#0d0d0d; --ink2:#5d5d5d; --line:#e5e5e5; --bg:#fff; --card:#fafafa; --accent:#10a37f; }
+  :root { --ink:#0d0d0d; --ink2:#5d5d5d; --line:#e5e5e5; --bg:#fff; --card:#fafafa; --accent:var(--brand, #10a37f); }
   @media (prefers-color-scheme: dark) {
     :root { --ink:#ececec; --ink2:#a1a1a1; --line:#333; --bg:#1a1a1a; --card:#222; }
   }
@@ -131,7 +131,7 @@ ${body}
  */
 export function toWordHtml(messages: ExportMessage[], stamp: string, title = '对话导出'): string {
   const body = messages.map(m => `
-  <p style="margin:0 0 4px"><b style="color:${m.role === 'user' ? '#5d5d5d' : '#10a37f'}">${escapeHtml(m.role === 'user' ? '❯ 用户' : '● 巨天')}</b></p>
+  <p style="margin:0 0 4px"><b style="color:${m.role === 'user' ? '#5d5d5d' : 'var(--brand, #10a37f)'}">${escapeHtml(m.role === 'user' ? '❯ 用户' : '● 巨天')}</b></p>
   <p style="margin:0 0 12px">${escapeHtml(m.content || '（空）').replace(/\n/g, '<br>')}</p>
   ${m.thinking ? `<p style="margin:0 0 12px;color:#8f8f8f;font-size:10.5pt"><i>（思考：${escapeHtml(m.thinking).replace(/\n/g, '<br>')}）</i></p>` : ''}`).join('\n')
 
