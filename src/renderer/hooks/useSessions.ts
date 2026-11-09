@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Session } from '../types'
 import * as storage from '../store/storage'
 
@@ -27,13 +27,18 @@ export function useSessions() {
     return s
   }, [])
 
+  // 引用稳定化（v14.47.0）：ChatTab 的 onProjectChange effect 依赖本回调，
+  // 旧实现 [sessions] 依赖让回调身份每次会话状态更新都变 → effect 无限重触发 →
+  // PUT /api/sessions/:id 以 ~900 次/秒自激（实测 CPU 88%）。改为 ref 读最新值，依赖空数组。
+  const sessionsRef = useRef(sessions)
+  sessionsRef.current = sessions
   const setProject = useCallback(async (id: string, project: string) => {
     // 值未变化则跳过，避免每次打开会话都写盘
-    const cur = sessions.find(s => s.id === id)
+    const cur = sessionsRef.current.find(s => s.id === id)
     if (cur && (cur.project || '') === (project || '')) return
     setSessions(prev => prev.map(s => (s.id === id ? { ...s, project } : s)))
     await storage.setSessionProject(id, project)
-  }, [sessions])
+  }, [])
 
   const remove = useCallback(async (id: string) => {
     await storage.deleteSession(id)
