@@ -5,6 +5,14 @@ import react from '@vitejs/plugin-react'
  * ly-next 架构 — 前端构建配置
  * 单一后端：serve.cjs（端口 3211）。开发时 /api 全部代理到后端，前端不再内嵌任何服务逻辑。
  */
+import fs from 'node:fs'
+import { execSync as _exec } from 'node:child_process'
+// 守卫（v14.47.0）：根 index.html 若被构建产物副本污染（历史踩坑：
+// 静默打包陈旧代码 + CPU 88% 假性故障），自动恢复并放行
+if (fs.existsSync('index.html') && fs.readFileSync('index.html', 'utf8').includes('/assets/index-')) {
+  console.warn('[vite-guard] 根 index.html 被产物污染——已自动从 git 恢复')
+  try { _exec('git checkout -- index.html'); console.warn('[vite-guard] 已恢复') } catch {}
+}
 export default defineConfig({
   root: '.',
   plugins: [react()],
