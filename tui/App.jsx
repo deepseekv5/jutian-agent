@@ -155,6 +155,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
         contextWindow: settings.contextWindow,
         hermesMode: settings.hermesProtocol,
         workDir: settings.workDir,
+        engine: engine || undefined,
         permissionLevel: settings.permissionLevel || 'standard',
       }, {
         onEvent: (ev) => {
@@ -387,7 +388,7 @@ function App({ info, tools, sysPrompt, initialMessages, initialSession, settings
 }
 
 /** 由 index.mjs 调用 */
-export async function startTui({ info, tools, settings, port }) {
+export async function startTui({ info, tools, settings, port, engine }) {
   const resumeId = process.argv.find((a) => a.startsWith('--resume='))?.split('=')[1]
   let initialMessages = []
   let initialSession = null

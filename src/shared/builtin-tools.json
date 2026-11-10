@@ -1260,5 +1260,127 @@
     "schedule"
    ]
   }
+ },
+ {
+  "name": "glob",
+  "description": "按 glob 模式查找文件（默认尊重 .gitignore，按修改时间倒序）。JT Core Ultra 移植自 gemini-cli。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "pattern": {
+     "type": "string",
+     "description": "glob 模式，如 src/**/*.ts"
+    },
+    "dir_path": {
+     "type": "string",
+     "description": "可选：绝对目录路径"
+    },
+    "case_sensitive": {
+     "type": "boolean"
+    },
+    "respect_git_ignore": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "pattern"
+   ]
+  }
+ },
+ {
+  "name": "grep_search",
+  "description": "正则内容搜索，支持 context/include/total_max_matches。JT Core Ultra 移植自 gemini-cli。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "pattern": {
+     "type": "string",
+     "description": "正则模式"
+    },
+    "dir_path": {
+     "type": "string"
+    },
+    "include_pattern": {
+     "type": "string"
+    },
+    "context": {
+     "type": "number"
+    },
+    "total_max_matches": {
+     "type": "number"
+    },
+    "names_only": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "pattern"
+   ]
+  }
+ },
+ {
+  "name": "read_many_files",
+  "description": "批量读取多个文件，带 --- path --- 分隔符。JT Core Ultra 移植自 gemini-cli。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "include": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "glob 模式或路径数组"
+    },
+    "exclude": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "recursive": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "include"
+   ]
+  }
+ },
+ {
+  "name": "write_todos",
+  "description": "全量覆盖式任务清单（pending/in_progress/completed/cancelled/blocked）。JT Core Ultra 移植自 gemini-cli。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "todos": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "description": {
+        "type": "string"
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "pending",
+         "in_progress",
+         "completed",
+         "cancelled",
+         "blocked"
+        ]
+       }
+      },
+      "required": [
+       "description",
+       "status"
+      ]
+     }
+    }
+   },
+   "required": [
+    "todos"
+   ]
+  }
  }
 ]

@@ -119,7 +119,7 @@ const SLASH_COMMANDS: SlashCmd[] = [
 const MODES_OFF: Record<ModeKey, boolean> = { plan: false, search: false, draw: false, dev: false, swarm: false, gongwen: false }
 
 // ─── composer 状态条：模式 · 模型 · 工作目录 · git 分支（学 ClerkBox 输入框上方的状态行）───
-function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMode: 'general' | 'coding'; modelLabel: string; workDir: string; disabled?: boolean }) {
+function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled, engine, onSwitchEngine }: { chatMode: 'general' | 'coding'; modelLabel: string; workDir: string; disabled?: boolean; engine?: string; onSwitchEngine?: () => void }) {
   const { c } = useTheme()
   const { lang } = useLanguage()
   const [git, setGit] = useState<{ branch: string; changes: number } | null>(null)
@@ -145,6 +145,12 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled }: { chatMo
         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: mode.color }} />
         {lang === 'en' ? mode.en : mode.zh}
       </span>
+      <button type="button" onClick={onSwitchEngine} title="点击切换 JT Core 内核"
+        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded transition-colors"
+        style={{ background: engine === 'ultra' ? '#c7000b18' : `${c.accent}12`, color: engine === 'ultra' ? '#c7000b' : c.accent }}>
+        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M10.5 18h3M6 10.5v3M18 10.5v3M8 8h8v8H8z" /></svg>
+        {engine === 'ultra' ? 'Ultra' : engine === 'harness' ? 'Harness' : 'Pro+'}
+      </button>
       <span className="font-mono truncate max-w-[180px]" title={modelLabel}>{modelLabel || '未配置模型'}</span>
       {base && (
         <span className="inline-flex items-center gap-1 truncate max-w-[160px]" title={workDir}>
@@ -1927,7 +1933,15 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         )}
 
         {/* composer 状态条：模式 · 模型 · 工作目录 · git 分支 */}
-        <ComposerStatusBar chatMode={chatMode} modelLabel={currentModel || settings?.model || ''} workDir={settings?.workDir || ''} disabled={disabled} />
+        <ComposerStatusBar chatMode={chatMode} modelLabel={currentModel || settings?.model || ''} workDir={settings?.workDir || ''} disabled={disabled}
+          engine={settings?.agentEngine} onSwitchEngine={() => {
+            const all = ['vercel', 'server', 'client', 'ultra', 'harness'];
+            const cur = String(settings?.agentEngine || 'vercel');
+            const next = all[(all.indexOf(cur) + 1) % all.length];
+            try { const raw = localStorage.getItem('lyclaw_settings'); const st = raw ? JSON.parse(raw) : {}; st.agentEngine = next; localStorage.setItem('lyclaw_settings', JSON.stringify(st)); } catch {}
+            fetch('/api/agent/engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: next }) }).catch(() => {});
+            window.dispatchEvent(new CustomEvent('settings-updated', { detail: { ...(settings || {}), agentEngine: next } }));
+          }} />
 
         {/* 免责声明 + 上下文仪表 */}
         <div className="mt-1 flex items-center justify-center gap-3 text-[11.5px]" style={{ color: c.textTertiary }}>

@@ -236,6 +236,25 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
             </div>
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#c7000b" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 12h14" /></svg>
           </button>
+          <div className="mb-4 rounded-2xl border p-3.5 flex items-center gap-3" style={{ borderColor: 'rgba(199,0,11,.3)', background: c.surfaceCard }}>
+            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0"
+              style={{ background: (() => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? '#c7000b' : 'var(--brand, #10a37f)' } catch { return 'var(--brand, #10a37f)' } })(), color: '#fff', fontSize: 11, fontWeight: 700 }}>
+              {((): string => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? 'U' : 'P' } catch { return 'P' } })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{((): string => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? 'JT Core Ultra' : 'JT Core Pro+' } catch { return 'JT Core Pro+' } })()}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('点击切换内核（composer 状态条 / 命令面板也可切换）', 'Click to switch kernel (also in composer status bar / command palette)')}</div>
+            </div>
+            <button onClick={() => {
+              try { const raw = localStorage.getItem('lyclaw_settings'); const st = raw ? JSON.parse(raw) : {}; const cur = st.agentEngine || 'vercel';
+                const next = cur === 'ultra' ? 'server' : 'ultra'; st.agentEngine = next;
+                localStorage.setItem('lyclaw_settings', JSON.stringify(st));
+                fetch('/api/agent/engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: next }) }).catch(() => {});
+                window.dispatchEvent(new CustomEvent('settings-updated', { detail: st }));
+              } catch {}
+            }} className="text-[11.5px] px-3 py-1.5 rounded-lg font-medium shrink-0"
+              style={{ background: c.accentBg, color: c.accent }}>{t('切换', 'Switch')}</button>
+          </div>
           <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('工作区入口', 'Workspace')}</span>
           <div className="flex-1 h-px" style={{ background: c.borderLight }} />
           <span className="text-[10.5px]" style={{ color: c.textMuted }}>{t('选择后本标签页自动关闭', 'This tab closes after you pick')}</span>

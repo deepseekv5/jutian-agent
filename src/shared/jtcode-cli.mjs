@@ -45,6 +45,7 @@ const rest = []
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '-m' || args[i] === '--model') { modelOverride = args[++i]; continue }
   if (args[i] === '-h' || args[i] === '--help') { printHelp(); process.exit(0) }
+  if (args[i] === '--engine') { globalThis.__jtEngine = args[++i] || ''; continue }
   if (args[i] === '-v' || args[i] === '--version') { console.log(VERSION); process.exit(0) }
   rest.push(args[i])
 }
@@ -56,7 +57,8 @@ function printHelp() {
   console.log(`    jtcode                  ${C.dim('交互对话（在当前目录操作电脑）')}`)
   console.log(`    jtcode "你的问题"       ${C.dim('单次提问')}`)
   console.log(`    jtcode status           ${C.dim('服务状态 / 当前模型')}`)
-  console.log(`    jtcode -m <model> "..." ${C.dim('指定模型')}`)
+  console.log(`    jtcode -m <model> "..." ${C.dim('指定模型')}
+    jtcode --engine ultra    ${C.dim('使用 JT Core Ultra 内核')}`)
   console.log('')
   console.log(`  ${C.bold('交互命令')}`)
   console.log(`    /tools /status /security /pack /clear /help /exit`)

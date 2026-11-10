@@ -75,7 +75,7 @@ async function main() {
     }
   }
   const { startTui } = await import('./App.mjs')
-  await startTui({ info, tools, settings, port: PORT })
+  await startTui({ info, tools, settings, port: PORT, engine: engineArg })
 }
 
 main().catch((e) => {

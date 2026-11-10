@@ -280,6 +280,8 @@ var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
 // JT Core Ultra（v15.0.0）：移植 gemini-cli/OpenHands 护栏的高端内核，与 JT Core Pro+ 并存
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
+var ULTRA_TOOLS = (() => { try { return require("./src/shared/ultraTools.cjs"); } catch (e) { return null; } })();
+var ULTRA_PROMPTS = (() => { try { return require("./src/shared/ultraPrompts.cjs"); } catch (e) { return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
@@ -2575,6 +2577,43 @@ console.log(`← ${name} ${r.success ? "OK" : "FAIL"}`);
   return r;
 }
 
+// ─── JT Core Ultra 工具实现（v15.1.0）：gemini-cli 语义包装巨天既有工具 ───
+/** glob：按 glob 模式找文件（默认尊重 .gitignore，按修改时间倒序） */
+async function ultra_glob(a) {
+  const r = await search_files({ pattern: String(a.pattern || '**/*'), path: String(a.dir_path || a.path || ''), limit: Number(a.limit) || 200 });
+  return r;
+}
+/** grep_search：正则内容搜索，支持 context / include / maxResults */
+async function ultra_grep(a) {
+  return await search_content({
+    pattern: String(a.pattern || ''),
+    path: String(a.dir_path || a.path || ''),
+    include: a.include ? String(a.include) : undefined,
+    context: Number(a.context) || 0,
+    maxResults: Number(a.maxResults) || 100,
+    namesOnly: !!a.names_only,
+  });
+}
+/** read_many_files：批量读取，带 --- path --- 分隔 */
+async function ultra_read_many(a) {
+  const paths = Array.isArray(a.paths) ? a.paths : Array.isArray(a.include) ? a.include : [];
+  const out = [];
+  for (const p of paths.slice(0, 20)) {
+    try {
+      const r = await read_file({ path: String(p) });
+      out.push(`--- ${p} ---\n${r.success ? String(r.output || '').slice(0, 8000) : String(r.error)}`);
+    } catch (e) { out.push(`--- ${p} ---\n读取失败: ${e.message}`); }
+  }
+  out.push('--- End of content ---');
+  return { success: true, output: out.join('\n\n') };
+}
+/** write_todos：全量覆盖式任务清单，状态五态 */
+function ultra_write_todos(a) {
+  const todos = Array.isArray(a.todos) ? a.todos : [];
+  try { fs.writeFileSync(path.join(DATA_DIR, 'ultra-todos.json'), JSON.stringify({ todos, updatedAt: new Date().toISOString() }, null, 2)); } catch {}
+  return { success: true, output: `已记录 ${todos.length} 项任务\n${todos.map((t, i) => `${i + 1}. [${t.status || 'pending'}] ${t.description || ''}`).join('\n')}` };
+}
+
 var TOOLS = {
   read_file, write_file, edit_file, list_dir, search_files, search_content,
   get_file_info, move_file, delete_file,
@@ -2591,7 +2630,10 @@ var TOOLS = {
   remember, recall, forget,
   save_knowledge: toolSaveKnowledge,
   consult_guidance: consultGuidance,
-  schedule_task: scheduleTaskTool
+  schedule_task: scheduleTaskTool,
+  // JT Core Ultra 原生工具（gemini-cli 语义）
+  glob: ultra_glob, grep_search: ultra_grep,
+  read_many_files: ultra_read_many, write_todos: ultra_write_todos
 };
 
 /* ─── v12 新工具实现 ─────────────────────────────────────────────
@@ -3581,6 +3623,19 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
      * 无状态续跑：遇到「需要用户确认」或「客户端工具」时，把消息原样返回
      * （needs_client 事件），渲染层处理完带着新消息重新 POST。
      */
+    // JT Core 引擎状态/切换（v15.1.0）：GET 查询，POST 落库（前端各入口共用）
+    if (url.pathname === "/api/agent/engine" && req.method === "GET") {
+      let cur = "vercel";
+      try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
+      return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP,
+        engines: ["vercel", "server", "client", "ultra", "harness"] });
+    }
+    if (url.pathname === "/api/agent/engine" && req.method === "POST") {
+      const d = await body(req);
+      const v = ["vercel", "server", "client", "ultra", "harness"].includes(String(d.engine)) ? String(d.engine) : "vercel";
+      try { db.setSetting("agentEngine", v); invalidateSettingsCache(); } catch {}
+      return json(res, { ok: true, engine: v });
+    }
     if (url.pathname === "/api/agent/run" && req.method === "POST") {
       if (!AGENT_LOOP) return json(res, { error: "agent 循环模块不可用" }, 500);
       const payload = await body(req);
@@ -3615,10 +3670,31 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       try {
         // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；其余一律 JT Core Pro+（原逻辑零改动）
         const __engine = String(payload.engine || '');
-        const __loop = __engine === 'ultra' && ULTRA_LOOP ? ULTRA_LOOP : AGENT_LOOP;
-        const __runner = __loop === ULTRA_LOOP ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
-        const result = await __runner(messages, {
-          tools,
+        const __ultra = __engine === 'ultra' && ULTRA_LOOP;
+        const __loop = __ultra ? ULTRA_LOOP : AGENT_LOOP;
+        const __runner = __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
+        // Ultra 后端全量接线（v15.1.0）：提示词 / 工具集 / 回落模型 / 语义检测 / IDE 上下文 / maxTokens
+        const __ultraTools = __ultra && ULTRA_TOOLS ? ULTRA_TOOLS.ultraToolsForModel(model) : tools;
+        const __ultraMsgs = __ultra && ULTRA_PROMPTS
+          ? (() => {
+              const sys = ULTRA_PROMPTS.buildUltraSystemPrompt({
+                model, workDir: String(payload.workDir || st.workDir || ''),
+                interactive: true, hasSkills: true, enableWriteTodos: true,
+                skills: [], memory: '',
+              });
+              const first = messages[0];
+              return first && first.role === 'system'
+                ? [{ ...first, content: String(first.content || '') + '\n\n' + sys }, ...messages.slice(1)]
+                : [{ role: 'system', content: sys }, ...messages];
+            })()
+          : messages;
+        let __fallbackModels = [];
+        try { const mm = JSON.parse(st.models || '[]'); if (Array.isArray(mm)) __fallbackModels = mm.filter(x => x && x !== model).slice(0, 2); } catch {}
+        const __ideContext = __ultra ? {
+          toPromptBlock: () => String(payload.ideContext || '').slice(0, 2000),
+        } : null;
+        const result = await __runner(__ultraMsgs, {
+          tools: __ultraTools,
           model,
           apiBase,
           contextWindow: Number(payload.contextWindow) || 0,
@@ -3629,6 +3705,32 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           // JT Core Ultra 专属字段（JT Core Pro+ 忽略，零影响）
           permissionLevel: String(payload.permissionLevel || 'edit'),
           approvedScopes: Array.isArray(payload.approvedScopes) ? payload.approvedScopes : [],
+          // Ultra 专属：模型回落 / 语义循环检测 / IDE 上下文 / maxTokens / 客户端工具
+          fallbackModels: __fallbackModels,
+          maxTokens: Number(payload.maxTokens) || undefined,
+          semanticLoopCheck: __ultra ? async (recent) => {
+            // 语义循环检测走 llm-proxy 的结构化 JSON（双模型复核的简化：置信度 ≥0.9 判定）
+            try {
+              const r = await fetch("http://127.0.0.1:" + PORT + "/api/llm-proxy", {
+                method: "POST", headers: { "Content-Type": "application/json", ...(apiBase ? { "X-Target-Base": apiBase } : {}), ...(apiKey ? { "X-Api-Key": apiKey } : {}), ...(APP_UI_TOKEN ? { "X-App-Token": APP_UI_TOKEN } : {}) },
+                body: JSON.stringify({ model, messages: [
+                  { role: 'system', content: ULTRA_PROMPTS ? ULTRA_PROMPTS.LOOP_DETECTION_SYSTEM_PROMPT : '' },
+                  ...recent.slice(-20),
+                  { role: 'user', content: ULTRA_PROMPTS ? ULTRA_PROMPTS.LOOP_DETECTION_TASK_PROMPT : 'Is this a loop? Answer JSON.' },
+                ], stream: false, max_tokens: 300 }),
+              });
+              const d = await r.json().catch(() => ({}));
+              const text = String(d?.choices?.[0]?.message?.content || '');
+              const m = text.match(/"unproductive_state_confidence"\s*:\s*([0-9.]+)/);
+              return !!m && Number(m[1]) >= 0.9;
+            } catch { return false; }
+          } : undefined,
+          ideContext: __ideContext,
+          runClientTool: async (tc) => {
+            const args = (() => { try { return JSON.parse(tc.arguments || '{}') } catch { return {} } })();
+            if (tc.name === 'update_plan' || tc.name === 'write_todos') return JSON.stringify({ ok: true, steps: args.steps || args.todos || [] });
+            return JSON.stringify({ ok: true });
+          },
           signal: abort.signal,
           // 内部转发到 llm-proxy（不是上游直连）：密钥解析、Kilo 免费档、
           // free/keyless 哨兵、上游接力全都在代理里，直接打上游会绕过它们。
@@ -3670,14 +3772,17 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             const v = confirmed[tc.id];
             return v === undefined || v === null || v === true ? null : String(v);
           },
-          runTool: async (name, args) => {
+          runTool: async (name, rawArgs) => {
+            // Ultra 工具别名回落（gemini 名 → 巨天 53 工具）+ 参数归一化
+            const name2 = __ultra && ULTRA_TOOLS ? (ULTRA_TOOLS.TOOL_ALIASES[name] || name) : name;
+            const args = __ultra && ULTRA_TOOLS ? ULTRA_TOOLS.normalizeArgs(name, rawArgs || {}) : (rawArgs || {});
             // 与 /api/tools/execute 同一套门禁
             const sec = securityConfig();
-            const secError = checkSecurity(name, args, sec);
+            const secError = checkSecurity(name2, args, sec);
             if (secError) return { success: false, error: "【安全策略】" + secError };
-            const platErr = toolPlatformError(name);
+            const platErr = toolPlatformError(name2);
             if (platErr) return { success: false, error: platErr };
-            return await executeToolCore(name, args);
+            return await executeToolCore(name2, args);
           },
           saveLargeOutput: async (name, text) => {
             const fname = "tool-outputs/" + name + "-" + Date.now() + ".txt";

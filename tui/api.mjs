@@ -155,6 +155,7 @@ export async function chatRun(payload, hooks, signal) {
           pendingTool,
           confirmations,
           approvedScopes,
+          engine: payload.engine || undefined,
         }),
         signal,
       })
