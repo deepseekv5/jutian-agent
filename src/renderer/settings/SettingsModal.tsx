@@ -988,13 +988,13 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('Agent 内核', 'Agent engine')}</label>
+                    <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('JT Core 内核', 'JT Core engine')}</label>
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                      {([['vercel', 'Vercel'], ['server', '服务端'], ['client', '兼容'], ['harness', 'Harness']] as const).map(([v, zh]) => (
+                      {([['vercel', 'Pro+ Vercel'], ['server', 'Pro+ 服务端'], ['client', 'Pro+ 兼容'], ['ultra', 'Ultra 移植'], ['harness', 'Harness']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
                           className="flex-1 px-1 py-1 text-[10px] transition-colors"
                           style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || 'var(--brand, #10a37f)') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
-                          {t(zh, v === 'vercel' ? 'Vercel' : v === 'server' ? 'Server' : v === 'client' ? 'Legacy' : 'Harness')}
+                          {t(zh, v === 'vercel' ? 'Pro+ Vercel' : v === 'server' ? 'Pro+ Server' : v === 'client' ? 'Pro+ Legacy' : v === 'ultra' ? 'Ultra (ported)' : 'Harness')}
                         </button>
                       ))}
                     </div>

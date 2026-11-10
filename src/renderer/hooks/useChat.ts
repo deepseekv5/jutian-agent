@@ -1260,9 +1260,9 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       const onPerf = (r: { totalMs: number; rounds: number; llmMs: number; toolMs: number; toolCalls: number; toolErrors: number }) => {
         window.dispatchEvent(new CustomEvent('chat-perf', { detail: { sessionId, ...r } }))
       }
-      // 内核选择（v14.3）：默认走服务端循环（工具零回环、定时任务同源）；
+      // 内核选择（v15.0.0）：JT Core Pro+ 三档 + Ultra（服务端同端点按 engine 字段分发）；
       // 设置里可切回渲染层循环作为对照/兜底
-      const engine = settings.agentEngine === 'client' ? 'client' : settings.agentEngine === 'server' ? 'server' : 'vercel'
+      const engine = settings.agentEngine === 'client' ? 'client' : settings.agentEngine === 'server' || settings.agentEngine === 'ultra' ? 'server' : 'vercel'
       const callArgs = [{ ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools] as const
       if (engine === 'vercel') {
         // 按需加载：AI SDK 体积较大，首屏不需要它

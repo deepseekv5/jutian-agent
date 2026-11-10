@@ -14,6 +14,25 @@ interface Doc { id: string; title: string; titleEn: string; icon: string; body: 
 
 const DOCS: Doc[] = [
   {
+    id: 'kernels', title: 'Agent 内核', titleEn: 'Agent kernels', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9h14M5 15h14M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z',
+    body: `## JT Core 双内核（设置 → JT Core 内核）
+
+**JT Core Pro+**（原内核，逻辑一行未改，三档并存）：
+- Pro+ Vercel：Vercel AI SDK 渲染层循环（默认）
+- Pro+ 服务端：/api/agent/run 服务端循环，工具零回环，定时任务同源
+- Pro+ 兼容：旧渲染层循环，兜底对照
+
+**JT Core Ultra**（v15.0.0 新移植，gemini-cli Apache-2.0 / OpenHands MIT 算法源码级再实现，零新依赖）：
+- 七态工具 FSM 与并发批处理调度器
+- 三层循环检测（工具周期 / 内容复读 / LLM 语义）+ 一次性自救硬停
+- 10 次抖动指数退避（429/499/5xx，尊重 Retry-After）+ 有界模型回落
+- 上下文压缩（0.5 阈值 / 保留 30% / 保护 3 轮）+ 溢出预检
+- Next-speaker 续跑、五场景卡死检测、Turn/Token 预算、策略与沙箱升级、IDE 上下文
+
+两内核走同一端点按 engine 字段分发，随时切回 Pro+。许可详见仓库 docs/THIRD_PARTY_NOTICES.md。`,
+  },
+
+  {
     id: 'quickstart', title: '快速上手', titleEn: 'Quick start', icon: 'M13 10V3L4 14h7v7l9-11h-7z',
     body: `## 三步开始
 

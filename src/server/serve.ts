@@ -278,6 +278,8 @@ var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
 var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"); } catch (e) { console.error("permission.cjs load failed:", e.message); return null; } })();
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
+// JT Core Ultra（v15.0.0）：移植 gemini-cli/OpenHands 护栏的高端内核，与 JT Core Pro+ 并存
+var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
@@ -3611,7 +3613,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
 
       try {
-        const result = await AGENT_LOOP.runAgentLoop(messages, {
+        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；其余一律 JT Core Pro+（原逻辑零改动）
+        const __engine = String(payload.engine || '');
+        const __loop = __engine === 'ultra' && ULTRA_LOOP ? ULTRA_LOOP : AGENT_LOOP;
+        const __runner = __loop === ULTRA_LOOP ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
+        const result = await __runner(messages, {
           tools,
           model,
           apiBase,
@@ -3620,6 +3626,9 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           disabledTools: Array.isArray(payload.disabledTools) ? payload.disabledTools : [],
           resume: payload.resume || undefined,
           pendingTool: payload.pendingTool || undefined,
+          // JT Core Ultra 专属字段（JT Core Pro+ 忽略，零影响）
+          permissionLevel: String(payload.permissionLevel || 'edit'),
+          approvedScopes: Array.isArray(payload.approvedScopes) ? payload.approvedScopes : [],
           signal: abort.signal,
           // 内部转发到 llm-proxy（不是上游直连）：密钥解析、Kilo 免费档、
           // free/keyless 哨兵、上游接力全都在代理里，直接打上游会绕过它们。
