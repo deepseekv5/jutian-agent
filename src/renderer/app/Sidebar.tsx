@@ -469,7 +469,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
   return (
     <div className="h-full flex flex-col glass" style={{ borderRight: `1px solid ${c.border}` }}>
       {/* ── 品牌头部 ── */}
-      <div className="h-14 flex items-center justify-between shrink-0 titlebar-drag" style={{ paddingLeft: isMac ? 78 : 12, paddingRight: 12 }}>
+      <div className="h-14 flex items-center justify-between shrink-0 titlebar-drag" style={{ paddingLeft: isMac ? 70 : 12, paddingRight: 10 }}>
         <div className="flex items-center gap-2.5 min-w-0">
           <BrandMark size={20} color={c.textHead} />
           <span className="sidebar-app-title text-[14px] font-semibold tracking-tight truncate" style={{ color: c.textHead }}>{APP_NAME}</span>
@@ -481,7 +481,7 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
             try { localStorage.setItem('lyclaw_chat_mode', next) } catch {}
             window.dispatchEvent(new Event('chat-mode-changed'))
           }}
-            className="h-7 pl-2 pr-2.5 rounded-full flex items-center gap-1 text-[11px] font-medium transition-colors"
+            className="h-6 pl-1.5 pr-2 rounded-full flex items-center gap-1 text-[10.5px] font-medium transition-colors"
             style={{
               // 与空态/状态条同源的模式色（办公绿 / 编程蓝），切换时整个应用的「身份感」一起变
               background: headerChatMode === 'coding' ? 'rgba(37,99,235,.09)' : 'var(--brand-soft, rgba(16,163,127,.09))',

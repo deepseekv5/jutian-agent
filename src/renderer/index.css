@@ -1084,7 +1084,8 @@ button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { c
 /* 新标签页：纯文字行，hover 只给浅灰底 + 主文字色，不用强调色 */
 .jt-text-row { transition: background-color .14s ease, color .14s ease; border-radius: 6px; }
 .jt-text-row:hover { color: var(--jt-ink) !important; background: var(--jt-focus) !important; }
-.jt-codex-search input { border: none !important; border-bottom: 1px solid var(--jt-hairline) !important; background: transparent !important; padding-left: 26px !important; font-size: 13px !important; border-radius: 0 !important; }
+.jt-codex-search input { border: none !important; border-bottom: 1px solid var(--jt-hairline) !important; background: transparent !important; padding-left: 36px !important; font-size: 13px !important; border-radius: 0 !important; color: var(--jt-ink) !important; }
+.jt-codex-search svg { opacity: .55; }
 .jt-codex-search input:focus { border-bottom-color: var(--jt-ink-2) !important; box-shadow: none !important; }
 .jt-codex-search .rounded-2xl { border: none !important; background: transparent !important; }
 
@@ -1160,3 +1161,8 @@ html[data-wallpaper="off"][data-theme="party"] .jt-in-left > * { background: #f6
 .composer-dock input:focus, .composer-dock textarea:focus { box-shadow: none !important; }
 /* 全局细滚动条 + hover 反馈统一 */
 .jt-in-left button:hover, .jt-in-fade button:hover { transition: background-color .16s ease !important; }
+
+/* v15.6.1 细节包：品牌行不再截断、顶栏激活 tab 字重、滚动条 6px */
+.sidebar-app-title { font-size: 13.5px !important; }
+.tab-strip > div:has(> span.absolute) { font-weight: 500 !important; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
