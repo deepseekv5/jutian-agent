@@ -2607,12 +2607,8 @@ async function ultra_read_many(a) {
   out.push('--- End of content ---');
   return { success: true, output: out.join('\n\n') };
 }
-/** write_todos：全量覆盖式任务清单，状态五态 */
-function ultra_write_todos(a) {
-  const todos = Array.isArray(a.todos) ? a.todos : [];
-  try { fs.writeFileSync(path.join(DATA_DIR, 'ultra-todos.json'), JSON.stringify({ todos, updatedAt: new Date().toISOString() }, null, 2)); } catch {}
-  return { success: true, output: `已记录 ${todos.length} 项任务\n${todos.map((t, i) => `${i + 1}. [${t.status || 'pending'}] ${t.description || ''}`).join('\n')}` };
-}
+// v15.3.0：write_todos 不再单独写 ultra-todos.json（面板读不到、五态也没处显示）。
+// 统一委托 todo_write：同一份 todos.json、三态映射、五态 description 兼容，面板实时可见。
 
 var TOOLS = {
   read_file, write_file, edit_file, list_dir, search_files, search_content,
@@ -2633,7 +2629,7 @@ var TOOLS = {
   schedule_task: scheduleTaskTool,
   // JT Core Ultra 原生工具（gemini-cli 语义）
   glob: ultra_glob, grep_search: ultra_grep,
-  read_many_files: ultra_read_many, write_todos: ultra_write_todos
+  read_many_files: ultra_read_many, write_todos: todo_write
 };
 
 /* ─── v12 新工具实现 ─────────────────────────────────────────────
@@ -2716,14 +2712,21 @@ async function text_diff(a) {
 
 function todo_write(a) {
   const list = Array.isArray(a.todos) ? a.todos : [];
-  const clean = list.slice(0, 100).map((t) => ({
-    content: String(t?.content || "").slice(0, 200),
-    status: ["pending", "in_progress", "completed"].includes(t?.status) ? t.status : "pending",
-  })).filter((t) => t.content);
-  const path = path.join(DATA_DIR, "todos.json");
+  // v15.3.0：兼容 Ultra/gemini 的五态 schema（description + cancelled/blocked），
+  // 映射到面板三态：cancelled/blocked 都归 pending（不能丢任务）。
+  const clean = list.slice(0, 100).map((t) => {
+    const raw = t?.status || "pending";
+    const status = ["in_progress", "completed"].includes(raw) ? raw : "pending";
+    return {
+      content: String(t?.content ?? t?.description ?? "").slice(0, 200),
+      status,
+    };
+  }).filter((t) => t.content);
+  // 之前写成 `const path = path.join(...)` —— const 遮蔽模块 path 且 TDZ，调用必崩。
+  const filePath = path.join(DATA_DIR, "todos.json");
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(path, JSON.stringify(clean, null, 1));
+    fs.writeFileSync(filePath, JSON.stringify(clean, null, 1));
   } catch (e) {
     return { success: false, error: `保存待办失败：${e.message}` };
   }
@@ -3662,7 +3665,9 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       });
       const send = (obj) => { try { res.write("data: " + JSON.stringify(obj) + "\n\n") } catch {} };
       const abort = new AbortController();
-      req.on("close", () => { try { abort.abort() } catch {} });
+      // v15.3.0：15s 注释心跳——长工具调用期间没有数据帧，代理/浏览器会判定连接已死
+      const heartbeat = setInterval(() => { try { res.write(": ping\n\n") } catch {} }, 15000);
+      req.on("close", () => { clearInterval(heartbeat); try { abort.abort() } catch {} });
 
       const clientTools = new Set(["dispatch_subagents", "update_plan"]);
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
@@ -3728,7 +3733,13 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           ideContext: __ideContext,
           runClientTool: async (tc) => {
             const args = (() => { try { return JSON.parse(tc.arguments || '{}') } catch { return {} } })();
-            if (tc.name === 'update_plan' || tc.name === 'write_todos') return JSON.stringify({ ok: true, steps: args.steps || args.todos || [] });
+            // v15.3.0：write_todos 客户端路径也要真落盘——此前只回显 steps，
+            // 模型以为清单记下了，面板却永远为空。与 todo_write 同一份文件/同一套校验。
+            if (tc.name === 'write_todos') {
+              const r = todo_write({ todos: Array.isArray(args.todos) ? args.todos : (Array.isArray(args.steps) ? args.steps : []) });
+              return JSON.stringify(r.success ? { ok: true, steps: args.todos || args.steps || [] } : { ok: false, error: r.error });
+            }
+            if (tc.name === 'update_plan') return JSON.stringify({ ok: true, steps: args.steps || args.todos || [] });
             return JSON.stringify({ ok: true });
           },
           signal: abort.signal,
@@ -3810,6 +3821,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         }
       } finally {
         __restoreWorkDir();
+        clearInterval(heartbeat);
         try { res.end() } catch {}
       }
       return;
@@ -6759,6 +6771,9 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           "Connection": "keep-alive",
         });
         const sse = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch {} };
+        // v15.3.0：调研是多路长任务，15s 心跳防中间无帧被代理掐断
+        const researchHeartbeat = setInterval(() => { try { res.write(": ping\n\n") } catch {} }, 15000);
+        res.on("close", () => clearInterval(researchHeartbeat));
 
         // 阶段一：拆检索词
         sse({ phase: "plan", detail: "正在拆解检索策略" });
@@ -6834,9 +6849,11 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
           fs.writeFileSync(file, `# 深度调研：${q}\n\n${report}\n`, "utf-8");
         } catch {}
         sse({ done: true, report, sources, file: path.basename(file || "") });
+        clearInterval(researchHeartbeat);
         res.end();
       } catch (e) {
         try { res.write(`data: ${JSON.stringify({ error: String(e?.message || e) })}\n\n`); } catch {}
+        clearInterval(researchHeartbeat);
         res.end();
       }
       return;

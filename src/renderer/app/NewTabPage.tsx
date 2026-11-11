@@ -74,18 +74,6 @@ const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
   { label: '集成与配置', labelEn: 'Integration', items: ['qqbot', 'settings', 'about', 'extensions', 'harness'] },
 ]
 
-// 徽章亮点：短标题 + 一句话
-const HIGHLIGHTS: { zh: string; en: string }[] = [
-  { zh: '本地优先 · 数据不出本机', en: 'Local-first · data stays on your machine' },
-  { zh: '开源可审计 · MIT 协议', en: 'Open source · MIT licensed' },
-  { zh: '免费模型开箱即用 · 免 key', en: 'Free models out of the box · keyless' },
-  { zh: '危险命令需你点头', en: 'Dangerous commands need your nod' },
-]
-
-interface Props {
-  onPick: (type: PageType) => void
-}
-
 /**
  * 新标签页（v15.2.0 重写为 Codex 风默认布局）
  *

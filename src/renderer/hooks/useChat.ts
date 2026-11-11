@@ -690,7 +690,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
         const isImg = /\.(png|jpe?g|gif|webp)$/i.test(f.name) || (f.dataUrl && f.dataUrl.startsWith('data:image/'))
         if (isImg) {
           try {
-            let payload: { session_id: string; name: string; dataUrl?: string; path?: string } = { session_id: sessionId, name: f.name }
+            const payload: { session_id: string; name: string; dataUrl?: string; path?: string } = { session_id: sessionId, name: f.name }
             if (f.dataUrl && f.dataUrl.startsWith('data:image/')) payload.dataUrl = f.dataUrl
             else if (f.file) {
               const dataUrl = await new Promise<string>((resolve, reject) => {

@@ -353,5 +353,9 @@ describe('tools / gemini-cli 工具集移植', () => {
       .toMatchObject({ path: 'a.ts', oldText: 'x', newText: 'y', replaceAll: true })
     expect(T.normalizeArgs('read_file', { file_path: 'a', start_line: 3, end_line: 7 }))
       .toMatchObject({ path: 'a', offset: 2, limit: 5 })
+    // v15.3.0：write_todos 五态 schema 必须能原样落到 todo_write（面板同一份数据）
+    const todos = [{ description: '修复 TDZ', status: 'in_progress' }, { description: '补测试', status: 'blocked' }]
+    expect(T.TOOL_ALIASES.write_todos).toBe('todo_write')
+    expect(T.normalizeArgs('write_todos', { todos })).toMatchObject({ todos })
   })
 })
