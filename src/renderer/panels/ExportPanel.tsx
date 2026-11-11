@@ -138,10 +138,10 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="px-5 py-3 border-b flex items-center gap-2" style={{ borderColor: c.borderLight }}>
-        <span className="text-[14px] font-bold" style={{ color: c.textHead }}>导出会话</span>
-        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown / HTML / PDF · 可多选合并</span>
+        <span className="text-[14px] font-bold whitespace-nowrap" style={{ color: c.textHead }}>导出会话</span>
+        <span className="text-[10.5px] hidden sm:inline" style={{ color: c.textTertiary }}>Markdown / HTML / PDF · 可多选合并</span>
         <span className="flex-1" />
-        <button onClick={onClose} className="px-2.5 py-1 rounded-lg text-[11.5px]" style={{ color: c.textTertiary }}>关闭</button>
+        <button onClick={onClose} className="px-2.5 py-1 rounded-lg text-[11.5px] whitespace-nowrap" style={{ color: c.textTertiary }}>关闭</button>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-4">
@@ -222,8 +222,8 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
         {msg && <div className="text-[11px] px-3 py-2 rounded-lg" style={{ background: c.bgInput, color: c.textSecondary || c.textTertiary }}>{msg}</div>}
       </div>
 
-      <div className="px-5 py-3 border-t flex items-center gap-2" style={{ borderColor: c.borderLight }}>
-        <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Markdown 进知识库 · HTML/PDF 发给同事</span>
+      <div className="px-5 py-3 border-t flex flex-wrap items-center gap-2" style={{ borderColor: c.borderLight }}>
+        <span className="text-[10.5px] hidden sm:inline jt-export-note" style={{ color: c.textTertiary }}>Markdown 进知识库 · HTML/PDF 发给同事</span>
         <span className="flex-1" />
         <button onClick={() => runRich('gongwen')} disabled={busy || !picked.size}
           className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"

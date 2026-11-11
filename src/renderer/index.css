@@ -1166,3 +1166,10 @@ html[data-wallpaper="off"][data-theme="party"] .jt-in-left > * { background: #f6
 .sidebar-app-title { font-size: 13.5px !important; }
 .tab-strip > div:has(> span.absolute) { font-weight: 500 !important; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
+
+/* v15.6.1 移动端：面板头/底部操作条不再挤压成竖排字 */
+@media (max-width: 767px) {
+  .jt-export-note { display: none !important; }
+  .jt-export-note ~ .flex-1 { display: none; }
+  [class*="border-t"] button { white-space: nowrap !important; }
+}
