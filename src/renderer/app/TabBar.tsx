@@ -123,7 +123,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
               onMouseDown={e => { if (e.button === 1) { e.preventDefault(); onClose(tab.id) } }}
               onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onClose(tab.id) } }}
               title={`${tab.title}${tabs.length > 1 ? '（中键关闭）' : ''}`}
-              className="group relative flex items-center gap-2 px-2.5 h-7 rounded-lg cursor-pointer transition-colors shrink-0 max-w-[180px] titlebar-nodrag"
+              className="group relative flex items-center gap-2 px-2.5 h-7 rounded-lg cursor-pointer transition-colors shrink-0 max-w-[148px] titlebar-nodrag"
               style={{
                 background: active ? c.surfaceActive : 'transparent',
                 color: active ? c.textHead : c.textTertiary,
@@ -140,7 +140,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
                   <path strokeLinecap="round" strokeLinejoin="round" d={tab.iconPath || meta.icon} />
                 </svg>
               )}
-              <span className="text-[12.5px] font-medium truncate">{lang === 'en' && !tab.sessionId && !tab.refId && meta.labelEn ? meta.labelEn : tab.title}</span>
+              <span className="text-[12px] font-normal truncate">{lang === 'en' && !tab.sessionId && !tab.refId && meta.labelEn ? meta.labelEn : tab.title}</span>
               {active && <span className="absolute left-2.5 right-2.5 -bottom-[5px] h-[2px] rounded-full" style={{ background: c.accent }} />}
               {tabs.length > 1 && (
                 <button

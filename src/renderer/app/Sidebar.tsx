@@ -510,18 +510,14 @@ export default function Sidebar({ sessions, activeId, workingIds, onSelect, onCr
       <div className="px-3 pb-1 shrink-0">
         <div className="flex gap-1.5">
           <button onClick={onCreate}
-            className="flex-1 h-9 rounded-xl flex items-center gap-2.5 px-3 text-[13px] font-medium transition-colors"
-            style={{ color: c.text, background: 'transparent', border: `1px solid ${c.border}` }}
-            onMouseEnter={e => { e.currentTarget.style.background = c.surfaceHover }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-            </svg>
-            {lang === 'en' ? 'New Chat' : '新建对话'}
+            className="jt-newchat flex-1 h-9 rounded-lg flex items-center gap-2 px-2.5 text-[13px] font-medium transition-colors"
+            style={{ color: c.text, background: 'transparent', border: 'none' }}>
+            <span className="jt-newchat-plus text-[17px] leading-none" style={{ color: c.textTertiary }}>+</span>
+            {lang === 'en' ? 'New chat' : '新建对话'}
           </button>
           <button onClick={() => { setManageMode(v => !v); setSelectedIds(new Set()) }}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0"
-            style={{ color: manageMode ? c.accent : c.textTertiary, background: c.surfaceCard, border: `1px solid ${manageMode ? c.accent : c.border}` }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0"
+            style={{ color: manageMode ? c.accent : c.textTertiary, background: manageMode ? c.bgActive : 'transparent', border: 'none' }}
             title={manageMode ? '退出批量管理' : '批量管理会话'}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />

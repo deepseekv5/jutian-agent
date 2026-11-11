@@ -985,47 +985,178 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 }
 [data-theme="party"] .announcement-banner .text { color: #5a3a12; }
 
-/* ── Codex 风默认布局（v15.2.0）：全局生效，不再有旧卡片布局 ──────────
-   新标签页已重写为纯文字列表；其余界面统一收掉玻璃叠层/图标行/公告/状态栏。
-   功能不删：侧栏图标入口仍可经命令面板/新标签页/搜索直达。 */
+/* ── Codex 结构化极简（v15.6.0 精修）─────────────────────────────────
+   原则：不靠「全部透明」制造简洁，靠「纯白纸面 + 一条细线 + 灰度层级 + 留白」。
+   旧版三条暴力规则（[style*="border"] 抹掉所有内联边框 / .glass 全部 transparent /
+   侧栏 svg 一律 .35）已删除——它们把结构线、面板层级、图标全弄丢了。 */
+:root {
+  --jt-hairline: rgba(0, 0, 0, 0.075);
+  --jt-hairline-soft: rgba(0, 0, 0, 0.045);
+  --jt-paper: #ffffff;
+  --jt-paper-alt: #fafafa;
+  --jt-ink: #16181d;
+  --jt-ink-2: #5b6069;
+  --jt-ink-3: #8b9099;
+  --jt-ink-4: #b4b8bf;
+  --jt-focus: rgba(0, 0, 0, 0.075);
+}
+[data-theme="dark"] {
+  --jt-hairline: rgba(255,255,255,.09);
+  --jt-hairline-soft: rgba(255,255,255,.055);
+  --jt-paper: #171717;
+  --jt-paper-alt: #1e1e1e;
+  --jt-ink: #f2f2f2;
+  --jt-ink-2: #b0b0b0;
+  --jt-ink-3: #838383;
+  --jt-ink-4: #5e5e5e;
+  --jt-focus: rgba(255,255,255,.12);
+}
+[data-theme="party"] {
+  --jt-hairline: rgba(120, 30, 30, 0.12);
+  --jt-hairline-soft: rgba(160, 110, 60, 0.08);
+  --jt-paper: #faf7f0;
+  --jt-paper-alt: #f6f1e6;
+  --jt-ink: #241c12;
+  --jt-ink-2: #6b5d4a;
+  --jt-ink-3: #98876e;
+  --jt-ink-4: #b8a888;
+}
+
+/* 该隐藏的 chrome 才隐藏；功能入口全部保留在命令面板 / 新标签页 / 搜索 */
 .announcement-banner,
 .jt-in-bottom,
 .jt-iconrow,
 .jt-hide-compact,
 .jt-promo-card { display: none !important; }
 
-/* 新标签页：纯文字行 hover 才显色，无卡片、无框、无阴影 */
-.jt-text-row { transition: color .15s; }
-.jt-text-row:hover { color: var(--brand, #10a37f) !important; }
-.jt-codex-search input { border-color: transparent !important; background: transparent !important; padding-left: 0 !important; padding-right: 0 !important; font-size: 13px !important; }
-.jt-codex-search input:focus { border-bottom: 1px solid var(--brand, #10a37f) !important; }
-.jt-codex-search .rounded-2xl { border-color: transparent !important; background: transparent !important; box-shadow: none !important; }
+/* 全局纸面：无壁纸时的实底由 BackgroundLayer 提供，这里只统一所有容器的字色/线色 */
+body { color: var(--jt-ink); }
+.glass { background: var(--jt-paper) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+.glass-strong { background: var(--jt-paper) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: 0 8px 30px rgba(0,0,0,.09) !important; }
+.global-veil { display: none !important; }
 
-/* 全局去卡片感：所有界面统一轻量化 */
-.glass { background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; }
-.glass-strong { background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; }
-.rounded-2xl { box-shadow: none !important; }
-[style*="border"] { border-color: transparent !important; }
+/* 卡片：白底 + 极细发丝线，不再用阴影堆叠 */
+.rounded-2xl, .rounded-xl, .rounded-lg { box-shadow: none !important; }
+.rounded-2xl { border: 1px solid var(--jt-hairline-soft) !important; }
 
-/* 顶栏：标签纯文字、无玻璃叠层 */
-.jt-in-top { background: transparent !important; border-bottom-color: transparent !important; backdrop-filter: none !important; }
-.tab-strip > div { background: transparent !important; box-shadow: none !important; }
-.tab-strip > div > svg { display: none !important; }
-.tab-strip > div > span.absolute { display: none !important; }
+/* 输入框 / 选择器：保留边框但极轻，聚焦时才给存在感 */
+input, textarea, select {
+  border-color: var(--jt-hairline) !important;
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--jt-ink-3) !important;
+  box-shadow: 0 0 0 3px var(--jt-focus) !important;
+  outline: none !important;
+}
+input::placeholder, textarea::placeholder { color: var(--jt-ink-4) !important; }
 
-/* 侧栏：会话列表纯文字、图标淡化 */
-.jt-in-left [class*="glass"] { background: transparent !important; backdrop-filter: none !important; border-right-color: transparent !important; }
-.jt-in-left svg { opacity: .35; }
+/* 按钮：默认无框无底，hover 才浮出浅灰底；主色按钮不被波及 */
+button { transition: background-color .16s ease, color .16s ease, border-color .16s ease, transform .16s ease; }
+button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { color: #fff !important; }
 
-/* 聊天空态：一行大字，收掉品牌大图/模式徽章/快捷 chips */
-.welcome-title { font-size: 26px !important; font-weight: 500 !important; letter-spacing: -0.03em !important; }
-.welcome-subtitle { opacity: .6; }
+/* 顶栏：纸面 + 底部一条发丝线；标签纯文字，激活态用浅灰而非粗下划线 */
+.jt-in-top {
+  background: var(--jt-paper) !important;
+  border-bottom: 1px solid var(--jt-hairline-soft) !important;
+  backdrop-filter: none !important;
+  height: 44px !important;
+}
+.tab-strip > div {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  color: var(--jt-ink-3) !important;
+  font-weight: 450 !important;
+}
+.tab-strip > div:hover { background: var(--jt-focus) !important; color: var(--jt-ink) !important; }
+.tab-strip > div[style*="surfaceActive"], .tab-strip > div:has(> span.absolute) { background: rgba(0,0,0,.05) !important; color: var(--jt-ink) !important; }
+.tab-strip > div > svg, .tab-strip > div > span.absolute { display: none !important; }
+
+/* 侧栏：比主区低一档的浅灰纸面 + 右侧一条发丝线（Codex 的骨架） */
+.jt-in-left { border-right: 1px solid var(--jt-hairline-soft) !important; }
+.jt-in-left { background: var(--jt-paper-alt) !important; }
+.jt-in-left > * { background: transparent !important; backdrop-filter: none !important; }
+.jt-in-left svg { opacity: .72; }
+.jt-in-left input { background: transparent !important; border-color: transparent !important; }
+.jt-in-left input:focus { background: rgba(0,0,0,.04) !important; box-shadow: none !important; }
+
+/* 新标签页：纯文字行，hover 只给浅灰底 + 主文字色，不用强调色 */
+.jt-text-row { transition: background-color .14s ease, color .14s ease; border-radius: 6px; }
+.jt-text-row:hover { color: var(--jt-ink) !important; background: var(--jt-focus) !important; }
+.jt-codex-search input { border: none !important; border-bottom: 1px solid var(--jt-hairline) !important; background: transparent !important; padding-left: 26px !important; font-size: 13px !important; border-radius: 0 !important; }
+.jt-codex-search input:focus { border-bottom-color: var(--jt-ink-2) !important; box-shadow: none !important; }
+.jt-codex-search .rounded-2xl { border: none !important; background: transparent !important; }
+
+/* 聊天空态：一行大字 + 极淡副文，不出现品牌大图 / 模式徽章 / 快捷 chip 堆 */
+.welcome-title { font-size: 28px !important; font-weight: 500 !important; letter-spacing: -0.032em !important; color: var(--jt-ink) !important; }
+.welcome-subtitle { opacity: .58; }
 .welcome-prompts { display: none !important; }
 .flex-1.flex.flex-col.items-center.justify-center > div > svg:first-child { display: none; }
 .flex-1.flex.flex-col.items-center.justify-center .inline-flex { display: none; }
 
-/* ── Composer Codex 化（v15.3.0）：默认只留 + / 麦克风 / 发送与已启用 chip ──
-   联网/公文/思考强度/模型选择器全部收进 + 菜单（功能不删，点 + 即用）。 */
+/* 消息气泡：AI 回复无底、用户消息浅灰圆角块（Codex 的对话层次） */
+.bubble-user, [class*="bubble-user"] { background: var(--jt-paper-alt) !important; box-shadow: none !important; }
+
+/* ── Composer：默认只留 + / 麦克风 / 发送；次要 chip 收进 + 菜单（功能不删）── */
 .jt-composer-secondary { display: none !important; }
-.composer-dock [class*="rounded-full"][style*="border"] { border-color: transparent !important; }
 .composer-dock .composer-status-secondary { display: none !important; }
+.composer-dock .composer-input-shell, .composer-dock [class*="rounded-2xl"] {
+  border: 1px solid var(--jt-hairline) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.035) !important;
+}
+.composer-dock [class*="rounded-full"][style*="border"] { border-color: var(--jt-hairline-soft) !important; }
+
+/* 滚动条：细到几乎不见，hover 才显 */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.28); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 键盘焦点：柔和灰环，不用实心黑框 */
+:focus-visible { box-shadow: 0 0 0 3px var(--jt-focus) !important; outline: none !important; }
+
+/* 党政红主题：仍然保留红头气质，但同样克制 */
+[data-theme="party"] .jt-text-row:hover { background: rgba(199,0,11,.05) !important; color: #8c1414 !important; }
+[data-theme="party"] input:focus, [data-theme="party"] textarea:focus { border-color: rgba(199,0,11,.5) !important; }
+
+/* ── 侧栏会话列表（v15.6.0）：纯文字 + 时间，图标只在有状态时出现 ── */
+.jt-in-left .session-row > svg:not(.animate-spin):not([fill="#f5b301"]),
+.jt-in-left .session-row > span:has(> span.rounded-full) { display: none !important; }
+.jt-in-left .session-row { padding-left: 10px !important; padding-right: 10px !important; border-radius: 7px !important; }
+.jt-in-left .session-row:hover { background: var(--jt-focus) !important; }
+.jt-in-left .session-row[style*="background: rgba"] { background: var(--jt-focus) !important; }
+.jt-in-left .session-row[style*="background: rgba"] .text-\[13px\] { color: var(--jt-ink) !important; font-weight: 500 !important; }
+.jt-in-left .session-row .row-time { opacity: .75; }
+.jt-newchat { border-bottom: none !important; border-radius: 8px !important; justify-content: flex-start; }
+.jt-newchat:hover { background: var(--jt-focus) !important; }
+.jt-newchat:hover { background: var(--jt-focus) !important; }
+.jt-newchat-plus { font-weight: 300; }
+
+/* ── 精修（v15.6.0）：让「简洁」有质感，而不是一片平 ── */
+/* follow-up：默认淡文字，hover 才显墨色，不用胶囊按钮 */
+.jt-followups button:hover { color: var(--jt-ink) !important; }
+.jt-followups button:hover svg { opacity: 1; }
+/* 聊天正文：段间呼吸、行高、字色分级 */
+.prose-chat { line-height: 1.75 !important; color: var(--jt-ink) !important; }
+.prose-chat p { margin-top: 0 !important; margin-bottom: 14px !important; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { font-weight: 600 !important; letter-spacing: -.015em !important; color: var(--jt-ink) !important; }
+.prose-chat li { line-height: 1.8 !important; }
+.prose-chat code { background: var(--jt-paper-alt) !important; border: 1px solid var(--jt-hairline-soft) !important; }
+.prose-chat blockquote { border-left-color: var(--jt-ink-4) !important; background: transparent !important; color: var(--jt-ink-2) !important; }
+/* 工具卡：一条发丝线；思考折叠行不加框，hover 才给浅底 */
+.tool-card { border: 1px solid var(--jt-hairline-soft) !important; box-shadow: none !important; border-radius: 10px !important; }
+.thinking-card { border: none !important; border-left: 2px solid var(--jt-hairline) !important; box-shadow: none !important; background: transparent !important; border-radius: 0 !important; transition: background-color .15s ease; }
+.thinking-card:hover { background: var(--jt-focus) !important; }
+/* 工作目录条：字号再小一档、去掉 Git 胶囊感 */
+.jt-in-fade > div[style*="border"] { border-bottom-color: var(--jt-hairline-soft) !important; }
+/* 侧栏分组标题与计数：灰度更轻 */
+.jt-in-left [class*="text-\[11px\]"] { color: var(--jt-ink-3) !important; }
+/* 主区与侧栏的层次：侧栏低一档灰，主区纯白（无壁纸时） */
+html[data-wallpaper="off"] .jt-in-left > * { background: #fafafa !important; }
+html[data-wallpaper="off"][data-theme="dark"] .jt-in-left > * { background: #1e1e1e !important; }
+html[data-wallpaper="off"][data-theme="party"] .jt-in-left > * { background: #f6f1e6 !important; }
+/* 输入框聚焦：只留柔和灰环，不再有蓝色/红色硬边 */
+.composer-dock input:focus, .composer-dock textarea:focus { box-shadow: none !important; }
+/* 全局细滚动条 + hover 反馈统一 */
+.jt-in-left button:hover, .jt-in-fade button:hover { transition: background-color .16s ease !important; }

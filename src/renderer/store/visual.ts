@@ -14,7 +14,7 @@ export interface VisualSettings {
 
 export const DEFAULT_VISUAL: VisualSettings = {
   glassBlur: 12,
-  bgImage: '/bg_upload.mp4',
+  bgImage: '',  // v15.6.0：默认纯净实底（Codex 风）；用户可在设置里手动开内置视频/自定义壁纸
   bgOpacityLight: 0.5,
   bgOpacityDark: 0.6,
 }
