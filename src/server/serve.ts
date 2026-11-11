@@ -5075,6 +5075,52 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       } catch (e) { return json(res, { error: e.message }, 500); }
     }
 
+    // ─── 会话图片画廊（v15.2.0）：粘贴/截图 dataUrl 落盘 DATA_DIR/gallery/<session>/，
+    // 消息里记 ![](/api/gallery/file/...) —— 重启后气泡与画廊都还能看到图 ───
+    if (url.pathname === "/api/gallery/save" && req.method === "POST") {
+      const b = await body(req);
+      const sid = String(b.session_id || "").replace(/[^\w-]/g, "").slice(0, 64) || "common";
+      const name = String(b.name || "image.png").replace(/[^\w.-]/g, "_").slice(0, 64) || "image.png";
+      try {
+        let buf: Buffer;
+        let ext = path.extname(name).toLowerCase();
+        if (typeof b.dataUrl === "string" && b.dataUrl.startsWith("data:image/")) {
+          const m2 = b.dataUrl.match(/^data:image\/([a-z+]+);base64,([\s\S]+)$/);
+          if (!m2) throw new Error("bad dataUrl");
+          if (m2[1] === "svg+xml") throw new Error("不支持 SVG");
+          buf = Buffer.from(m2[2], "base64");
+          ext = "." + (m2[1] === "jpeg" ? "jpg" : m2[1]);
+        } else if (typeof b.path === "string" && b.path) {
+          const src = path.resolve(String(b.path));
+          if (!/\.(png|jpe?g|gif|webp)$/i.test(src)) throw new Error("仅支持图片文件");
+          buf = fs.readFileSync(src);
+          ext = path.extname(src).toLowerCase();
+        } else throw new Error("缺少 dataUrl/path");
+        if (![".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) throw new Error("仅支持图片文件");
+        if (buf.length > 12 * 1024 * 1024) throw new Error("图片超过 12MB 限制");
+        const dir = path.join(DATA_DIR, "gallery", sid);
+        fs.mkdirSync(dir, { recursive: true });
+        const fname = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${ext}`;
+        fs.writeFileSync(path.join(dir, fname), buf);
+        return json(res, { ok: true, url: `/api/gallery/file/${sid}/${fname}` });
+      } catch (e) { return json(res, { error: e.message }, 400); }
+    }
+    // 画廊静态读取：两段路径都过白名单正则，拼接后再校验前缀，杜绝穿越
+    const galMatch = url.pathname.match(/^\/api\/gallery\/file\/([\w-]{1,64})\/([\w.-]{1,80})$/);
+    if (galMatch && req.method === "GET") {
+      const galDir = path.join(DATA_DIR, "gallery");
+      const fp = path.join(galDir, galMatch[1], galMatch[2]);
+      if (!fp.startsWith(galDir)) return json(res, { error: "forbidden" }, 403);
+      const ct = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" }[path.extname(galMatch[2]).toLowerCase()];
+      if (!ct) return json(res, { error: "forbidden" }, 403);
+      try {
+        const data = fs.readFileSync(fp);
+        res.writeHead(200, { "Content-Type": ct, "Cache-Control": "no-store" });
+        res.end(data);
+      } catch { return json(res, { error: "not found" }, 404); }
+      return;
+    }
+
     // ─── 应用公告（v11.7）：GitHub 仓库 docs/notice.md，进应用自动读取 ───
     if (url.pathname === "/api/announcement" && req.method === "GET") {
       const fresh = url.searchParams.get("fresh") === "1";

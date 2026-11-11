@@ -279,7 +279,6 @@ var TOOL_ALIASES = {
 };
 function normalizeArgs(geminiName, args) {
   const a = { ...args };
-  const T = { file_path: "path", dir_path: "path", query: "query", prompt: "url", content: "content", pattern: "pattern" };
   const out = {};
   for (const [k, v] of Object.entries(a)) {
     if (k === "file_path" || k === "dir_path") out.path = v;

@@ -181,7 +181,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
             try { localStorage.setItem('lyclaw_ambient', next ? '1' : '0') } catch {}
             window.dispatchEvent(new Event('ambient-changed'))
           }}
-          className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-medium transition-colors"
+          className="h-7 px-2 rounded-lg flex items-center gap-1 text-[11px] font-medium transition-colors jt-hide-compact"
           style={{ color: ambient ? c.accent : c.textTertiary, background: ambient ? `${c.accent}14` : 'transparent' }}
           onMouseEnter={e => { if (!ambient) e.currentTarget.style.background = c.surfaceHover }}
           onMouseLeave={e => { if (!ambient) e.currentTarget.style.background = 'transparent' }}
@@ -193,7 +193,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
         </button>
 
         {onOpenWorkDir && (
-          <button onClick={onOpenWorkDir} className="btn-icon" title="打开工作目录" aria-label="打开工作目录">
+          <button onClick={onOpenWorkDir} className="btn-icon jt-hide-compact" title="打开工作目录" aria-label="打开工作目录">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
             </svg>
@@ -202,7 +202,7 @@ export default function TabBar({ tabs, activeTabId, onSelect, onClose, onOpenTyp
         <div className="flex items-center px-1" title={toolServerOk === null ? '连接中' : toolServerOk ? '服务在线' : '服务离线'}>
           <div className="w-2 h-2 rounded-full" style={{ background: toolServerOk === null ? c.toolWarn : toolServerOk ? c.toolOk : c.toolErr }} />
         </div>
-        <button onClick={() => onOpenType('call')} className="btn-icon" title="语音通话（打电话模式）" aria-label="语音通话">
+        <button onClick={() => onOpenType('call')} className="btn-icon jt-hide-compact" title="语音通话（打电话模式）" aria-label="语音通话">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2a1 1 0 011.11-.21 11.36 11.36 0 003.57.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.36 11.36 0 00.57 3.57 1 1 0 01-.21 1.11z" />
           </svg>

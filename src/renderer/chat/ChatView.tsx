@@ -216,7 +216,7 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
 
   const galleryImages = useMemo(() => {
     const out: string[] = []
-    const re = /!\[[^\]]*\]\((data:image\/[a-z+]+;base64,[^)]+|https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^)\s]*)?)\)/gi
+    const re = /!\[[^\]]*\]\((data:image\/[a-z+]+;base64,[^)]+|https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp)(?:\?[^)\s]*)?|\/api\/gallery\/file\/[^)\s]+\.(?:png|jpe?g|gif|webp))\)/gi
     for (const msg of messages) {
       const text = String(msg.content || '')
       let m2: RegExpExecArray | null

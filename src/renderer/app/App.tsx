@@ -681,6 +681,24 @@ function MainApp() {
     }
   }, [handleSelectSession, handleJumpToMessage])
 
+  // 极简首页输入框：新建会话 → 挂载后把草稿填进 composer（不自动发送，用户可再改）
+  useEffect(() => {
+    const h = (e: Event) => {
+      const text = String((e as CustomEvent).detail || '')
+      if (!text) return
+      handleCreateSessionRef.current?.()
+      let tries = 0
+      const fill = () => {
+        const el = document.querySelector('textarea[data-composer="main"]') || document.querySelector('textarea')
+        if (el || ++tries >= 20) window.dispatchEvent(new CustomEvent('followup-fill', { detail: text }))
+        else setTimeout(fill, 80)
+      }
+      setTimeout(fill, 300)
+    }
+    window.addEventListener('jutian-minimal-ask', h)
+    return () => window.removeEventListener('jutian-minimal-ask', h)
+  }, [])
+
   const handleCreateSession = useCallback(async () => {
     // 新会话直接带上当前工作目录作为项目分组标签
     const s = await create(undefined, settings.workDir || '');
@@ -850,7 +868,7 @@ function MainApp() {
 
   const mainAreaStyle = { position: 'relative' as const, zIndex: 1, ['--kb-inset' as string]: `${kbInset}px` } as React.CSSProperties;
   return (
-    <div className="h-screen overflow-hidden flex relative">
+    <div className="h-screen overflow-hidden flex relative jt-compact">
       <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
       {bgImage && <div className="global-veil" aria-hidden />}
       {/* 氛围模式：全屏氛围光晕（顶栏「氛围」按钮开关，Esc 退出） */}

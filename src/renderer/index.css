@@ -984,3 +984,42 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
   border-left: 3px solid #c7000b;
 }
 [data-theme="party"] .announcement-banner .text { color: #5a3a12; }
+
+/* ── Codex 风默认布局（v15.2.0）：全局生效，不再有旧卡片布局 ──────────
+   新标签页已重写为纯文字列表；其余界面统一收掉玻璃叠层/图标行/公告/状态栏。
+   功能不删：侧栏图标入口仍可经命令面板/新标签页/搜索直达。 */
+.announcement-banner,
+.jt-in-bottom,
+.jt-iconrow,
+.jt-hide-compact,
+.jt-promo-card { display: none !important; }
+
+/* 新标签页：纯文字行 hover 才显色，无卡片、无框、无阴影 */
+.jt-text-row { transition: color .15s; }
+.jt-text-row:hover { color: var(--brand, #10a37f) !important; }
+.jt-codex-search input { border-color: transparent !important; background: transparent !important; padding-left: 0 !important; padding-right: 0 !important; font-size: 13px !important; }
+.jt-codex-search input:focus { border-bottom: 1px solid var(--brand, #10a37f) !important; }
+.jt-codex-search .rounded-2xl { border-color: transparent !important; background: transparent !important; box-shadow: none !important; }
+
+/* 全局去卡片感：所有界面统一轻量化 */
+.glass { background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; }
+.glass-strong { background: transparent !important; backdrop-filter: none !important; box-shadow: none !important; }
+.rounded-2xl { box-shadow: none !important; }
+[style*="border"] { border-color: transparent !important; }
+
+/* 顶栏：标签纯文字、无玻璃叠层 */
+.jt-in-top { background: transparent !important; border-bottom-color: transparent !important; backdrop-filter: none !important; }
+.tab-strip > div { background: transparent !important; box-shadow: none !important; }
+.tab-strip > div > svg { display: none !important; }
+.tab-strip > div > span.absolute { display: none !important; }
+
+/* 侧栏：会话列表纯文字、图标淡化 */
+.jt-in-left [class*="glass"] { background: transparent !important; backdrop-filter: none !important; border-right-color: transparent !important; }
+.jt-in-left svg { opacity: .35; }
+
+/* 聊天空态：一行大字，收掉品牌大图/模式徽章/快捷 chips */
+.welcome-title { font-size: 26px !important; font-weight: 500 !important; letter-spacing: -0.03em !important; }
+.welcome-subtitle { opacity: .6; }
+.welcome-prompts { display: none !important; }
+.flex-1.flex.flex-col.items-center.justify-center > div > svg:first-child { display: none; }
+.flex-1.flex.flex-col.items-center.justify-center .inline-flex { display: none; }

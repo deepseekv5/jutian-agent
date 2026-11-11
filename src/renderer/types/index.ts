@@ -57,6 +57,8 @@ export interface Settings {
   localModel: string
   voiceId: string
   theme?: 'light' | 'dark' | 'party'
+  /** 极简布局（v15.2.0）：Codex 式留白——隐藏侧栏图标行/公告横幅/状态栏/促销卡，功能不删 */
+  compactLayout?: boolean
   // 工作区（AI 默认工作目录，实时生效）
   workDir: string
   // 安全设置

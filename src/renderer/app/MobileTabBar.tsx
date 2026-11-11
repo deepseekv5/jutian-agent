@@ -6,7 +6,7 @@ import type { PageType } from './TabBar'
  * 手机底部导航（v13.5）
  *
  * 桌面靠侧栏切换工作区；手机上侧栏是抽屉，抽屉关着时没有任何入口，
- * 所以补一条底部导航：对话 / 代码 / 文件 / 设置 四个高频入口。
+ * 所以补一条底部导航：对话 / 代码 / 文件 / 文档 / 设置 五个高频入口。
  * 仅在 <768px 显示（CSS .mobile-tabbar 控制），桌面零影响。
  */
 const ITEMS: { type: PageType; key: string; icon: string }[] = [

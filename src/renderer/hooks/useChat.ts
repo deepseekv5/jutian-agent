@@ -682,10 +682,34 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       }
     }
     if (attachedFiles && attachedFiles.length > 0) {
-      // 有磁盘路径的给 file:// 链接；截图等 dataUrl 附件只列名字（内容已作为 image_url 随请求发送）
+      // 有磁盘路径的给 file:// 链接；图片附件（v15.2.0）先落盘到画廊再记 ![](/api/gallery/file/...)
+      // ——之前 dataUrl 图只在消息里列名字，重启后气泡变文字、会话画廊聚合不到用户自己的图
       const lines: string[] = []
       for (const f of attachedFiles) {
-        if (isAudioAttached(f)) lines.push(`- ${f.name}（音频，MiMo 识别结果见下方）`)
+        if (isAudioAttached(f)) { lines.push(`- ${f.name}（音频，MiMo 识别结果见下方）`); continue }
+        const isImg = /\.(png|jpe?g|gif|webp)$/i.test(f.name) || (f.dataUrl && f.dataUrl.startsWith('data:image/'))
+        if (isImg) {
+          try {
+            let payload: { session_id: string; name: string; dataUrl?: string; path?: string } = { session_id: sessionId, name: f.name }
+            if (f.dataUrl && f.dataUrl.startsWith('data:image/')) payload.dataUrl = f.dataUrl
+            else if (f.file) {
+              const dataUrl = await new Promise<string>((resolve, reject) => {
+                const fr = new FileReader()
+                fr.onload = () => resolve(String(fr.result || ''))
+                fr.onerror = reject
+                fr.readAsDataURL(f.file!)
+              })
+              if (!dataUrl.startsWith('data:image/')) throw new Error('not image')
+              payload.dataUrl = dataUrl
+              f.dataUrl = dataUrl // 复用：后面 imageParts ① 直接命中，不再重复读文件
+            } else if (f.path) payload.path = f.path
+            else { lines.push(`- ${f.name}`); continue }
+            const r = await fetchCompat('/api/gallery/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            const d = r.ok ? await r.json().catch(() => null) : null
+            if (d?.url) { lines.push(`- ![${f.name}](${d.url})`); continue }
+            throw new Error('save failed')
+          } catch { lines.push(`- ${f.name}（图片，已随消息发送）`) }
+        }
         else if (f.dataUrl) lines.push(`- ${f.name}（图片，已随消息发送）`)
         else if (f.path) lines.push(`- [${f.name}](file://${f.path})`)
         else lines.push(`- ${f.name}`)

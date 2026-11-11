@@ -746,7 +746,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
             {tab === 'inference' && (<>
 
               {/* 免费模型一键启用:不填任何东西,0 元用上 AI */}
-              <div className="mb-4 rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.12), rgba(255,255,255,.55) 70%)', border: '1px solid rgba(16,163,127,.35)' }}>
+              <div className="mb-4 rounded-2xl p-4 jt-promo-card" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.12), rgba(255,255,255,.55) 70%)', border: '1px solid rgba(16,163,127,.35)' }}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
                   <span className="text-[13.5px] font-bold" style={{ color: c.textHead }}>{t('不想配置?一键免费用 AI', 'No setup? Use AI for free')}</span>
@@ -1436,7 +1436,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               </Sub>
 
               {/* jtcode 命令行工具（随时可装/可看安装位置） */}
-              <CliEntry />
+              <div className="jt-promo-card"><CliEntry /></div>
 
               {/* 强调色（22）：新建按钮/链接/active 态的强调色，实时生效 */}
               <Sub c={c} title={t('强调色', 'Accent Color')}>

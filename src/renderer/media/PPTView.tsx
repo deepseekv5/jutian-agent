@@ -5,6 +5,7 @@ import { LAYOUT_LABELS } from '../store/ppt-layouts';
 import type { GenerateOptions, Slide, Block } from '../types/ppt';
 
 const PPT_THEMES = [
+  { id: 'hongtou', name: '红头公文', accent: '#c7000b', accent2: '#a3260f' },
   { id: 'aurora', name: '极光蓝', accent: '#2563eb', accent2: '#06b6d4' },
   { id: 'ink', name: '墨韵黑金', accent: '#e0a451', accent2: '#b45309' },
   { id: 'mint', name: '清水薄荷', accent: '#0d9488', accent2: '#22d3ee' },

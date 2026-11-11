@@ -86,252 +86,245 @@ interface Props {
   onPick: (type: PageType) => void
 }
 
+/**
+ * 新标签页（v15.2.0 重写为 Codex 风默认布局）
+ *
+ * 视觉：大留白、一句大字、底部一行输入框、纯文字列表——没有卡片/徽章/图标行/促销块。
+ * 功能一个不少：31 个工作区入口（按 8 组）、全局搜索、收藏（展开/导出/空态引导）、
+ * 概览统计、最近会话、写公文、内核切换、我的扩展、1024 彩蛋、节日主页。
+ * 全部以文字呈现，纵向堆叠，从根上消除窄屏按钮重叠。
+ */
 export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: PageType) => void; sessions?: { id: string; title?: string; updated_at?: string; created_at?: string }[] }) {
   const [exts, setExts] = useState(getRegisteredExts)
   useEffect(() => subscribeExts(() => setExts(getRegisteredExts())), [])
   const { c } = useTheme()
   const { lang, t } = useLanguage()
   const byType = new Map(CARDS.map(k => [k.type, k]))
-  // 1024 节日主页（v12.3.1）：仅在 10/24 前后的活动窗口内整页换肤
-  // （v13.9.1 应用户要求下架常驻展示——活动已过）
   const now = new Date()
   const festivalNow = now.getMonth() === 9 && now.getDate() >= 20 && now.getDate() <= 28
-  // 1024 彩蛋（v12.3）：连点徽章 3 次触发；平时完全不出现
   const [eggOpen, setEggOpen] = useState(false)
   const [tap, setTap] = useState({ count: 0, lastAt: 0 })
+  const [askText, setAskText] = useState('')
+  const submitAsk = () => {
+    const v = askText.trim()
+    if (!v) return
+    // App 接此事件：新建会话 → 会话挂载后把文字填进 composer
+    window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: v }))
+    setAskText('')
+  }
   const banner = festivalBanner()
   const onBadgeTap = () => {
     const r = nextTapCount(tap)
     setTap({ count: r.count, lastAt: r.lastAt })
     if (r.fired) { setEggOpen(true); setTap({ count: 0, lastAt: 0 }) }
   }
-  // 每日概览（v14.17.0）：今日活跃会话 / 今日轮次 / 收藏
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0)
   const todaySessions = sessions.filter(x => String(x.updated_at || x.created_at || '') >= dayStart.toISOString()).length
-  // 消息收藏（v14.16.0）：最近 5 条直达原消息
   const [favs, setFavs] = useState<Favorite[]>(loadFavorites)
   const [showAllFavs, setShowAllFavs] = useState(false)
   const [favHintClosed, setFavHintClosed] = useState(() => { try { return localStorage.getItem('lyclaw_fav_hint_done') === '1' } catch { return false } })
-  const showFavHint = !favHintClosed
   useEffect(() => {
     const h = () => setFavs(loadFavorites())
     window.addEventListener('favorites-changed', h)
     return () => window.removeEventListener('favorites-changed', h)
   }, [])
-  // 节日整页（hooks 已全部执行完，这里分流是安全的）
+
   if (festivalNow) return <FestivalHome onPick={onPick} />
 
+  const label = (type: PageType) => {
+    const meta = PAGE_META[type] || { label: '扩展', labelEn: 'Extension' }
+    return lang === 'en' && meta.labelEn ? meta.labelEn : meta.label
+  }
+  const muted = { color: c.textMuted, fontSize: 10.5 }
+  const sec = { color: c.textTertiary, fontSize: 11, fontWeight: 500 } as const
+
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-thin glass">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* 1024 横幅：10-24 当天连点三次开彩蛋；临近 7 天可直接预览 */}
-        {banner && (
-          <button onClick={banner.active ? onBadgeTap : () => setEggOpen(true)}
-            className="w-full mb-5 flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-            style={{
-              background: banner.active ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.42)',
-              border: `1px solid ${banner.active ? 'rgba(0,0,0,.08)' : 'rgba(0,0,0,.05)'}`,
-              backdropFilter: 'blur(16px)',
-              cursor: banner.active ? 'pointer' : 'default',
-            }}>
-            <span className="text-[19px] font-bold tabular-nums shrink-0"
-              style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
-              {banner.active ? '1024' : `${1024}`}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[12.5px] font-medium" style={{ color: c.textHead }}>{banner.title}</span>
-              <span className="block text-[10.5px] mt-0.5" style={{ color: c.textTertiary }}>{banner.subtitle}</span>
-            </span>
-            {banner.active && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.textTertiary} strokeWidth={1.8} strokeLinecap="round" className="shrink-0">
-                <path d="M9 5l7 7-7 7" />
-              </svg>
-            )}
+    <div className="flex-1 h-full overflow-y-auto scrollbar-thin">
+      <div className="mx-auto px-8" style={{ maxWidth: 720, paddingTop: 80, paddingBottom: 72 }}>
+
+        {/* 一句大字 */}
+        <h1 className="text-center font-medium tracking-tight"
+          style={{ color: c.textHead, fontSize: 32, letterSpacing: '-0.035em', lineHeight: 1.35 }}>
+          {t('今天想做点什么？', 'What should we build?')}
+        </h1>
+
+        {/* 唯一输入框：新建对话并把文字带进 composer */}
+        <div className="mt-8 rounded-2xl px-4 py-3 flex items-center gap-3"
+          style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+          <input
+            value={askText}
+            onChange={e => setAskText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitAsk() } }}
+            placeholder={t('输入一句话开始，回车新建对话…', 'Type to start a new chat…')}
+            className="flex-1 bg-transparent outline-none text-[14px]"
+            style={{ color: c.text }}
+            aria-label={t('新建对话', 'New chat')}
+          />
+          <button onClick={submitAsk} className="w-7 h-7 rounded-lg grid place-items-center shrink-0 transition-colors"
+            style={{ background: askText.trim() ? c.accent : c.bgHover, color: askText.trim() ? '#fff' : c.textTertiary }}
+            title={t('新建对话', 'New chat')} aria-label={t('新建对话', 'New chat')}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6l6 6-6 6" />
+            </svg>
           </button>
+        </div>
+
+        {/* 概览：纯文字一行（统计一个不少） */}
+        <div className="mt-5 flex items-center justify-center gap-6" style={muted}>
+          <span>{t('今日会话', 'Chats today')} {todaySessions}</span>
+          <span>{t('收藏', 'Favorites')} {favs.length}</span>
+          <span>{t('速记', 'Quick notes')} {sessions.filter(x => x.title === '速记').length}</span>
+          <span style={{ color: c.textTertiary }}>{lang === 'en' ? 'Have a productive day.' : '今天也请多指教。'}</span>
+        </div>
+
+        {/* 全局搜索（页面/扩展/会话/消息，回车打开） */}
+        <div className="mt-12 jt-codex-search">
+          <NewTabSearch cards={CARDS} onPickPage={onPick} />
+        </div>
+
+        {/* 最近会话：纯文字列表，点击直达 */}
+        {sessions.length > 0 && (
+          <section className="mt-9">
+            <div className="mb-2" style={sec}>{t('最近', 'Recents')}</div>
+            {(showAllFavs ? sessions.slice(0, 30) : sessions.slice(0, 6)).map(s => (
+              <button key={s.id} onClick={() => window.dispatchEvent(new CustomEvent('newtab-open-session', { detail: { sessionId: s.id } }))}
+                className="w-full text-left py-1.5 text-[12.5px] truncate transition-colors jt-text-row"
+                style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+                {s.title || t('新对话', 'New chat')}
+              </button>
+            ))}
+            {sessions.length > 6 && (
+              <button onClick={() => setShowAllFavs(v => !v)} className="text-[10.5px] mt-1" style={{ color: c.textTertiary, background: 'transparent', border: 'none' }}>
+                {showAllFavs ? t('收起', 'Less') : `${t('全部', 'All')} (${sessions.length})`}
+              </button>
+            )}
+          </section>
         )}
-        {/* 定位语 hero */}
-        <div className="mb-6">
-          <h1 className="text-[22px] font-semibold tracking-tight" style={{ color: c.textHead, letterSpacing: '-0.02em' }}>
-            {t('一个工作台，装下全部工作流', 'One workspace for every workflow')}
-          </h1>
-          <p className="text-[12.5px] mt-1.5 leading-relaxed" style={{ color: c.textSecondary }}>
-            {t(
-              '从一次提问到一次完整交付——搜索、写作、编码、自动化都在同一个本地面板里。',
-              'From a single question to a complete delivery — search, writing, coding and automation in one local panel.'
-            )}
-          </p>
-          {/* 徽章亮点 */}
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {HIGHLIGHTS.map(h => (
-              <span key={h.zh} className="text-[10.5px] px-2 py-1 rounded-full"
-                style={{ background: c.bgInput, color: c.textTertiary, border: `1px solid ${c.borderLight}` }}>
-                {lang === 'en' ? h.en : h.zh}
-              </span>
-            ))}
-          </div>
-        </div>
 
-        <div className="mb-5 flex items-center gap-2">
-          <div className="mb-4 rounded-2xl border p-3.5 flex items-center gap-6" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
-            {[
-              { n: todaySessions, label: '今日会话', labelEn: 'Chats today' },
-              { n: favs.length, label: '收藏', labelEn: 'Favorites' },
-              { n: sessions.filter(x => x.title === '速记').length, label: '速记', labelEn: 'Quick notes' },
-            ].map((it, i) => (
-              <div key={i} className="flex items-baseline gap-1.5">
-                <span className="text-[20px] font-bold tabular-nums" style={{ color: c.textHead }}>{it.n}</span>
-                <span className="text-[11px]" style={{ color: c.textTertiary }}>{lang === 'en' ? it.labelEn : it.label}</span>
-              </div>
-            ))}
-            <span className="flex-1" />
-            <span className="text-[11px]" style={{ color: c.textMuted }}>{lang === 'en' ? 'Have a productive day.' : '今天也请多指教。'}</span>
-          </div>
-          {(favs.length > 0 || !favHintClosed) && (
-            <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: c.borderLight, background: c.surfaceCard }}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('收藏的消息', 'Favorites')}</span>
-                {favs.length === 0 ? (
-                  <button onClick={() => { setFavHintClosed(true); try { localStorage.setItem('lyclaw_fav_hint_done', '1') } catch {} }}
-                    className="text-[10.5px]" style={{ color: c.textTertiary }}>{t('知道了', 'Got it')}</button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    {favs.length > 5 && (
-                      <button onClick={() => setShowAllFavs(v => !v)} className="text-[10.5px]" style={{ color: c.textSecondary }}>{showAllFavs ? '收起' : '全部'}</button>
-                    )}
-                    <button onClick={() => {
-                      const md = favs.map(f => `- [${f.role === 'user' ? '问' : '答'}] ${f.excerpt.replace(/\n/g, ' ')}`).join('\n')
-                      const blob = new Blob([`# 收藏的消息\n\n${md}\n`], { type: 'text/markdown' })
-                      const a = document.createElement('a')
-                      a.href = URL.createObjectURL(blob)
-                      a.download = `jutian-favorites-${new Date().toISOString().slice(0, 10)}.md`
-                      a.click(); URL.revokeObjectURL(a.href)
-                    }} className="text-[10.5px]" style={{ color: c.accent }}>{t('导出', 'Export')}</button>
-                    <span className="text-[10.5px] font-mono" style={{ color: c.textMuted }}>{favs.length}</span>
-                  </div>
+        {/* 收藏：文字列表 + 展开/收起/导出/空态引导（能力全保留） */}
+        <section className="mt-9">
+          <div className="flex items-center gap-3 mb-2">
+            <span style={sec}>{t('收藏的消息', 'Favorites')}</span>
+            <span style={muted}>{favs.length}</span>
+            {favs.length > 0 && (
+              <>
+                {favs.length > 5 && (
+                  <button onClick={() => setShowAllFavs(v => !v)} className="text-[10.5px]" style={{ color: c.textTertiary, background: 'transparent', border: 'none' }}>
+                    {showAllFavs ? t('收起', 'Less') : t('全部', 'All')}
+                  </button>
                 )}
-              </div>
-              {favs.length === 0 ? (
-                <div className="text-[12px]" style={{ color: c.textTertiary }}>{t('聊天时点消息下方的 ★ 即可收藏，收藏会显示在这里。', 'Tap ★ under any message to keep it here.')}</div>
-              ) : (
-                <div className="space-y-1">
-                  {(showAllFavs ? favs : favs.slice(0, 5)).map(f => (
-                    <button key={f.id} onClick={() => window.dispatchEvent(new CustomEvent('jutian-open-favorite', { detail: f }))}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:opacity-80" style={{ background: c.bgHover }}>
-                      <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="#d4a017" stroke="#d4a017" strokeWidth={1.5}><path d="M11.48 3.5a.56.56 0 011.04 0l2.13 5.11 5.52.44a.56.56 0 01.32.98l-4.2 3.6 1.28 5.38a.56.56 0 01-.84.61L12 16.7l-4.45 2.92a.56.56 0 01-.84-.61l1.28-5.38-4.2-3.6a.56.56 0 01.32-.98l5.52-.44 2.13-5.11z" /></svg>
-                      <span className="text-[12px] truncate flex-1" style={{ color: c.textSecondary }}>{f.excerpt}</span>
-                      <span className="text-[10px] shrink-0" style={{ color: c.textMuted }}>{sessions.find(x => x.id === f.sessionId)?.title?.slice(0, 10) || (f.role === 'user' ? '问' : '答')}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <button onClick={() => window.dispatchEvent(new CustomEvent('jutian-gongwen-new'))}
-            className="mb-4 w-full rounded-2xl border p-3.5 flex items-center gap-3 text-left transition-all hover:scale-[1.01]"
-            style={{ borderColor: 'rgba(199,0,11,.35)', background: 'linear-gradient(90deg, rgba(199,0,11,.06), rgba(255,251,240,.9))' }}>
-            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: '#c7000b', color: '#fff', fontFamily: "'Songti SC', serif", fontWeight: 700 }}>文</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{t('写公文', 'Write official documents')}</div>
-              <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('通知 · 请示 · 报告 · 批复 · 函 · 纪要 — GB/T 9704 规范', 'Notice · Request · Report · Reply · Letter · Minutes — GB/T 9704')}</div>
-            </div>
-            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#c7000b" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 12h14" /></svg>
-          </button>
-          <div className="mb-4 rounded-2xl border p-3.5 flex items-center gap-3" style={{ borderColor: 'rgba(199,0,11,.3)', background: c.surfaceCard }}>
-            <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0"
-              style={{ background: (() => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? '#c7000b' : 'var(--brand, #10a37f)' } catch { return 'var(--brand, #10a37f)' } })(), color: '#fff', fontSize: 11, fontWeight: 700 }}>
-              {((): string => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? 'U' : 'P' } catch { return 'P' } })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>{((): string => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').agentEngine === 'ultra' ? 'JT Core Ultra' : 'JT Core Pro+' } catch { return 'JT Core Pro+' } })()}</div>
-              <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('点击切换内核（composer 状态条 / 命令面板也可切换）', 'Click to switch kernel (also in composer status bar / command palette)')}</div>
-            </div>
-            <button onClick={() => {
-              try { const raw = localStorage.getItem('lyclaw_settings'); const st = raw ? JSON.parse(raw) : {}; const cur = st.agentEngine || 'vercel';
-                const next = cur === 'ultra' ? 'server' : 'ultra'; st.agentEngine = next;
-                localStorage.setItem('lyclaw_settings', JSON.stringify(st));
-                fetch('/api/agent/engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: next }) }).catch(() => {});
-                window.dispatchEvent(new CustomEvent('settings-updated', { detail: st }));
-              } catch {}
-            }} className="text-[11.5px] px-3 py-1.5 rounded-lg font-medium shrink-0"
-              style={{ background: c.accentBg, color: c.accent }}>{t('切换', 'Switch')}</button>
+                <button onClick={() => {
+                  const md = favs.map(f => `- [${f.role === 'user' ? '问' : '答'}] ${f.excerpt.replace(/\n/g, ' ')}`).join('\n')
+                  const blob = new Blob([`# 收藏的消息\n\n${md}\n`], { type: 'text/markdown' })
+                  const a = document.createElement('a')
+                  a.href = URL.createObjectURL(blob)
+                  a.download = `jutian-favorites-${new Date().toISOString().slice(0, 10)}.md`
+                  a.click(); URL.revokeObjectURL(a.href)
+                }} className="text-[10.5px]" style={{ color: c.accent, background: 'transparent', border: 'none' }}>{t('导出', 'Export')}</button>
+              </>
+            )}
+            {favs.length === 0 && !favHintClosed && (
+              <button onClick={() => { setFavHintClosed(true); try { localStorage.setItem('lyclaw_fav_hint_done', '1') } catch {} }}
+                className="text-[10.5px]" style={{ color: c.textTertiary, background: 'transparent', border: 'none' }}>{t('知道了', 'Got it')}</button>
+            )}
           </div>
-          <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('工作区入口', 'Workspace')}</span>
-          <div className="flex-1 h-px" style={{ background: c.borderLight }} />
-          <span className="text-[10.5px]" style={{ color: c.textMuted }}>{t('选择后本标签页自动关闭', 'This tab closes after you pick')}</span>
-        </div>
-
-        {/* 全局搜索（v14.11）：页面 / 扩展 / 会话 / 消息 一框搜尽 */}
-        <NewTabSearch cards={CARDS} onPickPage={onPick} />
-
-        {/* UXL 动态扩展（v14.11）：与官方页面分开渲染，用 emoji 图标 */}
-        {exts.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>我的扩展</span>
-              <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>{exts.length}</span>
-              <div className="flex-1 h-px" style={{ background: c.borderLight }} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {exts.map(e => (
-                <button key={e.id} onClick={() => onPick(extType(e.id) as PageType)}
-                  className="group flex flex-col p-3.5 rounded-xl text-left transition-all glass"
-                  style={{ border: `1px solid ${c.borderLight}` }}>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-[16px]" style={{ background: c.bgInput }}>{e.icon}</span>
-                    <span className="text-[13.5px] font-medium" style={{ color: c.textHead }}>{e.name}</span>
-                  </div>
-                  {e.description && <div className="text-[11px] line-clamp-2" style={{ color: c.textTertiary }}>{e.description}</div>}
+          {favs.length === 0 ? (
+            !favHintClosed && <div className="text-[11.5px]" style={{ color: c.textTertiary }}>{t('聊天时点消息下方的 ★ 即可收藏，收藏会显示在这里。', 'Tap ★ under any message to keep it here.')}</div>
+          ) : (
+            <div>
+              {(showAllFavs ? favs : favs.slice(0, 5)).map(f => (
+                <button key={f.id} onClick={() => window.dispatchEvent(new CustomEvent('jutian-open-favorite', { detail: f }))}
+                  className="w-full flex items-center gap-2 py-1.5 text-left jt-text-row"
+                  style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+                  <span className="text-[12px] truncate flex-1">{f.excerpt}</span>
+                  <span className="text-[10px] shrink-0" style={muted}>{sessions.find(x => x.id === f.sessionId)?.title?.slice(0, 10) || (f.role === 'user' ? '问' : '答')}</span>
                 </button>
               ))}
             </div>
+          )}
+        </section>
+
+        {/* 全部工作区入口：8 组纯文字列表（31 项一个不少，纵向堆叠不重叠） */}
+        <section className="mt-9">
+          <div className="flex items-center gap-3 mb-2">
+            <span style={sec}>{t('工作区入口', 'Workspace')}</span>
+            <span style={muted}>{CARDS.length}</span>
+            <div className="flex-1 h-px" style={{ background: c.borderLight }} />
+            <span style={muted}>{t('点击直达', 'Click to open')}</span>
           </div>
+          {GROUPS.map(g => (
+            <div key={g.label} className="mt-4">
+              <div className="mb-1.5" style={muted}>{lang === 'en' ? g.labelEn : g.label}</div>
+              <div>
+                {g.items.map(type => {
+                  const card = byType.get(type)
+                  return (
+                    <button key={type} onClick={() => onPick(type)}
+                      className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
+                      style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+                      <span className="text-[12.5px] shrink-0">{label(type)}</span>
+                      {card && <span className="text-[10.5px] truncate" style={muted}>{lang === 'en' ? card.descEn : card.desc}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* 写公文 / 内核切换：纯文字行，能力不变 */}
+        <section className="mt-9">
+          <div className="mb-1.5" style={muted}>{t('快捷', 'Quick actions')}</div>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('jutian-gongwen-new'))}
+            className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
+            style={{ color: '#c7000b', background: 'transparent', border: 'none' }}>
+            <span className="text-[12.5px] shrink-0">{t('写公文', 'Write official documents')}</span>
+            <span className="text-[10.5px] truncate" style={muted}>{t('通知 · 请示 · 报告 · 批复 · 函 · 纪要 — GB/T 9704', 'Notices · Requests · Reports — GB/T 9704')}</span>
+          </button>
+          <button onClick={() => {
+            try {
+              const raw = localStorage.getItem('lyclaw_settings'); const st = raw ? JSON.parse(raw) : {}
+              const next = (st.agentEngine || 'vercel') === 'ultra' ? 'server' : 'ultra'
+              st.agentEngine = next
+              localStorage.setItem('lyclaw_settings', JSON.stringify(st))
+              fetch('/api/agent/engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: next }) }).catch(() => {})
+              window.dispatchEvent(new CustomEvent('settings-updated', { detail: st }))
+            } catch {}
+          }} className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
+            style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+            <span className="text-[12.5px] shrink-0">{t('切换内核', 'Switch kernel')}</span>
+            <span className="text-[10.5px] truncate" style={muted}>{t('JT Core Pro+ / Ultra（composer 状态条、命令面板也可切换）', 'JT Core Pro+ / Ultra')}</span>
+          </button>
+          <button onClick={() => onPick('plugins')} className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
+            style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+            <span className="text-[12.5px] shrink-0">{t('插件市场', 'Plugin market')}</span>
+            <span className="text-[10.5px]" style={muted}>{t('LY HARNESS 插件中心', 'LY HARNESS')}</span>
+          </button>
+        </section>
+
+        {/* 我的扩展：纯文字列表 */}
+        {exts.length > 0 && (
+          <section className="mt-9">
+            <div className="mb-1.5" style={muted}>{t('我的扩展', 'My extensions')} · {exts.length}</div>
+            {exts.map(e => (
+              <button key={e.id} onClick={() => onPick(extType(e.id) as PageType)}
+                className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
+                style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
+                <span className="text-[12.5px] shrink-0">{e.name || e.id}</span>
+                {e.description && <span className="text-[10.5px] truncate" style={muted}>{e.description}</span>}
+              </button>
+            ))}
+          </section>
         )}
 
-        {GROUPS.map(g => (
-          <div key={g.label} className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{g.label}</span>
-              <span className="text-[10px] font-mono" style={{ color: c.textMuted }}>{g.items.length}</span>
-              <div className="flex-1 h-px" style={{ background: c.borderLight }} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {g.items.map(type => {
-                const meta = PAGE_META[type] || { label: "扩展", icon: "🧩" }
-                const card = byType.get(type)
-                return (
-                  <button key={type} onClick={() => onPick(type)}
-                    className="group flex flex-col p-3.5 rounded-xl text-left transition-all glass"
-                    style={{ border: `1px solid ${c.borderLight}` }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.borderLight; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: c.bgInput, color: c.textSecondary }}>
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d={meta.icon} />
-                        </svg>
-                      </span>
-                      <span className="text-[13.5px] font-medium" style={{ color: c.textHead }}>{lang === 'en' && meta.labelEn ? meta.labelEn : meta.label}</span>
-                    </div>
-                    {card && (
-                      <>
-                        <p className="text-[11.5px] leading-relaxed" style={{ color: c.textSecondary }}>
-                          {lang === 'en' ? card.descEn : card.desc}
-                        </p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {(lang === 'en' ? card.chipsEn : card.chips).map((chip, ci) => (
-                            <span key={ci} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+        {/* 1024 彩蛋入口：低调一行文字，功能保留 */}
+        {banner && (
+          <button onClick={banner.active ? onBadgeTap : () => setEggOpen(true)}
+            className="w-full text-center text-[10.5px] mt-12 py-2"
+            style={{ color: c.textMuted, background: 'transparent', border: 'none' }}>
+            {banner.title} · {banner.subtitle}
+          </button>
+        )}
       </div>
       {eggOpen && <FestivalEgg onClose={() => setEggOpen(false)} />}
     </div>

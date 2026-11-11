@@ -91,6 +91,7 @@ const DEFAULT_SETTINGS: Settings = {
   ttsSpeed: '1.0',
   autoSpeak: false,
   agentEngine: 'vercel',
+  compactLayout: true,
 }
 
 export function getSettingsSync(): Settings {
@@ -156,6 +157,7 @@ export async function getSettings(): Promise<Settings> {
       ttsSpeed: result.ttsSpeed || localSettings.ttsSpeed || '1.0',
       autoSpeak: result.autoSpeak !== undefined ? result.autoSpeak === 'true' : !!localSettings.autoSpeak,
       agentEngine: (result.agentEngine as Settings['agentEngine']) || localSettings.agentEngine || 'vercel',
+      compactLayout: result.compactLayout !== undefined ? result.compactLayout === 'true' : localSettings.compactLayout !== false,
     }
     // 自愈：把服务器端最新值写回 localStorage，避免陈旧缓存永久覆盖
     try { localStorage.setItem('lyclaw_settings', JSON.stringify(s)) } catch {}
@@ -214,6 +216,7 @@ export async function saveSettings(s: Settings): Promise<void> {
   await put('ttsSpeed', s.ttsSpeed || '1.0')
   await put('autoSpeak', String(!!s.autoSpeak))
   await put('agentEngine', String(s.agentEngine || 'vercel'))
+  await put('compactLayout', String(s.compactLayout !== false))
   if (failed > 0) reportWriteFailure('设置', '/api/settings × ' + failed)
 }
 

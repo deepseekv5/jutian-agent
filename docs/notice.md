@@ -4,6 +4,9 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v15.2.0**：UI 全面 Codex 化——新标签页整体重写为大留白首页（一句大字 + 单输入框 + 纯文字列表），31 个工作区入口按 8 组、全局搜索、收藏（展开/导出/空态引导）、概览统计、最近会话、写公文、内核切换、我的扩展、1024 彩蛋一个不少，纵向堆叠从根上消除窄屏按钮重叠；全局去玻璃叠层/卡片阴影/图标行/公告横幅/状态栏/促销卡，顶栏标签纯文字、侧栏会话纯文字、聊天空态收掉品牌大图与模式徽章；默认生效，旧卡片布局删除（不再有开关）；输入框回车新建会话并把草稿带进 composer。会话图片画廊补全——粘贴/截图/选图发消息时图片自动落盘画廊目录，消息里记画廊直链：重启后气泡不再变「已随消息发送」的文字、会话画廊能聚合到用户自己发过的图（此前只聚合 AI 回的图）；新增 /api/gallery/save 落盘端点与静态读取（两段白名单防穿越、仅 png/jpg/gif/webp、单图 12MB 上限）；PPT 新增「红头公文」主题（公文红 #c7000b，置于主题首位）。另外回填 v15.0.0 / v15.1.0 在 GitHub 与 Gitee 两个发行版的真实发行说明（此前是兜底文案）。
+* **v15.1.0**：JT Core Ultra 完全体——提示词整族移植（Core Mandates/Operational Guidelines/双工作流/TaskTracker/HookContext/SubAgents/Skills/Sandbox 全节 + NEXT_SPEAKER_CHECK/LOOP_DETECTION/压缩指令三个 utility prompt + modern/legacy 两套选型）；工具整族移植（21 个 gemini 定义全 JSON schema + TOOL_ALIASES 参数名归一化，glob/grep_search/read_many_files/write_todos 真实现注册，工具总数 57）；后端 deps 全接齐（fallbackModels/语义查环/ideContext/权限层/已批准范围/runClientTool）；切换入口全场景——composer 徽章/命令面板/NewTab 内核卡/TUI --engine/jtcode --engine/API /api/agent/engine 持久化。
+* **v15.0.0**：JT Core 双内核——原三循环品牌化 JT Core Pro+（零逻辑改动）+ 新增 JT Core Ultra（gemini-cli Apache-2.0 + OpenHands MIT 11 子系统源码级移植，零新依赖）：七态工具状态机/三层查环（工具环+复读+LLM 语义）/十次重试含配额+20% 与模型回退/上下文压缩（0.5 阈值/3 轮保护/256KB 折叠）/下一发言人/卡壳五场景/百轮预算/令牌预算/四态审批策略（一次性沙箱提权+范围键）/IDE 上下文与文件发现；engine 字段分发，同一 NeedsClientError 无状态续跑契约（30 跳）。
 * **v14.45.0**：新标签页「写公文」一键卡（开新会话 + 自动开公文模式）；全局速记支持多行（Ctrl+Enter 保存）。
 * **v14.44.0**：党政红主题公告横幅红头样式（红边 + 暖纸底 + 墨字）。
 * **v14.43.0**：党政红主题侧栏标题红字宋体 + 金色下划线。
