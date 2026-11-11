@@ -1023,3 +1023,9 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .welcome-prompts { display: none !important; }
 .flex-1.flex.flex-col.items-center.justify-center > div > svg:first-child { display: none; }
 .flex-1.flex.flex-col.items-center.justify-center .inline-flex { display: none; }
+
+/* ── Composer Codex 化（v15.3.0）：默认只留 + / 麦克风 / 发送与已启用 chip ──
+   联网/公文/思考强度/模型选择器全部收进 + 菜单（功能不删，点 + 即用）。 */
+.jt-composer-secondary { display: none !important; }
+.composer-dock [class*="rounded-full"][style*="border"] { border-color: transparent !important; }
+.composer-dock .composer-status-secondary { display: none !important; }

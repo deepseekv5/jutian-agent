@@ -151,15 +151,15 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled, engine, on
         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M10.5 18h3M6 10.5v3M18 10.5v3M8 8h8v8H8z" /></svg>
         {engine === 'ultra' ? 'Ultra' : engine === 'harness' ? 'Harness' : 'Pro+'}
       </button>
-      <span className="font-mono truncate max-w-[180px]" title={modelLabel}>{modelLabel || '未配置模型'}</span>
+      <span className="font-mono truncate max-w-[180px] composer-status-secondary" title={modelLabel}>{modelLabel || '未配置模型'}</span>
       {base && (
-        <span className="inline-flex items-center gap-1 truncate max-w-[160px]" title={workDir}>
+        <span className="inline-flex items-center gap-1 truncate max-w-[160px] composer-status-secondary" title={workDir}>
           <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>
           <span className="truncate">{base}</span>
         </span>
       )}
       {git && (
-        <span className="inline-flex items-center gap-1 shrink-0" title={`分支 ${git.branch}${git.changes ? ` · ${git.changes} 处变更` : ''}`}>
+        <span className="inline-flex items-center gap-1 shrink-0 composer-status-secondary" title={`分支 ${git.branch}${git.changes ? ` · ${git.changes} 处变更` : ''}`}>
           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v6m0 0l-3-3m3 3l3-3M6 9a3 3 0 100-6 3 3 0 000 6zm12 0a3 3 0 100-6 3 3 0 000 6zM6 9v6a3 3 0 003 3h6a3 3 0 003-3V9" /></svg>
           <span className="font-mono">{git.branch}</span>
           {git.changes > 0 && <span className="font-mono">+{git.changes}</span>}
@@ -1714,7 +1714,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             {!modes.search && (
               <button onClick={() => toggleMode('search')} aria-pressed={false}
                 title="联网搜索（web_search）" aria-label="联网搜索"
-                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors jt-composer-secondary"
                 style={{ border: `1px solid ${c.border}`, color: c.textSecondary }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c1.657 0 3 4.03 3 9s-1.343 9-3 9-3-4.03-3-9 1.343-9 3-9z" /></svg>
                 <span className="text-[12px] font-medium">联网</span>
@@ -1723,7 +1723,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
             {!modes.gongwen && (
               <button onClick={() => toggleMode('gongwen')} aria-pressed={false}
                 title="公文写作（GB/T 9704 规范）" aria-label="公文写作"
-                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors"
+                className="h-8 px-2.5 rounded-full flex items-center gap-1.5 shrink-0 transition-colors jt-composer-secondary"
                 style={{ border: `1px solid ${c.border}`, color: c.textSecondary }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5" /></svg>
                 <span className="text-[12px] font-medium">公文</span>
@@ -1757,7 +1757,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
               </button>
             )}
             {/* 思考程度：常驻下拉（对应参考 UI 的 "High ▾" 芯片） */}
-            <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 transition-colors"
+            <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 transition-colors jt-composer-secondary"
               style={{ background: `${THINK_COLORS[thinking]}14`, border: `1px solid ${THINK_COLORS[thinking]}59` }}
               title="思考程度：档位越深推理越充分">
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ color: THINK_COLORS[thinking] }}>
@@ -1782,10 +1782,10 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
               const modelChoices = mineSet.length ? mineSet : freeHit
               const cur = currentModel || settings?.model || ''
               if (modelChoices.length === 0) {
-                return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title={modelsErr || '未配置模型（设置 → 推理）'}>{modelsLoading ? '拉取中…' : (cur || '未配置模型')}</span>
+                return <span className="h-8 px-2.5 rounded-full flex items-center text-[12px] font-mono shrink-0 max-w-[170px] truncate jt-composer-secondary" style={{ background: c.surfaceInput, color: c.textTertiary, border: `1px solid ${c.border}` }} title={modelsErr || '未配置模型（设置 → 推理）'}>{modelsLoading ? '拉取中…' : (cur || '未配置模型')}</span>
               }
               return (
-                <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 max-w-[190px]" style={{ background: c.surfaceInput, border: `1px solid ${c.border}` }}
+                <span className="h-8 pl-2.5 pr-1.5 rounded-full flex items-center gap-1 shrink-0 max-w-[190px] jt-composer-secondary" style={{ background: c.surfaceInput, border: `1px solid ${c.border}` }}
                   title={modelsErr ? `上游拉取失败：${modelsErr}（显示已缓存清单）` : `切换模型 · 共 ${modelChoices.length} 个`}>
                   <select value={cur}
                     // 展开即实时拉取当前供应商的模型清单
