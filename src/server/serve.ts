@@ -5117,6 +5117,48 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         return json(res, { ok: true, url: `/api/gallery/file/${sid}/${fname}` });
       } catch (e) { return json(res, { error: e.message }, 400); }
     }
+    // 画廊容量统计 / 清理（v15.6.3）：粘贴图会随使用积累，给用户可见可清的入口
+    if (url.pathname === "/api/gallery/stats" && req.method === "GET") {
+      try {
+        const galDir = path.join(DATA_DIR, "gallery");
+        let files = 0, bytes = 0;
+        const sessions: Record<string, number> = {};
+        if (fs.existsSync(galDir)) {
+          for (const sid of fs.readdirSync(galDir)) {
+            const dir = path.join(galDir, sid);
+            if (!fs.statSync(dir).isDirectory()) continue;
+            for (const f of fs.readdirSync(dir)) {
+              const st = fs.statSync(path.join(dir, f));
+              if (!st.isFile()) continue;
+              files++; bytes += st.size;
+              sessions[sid] = (sessions[sid] || 0) + 1;
+            }
+          }
+        }
+        return json(res, { files, bytes, sessions: Object.keys(sessions).length, perSession: sessions });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
+    if (url.pathname === "/api/gallery/clear" && req.method === "POST") {
+      try {
+        const b = await body(req).catch(() => ({} as Record<string, unknown>));
+        const galDir = path.join(DATA_DIR, "gallery");
+        if (!fs.existsSync(galDir)) return json(res, { ok: true, removed: 0 });
+        const sid = typeof b.session_id === "string" ? b.session_id.replace(/[^\w-]/g, "").slice(0, 64) : "";
+        const targets = sid ? [path.join(galDir, sid)] : fs.readdirSync(galDir).map((d) => path.join(galDir, d));
+        let removed = 0;
+        for (const dir of targets) {
+          if (!fs.existsSync(dir)) continue;
+          // 双保险：目录名必须已在 galDir 内（readdir 出来的不含路径分隔符）
+          if (!dir.startsWith(galDir)) continue;
+          for (const f of fs.readdirSync(dir)) {
+            const fp = path.join(dir, f);
+            if (fs.statSync(fp).isFile()) { fs.rmSync(fp); removed++; }
+          }
+          if (!sid) { try { fs.rmdirSync(dir); } catch { /* 非空或保留 */ } }
+        }
+        return json(res, { ok: true, removed });
+      } catch (e) { return json(res, { error: e.message }, 500); }
+    }
     // 画廊静态读取：两段路径都过白名单正则，拼接后再校验前缀，杜绝穿越
     const galMatch = url.pathname.match(/^\/api\/gallery\/file\/([\w-]{1,64})\/([\w.-]{1,80})$/);
     if (galMatch && req.method === "GET") {

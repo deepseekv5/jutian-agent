@@ -320,6 +320,9 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
   const [lmError, setLmError] = useState('');
   const [addingFolder, setAddingFolder] = useState(false);
   const [testingConn, setTestingConn] = useState<null | 'ok' | 'fail'>(null);
+  // 会话图片画廊容量（v15.6.3）：进数据页时在 useEffect 里拉一次
+  const [galleryStats, setGalleryStats] = useState<null | { files: number; bytes: number; sessions: number }>(null);
+  useEffect(() => { if (tab === 'data' && !galleryStats) { fetchCompat('/api/gallery/stats').then(r => r.json()).then(d => setGalleryStats(d)).catch(() => {}) } }, [tab]);
   const [connDetail, setConnDetail] = useState('');
   const [fetchingModels, setFetchingModels] = useState(false);
   const [autoLaunch, setAutoLaunch] = useState<boolean | null>(null);
@@ -1311,6 +1314,24 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               </div>
             </>)}
             {tab === 'data' && (<>
+              {/* 会话图片画廊：容量可见、一键清理（v15.6.3） */}
+              <Sub c={c} title={t('会话图片画廊', 'Session image gallery')}>
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] font-medium" style={{ color: c.textHead }}>{t('聊天里粘贴/截图的图片缓存', 'Pasted & screenshot image cache')}</div>
+                    <div className="text-[10.5px] mt-0.5" style={{ color: c.textTertiary }}>{galleryStats ? `${galleryStats.files} 张 · ${(galleryStats.bytes / 1048576).toFixed(1)} MB · ${galleryStats.sessions} 个会话` : t('统计中…', 'Counting…')}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button type="button" onClick={async () => {
+                      try { const r = await fetchCompat('/api/gallery/stats'); const d = await r.json(); setGalleryStats(d); } catch { /* 忽略 */ }
+                    }} className="text-[11.5px] px-3 py-1.5 rounded-lg font-medium" style={{ background: c.bgCard, color: c.textSecondary, border: `1px solid ${c.border}` }}>{t('刷新统计', 'Refresh')}</button>
+                    <button type="button" onClick={async () => {
+                      if (!confirm('清空全部会话图片缓存？消息里的画廊链接将失效，不可恢复。')) return
+                      try { await fetchCompat('/api/gallery/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const r = await fetchCompat('/api/gallery/stats'); setGalleryStats(await r.json()); } catch { /* 忽略 */ }
+                    }} className="text-[11.5px] px-3 py-1.5 rounded-lg font-medium" style={{ background: 'rgba(199,0,11,.08)', color: '#c7000b', border: '1px solid rgba(199,0,11,.3)' }}>{t('清空', 'Clear')}</button>
+                  </div>
+                </div>
+              </Sub>
               <Sub c={c} title={t('备份与恢复', 'Backup & Restore')}>
                 <div className="flex gap-2 mb-1">
                   <button type="button" onClick={async () => {
