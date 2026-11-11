@@ -52,6 +52,7 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
     }))
     cmds.push(
       { id: 'new', label: '新建对话', labelEn: "New chat", hint: '开始一段新对话', hintEn: "Start a new conversation", icon: 'M12 4v16m8-8H4', run: () => { onCreateSession(); onClose() } },
+      { id: 'gongwen', label: '打开公文写作台 (gongwen)', labelEn: "Official doc desk", hint: 'gw · 要素表单 / 红头实时预览 / 导出 Word', hintEn: 'gw · Fields / live red-head preview / Word export', icon: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5', run: () => { onOpenTab('gongwen'); onClose() } },
       { id: 'persona', label: '打开 AI 角色', labelEn: "Open AI personas", hint: '有长期记忆的对话角色 · 免费直接聊', hintEn: "Personas with long-term memory — free", icon: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z', run: () => { onOpenTab('persona'); onClose() } },
       { id: 'research', label: '打开深度调研', labelEn: "Deep research", hint: '多路检索 → 交叉验证 → 带引用的报告', hintEn: "Multi-source search → cross-check → cited report", icon: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z', run: () => { onOpenTab('research'); onClose() } },
       { id: 'code', label: '打开 Code 工作台', labelEn: "Open code workspace", hint: '编辑器 / 终端 / AI 编程', hintEn: "Editor / terminal / AI coding", icon: 'M8 9l-3 3 3 3m8-6l3 3-3 3M14 5l-4 14', run: () => { onOpenTab('code'); onClose() } },

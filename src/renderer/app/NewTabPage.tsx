@@ -30,6 +30,7 @@ interface Card {
 }
 
 const CARDS: Card[] = [
+  { type: 'gongwen', desc: '公文写作台：要素表单 + 红头实时预览 + 一键导出 Word', descEn: 'Official doc desk: fields + red-head live preview + Word export', chips: ['GB/T 9704', '双栏'], chipsEn: ['GB/T 9704', 'Split view'] },
   { type: 'chat', desc: '和 AI 直接对话，一句话让它把活干完', descEn: 'Talk to the agent — it finishes the work, not just answers', chips: [`${TOOL_COUNT} 个工具`, '目标模式'], chipsEn: [`${TOOL_COUNT} tools`, 'Goal mode'] },
   { type: 'persona', desc: '有长期记忆的 AI 角色，免费直接聊', descEn: 'AI personas with long-term memory — free', chips: ['记忆', '朗读', '画画'], chipsEn: ['Memory', 'Voice', 'Paint'] },
   { type: 'research', desc: '多路检索·交叉验证·带引用报告，历史可查', descEn: 'Multi-query search, cross-checked, cited report', chips: ['实时进度', '来源清单', '历史归档'], chipsEn: ['Live progress', 'Sources', 'Archive'] },
@@ -64,7 +65,7 @@ const CARDS: Card[] = [
 ]
 
 const GROUPS: { label: string; labelEn: string; items: PageType[] }[] = [
-  { label: '对话与角色', labelEn: 'Chat & Personas', items: ['chat', 'persona', 'call'] },
+  { label: '对话与角色', labelEn: 'Chat & Personas', items: ['chat', 'gongwen', 'persona', 'call'] },
   { label: '研究与产出', labelEn: 'Research & Output', items: ['research', 'ppt', 'outputs'] },
   { label: '核心工作区', labelEn: 'Workspace', items: ['code', 'terminal', 'files'] },
   { label: '扩展能力', labelEn: 'Extended', items: ['kb', 'skills', 'memory', 'tasks', 'diary', 'employees', 'freemodels'] },
@@ -263,7 +264,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
         {/* 写公文 / 内核切换：纯文字行，能力不变 */}
         <section className="mt-9">
           <div className="mb-1.5" style={muted}>{t('快捷', 'Quick actions')}</div>
-          <button onClick={() => window.dispatchEvent(new CustomEvent('jutian-gongwen-new'))}
+          <button onClick={() => onPick('gongwen')}
             className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
             style={{ color: '#c7000b', background: 'transparent', border: 'none' }}>
             <span className="text-[12.5px] shrink-0">{t('写公文', 'Write official documents')}</span>

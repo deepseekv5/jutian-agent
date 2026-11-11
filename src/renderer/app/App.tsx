@@ -62,6 +62,7 @@ const HarnessPanel = lazy(() => import('./HarnessPanel'));
 const FreeModelsPanel = lazy(() => import('../panels/FreeModelsPanel'));
 const PersonaChatTab = lazy(() => import('../panels/persona/PersonaChatTab'));
 const DocsPanel = lazy(() => import('../panels/DocsPanel'));
+const GongwenDesk = lazy(() => import('../panels/GongwenDesk'));
 const LegalPage = lazy(() => import('../legal/LegalPage'));
 import LegalGate, { hasLegalConsent } from '../legal/LegalGate';
 import StarGate, { shouldShowStarGate } from './StarGate';
@@ -449,7 +450,8 @@ function MainApp() {
     return () => window.removeEventListener('jutian-open-tab-tasks', h)
   }, [openTab])
   useEffect(() => {
-    const h = () => { handleCreateSessionRef.current?.(); setTimeout(() => { window.dispatchEvent(new CustomEvent('jutian-gongwen-on')) }, 300) }
+    // v15.5.0：写公文统一进独立写作台（左编辑右红头预览），不再在聊天里塞提示词
+    const h = () => { window.dispatchEvent(new CustomEvent('open-panel', { detail: 'gongwen' })) }
     window.addEventListener('jutian-gongwen-new', h)
     return () => window.removeEventListener('jutian-gongwen-new', h)
   }, [])
@@ -795,6 +797,8 @@ function MainApp() {
         return <FreeModelsPanel settings={settings} onSettingsChange={s => saveSettings(s)} />;
       case 'docs':
         return <DocsPanel onClose={() => closeTab(tab.id)} />;
+      case 'gongwen':
+        return <GongwenDesk />;
       case 'persona':
         return <PersonaChatTab settings={settings} onClose={() => closeTab(tab.id)} />;
       case 'employees':

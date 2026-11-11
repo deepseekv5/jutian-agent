@@ -4,7 +4,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { APP_VERSION } from '../brand'
 import { isMac as platformIsMac } from '../utils/platform'
 
-export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | 'harness' | `ext:${string}` | 'docs'
+export type PageType = 'chat' | 'files' | 'terminal' | 'ppt' | 'outputs' | 'skills' | 'code' | 'memory' | 'tasks' | 'qqbot' | 'settings' | 'about' | 'call' | 'kb' | 'diary' | 'employees' | 'employee' | 'group' | 'plugins' | 'newtab' | 'freemodels' | 'persona' | 'legal' | 'research' | 'templates' | 'workflow' | 'snippets' | 'usage' | 'diagnostics' | 'shortcuts' | 'export' | 'backup' | 'todos' | 'compare' | 'extensions' | 'harness' | `ext:${string}` | 'docs' | 'gongwen'
 
 export interface WorkTab {
   id: string
@@ -18,6 +18,7 @@ export interface WorkTab {
 }
 
 export const PAGE_META: Record<string, { label: string; labelEn?: string; icon: string }> = {
+  gongwen: { label: '公文写作台', labelEn: 'Official Doc Desk', icon: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5' },
   chat: { label: '对话', labelEn: 'Chat', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
   files: { label: '文件', labelEn: 'Files', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
   terminal: { label: '终端', labelEn: 'Terminal', icon: 'M8 9l3 3-3 3m5 0h3M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z' },
@@ -70,7 +71,7 @@ export function registerExtMeta(type: string, label: string, icon?: string) {
 export function unregisterExtMeta(type: string) { delete PAGE_META[type] }
 export function getAllExtMetaKeys(): string[] { return Object.keys(PAGE_META).filter(k => k.startsWith('ext:')) }
 
-export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'harness', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research', 'docs']
+export const SINGLE_INSTANCE: PageType[] = ['ppt', 'outputs', 'skills', 'code', 'extensions', 'harness', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'newtab', 'freemodels', 'persona', 'legal', 'research', 'docs', 'gongwen']
 
 interface Props {
   tabs: WorkTab[]
