@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
+import { CARDS, GROUPS } from './pageCatalog'
 
 /**
  * Codex Exact 布局（v15.7.0）
@@ -81,9 +82,12 @@ function CodexMark({ size = 52 }: { size?: number }) {
 
 /** 主区欢迎页（仅 newtab 标签）：中央 logo + 大字 + 建议 + 输入框 */
 export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }: HomeProps) {
-  const { t } = useLanguage()
+  const { lang, t } = useLanguage()
   const [text, setText] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
+  // 全部功能折叠区（v15.8.4）：默认收起保持 Codex 观感，展开列出全部 8 组入口
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  const catalogByType = new Map(CARDS.map(k => [k.type, k]))
   const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--jt-focus)' }
   const leave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent' }
   return (
@@ -105,8 +109,32 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
               {x.label}
             </button>
           ))}
+          </div>
+
+          {/* 全部功能：展开显示 8 组全部入口（点击直达），收起只占一行 */}
+          <div className="mt-10 w-full" style={{ maxWidth: 570 }}>
+            <button onClick={() => setCatalogOpen(v => !v)} className="w-full flex items-center gap-2 py-2 text-left text-[12px] rounded-lg px-2 transition-colors"
+              style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>
+              <svg className="w-3 h-3 transition-transform" style={{ transform: catalogOpen ? 'rotate(90deg)' : 'none' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
+              {t(`全部功能 · ${CARDS.length} 项`, `All features · ${CARDS.length}`)}
+            </button>
+            {catalogOpen && GROUPS.map(g => (
+              <div key={g.label} className="mt-3">
+                <div className="px-2 mb-1 text-[10.5px]" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? g.labelEn : g.label}</div>
+                {g.items.map(type => {
+                  const card = catalogByType.get(type)
+                  return (
+                    <button key={type} onClick={() => onOpenTab(type)} className="w-full flex items-baseline gap-3 py-1 text-left rounded-md px-2 transition-colors"
+                      style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
+                      <span className="text-[12.5px] shrink-0">{(() => { const m = PAGE_META[type]; return lang === 'en' && m?.labelEn ? m.labelEn : (m?.label || type) })()}</span>
+                      {card && <span className="text-[10.5px] truncate" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? card.descEn : card.desc}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
       <div className="mx-auto mb-8 w-full" style={{ maxWidth: 820, padding: '0 24px' }}>
         <div className="rounded-[26px] overflow-hidden" style={{ background: 'var(--jt-paper-alt)', padding: 8 }}>
           <div className="rounded-[20px]" style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline-soft)' }}>
