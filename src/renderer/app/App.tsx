@@ -895,7 +895,9 @@ function MainApp() {
       <CodexRail sessions={sessions} activeId={activeId} activeType={activeTab?.type || 'newtab'}
         onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
         onOpenTab={(type) => openTab(type)} onSearch={() => setCmdOpen(true)}
-        onCollapse={() => setSidebarCollapsed(true)} onHome={() => openTab('newtab')} />
+        onCollapse={() => setSidebarCollapsed(true)} onHome={() => openTab('newtab')}
+        onDelete={(id) => handleDeleteSession(id)}
+        onRename={(id, title) => { updateTitle(id, title) }} />
       <div className="flex-1 flex flex-col min-w-0 h-full">
         {!immersive && <TabBar
           tabs={tabs} activeTabId={activeTab?.id || ''} onSelect={setActiveTabId} onClose={closeTab}

@@ -60,6 +60,8 @@ interface RailProps {
   onCollapse: () => void
   onHome: () => void
   activeType: PageType
+  onDelete?: (id: string) => void
+  onRename?: (id: string, title: string) => void
 }
 
 interface HomeProps {
@@ -175,11 +177,13 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
 }
 
 /** 左侧骨架：64px 活动栏 + 320px 会话栏（所有界面常驻，Codex 1:1） */
-export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onHome, activeType }: RailProps) {
+export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onHome, activeType, onDelete, onRename }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   // Projects 点击 → 过滤 Recents（再点同一个取消）
   const [projFilter, setProjFilter] = useState<string | null>(null)
+  // Recents 右键菜单（v15.8.5）：重命名 / 删除，与原侧栏能力对齐
+  const [ctx, setCtx] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
   // 工作 / 编程双模式：与原侧栏切换器同源（localStorage + chat-mode-changed 事件）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
     try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
@@ -205,6 +209,13 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
     window.addEventListener('chat-mode-changed', h)
     return () => window.removeEventListener('chat-mode-changed', h)
   }, [])
+  // 右键菜单点空白处关闭
+  useEffect(() => {
+    if (!ctx) return
+    const close = () => setCtx(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [ctx])
   const switchMode = (m: 'general' | 'coding') => {
     setChatMode(m); setModeOpen(false)
     try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
@@ -299,7 +310,9 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
           </button>
           <div className="px-2 mb-2 text-[11px] font-medium" style={muted}>{t('最近', 'Recents')}</div>
           {recents.map((s, i) => (
-            <button key={s.id} onClick={() => onSelect(s.id)} className={row}
+            <button key={s.id} onClick={() => onSelect(s.id)}
+              onContextMenu={e => { e.preventDefault(); setCtx({ id: s.id, title: s.title || '', x: e.clientX, y: e.clientY }) }}
+              className={row}
               style={{ color: s.id === activeId ? 'var(--jt-ink)' : 'var(--jt-ink-2)', background: s.id === activeId ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
               <span className="flex-1 truncate">{s.title || t('新对话', 'New chat')}</span>
@@ -377,6 +390,16 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
           )}
         </div>
       </div>
+      {ctx && (
+        <div className="fixed z-50 rounded-xl py-1.5 min-w-[160px]" style={{ left: ctx.x, top: ctx.y, background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 8px 28px rgba(0,0,0,.14)' }} onContextMenu={e => e.preventDefault()}>
+          <button onClick={() => { const val = prompt(t('重命名对话', 'Rename chat'), ctx.title); if (val && val.trim() && onRename) onRename(ctx.id, val.trim()); setCtx(null) }}
+            className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: 'var(--jt-ink-2)' }}
+            onMouseEnter={hover} onMouseLeave={leave}>{t('重命名', 'Rename')}</button>
+          <button onClick={() => { if (confirm(t('确定删除这个对话？不可恢复。', 'Delete this chat? This cannot be undone.')) && onDelete) onDelete(ctx.id); setCtx(null) }}
+            className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: '#c7000b' }}
+            onMouseEnter={hover} onMouseLeave={leave}>{t('删除', 'Delete')}</button>
+        </div>
+      )}
     </>
   )
 }
