@@ -66,6 +66,7 @@ interface HomeProps {
   onOpenTab: (type: PageType) => void
   onCreate: () => void
   modelLabel?: string
+  workLabel?: string
 }
 
 /** 中央花形 logo（参考图的手绘线稿） */
@@ -79,7 +80,7 @@ function CodexMark({ size = 52 }: { size?: number }) {
 }
 
 /** 主区欢迎页（仅 newtab 标签）：中央 logo + 大字 + 建议 + 输入框 */
-export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel }: HomeProps) {
+export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }: HomeProps) {
   const { t } = useLanguage()
   const [text, setText] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
@@ -116,7 +117,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel }: HomeProps)
               </button>
               <button onClick={() => onOpenTab('files')} className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors" onMouseEnter={hover} onMouseLeave={leave}>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.folder} /></svg>
-                {t('工作区', 'Workspace')}<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
+                <span className="max-w-[140px] truncate">{workLabel || t('工作区', 'Workspace')}</span><svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
               </button>
             </div>
             <input value={text} onChange={e => setText(e.target.value)}

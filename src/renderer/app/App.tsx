@@ -915,7 +915,8 @@ function MainApp() {
                     {tab.type === 'newtab'
                       ? <CodexHome onAsk={(text) => window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text }))}
                           onOpenTab={(type) => openTab(type)} onCreate={() => handleCreateSession()}
-                          modelLabel={settings.model} />
+                          modelLabel={settings.model}
+                          workLabel={(() => { const w = settings.workDir || ''; const seg = w.replace(/[\\/]+$/, '').split(/[\\/]/).pop(); return seg || '' })()} />
                       : renderTabBody(tab)}
                   </Suspense>
                 </ErrorBoundary>
