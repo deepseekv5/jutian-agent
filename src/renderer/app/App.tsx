@@ -16,7 +16,7 @@ import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import { useAndroid } from '../hooks/useAndroid';
 import BackgroundLayer from './BackgroundLayer';
-import CodexShell from './CodexShell';
+import { CodexRail, CodexHome } from './CodexShell';
 import CommandPalette from './CommandPalette';
 import PermissionPrompt from './PermissionPrompt';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
@@ -781,8 +781,8 @@ function MainApp() {
   }, [])
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-  // Codex Exact 首页：整窗交给 CodexShell（活动栏+会话栏+主区），原顶栏/侧栏/状态栏全隐
-  const codexHome = activeTab?.type === 'newtab' && !vp.isMobile;
+  // v15.7.2：桌面端所有界面统一走 Codex 外壳（手机保留抽屉式原布局）
+  const codexShell = !vp.isMobile;
   activeTabRef.current = activeTab?.id || '';
   activeSessionIdRef.current = activeTab?.sessionId || activeId || null;
   tabsOrderRef.current = tabs;
@@ -823,12 +823,8 @@ function MainApp() {
       case 'group':
         return tab.refId ? <GroupChatTab key={tab.id} groupId={tab.refId} settings={settings} onClose={() => closeTab(tab.id)} /> : null;
       case 'newtab':
-        return <CodexShell sessions={sessions} activeId={activeId}
-          onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
-          onOpenTab={(type) => openTab(type)}
-          onAsk={(text) => { window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text })) }}
-          onSearch={() => { setCmdOpen(true) }}
-          onCollapse={() => setSidebarCollapsed(true)} />;
+        // 首页由外层 CodexShell 直接渲染（不传 children）；手机走旧布局时给个纯文字兜底
+        return <NewTabPage onPick={handleNewTabPick} sessions={sessions} />;
       case 'files':
         return <FilesTab settings={settings} />;
       case 'terminal':
@@ -892,25 +888,58 @@ function MainApp() {
 
   const mainAreaStyle = { position: 'relative' as const, zIndex: 1, ['--kb-inset' as string]: `${kbInset}px` } as React.CSSProperties;
 
-  // Codex Exact 首页（v15.7.0）：整窗一比一复刻参考图，不渲染原顶栏/侧栏/状态栏。
-  // 其它页签仍走下面原来的完整工作台，功能零删。
-  if (codexHome) return (
-    <div className="h-screen w-screen overflow-hidden" style={{ background: '#fff' }}>
-      <CodexShell sessions={sessions} activeId={activeId}
+  // v15.7.2「所有界面都要」：Codex 左骨架（活动栏+会话栏）常驻，
+  // 右侧仍是完整工作台——多标签条、页面内容、状态栏、所有面板入口与按钮全部保留。
+  if (codexShell) return (
+    <div className="h-screen w-screen overflow-hidden flex" style={{ background: '#fff' }}>
+      <CodexRail sessions={sessions} activeId={activeId} activeType={activeTab?.type || 'newtab'}
         onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
-        onOpenTab={(type) => openTab(type)}
-        onAsk={(text) => { window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text })) }}
-        onSearch={() => setCmdOpen(true)}
-        onCollapse={() => setSidebarCollapsed(true)} />
+        onOpenTab={(type) => openTab(type)} onSearch={() => setCmdOpen(true)}
+        onCollapse={() => setSidebarCollapsed(true)} onHome={() => openTab('newtab')} />
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        {!immersive && <TabBar
+          tabs={tabs} activeTabId={activeTab?.id || ''} onSelect={setActiveTabId} onClose={closeTab}
+          onOpenType={(type) => openTab(type)} toolServerOk={toolServerOk}
+          onOpenSettings={() => openTab('settings')}
+          onOpenWorkDir={() => fetchCompat(`/api/sessions/${activeId || ''}/folder`).catch(() => {})}
+          workingSessionIds={streamingSessionIds} isMobile={false}
+          onToggleSidebar={() => setSidebarCollapsed(v => !v)} />}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {tabs.map(tab => {
+            const isActive = tab.id === activeTab?.id
+            if (!isActive && !everMounted.has(tab.id)) return null
+            return (
+              <div key={tab.id} className={`jt-tab-body h-full flex flex-col min-h-0 ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
+                <ErrorBoundary inline resetKey={`${tab.id}:${tab.sessionId || tab.refId || ''}`} label="这个页面加载出错了">
+                  <Suspense fallback={<TabFallback />}>
+                    {tab.type === 'newtab'
+                      ? <CodexHome onAsk={(text) => window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text }))}
+                          onOpenTab={(type) => openTab(type)} onCreate={() => handleCreateSession()} />
+                      : renderTabBody(tab)}
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )
+          })}
+        </div>
+        {!immersive && <StatusBar serverOk={toolServerOk} model={settings.model} workDir={settings.workDir} />}
+      </div>
+      {/* 全局浮层：任何页面都要在 */}
+      {!legalOk && <LegalGate onAgree={() => setLegalOk(true)} />}
+      {legalOk && starGate && <StarGate onClose={() => setStarGate(false)} />}
+      {legalOk && tour && <Suspense fallback={null}><OnboardingTour onDone={() => setTour(false)} /></Suspense>}
+      {festivalEgg && <FestivalEgg onClose={() => setFestivalEgg(false)} />}
+      <RuntimeHints />
+      {cliPrompt && <CliInstallModal onClose={() => setCliPrompt(false)} />}
+      {showBrowserOverlay && <BrowserOverlay initialUrl={browserUrl} onClose={() => setShowBrowserOverlay(false)} />}
+      {pendingScreenshot && (
+        <ScreenshotCrop dataUrl={pendingScreenshot}
+          onCancel={() => setPendingScreenshot(null)}
+          onConfirm={(cropped) => { window.dispatchEvent(new CustomEvent('attach-screenshot', { detail: cropped })); setPendingScreenshot(null); }} />
+      )}
       <PermissionPrompt />
-      <CommandPalette
-        open={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        onOpenTab={(t) => openTab(t as any)}
-        sessions={sessions}
-        onSelectSession={handleSelectSession}
-        onCreateSession={handleCreateSession as () => void}
-      />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} onOpenTab={(t) => openTab(t as any)}
+        sessions={sessions} onSelectSession={handleSelectSession} onCreateSession={handleCreateSession as () => void} />
     </div>
   );
 

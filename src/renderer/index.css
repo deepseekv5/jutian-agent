@@ -977,10 +977,10 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
   --jt-focus: rgba(255,255,255,.12);
 }
 /* 该隐藏的 chrome 才隐藏；功能入口全部保留在命令面板 / 新标签页 / 搜索 */
-.announcement-banner,
-.jt-in-bottom,
-.jt-iconrow,
-.jt-hide-compact { display: none !important; }
+.announcement-banner { display: none !important; }
+/* v15.7.2：状态栏、侧栏功能图标行、顶栏按钮全部恢复——用户要求「按钮要可以点击、所有界面都要完整」 */
+.jt-hide-compact { opacity: .6 !important; }
+.jt-hide-compact:hover { opacity: 1 !important; }
 
 /* 全局纸面：无壁纸时的实底由 BackgroundLayer 提供，这里只统一所有容器的字色/线色 */
 body { color: var(--jt-ink); }
@@ -1024,7 +1024,7 @@ button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { c
 }
 .tab-strip > div:hover { background: var(--jt-focus) !important; color: var(--jt-ink) !important; }
 .tab-strip > div[style*="surfaceActive"], .tab-strip > div:has(> span.absolute) { background: rgba(0,0,0,.05) !important; color: var(--jt-ink) !important; }
-.tab-strip > div > svg, .tab-strip > div > span.absolute { display: none !important; }
+.tab-strip > div > svg { opacity: .55; }
 
 /* 侧栏：比主区低一档的浅灰纸面 + 右侧一条发丝线（Codex 的骨架） */
 .jt-in-left { border-right: 1px solid var(--jt-hairline-soft) !important; }
@@ -1045,9 +1045,7 @@ button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { c
 /* 聊天空态：一行大字 + 极淡副文，不出现品牌大图 / 模式徽章 / 快捷 chip 堆 */
 .welcome-title { font-size: 28px !important; font-weight: 500 !important; letter-spacing: -0.032em !important; color: var(--jt-ink) !important; }
 .welcome-subtitle { opacity: .58; }
-.welcome-prompts { display: none !important; }
-.flex-1.flex.flex-col.items-center.justify-center > div > svg:first-child { display: none; }
-.flex-1.flex.flex-col.items-center.justify-center .inline-flex { display: none; }
+.welcome-prompts { opacity: .8; }
 
 /* 消息气泡：AI 回复无底、用户消息浅灰圆角块（Codex 的对话层次） */
 .bubble-user, [class*="bubble-user"] { background: var(--jt-paper-alt) !important; box-shadow: none !important; }
@@ -1228,3 +1226,4 @@ input:focus, textarea:focus, select:focus { animation: jt-focus-ring .24s var(--
 /* Codex Exact 首页：强制中性灰，不受党政红/深色主题的暖色变量影响 */
 .jt-codex-input::placeholder { color: #9a9a9a !important; }
 .jt-codex-input { caret-color: #111 !important; }
+
