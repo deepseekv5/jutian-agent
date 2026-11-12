@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
-import type { PageType } from './TabBar'
+import { PAGE_META, type PageType } from './TabBar'
 
 /**
  * Codex Exact 布局（v15.7.0）
@@ -27,6 +27,27 @@ const ICONS = {
 }
 
 type SessionLite = { id: string; title?: string; updated_at?: string; created_at?: string; project?: string }
+
+/** 侧栏「工作区」自定义入口（v15.8.0）：用户可增删，设置固定不可移除 */
+const RAIL_PINS_KEY = 'lyclaw_rail_pins'
+const RAIL_DEFAULT_PINS: PageType[] = ['settings', 'files', 'tasks', 'kb', 'skills', 'workflow', 'gongwen', 'freemodels', 'export', 'plugins']
+// 可添加的全部页面（排除首页/会话/动态扩展；与 NewTabSearch 同源取 PAGE_META）
+const RAIL_ADDABLE: PageType[] = ['chat', 'files', 'terminal', 'ppt', 'outputs', 'skills', 'code', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'freemodels', 'persona', 'legal', 'research', 'templates', 'workflow', 'snippets', 'usage', 'diagnostics', 'shortcuts', 'export', 'backup', 'todos', 'compare', 'extensions', 'harness', 'docs', 'gongwen']
+
+function loadRailPins(): PageType[] {
+  try {
+    const raw = localStorage.getItem(RAIL_PINS_KEY)
+    if (!raw) return RAIL_DEFAULT_PINS
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr) || !arr.length) return RAIL_DEFAULT_PINS
+    // 设置永远固定在第一位
+    const rest = (arr as PageType[]).filter(t => t !== 'settings' && RAIL_ADDABLE.includes(t))
+    return ['settings', ...rest]
+  } catch { return RAIL_DEFAULT_PINS }
+}
+function saveRailPins(pins: PageType[]) {
+  try { localStorage.setItem(RAIL_PINS_KEY, JSON.stringify(pins)) } catch { /* ignore */ }
+}
 
 interface RailProps {
   sessions: SessionLite[]
@@ -133,6 +154,19 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
     try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
   })
   const [modeOpen, setModeOpen] = useState(false)
+  // 工作区入口自定义（v15.8.0）：可移除 / 可从全部页面添加
+  const [pins, setPins] = useState<PageType[]>(loadRailPins)
+  const [addOpen, setAddOpen] = useState(false)
+  const removePin = (t: PageType) => {
+    if (t === 'settings') return // 设置固定不可移除
+    const next = pins.filter(x => x !== t)
+    setPins(next); saveRailPins(next)
+  }
+  const addPin = (t: PageType) => {
+    if (pins.includes(t)) return
+    const next = [...pins, t]
+    setPins(next); saveRailPins(next)
+  }
   useEffect(() => {
     const h = () => { try { setChatMode(localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch {} }
     window.addEventListener('chat-mode-changed', h)
@@ -252,18 +286,61 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             </button>
           ))}
           {/* 功能入口（Codex 骨架下不显示原侧栏图标行，这里补纯文字快捷入口） */}
-          <div className="px-2 mt-7 mb-2 text-[11px] font-medium" style={muted}>{t('工作区', 'Workspace')}</div>
-          {([
-            ['settings', t('设置', 'Settings')], ['files', t('文件', 'Files')], ['tasks', t('任务', 'Tasks')],
-            ['kb', t('知识库', 'Knowledge')], ['skills', t('技能', 'Skills')], ['workflow', t('工作流', 'Workflows')],
-            ['gongwen', t('公文写作台', 'Doc desk')], ['freemodels', t('免费模型', 'Free models')],
-            ['export', t('导出', 'Export')], ['plugins', t('插件市场', 'Plugins')],
-          ] as [PageType, string][]).map(([type, label]) => (
-            <button key={type} onClick={() => onOpenTab(type)} className={row} style={{ color: activeType === type ? '#111' : '#6b6b6b', background: activeType === type ? '#f4f4f4' : 'transparent' }}
-              onMouseEnter={hover} onMouseLeave={leave}>
-              <span className="text-[11px] w-4 text-center" style={muted}>·</span>{label}
-            </button>
-          ))}
+          <div className="px-2 mt-7 mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-medium" style={muted}>{t('工作区', 'Workspace')}</span>
+            <button onClick={() => setAddOpen(v => !v)} title={t('添加 / 移除入口', 'Add / remove entries')}
+              className="text-[11px] px-1.5 py-0.5 rounded transition-colors" style={{ color: addOpen ? '#111' : '#9a9a9a', background: addOpen ? '#f4f4f4' : 'transparent' }}
+              onMouseEnter={hover} onMouseLeave={leave}>{addOpen ? t('完成', 'Done') : t('+ 添加', '+ Add')}</button>
+          </div>
+          {/* 自定义入口（v15.8.0）：设置固定首位不可移除，其余 hover 出 × 可移除 */}
+          {pins.map(type => {
+            const meta = PAGE_META[type]
+            const label = lang === 'en' && meta?.labelEn ? meta.labelEn : (meta?.label || type)
+            const fixed = type === 'settings'
+            return (
+              <div key={type} className="group relative">
+                <button onClick={() => onOpenTab(type)} className={row + ' w-full'} style={{ color: activeType === type ? '#111' : '#6b6b6b', background: activeType === type ? '#f4f4f4' : 'transparent' }}
+                  onMouseEnter={hover} onMouseLeave={leave}>
+                  <span className="text-[11px] w-4 text-center" style={muted}>·</span>
+                  <span className="flex-1 truncate text-left">{label}</span>
+                  {addOpen && !fixed && (
+                    <span onClick={e => { e.stopPropagation(); removePin(type) }}
+                      className="w-5 h-5 rounded grid place-items-center text-[11px] shrink-0 transition-colors"
+                      style={{ color: '#b0b0b0' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#c7000b'; e.currentTarget.style.background = '#f6f6f6' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#b0b0b0'; e.currentTarget.style.background = 'transparent' }}
+                      title={t('从侧栏移除', 'Remove from sidebar')}>×</span>
+                  )}
+                  {addOpen && fixed && <span className="text-[9.5px] shrink-0 px-1 py-0.5 rounded" style={{ color: '#9a9a9a', background: '#f4f4f4' }}>{t('固定', 'Pinned')}</span>}
+                </button>
+              </div>
+            )
+          })}
+          {/* 添加面板：全部可用页面（已添加的排除），纯文字两列 */}
+          {addOpen && (
+            <div className="mt-2 rounded-xl p-2.5" style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}>
+              <div className="text-[10.5px] mb-2 px-1" style={muted}>{t('点击添加到侧栏', 'Click to add to sidebar')}</div>
+              <div className="grid grid-cols-2 gap-x-2">
+                {RAIL_ADDABLE.filter(t => !pins.includes(t)).map(type => {
+                  const meta = PAGE_META[type]
+                  const label = lang === 'en' && meta?.labelEn ? meta.labelEn : (meta?.label || type)
+                  return (
+                    <button key={type} onClick={() => addPin(type)}
+                      className="flex items-center gap-1.5 py-1.5 px-1.5 rounded-md text-left text-[11.5px] transition-colors"
+                      style={{ color: '#5b5b5b' }}
+                      onMouseEnter={hover} onMouseLeave={leave}
+                      title={t('添加', 'Add')}>
+                      <span className="text-[11px]" style={muted}>+</span>
+                      <span className="truncate">{label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {RAIL_ADDABLE.filter(t => !pins.includes(t)).length === 0 && (
+                <div className="text-[10.5px] px-1 py-1" style={muted}>{t('全部页面都已在侧栏', 'All pages are already pinned')}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
