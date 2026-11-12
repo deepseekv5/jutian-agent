@@ -70,7 +70,7 @@ interface HomeProps {
 /** 中央花形 logo（参考图的手绘线稿） */
 function CodexMark({ size = 52 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke="#111" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke="var(--jt-ink)" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M24 6c-3.6-2.2-8.2-.6-9.2 3.4-4.2-.4-7.3 3.9-5.7 7.8-3.7 2-4.2 7.1-1 9.7-1.6 4 1.5 8.3 5.8 8 1.5 4 6.5 5 9.7 2 3.2 3 8.2 2 9.7-2 4.3.3 7.4-4 5.8-8 3.2-2.6 2.7-7.7-1-9.7 1.6-3.9-1.5-8.2-5.7-7.8C31.2 5.4 26.6 3.8 23 6" />
       <path d="M20 19l7 5-7 5M27 24h-6" />
     </svg>
@@ -82,13 +82,13 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
   const { t } = useLanguage()
   const [text, setText] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
-  const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = '#f4f4f4' }
+  const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--jt-focus)' }
   const leave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent' }
   return (
-    <div className="flex-1 min-w-0 flex flex-col" style={{ background: '#fff' }}>
+    <div className="flex-1 min-w-0 flex flex-col" style={{ background: 'var(--jt-paper)' }}>
       <div className="flex-1 flex flex-col items-center justify-center px-8" style={{ paddingBottom: 24 }}>
         <CodexMark size={54} />
-        <h1 className="mt-4 font-normal" style={{ fontSize: 34, letterSpacing: '-.035em', color: '#111' }}>
+        <h1 className="mt-4 font-normal" style={{ fontSize: 34, letterSpacing: '-.035em', color: 'var(--jt-ink)' }}>
           {t('今天想做点什么？', 'What should we build?')}
         </h1>
         <div className="mt-14 w-full" style={{ maxWidth: 570 }}>
@@ -98,7 +98,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
             { color: '#3b82f6', label: t('用免费模型起草一份公文', 'Draft a document with free models'), icon: ICONS.docs },
           ].map(x => (
             <button key={x.label} onClick={() => onAsk(x.label)} className="w-full flex items-center gap-3 py-2.5 text-left rounded-lg px-2 transition-colors"
-              style={{ color: '#6b6b6b', fontSize: 13.5 }} onMouseEnter={hover} onMouseLeave={leave}>
+              style={{ color: 'var(--jt-ink-2)', fontSize: 13.5 }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke={x.color} strokeWidth={1.9}><path strokeLinecap="round" strokeLinejoin="round" d={x.icon} /></svg>
               {x.label}
             </button>
@@ -106,9 +106,9 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
         </div>
       </div>
       <div className="mx-auto mb-8 w-full" style={{ maxWidth: 820, padding: '0 24px' }}>
-        <div className="rounded-[26px] overflow-hidden" style={{ background: '#f2f2f2', padding: 8 }}>
-          <div className="rounded-[20px]" style={{ background: '#fff', border: '1px solid #ececec' }}>
-            <div className="flex items-center gap-2 px-4 pt-3 pb-1 text-[11.5px]" style={{ color: '#8b8b8b' }}>
+        <div className="rounded-[26px] overflow-hidden" style={{ background: 'var(--jt-paper-alt)', padding: 8 }}>
+          <div className="rounded-[20px]" style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline-soft)' }}>
+            <div className="flex items-center gap-2 px-4 pt-3 pb-1 text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }}>
               <button onClick={() => onOpenTab('settings')} className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors" onMouseEnter={hover} onMouseLeave={leave}>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.box} /></svg>
                 {t('模型', 'Model')}<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
@@ -121,19 +121,19 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
             <input value={text} onChange={e => setText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
               placeholder={t('做任何事…', 'Do anything')}
-              className="w-full bg-transparent outline-none px-5 pt-2 pb-3 text-[15px] jt-codex-input" style={{ color: '#111' }} />
+              className="w-full bg-transparent outline-none px-5 pt-2 pb-3 text-[15px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
             <div className="flex items-center gap-2 px-4 pb-3">
-              <button onClick={() => onOpenTab('files')} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: '#555' }} title={t('添加文件', 'Add file')} onMouseEnter={hover} onMouseLeave={leave}>
+              <button onClick={() => onOpenTab('files')} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: 'var(--jt-ink-2)' }} title={t('添加文件', 'Add file')} onMouseEnter={hover} onMouseLeave={leave}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d={ICONS.plus} /></svg>
               </button>
               <span className="flex-1" />
-              <button onClick={() => onOpenTab('settings')} className="text-[11.5px] px-2 py-1 rounded-md flex items-center gap-1" style={{ color: '#555' }} onMouseEnter={hover} onMouseLeave={leave}>
+              <button onClick={() => onOpenTab('settings')} className="text-[11.5px] px-2 py-1 rounded-md flex items-center gap-1" style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
                 {t('Astra High', 'Astra High')}<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
               </button>
-              <button onClick={onCreate} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: '#555' }} title={t('语音', 'Voice')} onMouseEnter={hover} onMouseLeave={leave}>
+              <button onClick={onCreate} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: 'var(--jt-ink-2)' }} title={t('语音', 'Voice')} onMouseEnter={hover} onMouseLeave={leave}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.mic} /></svg>
               </button>
-              <button onClick={ask} className="w-8 h-8 rounded-full grid place-items-center transition-transform hover:scale-105" style={{ background: '#111', color: '#fff' }} title={t('发送', 'Send')}>
+              <button onClick={ask} className="w-8 h-8 rounded-full grid place-items-center transition-transform hover:scale-105" style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.arrow} /></svg>
               </button>
             </div>
@@ -148,12 +148,13 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
 export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onHome, activeType }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
-  const [activeNav, setActiveNav] = useState<string>('logo')
   // 工作 / 编程双模式：与原侧栏切换器同源（localStorage + chat-mode-changed 事件）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
     try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
   })
   const [modeOpen, setModeOpen] = useState(false)
+  // 活动栏高亮跟随当前页面：newtab→logo，diary→clock，docs→docs，skills→box，其余→更多
+  const activeNav = activeType === 'newtab' ? 'logo' : activeType === 'diary' ? 'clock' : activeType === 'docs' ? 'docs' : activeType === 'skills' ? 'box' : 'dots'
   // 工作区入口自定义（v15.8.0）：可移除 / 可从全部页面添加
   const [pins, setPins] = useState<PageType[]>(loadRailPins)
   const [addOpen, setAddOpen] = useState(false)
@@ -184,9 +185,9 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
     return seg.length > 14 ? seg.slice(0, 13) + '…' : seg
   }
   const projects = [...new Set(sessions.map(s => shortName(s.project)).filter(Boolean) as string[])].slice(0, 4)
-  const muted = { color: '#9a9a9a' }
+  const muted = { color: 'var(--jt-ink-3)' }
   const row = 'w-full flex items-center gap-2.5 py-[7px] text-[13.5px] rounded-md px-2 transition-colors text-left'
-  const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = '#f4f4f4' }
+  const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--jt-focus)' }
   const leave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent' }
   const navItems: { key: string; icon: string; title: string; page?: PageType }[] = [
     { key: 'logo', icon: ICONS.logo, title: 'JT Core' },
@@ -198,13 +199,13 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
   return (
     <>
       {/* 64px 活动栏：每个图标都是可点入口 */}
-      <div className="shrink-0 flex flex-col items-center pb-3 gap-1 titlebar-drag" style={{ width: 64, background: '#fafafa', paddingTop: 76 }}>
+      <div className="shrink-0 flex flex-col items-center pb-3 gap-1 titlebar-drag" style={{ width: 64, background: 'var(--jt-paper-alt)', paddingTop: 76 }}>
         {navItems.map((n, i) => (
           <div key={n.key} className="contents">
-            {i === 4 && <div className="w-6 h-px my-1" style={{ background: '#e5e5e5' }} />}
-            <button title={n.title} onClick={() => { setActiveNav(n.key); if (n.key === 'logo') onHome(); else if (n.page) onOpenTab(n.page) }}
+            {i === 4 && <div className="w-6 h-px my-1" style={{ background: 'var(--jt-hairline)' }} />}
+            <button title={n.title} onClick={() => { if (n.key === 'logo') onHome(); else if (n.page) onOpenTab(n.page) }}
               className="w-10 h-10 rounded-lg grid place-items-center transition-colors titlebar-nodrag"
-              style={{ color: activeNav === n.key ? '#111' : '#8b8b8b', background: activeNav === n.key ? '#eee' : 'transparent' }}
+              style={{ color: activeNav === n.key ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: activeNav === n.key ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={n.icon} />
@@ -214,34 +215,34 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
         ))}
       </div>
       {/* 320px 会话栏 */}
-      <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid #f0f0f0' }}>
+      <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid var(--jt-hairline-soft)' }}>
         <div className="h-[76px] flex items-end justify-between px-5 pb-3 shrink-0 titlebar-drag">
           <div className="relative titlebar-nodrag">
-            <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: '#111' }}
+            <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: 'var(--jt-ink)' }}
               title={t('切换工作 / 编程模式', 'Switch Office / Coding mode')}>
               {t('巨天', 'Jutian')}
-              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? '#2563eb' : '#6b6b6b', background: chatMode === 'coding' ? 'rgba(37,99,235,.08)' : '#f2f2f2' }}>
+              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? '#2563eb' : 'var(--jt-ink-2)', background: chatMode === 'coding' ? 'rgba(37,99,235,.08)' : 'var(--jt-paper-alt)' }}>
                 {chatMode === 'coding' ? t('编程', 'Coding') : t('工作', 'Work')}
               </span>
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="#888" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
             </button>
             {modeOpen && (
-              <div className="absolute left-0 top-8 z-30 w-52 rounded-xl py-1.5" style={{ background: '#fff', border: '1px solid #ececec', boxShadow: '0 8px 28px rgba(0,0,0,.10)' }}>
+              <div className="absolute left-0 top-8 z-30 w-52 rounded-xl py-1.5" style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline-soft)', boxShadow: '0 8px 28px rgba(0,0,0,.10)' }}>
                 {([['general', t('工作模式', 'Work mode'), t('办公 · 写作 · 日常任务', 'Office · writing · daily tasks'), ICONS.docs],
                    ['coding', t('编程模式', 'Coding mode'), t('代码 · 终端 · diff', 'Code · terminal · diff'), ICONS.box]] as const).map(([m, label, desc, icon]) => (
                   <button key={m} onClick={() => switchMode(m)} className="w-full flex items-start gap-2.5 px-3 py-2 text-left rounded-lg"
-                    style={{ background: chatMode === m ? '#f4f4f4' : 'transparent' }}
+                    style={{ background: chatMode === m ? 'var(--jt-focus)' : 'transparent' }}
                     onMouseEnter={hover} onMouseLeave={leave}>
-                    <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke={chatMode === m ? '#111' : '#8b8b8b'} strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
+                    <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke={chatMode === m ? 'var(--jt-ink)' : 'var(--jt-ink-3)'} strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
                     <span className="min-w-0">
-                      <span className="block text-[12.5px] font-medium" style={{ color: '#111' }}>{label}</span>
-                      <span className="block text-[10.5px] mt-0.5" style={{ color: '#9a9a9a' }}>{desc}</span>
+                      <span className="block text-[12.5px] font-medium" style={{ color: 'var(--jt-ink)' }}>{label}</span>
+                      <span className="block text-[10.5px] mt-0.5" style={{ color: 'var(--jt-ink-3)' }}>{desc}</span>
                     </span>
-                    {chatMode === m && <svg className="w-3.5 h-3.5 ml-auto mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#111" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
+                    {chatMode === m && <svg className="w-3.5 h-3.5 ml-auto mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink)" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
                   </button>
                 ))}
-                <div className="h-px my-1" style={{ background: '#f0f0f0' }} />
-                <button onClick={() => { setModeOpen(false); onHome() }} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] rounded-lg" style={{ color: '#6b6b6b' }}
+                <div className="h-px my-1" style={{ background: 'var(--jt-hairline-soft)' }} />
+                <button onClick={() => { setModeOpen(false); onHome() }} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] rounded-lg" style={{ color: 'var(--jt-ink-2)' }}
                   onMouseEnter={hover} onMouseLeave={leave}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.logo} /></svg>
                   {t('回到首页', 'Back to home')}
@@ -250,23 +251,23 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             )}
           </div>
           <div className="flex items-center gap-1 titlebar-nodrag">
-            <button title={t('搜索', 'Search')} onClick={onSearch} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: '#8b8b8b' }} onMouseEnter={hover} onMouseLeave={leave}>
+            <button title={t('搜索', 'Search')} onClick={onSearch} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.search} /></svg>
             </button>
-            <button title={t('收起侧栏', 'Collapse')} onClick={onCollapse} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: '#8b8b8b' }} onMouseEnter={hover} onMouseLeave={leave}>
+            <button title={t('收起侧栏', 'Collapse')} onClick={onCollapse} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.panel} /></svg>
             </button>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-3 pb-6">
-          <button onClick={onCreate} className={row} style={{ color: '#111', marginBottom: 18 }} onMouseEnter={hover} onMouseLeave={leave}>
+          <button onClick={onCreate} className={row} style={{ color: 'var(--jt-ink)', marginBottom: 18 }} onMouseEnter={hover} onMouseLeave={leave}>
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.pencil} /></svg>
             {t('新对话', 'New chat')}
           </button>
           <div className="px-2 mb-2 text-[11px] font-medium" style={muted}>{t('最近', 'Recents')}</div>
           {recents.map((s, i) => (
             <button key={s.id} onClick={() => onSelect(s.id)} className={row}
-              style={{ color: s.id === activeId ? '#111' : '#3d3d3d', background: s.id === activeId ? '#f4f4f4' : 'transparent' }}
+              style={{ color: s.id === activeId ? 'var(--jt-ink)' : 'var(--jt-ink-2)', background: s.id === activeId ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
               <span className="flex-1 truncate">{s.title || t('新对话', 'New chat')}</span>
               {(s.project || (i % 3 === 1)) && <span className="text-[11px] shrink-0" style={muted}>{shortName(s.project) || 'Miniapp'}</span>}
@@ -280,7 +281,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
           )}
           <div className="px-2 mt-7 mb-2 text-[11px] font-medium" style={muted}>{t('项目', 'Projects')}</div>
           {(projects.length ? projects : ['iOS', 'Miniapp', 'Superapp']).map(p => (
-            <button key={p} onClick={() => onOpenTab('files')} className={row} style={{ color: '#3d3d3d' }} onMouseEnter={hover} onMouseLeave={leave}>
+            <button key={p} onClick={() => onOpenTab('files')} className={row} style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.folder} /></svg>
               {p}
             </button>
@@ -289,7 +290,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
           <div className="px-2 mt-7 mb-2 flex items-center justify-between">
             <span className="text-[11px] font-medium" style={muted}>{t('工作区', 'Workspace')}</span>
             <button onClick={() => setAddOpen(v => !v)} title={t('添加 / 移除入口', 'Add / remove entries')}
-              className="text-[11px] px-1.5 py-0.5 rounded transition-colors" style={{ color: addOpen ? '#111' : '#9a9a9a', background: addOpen ? '#f4f4f4' : 'transparent' }}
+              className="text-[11px] px-1.5 py-0.5 rounded transition-colors" style={{ color: addOpen ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: addOpen ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>{addOpen ? t('完成', 'Done') : t('+ 添加', '+ Add')}</button>
           </div>
           {/* 自定义入口（v15.8.0）：设置固定首位不可移除，其余 hover 出 × 可移除 */}
@@ -299,26 +300,26 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             const fixed = type === 'settings'
             return (
               <div key={type} className="group relative">
-                <button onClick={() => onOpenTab(type)} className={row + ' w-full'} style={{ color: activeType === type ? '#111' : '#6b6b6b', background: activeType === type ? '#f4f4f4' : 'transparent' }}
+                <button onClick={() => onOpenTab(type)} className={row + ' w-full'} style={{ color: activeType === type ? 'var(--jt-ink)' : 'var(--jt-ink-2)', background: activeType === type ? 'var(--jt-focus)' : 'transparent' }}
                   onMouseEnter={hover} onMouseLeave={leave}>
                   <span className="text-[11px] w-4 text-center" style={muted}>·</span>
                   <span className="flex-1 truncate text-left">{label}</span>
                   {addOpen && !fixed && (
                     <span onClick={e => { e.stopPropagation(); removePin(type) }}
                       className="w-5 h-5 rounded grid place-items-center text-[11px] shrink-0 transition-colors"
-                      style={{ color: '#b0b0b0' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = '#c7000b'; e.currentTarget.style.background = '#f6f6f6' }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#b0b0b0'; e.currentTarget.style.background = 'transparent' }}
+                      style={{ color: 'var(--jt-ink-4)' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#c7000b'; e.currentTarget.style.background = 'var(--jt-focus)' }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--jt-ink-4)'; e.currentTarget.style.background = 'transparent' }}
                       title={t('从侧栏移除', 'Remove from sidebar')}>×</span>
                   )}
-                  {addOpen && fixed && <span className="text-[9.5px] shrink-0 px-1 py-0.5 rounded" style={{ color: '#9a9a9a', background: '#f4f4f4' }}>{t('固定', 'Pinned')}</span>}
+                  {addOpen && fixed && <span className="text-[9.5px] shrink-0 px-1 py-0.5 rounded" style={{ color: 'var(--jt-ink-3)', background: 'var(--jt-focus)' }}>{t('固定', 'Pinned')}</span>}
                 </button>
               </div>
             )
           })}
           {/* 添加面板：全部可用页面（已添加的排除），纯文字两列 */}
           {addOpen && (
-            <div className="mt-2 rounded-xl p-2.5" style={{ background: '#fafafa', border: '1px solid #f0f0f0' }}>
+            <div className="mt-2 rounded-xl p-2.5" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
               <div className="text-[10.5px] mb-2 px-1" style={muted}>{t('点击添加到侧栏', 'Click to add to sidebar')}</div>
               <div className="grid grid-cols-2 gap-x-2">
                 {RAIL_ADDABLE.filter(t => !pins.includes(t)).map(type => {
@@ -327,7 +328,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
                   return (
                     <button key={type} onClick={() => addPin(type)}
                       className="flex items-center gap-1.5 py-1.5 px-1.5 rounded-md text-left text-[11.5px] transition-colors"
-                      style={{ color: '#5b5b5b' }}
+                      style={{ color: 'var(--jt-ink-2)' }}
                       onMouseEnter={hover} onMouseLeave={leave}
                       title={t('添加', 'Add')}>
                       <span className="text-[11px]" style={muted}>+</span>

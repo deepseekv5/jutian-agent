@@ -891,7 +891,7 @@ function MainApp() {
   // v15.7.2「所有界面都要」：Codex 左骨架（活动栏+会话栏）常驻，
   // 右侧仍是完整工作台——多标签条、页面内容、状态栏、所有面板入口与按钮全部保留。
   if (codexShell) return (
-    <div className="h-screen w-screen overflow-hidden flex" style={{ background: '#fff' }}>
+    <div className="h-screen w-screen overflow-hidden flex" style={{ background: 'var(--jt-paper)' }}>
       <CodexRail sessions={sessions} activeId={activeId} activeType={activeTab?.type || 'newtab'}
         onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
         onOpenTab={(type) => openTab(type)} onSearch={() => setCmdOpen(true)}
