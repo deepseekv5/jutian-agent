@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import type { PageType } from './TabBar'
 
@@ -128,6 +128,21 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const [activeNav, setActiveNav] = useState<string>('logo')
+  // 工作 / 编程双模式：与原侧栏切换器同源（localStorage + chat-mode-changed 事件）
+  const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
+    try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
+  })
+  const [modeOpen, setModeOpen] = useState(false)
+  useEffect(() => {
+    const h = () => { try { setChatMode(localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch {} }
+    window.addEventListener('chat-mode-changed', h)
+    return () => window.removeEventListener('chat-mode-changed', h)
+  }, [])
+  const switchMode = (m: 'general' | 'coding') => {
+    setChatMode(m); setModeOpen(false)
+    try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
+    window.dispatchEvent(new Event('chat-mode-changed'))
+  }
   const recents = sessions.slice(0, expanded ? 18 : 8)
   const shortName = (p?: string) => {
     if (!p) return ''
@@ -167,10 +182,39 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
       {/* 320px 会话栏 */}
       <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid #f0f0f0' }}>
         <div className="h-[76px] flex items-end justify-between px-5 pb-3 shrink-0 titlebar-drag">
-          <button onClick={onHome} className="text-[16px] font-semibold flex items-center gap-1.5 titlebar-nodrag" style={{ color: '#111' }}>
-            {t('巨天', 'Jutian')}
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="#888" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
-          </button>
+          <div className="relative titlebar-nodrag">
+            <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: '#111' }}
+              title={t('切换工作 / 编程模式', 'Switch Office / Coding mode')}>
+              {t('巨天', 'Jutian')}
+              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? '#2563eb' : '#6b6b6b', background: chatMode === 'coding' ? 'rgba(37,99,235,.08)' : '#f2f2f2' }}>
+                {chatMode === 'coding' ? t('编程', 'Coding') : t('工作', 'Work')}
+              </span>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="#888" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
+            </button>
+            {modeOpen && (
+              <div className="absolute left-0 top-8 z-30 w-52 rounded-xl py-1.5" style={{ background: '#fff', border: '1px solid #ececec', boxShadow: '0 8px 28px rgba(0,0,0,.10)' }}>
+                {([['general', t('工作模式', 'Work mode'), t('办公 · 写作 · 日常任务', 'Office · writing · daily tasks'), ICONS.docs],
+                   ['coding', t('编程模式', 'Coding mode'), t('代码 · 终端 · diff', 'Code · terminal · diff'), ICONS.box]] as const).map(([m, label, desc, icon]) => (
+                  <button key={m} onClick={() => switchMode(m)} className="w-full flex items-start gap-2.5 px-3 py-2 text-left rounded-lg"
+                    style={{ background: chatMode === m ? '#f4f4f4' : 'transparent' }}
+                    onMouseEnter={hover} onMouseLeave={leave}>
+                    <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke={chatMode === m ? '#111' : '#8b8b8b'} strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
+                    <span className="min-w-0">
+                      <span className="block text-[12.5px] font-medium" style={{ color: '#111' }}>{label}</span>
+                      <span className="block text-[10.5px] mt-0.5" style={{ color: '#9a9a9a' }}>{desc}</span>
+                    </span>
+                    {chatMode === m && <svg className="w-3.5 h-3.5 ml-auto mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#111" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
+                  </button>
+                ))}
+                <div className="h-px my-1" style={{ background: '#f0f0f0' }} />
+                <button onClick={() => { setModeOpen(false); onHome() }} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] rounded-lg" style={{ color: '#6b6b6b' }}
+                  onMouseEnter={hover} onMouseLeave={leave}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.logo} /></svg>
+                  {t('回到首页', 'Back to home')}
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1 titlebar-nodrag">
             <button title={t('搜索', 'Search')} onClick={onSearch} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: '#8b8b8b' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.search} /></svg>
