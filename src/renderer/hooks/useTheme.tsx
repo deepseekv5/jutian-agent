@@ -200,7 +200,6 @@ export type Theme = 'light' | 'dark' | 'auto' | 'party'
 
 /** 强调色预设：light/dark 各配一个变体（graphite 即默认） */
 export const ACCENT_PRESETS: Record<string, { label: string; light: string; dark: string }> = {
-  red: { label: '党政红', light: '#c7000b', dark: '#e05555' },
   graphite: { label: '石墨', light: '#0d0d0d', dark: '#ffffff' },
   teal: { label: '青绿', light: '#0f766e', dark: '#2dd4bf' },
   amber: { label: '琥珀', light: '#b45309', dark: '#f59e0b' },
@@ -283,7 +282,8 @@ const THEME_KEY = 'lyclaw_theme'
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [systemDark, setSystemDark] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
   const [themePref, setThemePref] = useState<Theme>(() => {
-    try { const raw = localStorage.getItem(THEME_KEY); if (raw === 'dark' || raw === 'light' || raw === 'auto' || raw === 'party') return raw } catch {}
+    // v15.7.1：党政风已下架，历史偏好归一为 Codex 纯白
+    try { const raw = localStorage.getItem(THEME_KEY); if (raw === 'party') return 'light'; if (raw === 'dark' || raw === 'light' || raw === 'auto') return raw } catch {}
     return 'auto'
   })
   const theme = themePref === 'auto' ? (systemDark ? 'dark' : 'light') : themePref
@@ -334,9 +334,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const s = getSettingsSync()
     const t = (s as any).theme
-    if (t === 'dark' || t === 'light' || t === 'auto' || t === 'party') setThemePref(t)
+    if (t === 'party') { setThemePref('light'); return }
+    if (t === 'dark' || t === 'light' || t === 'auto') setThemePref(t)
     fetchCompat('/api/settings').then(r => r.json()).then((server: any) => {
-      if (server.theme === 'dark' || server.theme === 'light' || server.theme === 'auto' || server.theme === 'party') setThemePref(server.theme)
+      const st = server.theme === 'party' ? 'light' : server.theme
+      if (st === 'dark' || st === 'light' || st === 'auto') setThemePref(st)
+      if (server.theme === 'party') {
+        // 一次性自愈：把历史党政红偏好改成 Codex 纯白，避免每次启动又被覆盖
+        try { localStorage.setItem(THEME_KEY, 'light') } catch {}
+        fetchCompat('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'theme', value: 'light' }) }).catch(() => {})
+      }
     }).catch(() => {})
   }, [])
 

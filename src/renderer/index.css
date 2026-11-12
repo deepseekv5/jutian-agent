@@ -665,9 +665,10 @@
    .glass-strong 弹出层：菜单 / 弹窗 / 命令面板（更实、更模糊）
    ============================================================ */
 :root {
-  --brand: #10a37f;
-  --brand-soft: rgba(16, 163, 127, 0.12);
-  --brand-border: rgba(16, 163, 127, 0.35);
+  /* v15.7.1：党政风/旧绿品牌下架，统一 Codex 中性黑 */
+  --brand: #0d0d0d;
+  --brand-soft: rgba(0, 0, 0, 0.06);
+  --brand-border: rgba(0, 0, 0, 0.18);
   /* 浅色：更低不透明度 + 更高模糊，让磨砂质感在浅色下同样肉眼可见 */
   --glass-bg: rgba(255, 255, 255, 0.52);
   --glass-bg-strong: rgba(255, 255, 255, 0.72);
@@ -680,26 +681,7 @@
   --glass-bg-strong: rgba(36, 36, 40, 0.72);
   --glass-hairline: inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
-[data-theme="party"] {
-  --brand: #c7000b;
-  --brand-soft: rgba(199, 0, 11, 0.12);
-  --brand-border: rgba(199, 0, 11, 0.4);
-  --glass-bg: rgba(255, 251, 240, 0.6);
-  --glass-bg-strong: rgba(255, 252, 245, 0.78);
-  --glass-hairline: inset 0 1px 0 rgba(255, 245, 225, 0.5);
-  --accent: #c7000b;
-  --accent-soft: rgba(199, 0, 11, 0.12);
-  --accent-soft2: rgba(199, 0, 11, 0.28);
-}
 /* 党政风：宣纸暖底 + 标题宋黑、正文墨色 */
-[data-theme="party"] .global-veil { background: rgba(246, 236, 216, 0.3); }
-[data-theme="party"] .md-inner h1,
-[data-theme="party"] .md-inner h2,
-[data-theme="party"] .md-inner h3 {
-  font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif;
-  letter-spacing: 0.02em;
-}
-[data-theme="party"] .bubble-user { border-radius: 4px 14px 14px 14px; }
 .glass {
   /* 着色层：磨砂由全局 .global-veil 统一提供（单次模糊，全覆盖） */
   background: var(--glass-bg) !important;
@@ -966,25 +948,8 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .prose-chat blockquote { margin: 9px 0; padding: 6px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; }
 
 /* 党政风：欢迎语与快捷卡片宋体庄重 */
-[data-theme="party"] .hero-title,
-[data-theme="party"] .welcome-hero-title { font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif; letter-spacing: .04em; }
-
 /* 党政风：侧栏标题红字宋体 + 金色下划线点缀 */
-[data-theme="party"] .sidebar-app-title {
-  color: #c7000b;
-  font-family: 'Songti SC', 'STZhongsong', 'SimSun', serif;
-  font-weight: 700;
-  border-bottom: 2px solid rgba(212, 160, 23, 0.55);
-  padding-bottom: 1px;
-}
-
 /* 党政风：公告横幅红头样式 */
-[data-theme="party"] .announcement-banner {
-  background: linear-gradient(180deg, rgba(255, 251, 240, 0.92), rgba(255, 244, 224, 0.92));
-  border-left: 3px solid #c7000b;
-}
-[data-theme="party"] .announcement-banner .text { color: #5a3a12; }
-
 /* ── Codex 结构化极简（v15.6.0 精修）─────────────────────────────────
    原则：不靠「全部透明」制造简洁，靠「纯白纸面 + 一条细线 + 灰度层级 + 留白」。
    旧版三条暴力规则（[style*="border"] 抹掉所有内联边框 / .glass 全部 transparent /
@@ -1011,17 +976,6 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
   --jt-ink-4: #5e5e5e;
   --jt-focus: rgba(255,255,255,.12);
 }
-[data-theme="party"] {
-  --jt-hairline: rgba(120, 30, 30, 0.12);
-  --jt-hairline-soft: rgba(160, 110, 60, 0.08);
-  --jt-paper: #faf7f0;
-  --jt-paper-alt: #f6f1e6;
-  --jt-ink: #241c12;
-  --jt-ink-2: #6b5d4a;
-  --jt-ink-3: #98876e;
-  --jt-ink-4: #b8a888;
-}
-
 /* 该隐藏的 chrome 才隐藏；功能入口全部保留在命令面板 / 新标签页 / 搜索 */
 .announcement-banner,
 .jt-in-bottom,
@@ -1117,9 +1071,6 @@ button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { c
 :focus-visible { box-shadow: 0 0 0 3px var(--jt-focus) !important; outline: none !important; }
 
 /* 党政红主题：仍然保留红头气质，但同样克制 */
-[data-theme="party"] .jt-text-row:hover { background: rgba(199,0,11,.05) !important; color: #8c1414 !important; }
-[data-theme="party"] input:focus, [data-theme="party"] textarea:focus { border-color: rgba(199,0,11,.5) !important; }
-
 /* ── 侧栏会话列表（v15.6.0）：纯文字 + 时间，图标只在有状态时出现 ── */
 .jt-in-left .session-row > svg:not(.animate-spin):not([fill="#f5b301"]),
 .jt-in-left .session-row > span:has(> span.rounded-full) { display: none !important; }
@@ -1155,8 +1106,7 @@ button[style*="background: rgb(199"], button[style*="background: '#c7000b'"] { c
 /* 主区与侧栏的层次：侧栏低一档灰，主区纯白（无壁纸时） */
 html[data-wallpaper="off"] .jt-in-left > * { background: #fafafa !important; }
 html[data-wallpaper="off"][data-theme="dark"] .jt-in-left > * { background: #1e1e1e !important; }
-html[data-wallpaper="off"][data-theme="party"] .jt-in-left > * { background: #f6f1e6 !important; }
-/* 输入框聚焦：只留柔和灰环，不再有蓝色/红色硬边 */
+html[data-wallpaper="off"]/* 输入框聚焦：只留柔和灰环，不再有蓝色/红色硬边 */
 .composer-dock input:focus, .composer-dock textarea:focus { box-shadow: none !important; }
 /* 全局细滚动条 + hover 反馈统一 */
 .jt-in-left button:hover, .jt-in-fade button:hover { transition: background-color .16s ease !important; }

@@ -119,8 +119,26 @@ function MainApp() {
   }, [setActiveIdRaw]);
   const { c, theme } = useTheme();
 
-  const [tabs, setTabs] = useState<WorkTab[]>(() => loadPersistedTabs() || []);
-  const [activeTabId, setActiveTabId] = useState<string>(() => localStorage.getItem(ACTIVE_TAB_KEY) || '');
+  // v15.7.1：启动永远回 Codex Exact 首页。旧版本持久化的一堆 chat/面板标签不再
+  // 自动恢复为当前页（用户说的「首页又变回去了」），但标签本身保留、仍可切回。
+  const [tabs, setTabs] = useState<WorkTab[]>(() => {
+    const saved = loadPersistedTabs() || []
+    if (saved.some(t => t.type === 'newtab')) return saved
+    const home: WorkTab = { id: uid(), type: 'newtab', title: '新建标签页' }
+    return [home, ...saved]
+  });
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    // 与 tabs 初始化同源计算：优先已存在的首页；否则取刚插入的首项
+    const saved = loadPersistedTabs() || []
+    const existing = saved.find(t => t.type === 'newtab')
+    if (existing) return existing.id
+    return '__codex_home_first__'
+  });
+  // 初始化时新建了首页（哨兵）→ 校正为 tabs[0].id
+  useEffect(() => {
+    if (activeTabId === '__codex_home_first__' && tabs[0]) setActiveTabId(tabs[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 激活过的标签保持挂载（保留滚动/编辑器/流式状态）；从未激活的不挂载以跳过懒加载
   const [everMounted, setEverMounted] = useState<Set<string>>(() => new Set());
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(new Set());
@@ -163,7 +181,7 @@ function MainApp() {
   useEffect(() => {
     if (tabs.length > 0) {
       localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
-      localStorage.setItem(ACTIVE_TAB_KEY, activeTabId);
+      localStorage.setItem(ACTIVE_TAB_KEY, activeTabId === '__codex_home_first__' ? (tabs[0]?.id || '') : activeTabId);
     }
   }, [tabs, activeTabId]);
 
@@ -203,17 +221,11 @@ function MainApp() {
         }
       } catch { /* ignore */ }
       if (!restoreOk) {
-        // 仅当确实没有任何会话时才 create；有会话时打开最近一条而不是新建
-        let list = sessions
-        if (!list.length) {
-          const mod = await import('../store/storage')
-          list = await mod.listSessions()
-        }
-        const sid = list[0]?.id || (await create()).id;
-        const tab: WorkTab = { id: uid(), type: 'chat', title: list[0]?.title || '新对话', sessionId: sid };
+        // v15.7.1：启动默认进 Codex Exact 首页（此前无条件建 chat 标签，
+        // 用户看到的永远是对话页而不是首页）。会话仍全部保留在首页 Recents 里。
+        const tab: WorkTab = { id: uid(), type: 'newtab', title: '新建标签页' };
         setTabs([tab]);
         setActiveTabId(tab.id);
-        if (list[0]?.id) setActiveId(list[0].id)
       }
     })();
     // 一次性引导：补 sessions/tabs.length 会在会话被删空时重复建 Tab

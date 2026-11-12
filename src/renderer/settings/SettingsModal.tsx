@@ -78,7 +78,6 @@ const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string;
   { tab: 'security', label: '巨天安全·密钥屏蔽与占位符', labelEn: 'Shield: key mask & placeholders', desc: '安全', keywords: 'shield 安全 密钥 key 打码 占位符 {{KEY}} 巨天安全 keyShield' },
   { tab: 'security', label: '巨天安全·安全记录', labelEn: 'Shield: security log', desc: '安全', keywords: 'shield 安全记录 日志 拦截记录 巨天安全' },
   { tab: 'appearance', label: '夜间勿扰', labelEn: 'Quiet hours', desc: '外观', keywords: '勿扰 夜间 通知 静音 quiet hours notify' },
-  { tab: 'appearance', label: '党政红主题', labelEn: 'Party red theme', desc: '外观', keywords: '党政红 主题 红金 party red theme 宣纸' },
   { tab: 'appearance', label: '焦点模式', labelEn: 'Focus mode', desc: '外观', keywords: '焦点 沉浸 全屏 focus immersive 写作' },
   { tab: 'about', label: '速记（全局快捷键）', labelEn: 'Quick note', desc: '关于', keywords: '速记 快捷键 quick note 捕获 Cmd+Shift+Space' },
   { tab: 'about', label: '终端版 TUI / jtcode', labelEn: 'Terminal TUI', desc: '关于', keywords: '终端 tui jtcode claude code 命令行' },
@@ -1443,7 +1442,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               {/* 宣传标签置顶 */}
               <Sub c={c} title={t('主题模式', 'Theme')}>
                 <div className="flex gap-2">
-                  {([['light', '纯白（Codex）'], ['dark', '深色'], ['party', '党政红（红金）'], ['auto', '跟随系统']] as const).map(([t2, label]) => {
+                  {([['light', '纯白（Codex）'], ['dark', '深色'], ['auto', '跟随系统']] as const).map(([t2, label]) => {
                     const active = (settings as any).theme === t2 || (!(settings as any).theme && t2 === 'light')
                     return (
                       <button key={t2} type="button" onClick={() => setTheme(t2)}
