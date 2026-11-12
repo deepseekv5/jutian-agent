@@ -1026,8 +1026,7 @@ input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(-
 .announcement-banner,
 .jt-in-bottom,
 .jt-iconrow,
-.jt-hide-compact,
-.jt-promo-card { display: none !important; }
+.jt-hide-compact { display: none !important; }
 
 /* 全局纸面：无壁纸时的实底由 BackgroundLayer 提供，这里只统一所有容器的字色/线色 */
 body { color: var(--jt-ink); }
@@ -1173,3 +1172,109 @@ html[data-wallpaper="off"][data-theme="party"] .jt-in-left > * { background: #f6
   .jt-export-note ~ .flex-1 { display: none; }
   [class*="border-t"] button { white-space: nowrap !important; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   JT Motion（v15.7.0）：生动但克制
+   ── 一条 spring 曲线贯穿全应用；所有交互都能「跟手」，
+      不做长时间循环特效，不牺牲可读性；尊重 prefers-reduced-motion。
+   ══════════════════════════════════════════════════════════════ */
+:root {
+  --jt-ease: cubic-bezier(.22, .9, .26, 1);
+  --jt-spring: cubic-bezier(.34, 1.4, .5, 1);
+  --jt-t-fast: 130ms;
+  --jt-t-base: 220ms;
+  --jt-t-slow: 360ms;
+  --jt-lift: 0 4px 14px rgba(0, 0, 0, .055);
+}
+
+/* ── 通用可点元素：按下微缩、hover 微浮，跟手不飘 ── */
+button, [role="button"], .jt-btn-live, .jt-text-row, .session-row {
+  transition: transform var(--jt-t-fast) var(--jt-spring),
+              background-color var(--jt-t-fast) ease,
+              color var(--jt-t-fast) ease,
+              border-color var(--jt-t-fast) ease,
+              box-shadow var(--jt-t-fast) ease !important;
+}
+button:hover:not(:disabled), [role="button"]:hover { filter: brightness(.985); }
+button:active:not(:disabled), [role="button"]:active { transform: scale(.965) !important; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 主色按钮：hover 抬升并带一环柔光，点击回弹 */
+.jt-btn-live:hover { transform: translateY(-1px) !important; box-shadow: var(--jt-lift) !important; }
+.jt-btn-live:active { transform: translateY(0) scale(.97) !important; box-shadow: none !important; }
+
+/* 侧栏会话行：hover 右移 2px + 浅底，激活行左侧细指示条滑入 */
+.jt-in-left .session-row:hover { transform: translateX(2px) !important; }
+.jt-in-left .session-row[style*="background: rgba"]::before {
+  content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 2px;
+  border-radius: 2px; background: var(--brand, #10a37f);
+  animation: jt-indicator .28s var(--jt-spring) both;
+}
+@keyframes jt-indicator { from { transform: scaleY(.2); opacity: 0 } to { transform: scaleY(1); opacity: .75 } }
+.jt-in-left .session-row { position: relative; }
+
+/* 顶栏标签：hover 上浮，激活标签轻微放大 */
+.tab-strip > div { transition: transform var(--jt-t-fast) var(--jt-spring), background-color var(--jt-t-fast) ease !important; }
+.tab-strip > div:hover { transform: translateY(-1px) !important; }
+.tab-strip > div:has(> span.absolute) { animation: jt-tab-pop .26s var(--jt-spring) both; }
+@keyframes jt-tab-pop { from { transform: scale(.97) } to { transform: scale(1) } }
+.jt-top-light { opacity: .55 !important; transition: opacity var(--jt-t-fast) ease !important; }
+.jt-top-light:hover { opacity: 1 !important; }
+
+/* 输入框：聚焦时描边淡入 + 轻微抬升 */
+input, textarea, select { transition: border-color var(--jt-t-fast) ease, box-shadow var(--jt-t-base) var(--jt-ease), transform var(--jt-t-fast) var(--jt-ease) !important; }
+input:focus, textarea:focus, select:focus { animation: jt-focus-ring .24s var(--jt-ease) both; }
+@keyframes jt-focus-ring { from { box-shadow: 0 0 0 0 var(--jt-focus) } to { box-shadow: 0 0 0 3px var(--jt-focus) } }
+
+/* 卡片 / 面板：进入时淡入上浮（不是循环动画） */
+.glass-strong, [class*="rounded-2xl"] { animation: jt-panel-in var(--jt-t-slow) var(--jt-ease) both; }
+@keyframes jt-panel-in { from { opacity: 0; transform: translateY(8px) scale(.995) } to { opacity: 1; transform: none } }
+
+/* tab 内容切换：每次激活淡入（key=tab.id，React 重挂载时触发） */
+.jt-tab-body { animation: jt-tab-content .3s var(--jt-ease) both; }
+@keyframes jt-tab-content { from { opacity: 0; transform: translateY(7px) } to { opacity: 1; transform: none } }
+
+/* 消息气泡：仅最新一条入场（历史消息不集体闪动） */
+.msg-cv:last-child { animation: jt-msg-in .34s var(--jt-ease) both; }
+@keyframes jt-msg-in { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+
+/* 开关 Toggle：滑块 spring 弹动 + 轨道淡变 */
+[role="switch"] > div { transition: left var(--jt-t-base) var(--jt-spring), transform var(--jt-t-base) var(--jt-spring) !important; }
+[role="switch"]:active > div { transform: scale(.88); }
+
+/* 状态提示 / 保存成功：闪现 */
+.jt-flash-in { animation: jt-flash .42s var(--jt-ease) both; }
+@keyframes jt-flash { 0% { opacity: 0; transform: translateX(-4px) } 100% { opacity: 1; transform: none } }
+
+/* 思考态：三点依次跳动（替代静态转圈，更生动） */
+.jt-thinking-dots { display: inline-flex; gap: 3px; align-items: center; }
+.jt-thinking-dots i {
+  width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .55;
+  animation: jt-dot 1.15s var(--jt-ease) infinite;
+}
+.jt-thinking-dots i:nth-child(2) { animation-delay: .16s }
+.jt-thinking-dots i:nth-child(3) { animation-delay: .32s }
+@keyframes jt-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .45 } 30% { transform: translateY(-4px); opacity: 1 } }
+
+/* 数字/统计变化：轻微弹一下 */
+.jt-count-pop { animation: jt-count .38s var(--jt-spring) both; }
+@keyframes jt-count { from { transform: scale(.82); opacity: .5 } to { transform: scale(1); opacity: 1 } }
+
+/* 发送键：hover 箭头微移，点击缩放回弹 */
+.composer-dock button[aria-label*="发送"], .composer-dock button svg + span { transition: transform var(--jt-t-fast) var(--jt-spring) !important; }
+
+/* 滚动条 hover 平滑 */
+::-webkit-scrollbar-thumb { transition: background-color var(--jt-t-base) ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jt-btn-live, .jt-text-row, .session-row, .tab-strip > div,
+  .glass-strong, [class*="rounded-2xl"], .jt-tab-body, .msg-cv,
+  .jt-flash-in, .jt-count-pop, .jt-thinking-dots i, [role="switch"] > div {
+    animation: none !important; transition: none !important;
+  }
+}
+
+/* Codex Exact 首页：强制中性灰，不受党政红/深色主题的暖色变量影响 */
+.jt-codex-input::placeholder { color: #9a9a9a !important; }
+.jt-codex-input { caret-color: #111 !important; }

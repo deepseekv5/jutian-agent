@@ -16,6 +16,7 @@ import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import { useAndroid } from '../hooks/useAndroid';
 import BackgroundLayer from './BackgroundLayer';
+import CodexShell from './CodexShell';
 import CommandPalette from './CommandPalette';
 import PermissionPrompt from './PermissionPrompt';
 import CliInstallModal, { shouldShowCliPrompt } from './CliInstallModal';
@@ -768,6 +769,8 @@ function MainApp() {
   }, [])
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  // Codex Exact 首页：整窗交给 CodexShell（活动栏+会话栏+主区），原顶栏/侧栏/状态栏全隐
+  const codexHome = activeTab?.type === 'newtab' && !vp.isMobile;
   activeTabRef.current = activeTab?.id || '';
   activeSessionIdRef.current = activeTab?.sessionId || activeId || null;
   tabsOrderRef.current = tabs;
@@ -808,7 +811,12 @@ function MainApp() {
       case 'group':
         return tab.refId ? <GroupChatTab key={tab.id} groupId={tab.refId} settings={settings} onClose={() => closeTab(tab.id)} /> : null;
       case 'newtab':
-        return <NewTabPage onPick={handleNewTabPick} sessions={sessions} />;
+        return <CodexShell sessions={sessions} activeId={activeId}
+          onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
+          onOpenTab={(type) => openTab(type)}
+          onAsk={(text) => { window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text })) }}
+          onSearch={() => { setCmdOpen(true) }}
+          onCollapse={() => setSidebarCollapsed(true)} />;
       case 'files':
         return <FilesTab settings={settings} />;
       case 'terminal':
@@ -871,6 +879,29 @@ function MainApp() {
   };
 
   const mainAreaStyle = { position: 'relative' as const, zIndex: 1, ['--kb-inset' as string]: `${kbInset}px` } as React.CSSProperties;
+
+  // Codex Exact 首页（v15.7.0）：整窗一比一复刻参考图，不渲染原顶栏/侧栏/状态栏。
+  // 其它页签仍走下面原来的完整工作台，功能零删。
+  if (codexHome) return (
+    <div className="h-screen w-screen overflow-hidden" style={{ background: '#fff' }}>
+      <CodexShell sessions={sessions} activeId={activeId}
+        onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
+        onOpenTab={(type) => openTab(type)}
+        onAsk={(text) => { window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text })) }}
+        onSearch={() => setCmdOpen(true)}
+        onCollapse={() => setSidebarCollapsed(true)} />
+      <PermissionPrompt />
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        onOpenTab={(t) => openTab(t as any)}
+        sessions={sessions}
+        onSelectSession={handleSelectSession}
+        onCreateSession={handleCreateSession as () => void}
+      />
+    </div>
+  );
+
   return (
     <div className="h-screen overflow-hidden flex relative jt-compact">
       <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
@@ -950,7 +981,7 @@ function MainApp() {
           // 从未激活过的标签不挂载：其懒加载 chunk 不会下载，首屏只加载对话核心
           if (!isActive && !everMounted.has(tab.id)) return null;
           return (
-            <div key={tab.id} className={`flex-1 flex flex-col min-h-0 overflow-hidden ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
+            <div key={tab.id} className={`jt-tab-body flex-1 flex flex-col min-h-0 overflow-hidden ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
               {/* 每个标签页独立错误边界：单个面板崩溃只坏这个标签，
                   侧栏、标签栏和其他标签页照常可用，不会整 App 白屏。
                   resetKey 带上 sessionId/refId：在同一标签内换对话也能自动恢复 */}

@@ -748,33 +748,33 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
 
             {tab === 'inference' && (<>
 
-              {/* 免费模型一键启用:不填任何东西,0 元用上 AI */}
-              <div className="mb-4 rounded-2xl p-4 jt-promo-card" style={{ background: 'linear-gradient(135deg, rgba(16,163,127,.12), rgba(255,255,255,.55) 70%)', border: '1px solid rgba(16,163,127,.35)' }}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round"><path d="M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z" /></svg>
-                  <span className="text-[13.5px] font-bold" style={{ color: c.textHead }}>{t('不想配置?一键免费用 AI', 'No setup? Use AI for free')}</span>
+              {/* 免费模型（v15.7.0 修复）：这是正式功能入口，此前被极简布局的
+                  .jt-promo-card 规则误伤（display:none），设置里彻底看不见。
+                  改为常规 Sub 区块，纯文字 + 两个轻按钮，Codex 风但可见可用。 */}
+              <Sub c={c} title={t('免费模型（免密钥）', 'Free models · no API key')}>
+                <div className="px-3 py-2.5 rounded-xl" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div className="text-[12px] leading-relaxed mb-2.5" style={{ color: c.textSecondary }}>
+                    {t('Kilo 网关（19 个免费档，含 openrouter/free 自动路由）、OpenCode Zen Free、Pollinations（GPT-OSS 20B）——无需注册与密钥，一键即可对话。', 'Kilo gateway (19 free tiers), OpenCode Zen Free, Pollinations GPT-OSS 20B — no signup or key needed.')}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button type="button"
+                      onClick={() => {
+                        const next = { ...form, provider: 'api' as const, apiBaseUrl: 'https://api.kilo.ai/api/gateway/v1', apiKey: 'free', model: 'openrouter/free', models: ['openrouter/free'] }
+                        setForm(next)
+                        onSave(next)
+                        setSavedFlash('free')
+                      }}
+                      className="px-3.5 h-8 rounded-lg text-[12px] font-medium jt-btn-live" style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
+                      {t('一键启用', 'Enable')}
+                    </button>
+                    <button type="button" onClick={() => onOpenFreeModels?.()}
+                      className="px-3.5 h-8 rounded-lg text-[12px] font-medium jt-btn-live" style={{ background: 'transparent', color: c.textSecondary, border: `1px solid ${c.border}` }}>
+                      {t('浏览全部 26 个免费模型 →', 'Browse all 26 free models →')}
+                    </button>
+                    {savedFlash === 'free' && <span className="text-[11.5px] jt-flash-in" style={{ color: 'var(--brand, #10a37f)' }}>{t('已启用，去对话试试', 'Enabled — try it in chat')}</span>}
+                  </div>
                 </div>
-                <p className="text-[12px] leading-relaxed mb-3" style={{ color: c.textSecondary }}>
-                  {t('三个免 key 源开箱即用：Kilo 网关（19 个免费档，含 openrouter/free 自动路由）、OpenCode Zen Free（6 个实测可用，最大 1M 上下文 / 512K 输出）、Pollinations（GPT-OSS 20B）。都不需要注册和密钥，按 IP 限速。科技不是高高在上，而是服务于人民。', 'Three keyless sources out of the box: Kilo gateway (19 free tiers incl. openrouter/free auto-routing), OpenCode Zen Free (6 verified models, up to 1M context / 512K output), Pollinations (GPT-OSS 20B). No signup, no API key, rate-limited per IP.')}
-                </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button type="button"
-                    onClick={() => {
-                      const next = { ...form, provider: 'api' as const, apiBaseUrl: 'https://api.kilo.ai/api/gateway/v1', apiKey: 'free', model: 'openrouter/free', models: ['openrouter/free'] }
-                      setForm(next)
-                      onSave(next)
-                      setSavedFlash('free')
-                    }}
-                    className="px-4 h-9 rounded-full text-[12.5px] font-semibold" style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
-                    {t('一键启用免费模型', 'Enable free models')}
-                  </button>
-                  <button type="button" onClick={() => onOpenFreeModels?.()}
-                    className="px-4 h-9 rounded-full text-[12.5px] font-medium" style={{ background: 'rgba(255,255,255,.7)', color: '#0f766e', border: '1px solid rgba(16,163,127,.35)' }}>
-                    {t('浏览全部免费模型（26 个）→', 'Browse all free models (26) →')}
-                  </button>
-                  {savedFlash === 'free' && <span className="text-[11.5px]" style={{ color: 'var(--brand, #10a37f)' }}>{t('已启用,去对话试试', 'Enabled — try it in chat')}</span>}
-                </div>
-              </div>
+              </Sub>
 
               <Sub c={c} title={t('推理方式', 'Provider')}>
                 <div className="flex rounded-lg p-0.5 w-fit" style={{ background: c.bgInput, border: `1px solid ${c.border}` }}>
@@ -1456,8 +1456,10 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                 </div>
               </Sub>
 
-              {/* jtcode 命令行工具（随时可装/可看安装位置） */}
-              <div className="jt-promo-card"><CliEntry /></div>
+              {/* jtcode 命令行工具（v15.7.0 恢复）：功能入口，不能被极简布局隐藏 */}
+              <Sub c={c} title={t('命令行工具', 'CLI tool')}>
+                <CliEntry />
+              </Sub>
 
               {/* 强调色（22）：新建按钮/链接/active 态的强调色，实时生效 */}
               <Sub c={c} title={t('强调色', 'Accent Color')}>

@@ -190,10 +190,7 @@ function ThinkingCard({ thinking, isStreaming, open, onToggle, thinkMs }: { thin
     <div className="thinking-card my-2">
       <div className="thinking-header" onClick={collapsible ? () => { userToggled.current = true; onToggle() } : undefined} style={collapsible ? undefined : { cursor: 'default' }}>
         {isStreaming && (
-          <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" style={{ color: c.accent }}>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+          <span className="jt-thinking-dots shrink-0" style={{ color: c.accent, marginRight: 4 }} aria-hidden><i /><i /><i /></span>
         )}
         {collapsible && (
           <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
@@ -235,10 +232,7 @@ function ThinkingBlock({ text, label, streaming }: { text: string; label: string
     <div className="thinking-card my-2">
       <div className="thinking-header" onClick={() => { touched.current = true; setOpen(v => !v) }}>
         {streaming && (
-          <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" style={{ color: c.accent }}>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+          <span className="jt-thinking-dots shrink-0" style={{ color: c.accent, marginRight: 4 }} aria-hidden><i /><i /><i /></span>
         )}
         <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: c.textTertiary }}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
