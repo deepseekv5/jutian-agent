@@ -65,6 +65,7 @@ interface HomeProps {
   onAsk: (text: string) => void
   onOpenTab: (type: PageType) => void
   onCreate: () => void
+  modelLabel?: string
 }
 
 /** 中央花形 logo（参考图的手绘线稿） */
@@ -78,7 +79,7 @@ function CodexMark({ size = 52 }: { size?: number }) {
 }
 
 /** 主区欢迎页（仅 newtab 标签）：中央 logo + 大字 + 建议 + 输入框 */
-export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
+export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel }: HomeProps) {
   const { t } = useLanguage()
   const [text, setText] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
@@ -95,9 +96,9 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
           {[
             { color: '#ea4335', label: t('总结最近会话要点', 'Summarize recent chats'), icon: 'M3 8l9 6 9-6M3 8h18v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z' },
             { color: '#10a37f', label: t('整理本周工作并生成待办', 'Plan this week and make todos'), icon: ICONS.sparkle },
-            { color: '#3b82f6', label: t('用免费模型起草一份公文', 'Draft a document with free models'), icon: ICONS.docs },
+            { color: '#3b82f6', label: t('用免费模型起草一份公文', 'Draft a document with free models'), icon: ICONS.docs, page: 'gongwen' as PageType },
           ].map(x => (
-            <button key={x.label} onClick={() => onAsk(x.label)} className="w-full flex items-center gap-3 py-2.5 text-left rounded-lg px-2 transition-colors"
+            <button key={x.label} onClick={() => x.page ? onOpenTab(x.page) : onAsk(x.label)} className="w-full flex items-center gap-3 py-2.5 text-left rounded-lg px-2 transition-colors"
               style={{ color: 'var(--jt-ink-2)', fontSize: 13.5 }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke={x.color} strokeWidth={1.9}><path strokeLinecap="round" strokeLinejoin="round" d={x.icon} /></svg>
               {x.label}
@@ -128,7 +129,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
               </button>
               <span className="flex-1" />
               <button onClick={() => onOpenTab('settings')} className="text-[11.5px] px-2 py-1 rounded-md flex items-center gap-1" style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
-                {t('Astra High', 'Astra High')}<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
+                <span className="max-w-[140px] truncate">{modelLabel || t('未配置模型', 'No model')}</span><svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
               </button>
               <button onClick={onCreate} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: 'var(--jt-ink-2)' }} title={t('语音', 'Voice')} onMouseEnter={hover} onMouseLeave={leave}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.mic} /></svg>
@@ -148,6 +149,8 @@ export function CodexHome({ onAsk, onOpenTab, onCreate }: HomeProps) {
 export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onHome, activeType }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
+  // Projects 点击 → 过滤 Recents（再点同一个取消）
+  const [projFilter, setProjFilter] = useState<string | null>(null)
   // 工作 / 编程双模式：与原侧栏切换器同源（localStorage + chat-mode-changed 事件）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
     try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
@@ -178,7 +181,8 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
     try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
     window.dispatchEvent(new Event('chat-mode-changed'))
   }
-  const recents = sessions.slice(0, expanded ? 18 : 8)
+  const allRecents = projFilter ? sessions.filter(x => (x.project || '').endsWith('/' + projFilter) || x.project === projFilter) : sessions
+  const recents = allRecents.slice(0, expanded ? 18 : 8)
   const shortName = (p?: string) => {
     if (!p) return ''
     const seg = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p

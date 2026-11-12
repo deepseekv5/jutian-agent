@@ -914,7 +914,8 @@ function MainApp() {
                   <Suspense fallback={<TabFallback />}>
                     {tab.type === 'newtab'
                       ? <CodexHome onAsk={(text) => window.dispatchEvent(new CustomEvent('jutian-minimal-ask', { detail: text }))}
-                          onOpenTab={(type) => openTab(type)} onCreate={() => handleCreateSession()} />
+                          onOpenTab={(type) => openTab(type)} onCreate={() => handleCreateSession()}
+                          modelLabel={settings.model} />
                       : renderTabBody(tab)}
                   </Suspense>
                 </ErrorBoundary>
