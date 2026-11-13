@@ -82,94 +82,104 @@ function CodexMark({ size = 52 }: { size?: number }) {
   )
 }
 
-/** 主区欢迎页（仅 newtab 标签）：中央 logo + 大字 + 建议 + 输入框 */
+/** 新标签页「工作台」（v15.9.1）：可滚动的应用启动台，与聊天页彻底区分。
+ *  不再是「中央大字 + 底部 composer」（和对话页太像且展开后无法滚动），
+ *  改为：顶部紧凑提问/搜索行 + 8 组常驻功能分区；整页自身 overflow-y-auto。 */
 export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }: HomeProps) {
   const { lang, t } = useLanguage()
   const [text, setText] = useState('')
+  const [q, setQ] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
-  // 全部功能折叠区（v15.8.4）：默认收起保持 Codex 观感，展开列出全部 8 组入口
-  const [catalogOpen, setCatalogOpen] = useState(false)
   const catalogByType = new Map(CARDS.map(k => [k.type, k]))
   const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--jt-focus)' }
   const leave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent' }
+  const kw = q.trim().toLowerCase()
+  const match = (type: PageType, desc: string) => {
+    if (!kw) return true
+    const m = PAGE_META[type]
+    const label = lang === 'en' && m?.labelEn ? m.labelEn : (m?.label || type)
+    return (label + ' ' + desc + ' ' + type).toLowerCase().includes(kw)
+  }
   return (
-    <div className="flex-1 min-w-0 flex flex-col" style={{ background: 'var(--jt-paper)' }}>
-      <div className="flex-1 flex flex-col items-center justify-center px-8" style={{ paddingBottom: 24 }}>
-        <CodexMark size={54} />
-        <h1 className="mt-4 font-normal" style={{ fontSize: 34, letterSpacing: '-.035em', color: 'var(--jt-ink)' }}>
-          {t('今天想做点什么？', 'What should we build?')}
-        </h1>
-        <div className="mt-14 w-full" style={{ maxWidth: 570 }}>
-          {[
-            { color: '#ea4335', label: t('总结最近会话要点', 'Summarize recent chats'), icon: 'M3 8l9 6 9-6M3 8h18v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z' },
-            { color: '#10a37f', label: t('整理本周工作并生成待办', 'Plan this week and make todos'), icon: ICONS.sparkle },
-            { color: '#3b82f6', label: t('用免费模型起草一份公文', 'Draft a document with free models'), icon: ICONS.docs, page: 'gongwen' as PageType },
-          ].map(x => (
-            <button key={x.label} onClick={() => x.page ? onOpenTab(x.page) : onAsk(x.label)} className="w-full flex items-center gap-3 py-2.5 text-left rounded-lg px-2 transition-colors"
-              style={{ color: 'var(--jt-ink-2)', fontSize: 13.5 }} onMouseEnter={hover} onMouseLeave={leave}>
-              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke={x.color} strokeWidth={1.9}><path strokeLinecap="round" strokeLinejoin="round" d={x.icon} /></svg>
-              {x.label}
-            </button>
-          ))}
+    <div className="jt-home-launcher h-full overflow-y-auto scrollbar-thin" style={{ background: 'var(--jt-paper)' }}>
+      <div className="mx-auto w-full" style={{ maxWidth: 860, padding: '40px 32px 64px' }}>
+        {/* 头部：标题 + 当前上下文（不再是聊天式大问句） */}
+        <div className="flex items-end justify-between gap-4 mb-6">
+          <div>
+            <h1 className="font-semibold" style={{ fontSize: 22, letterSpacing: '-.02em', color: 'var(--jt-ink)' }}>
+              {t('工作台', 'Workspace')}
+            </h1>
+            <div className="text-[11.5px] mt-1.5" style={{ color: 'var(--jt-ink-3)' }}>
+              {t(`全部 ${CARDS.length} 项功能 · 点击直达`, `${CARDS.length} features · click to open`)}
+            </div>
           </div>
+          <div className="flex items-center gap-2 text-[11px] shrink-0" style={{ color: 'var(--jt-ink-3)' }}>
+            <span className="px-2 py-1 rounded-md" style={{ background: 'var(--jt-paper-alt)' }}>{modelLabel || t('未配置模型', 'No model')}</span>
+            <span className="px-2 py-1 rounded-md" style={{ background: 'var(--jt-paper-alt)' }}>{workLabel || t('工作区', 'Workspace')}</span>
+          </div>
+        </div>
 
-          {/* 全部功能：展开显示 8 组全部入口（点击直达），收起只占一行 */}
-          <div className="mt-10 w-full" style={{ maxWidth: 570 }}>
-            <button onClick={() => setCatalogOpen(v => !v)} className="w-full flex items-center gap-2 py-2 text-left text-[12px] rounded-lg px-2 transition-colors"
-              style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>
-              <svg className="w-3 h-3 transition-transform" style={{ transform: catalogOpen ? 'rotate(90deg)' : 'none' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
-              {t(`全部功能 · ${CARDS.length} 项`, `All features · ${CARDS.length}`)}
-            </button>
-            {catalogOpen && GROUPS.map(g => (
-              <div key={g.label} className="mt-3">
-                <div className="px-2 mb-1 text-[10.5px]" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? g.labelEn : g.label}</div>
-                {g.items.map(type => {
+        {/* 紧凑提问行：在上方、单行、不悬浮 */}
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-8" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.plus} /></svg>
+          <input value={text} onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
+            placeholder={t('输入一句话开始新对话，或搜索下面的功能…', 'Start a chat, or search features below…')}
+            className="flex-1 bg-transparent outline-none text-[13px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
+          <button onClick={ask} className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.arrow} /></svg>
+          </button>
+        </div>
+
+        {/* 过滤框（纯文字，不额外占大块） */}
+        <div className="flex items-center gap-2 mb-5 pb-2" style={{ borderBottom: '1px solid var(--jt-hairline-soft)' }}>
+          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.search} /></svg>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('筛选功能…', 'Filter features…')}
+            className="flex-1 bg-transparent outline-none text-[12px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
+          {kw && <button onClick={() => setQ('')} className="text-[11px] px-1" style={{ color: 'var(--jt-ink-3)' }}>{t('清除', 'Clear')}</button>}
+        </div>
+
+        {/* 8 组功能分区：常驻可见、可滚动、与聊天页完全不同 */}
+        {GROUPS.map(g => {
+          const items = g.items.filter(type => match(type, catalogByType.get(type)?.desc || ''))
+          if (!items.length) return null
+          return (
+            <section key={g.label} className="mb-7">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-[11px] font-medium" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? g.labelEn : g.label}</span>
+                <span className="text-[10px]" style={{ color: 'var(--jt-ink-4)' }}>{items.length}</span>
+                <div className="flex-1 h-px" style={{ background: 'var(--jt-hairline-soft)' }} />
+              </div>
+              <div className="grid grid-cols-2 gap-x-3">
+                {items.map(type => {
                   const card = catalogByType.get(type)
+                  const m = PAGE_META[type]
+                  const label = lang === 'en' && m?.labelEn ? m.labelEn : (m?.label || type)
                   return (
-                    <button key={type} onClick={() => onOpenTab(type)} className="w-full flex items-baseline gap-3 py-1 text-left rounded-md px-2 transition-colors"
-                      style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
-                      <span className="text-[12.5px] shrink-0">{(() => { const m = PAGE_META[type]; return lang === 'en' && m?.labelEn ? m.labelEn : (m?.label || type) })()}</span>
-                      {card && <span className="text-[10.5px] truncate" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? card.descEn : card.desc}</span>}
+                    <button key={type} onClick={() => onOpenTab(type)}
+                      className="flex items-start gap-2.5 py-2 px-2 rounded-lg text-left transition-colors"
+                      onMouseEnter={hover} onMouseLeave={leave}>
+                      <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 mt-0.5" style={{ background: 'var(--jt-paper-alt)', color: 'var(--jt-ink-3)' }}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={m?.icon || ICONS.dots} /></svg>
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[12.5px] font-medium" style={{ color: 'var(--jt-ink)' }}>{label}</span>
+                        {card && <span className="block text-[10.5px] mt-0.5 truncate" style={{ color: 'var(--jt-ink-3)' }}>{lang === 'en' ? card.descEn : card.desc}</span>}
+                      </span>
                     </button>
                   )
                 })}
               </div>
-            ))}
-          </div>
-        </div>
-      <div className="mx-auto mb-8 w-full" style={{ maxWidth: 820, padding: '0 24px' }}>
-        <div className="rounded-[26px] overflow-hidden" style={{ background: 'var(--jt-paper-alt)', padding: 8 }}>
-          <div className="rounded-[20px]" style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline-soft)' }}>
-            <div className="flex items-center gap-2 px-4 pt-3 pb-1 text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }}>
-              <button onClick={() => onOpenTab('settings')} className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors" onMouseEnter={hover} onMouseLeave={leave}>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.box} /></svg>
-                {t('模型', 'Model')}<svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
-              </button>
-              <button onClick={() => onOpenTab('files')} className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors" onMouseEnter={hover} onMouseLeave={leave}>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.folder} /></svg>
-                <span className="max-w-[140px] truncate">{workLabel || t('工作区', 'Workspace')}</span><svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
-              </button>
-            </div>
-            <input value={text} onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
-              placeholder={t('做任何事…', 'Do anything')}
-              className="w-full bg-transparent outline-none px-5 pt-2 pb-3 text-[15px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
-            <div className="flex items-center gap-2 px-4 pb-3">
-              <button onClick={() => onOpenTab('files')} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: 'var(--jt-ink-2)' }} title={t('添加文件', 'Add file')} onMouseEnter={hover} onMouseLeave={leave}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d={ICONS.plus} /></svg>
-              </button>
-              <span className="flex-1" />
-              <button onClick={() => onOpenTab('settings')} className="text-[11.5px] px-2 py-1 rounded-md flex items-center gap-1" style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
-                <span className="max-w-[140px] truncate">{modelLabel || t('未配置模型', 'No model')}</span><svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d={ICONS.chevron} /></svg>
-              </button>
-              <button onClick={onCreate} className="w-7 h-7 rounded-full grid place-items-center" style={{ color: 'var(--jt-ink-2)' }} title={t('语音', 'Voice')} onMouseEnter={hover} onMouseLeave={leave}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.mic} /></svg>
-              </button>
-              <button onClick={ask} className="w-8 h-8 rounded-full grid place-items-center transition-transform hover:scale-105" style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.arrow} /></svg>
-              </button>
-            </div>
-          </div>
+            </section>
+          )
+        })}
+
+        {/* 底部保留三个快捷动作（纯文字，不再是大 composer） */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-3" style={{ borderTop: '1px solid var(--jt-hairline-soft)' }}>
+          <button onClick={onCreate} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>+ {t('新建对话', 'New chat')}</button>
+          <button onClick={() => onOpenTab('settings')} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>{t('设置', 'Settings')}</button>
+          <button onClick={() => onOpenTab('gongwen')} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>{t('公文写作台', 'Doc desk')}</button>
+          <button onClick={() => onAsk(t('总结最近会话要点', 'Summarize recent chats'))} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>{t('总结最近会话', 'Summarize recent chats')}</button>
         </div>
       </div>
     </div>

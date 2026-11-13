@@ -911,7 +911,7 @@ function MainApp() {
             const isActive = tab.id === activeTab?.id
             if (!isActive && !everMounted.has(tab.id)) return null
             return (
-              <div key={tab.id} className={`jt-tab-body h-full flex flex-col min-h-0 ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
+              <div key={tab.id} className={`jt-tab-body h-full flex flex-col min-h-0 ${tab.type === 'newtab' ? 'jt-tab-home' : ''} ${isActive ? '' : 'hidden'}`} style={{ display: isActive ? 'flex' : 'none' }}>
                 <ErrorBoundary inline resetKey={`${tab.id}:${tab.sessionId || tab.refId || ''}`} label="这个页面加载出错了">
                   <Suspense fallback={<TabFallback />}>
                     {tab.type === 'newtab'

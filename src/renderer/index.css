@@ -1227,3 +1227,11 @@ input:focus, textarea:focus, select:focus { animation: jt-focus-ring .24s var(--
 .jt-codex-input::placeholder { color: #9a9a9a !important; }
 .jt-codex-input { caret-color: #111 !important; }
 
+
+/* 新标签页启动台：整页可滚动，与聊天页（消息流+悬浮 composer）彻底区分 */
+.jt-tab-home { overflow: hidden !important; }
+.jt-home-launcher { overscroll-behavior: contain; }
+.jt-home-launcher section { animation: jt-home-in .32s var(--jt-ease) both; }
+.jt-home-launcher section:nth-child(2n) { animation-delay: .04s; }
+@keyframes jt-home-in { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+@media (max-width: 767px) { .jt-home-launcher .grid { grid-template-columns: 1fr; } }
