@@ -1,3 +1,5 @@
+import { LOCAL_CAPABILITIES } from '../localCapabilities'
+
 /**
  * JT Core Ultra / prompts —— gemini-cli packages/core/src/prompts/ 全量移植
  *   snippets.ts（现代）/ snippets.legacy.ts（旧模型）/ promptProvider.ts（编排）
@@ -262,6 +264,7 @@ export function buildUltraSystemPrompt(opts: UltraPromptOptions = {}): string {
   const sections: string[] = [
     renderPreamble({ interactive: opts.interactive ?? true, approvalMode: opts.planMode ? 'plan' : opts.yolo ? 'yolo' : 'default' }),
     renderCoreMandates(opts),
+    LOCAL_CAPABILITIES,
     renderSubAgents(),
     renderAgentSkills(opts.skills),
     renderHookContext(),

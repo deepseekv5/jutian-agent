@@ -272,5 +272,28 @@ try {
   else bad('MCP 预设缺失')
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+
+// ─── 本机操作能力契约（v15.9.0）：防止「没有工具」式推诿回归 ───
+section('本机操作能力契约')
+try {
+  const cap = fs.readFileSync(path.join(ROOT, 'src/shared/localCapabilities.ts'), 'utf-8')
+  const chat = fs.readFileSync(path.join(ROOT, 'src/renderer/engine/chatPrompt.ts'), 'utf-8')
+  const ultra = fs.readFileSync(path.join(ROOT, 'src/shared/ultra/prompts.ts'), 'utf-8')
+  const tui = fs.readFileSync(path.join(ROOT, 'src/shared/jtcode-cli.mjs'), 'utf-8')
+  const tools = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/shared/builtin-tools.json'), 'utf-8'))
+  const op = tools.find(t => t.name === 'open_path')
+  const sh = tools.find(t => t.name === 'shell')
+  if (cap.includes('open_path') && cap.includes('open -a') && cap.includes('禁止推诿')) ok('LOCAL_CAPABILITIES 声明完整（URL / 启动应用 / 禁止说没工具）')
+  else bad('LOCAL_CAPABILITIES 声明缺失关键句')
+  if (chat.includes('LOCAL_CAPABILITIES')) ok('办公/编程主提示词已注入')
+  else bad('chatPrompt 未注入 LOCAL_CAPABILITIES')
+  if (ultra.includes('LOCAL_CAPABILITIES')) ok('JT Core Ultra 提示词族已注入')
+  else bad('Ultra 提示词未注入')
+  if (tui.includes('打开浏览器') && tui.includes('open -a')) ok('jtcode 命令行提示词已强化')
+  else bad('jtcode 提示词缺少浏览器/应用启动说明')
+  if (op && /URL|浏览器/.test(op.description) && sh && /启动应用|open -a/.test(sh.description)) ok('open_path / shell 工具描述已讲清本机能力')
+  else bad('工具描述未讲清 URL/应用打开能力')
+} catch (e) { bad(`读取失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)

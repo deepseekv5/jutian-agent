@@ -2,6 +2,7 @@ import type { Settings } from '../types'
 import { getSkillManifest } from './skillManifest'
 import { getExtPromptSnapshot, extType } from '../app/extensions'
 import { isWindows, osName as detectOsName, runtimeEnvLine } from '../utils/platform'
+import { LOCAL_CAPABILITIES } from '../../shared/localCapabilities'
 
 /**
  * 聊天系统提示词（唯一来源）
@@ -38,6 +39,8 @@ export function buildChatSystemPrompt(settings: Settings): string {
 - 直接高效：先给结论/方案，再补必要细节；不复述用户问题、不写空洞开场白和客套话
 - 常规问题直接作答，不要冗长推理；只有真正复杂的任务才展开分析
 - 能一步说清的绝不分两步，能列 3 点的绝不写 5 点
+
+${LOCAL_CAPABILITIES}
 
 【运行环境 — 重要】
 - 操作系统：${osName}

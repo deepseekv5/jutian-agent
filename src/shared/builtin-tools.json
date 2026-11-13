@@ -277,7 +277,7 @@
  },
  {
   "name": "shell",
-  "description": "执行 Shell 命令并返回输出。默认前台执行（30 秒超时，上限 600 秒）。长驻进程（开发服务器、watch、大型构建）必须传 background:true 后台启动，否则会超时。命令中可用 {{KEY}} / {{BASE}} 占位符引用已配置的 API 密钥/地址——执行时由巨天安全替换为真实值，密钥不会出现在对话或输出中。",
+  "description": "在本机执行 Shell 命令并返回输出（可启动应用、打开窗口、运行脚本、诊断系统）。默认前台执行（30 秒超时，上限 600 秒）。长驻进程（开发服务器、watch、大型构建）必须传 background:true 后台启动，否则会超时。命令中可用 {{KEY}} / {{BASE}} 占位符引用已配置的 API 密钥/地址——执行时由巨天安全替换为真实值，密钥不会出现在对话或输出中。macOS 启动应用用 open -a \"应用名\"，打开路径用 open <路径>。",
   "parameters": {
    "type": "object",
    "properties": {
@@ -1128,12 +1128,13 @@
  },
  {
   "name": "open_path",
-  "description": "用系统默认程序打开文件或目录（macOS 用 open，Windows 用 start）。",
+  "description": "用系统默认程序打开网页、文件或目录（macOS 用 open、Windows 用 start、Linux 用 xdg-open）。传 https://… 等 URL 时会用系统默认浏览器打开网页；传本机路径则打开对应文件/文件夹。用户说「打开浏览器/打开网页/打开应用/打开文件」时优先用本工具，不要回答做不到。",
   "parameters": {
    "type": "object",
    "properties": {
     "path": {
-     "type": "string"
+     "type": "string",
+     "description": "网址（https://…）或本机文件/目录绝对路径。URL 用默认浏览器打开，路径用系统默认程序打开。"
     }
    },
    "required": [
