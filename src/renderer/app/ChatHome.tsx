@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { useLanguage } from '../hooks/useLanguage'
 import { getSettingsSync, effectiveApiKey } from '../store/storage'
 import { fetchCompat } from '../api'
 import { ssePayloads } from '../../shared/sse'
+import { MdInner } from '../chat/MessageBubble'
+import { useMathPlugins, hasMathSyntax } from '../chat/useMathPlugins'
+import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 
 /**
  * 主界面独立对话（v16.3.0）：工作台首页的「对话」模式。
@@ -22,9 +26,43 @@ const QUICK = [
 export default function ChatHome() {
   const { c } = useTheme()
   const { lang, t } = useLanguage()
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  // v16.3.1：历史持久化（localStorage，最多 200 条）+ 工作/编程模式 + TTS 朗读
+  const [msgs, setMsgs] = useState<Msg[]>(() => {
+    try { const raw = localStorage.getItem('lyclaw_chathome_msgs'); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr.slice(-200) : [] } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
+    try { return localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general' } catch { return 'general' }
+  })
+  const [ttsBusy, setTtsBusy] = useState(false)
+  const ttsStopRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => { try { localStorage.setItem('lyclaw_chathome_msgs', JSON.stringify(msgs.slice(-200))) } catch { /* 超限截断 */ } }, [msgs])
+  const switchMode = (m: 'general' | 'coding') => {
+    setChatMode(m)
+    try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
+    window.dispatchEvent(new Event('chat-mode-changed'))
+  }
+  // 朗读：剥代码块/标记，逐条经 /api/edge-tts
+  const speak = async (text: string) => {
+    if (ttsBusy) { ttsStopRef.current = true; audioRef.current?.pause(); setTtsBusy(false); return }
+    const spoken = String(text || '').replace(/```[\s\S]*?```/g, '（代码已省略）').replace(/[*_#>|]/g, '').slice(0, 1500)
+    if (!spoken.trim()) return
+    setTtsBusy(true); ttsStopRef.current = false
+    try {
+      const s = getSettingsSync()
+      const r = await fetchCompat('/api/edge-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spoken, voice: s.voiceId || 'zh-CN-XiaoxiaoNeural', speed: Number(s.ttsSpeed) || 1.0 }) })
+      if (!r.ok) throw new Error('tts fail')
+      const b = await r.blob()
+      await new Promise<void>((resolve) => {
+        const a = new Audio(URL.createObjectURL(b))
+        audioRef.current = a
+        a.onended = () => resolve(); a.onerror = () => resolve()
+        a.play().catch(() => resolve())
+      })
+    } catch { /* 静默 */ } finally { setTtsBusy(false) }
+  }
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -50,7 +88,12 @@ export default function ChatHome() {
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': s.apiBaseUrl, 'X-Api-Key': effectiveApiKey(s.apiKey) },
         body: JSON.stringify({
           model: s.model || 'default',
-          messages: [...next.map(m => ({ role: m.role, content: m.content }))].slice(-20),
+          messages: [
+            { role: 'system', content: chatMode === 'coding'
+              ? '你是「巨天」的编程形态：工程 Agent，直接给出可运行代码与最小改动；代码块标注语言；解释从简。'
+              : '你是「巨天」的办公形态：直接高效，先结论后细节；需要时给出结构化 Markdown（标题/列表/表格/代码块）。' },
+            ...next.map(m => ({ role: m.role, content: m.content })),
+          ].slice(-21),
           stream: true, max_tokens: 1024,
         }),
       })
@@ -81,7 +124,17 @@ export default function ChatHome() {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto w-full" style={{ maxWidth: 780, padding: '32px 24px 16px' }}>
           {msgs.length === 0 && (
-            <div className="pt-16 text-center">
+            <div className="pt-12 text-center">
+              {/* 工作 / 编程模式切换（与侧栏同源：localStorage + chat-mode-changed 事件） */}
+              <div className="flex items-center justify-center gap-1 mb-6">
+                {([['general', t('工作', 'Work')], ['coding', t('编程', 'Coding')]] as const).map(([m, label]) => (
+                  <button key={m} onClick={() => switchMode(m)}
+                    className="px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-colors"
+                    style={{ background: chatMode === m ? 'var(--brand, #10a37f)' : 'var(--jt-paper-alt)', color: chatMode === m ? '#fff' : 'var(--jt-ink-3)', border: `1px solid ${chatMode === m ? 'transparent' : 'var(--jt-hairline-soft)'}` }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <h2 className="font-medium" style={{ fontSize: 26, letterSpacing: '-.03em', color: 'var(--jt-ink)' }}>
                 {t('有什么想聊的？', 'What is on your mind?')}
               </h2>
@@ -103,11 +156,22 @@ export default function ChatHome() {
           )}
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-3 jt-msg-in`}>
-              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed whitespace-pre-wrap"
+              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed"
                 style={m.role === 'user'
-                  ? { background: 'var(--jt-ink)', color: 'var(--jt-paper)', borderBottomRightRadius: 6 }
+                  ? { background: 'var(--jt-ink)', color: 'var(--jt-paper)', borderBottomRightRadius: 6, whiteSpace: 'pre-wrap' }
                   : { background: 'var(--jt-paper-alt)', color: 'var(--jt-ink)', border: `1px solid var(--jt-hairline-soft)`, borderBottomLeftRadius: 6 }}>
-                {m.content || (m.role === 'assistant' && busy ? <span className="jt-thinking-dots" style={{ color: 'var(--jt-ink-3)' }}><i /><i /><i /></span> : '')}
+                {m.role === 'assistant' && m.content
+                  ? <MdText text={m.content} />
+                  : (m.role === 'assistant' && busy ? <span className="jt-thinking-dots" style={{ color: 'var(--jt-ink-3)' }}><i /><i /><i /></span> : m.content)}
+                {m.role === 'assistant' && m.content && !busy && (
+                  <div className="mt-1.5 pt-1.5 flex items-center gap-2" style={{ borderTop: '1px dashed var(--jt-hairline-soft)' }}>
+                    <button onClick={() => speak(m.content)} className="text-[10.5px] flex items-center gap-1 transition-colors"
+                      style={{ color: ttsBusy ? 'var(--brand, #10a37f)' : 'var(--jt-ink-3)' }}>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.5 8.5a4 4 0 010 7m-3-7v7m-6-4.5v3a2 2 0 002 2h1l4 3V6l-4 3h-1a2 2 0 00-2 2z" /></svg>
+                      {ttsBusy ? t('停止', 'Stop') : t('朗读', 'Speak')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -137,4 +201,21 @@ export default function ChatHome() {
       </div>
     </div>
   )
+}
+
+/** 单条消息的 Markdown 渲染：math 插件按内容懒加载（与 MessageBubble 同策略） */
+function MdText({ text }: { text: string }) {
+  const math = useMathPlugins(hasMathSyntax(text))
+  const mdRemark = useMemo(() => (math ? [remarkGfm, math.remarkMath] : [remarkGfm]), [math])
+  const mdRehype = useMemo(() => (math ? [rehypeHighlight, math.rehypeKatex] : [rehypeHighlight]), [math])
+  return (
+    <div className="markdown-body" style={{ color: 'inherit', fontSize: 'inherit', lineHeight: 'inherit' }}>
+      <MdInner text={text} remark={mdRemark} rehype={mdRehype} link={LinkRenderer} math />
+    </div>
+  )
+}
+
+/** 链接渲染：target=_blank + rel，样式继承气泡 */
+function LinkRenderer(props: any) {
+  return <a href={props.href} target="_blank" rel="noreferrer" style={{ color: 'var(--brand, #10a37f)', textDecoration: 'underline' }}>{props.children}</a>
 }

@@ -250,7 +250,7 @@ const MermaidBlock = lazy(() => import('./MermaidBlock'))
 /** 代码块：语言栏 + 复制按钮（ChatGPT 风格）；mermaid 渲染成图，完整 HTML 文档给预览页签 */
 /** 性能（v14.9）：markdown 渲染 memo 化——历史消息 content 不变时整棵子树 bail out，
  *  不再重复跑 remark/rehype/highlight 解析。切换几百条消息的会话从全量重解析变为零解析。 */
-const MdInner = memo(function MdInner({ text, remark, rehype, link, math }: {
+export const MdInner = memo(function MdInner({ text, remark, rehype, link, math }: {
   text: string; remark: any[]; rehype: any[]; link: any; math: boolean
 }) {
   return (
