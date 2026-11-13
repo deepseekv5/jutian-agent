@@ -68,6 +68,10 @@ export default function PPTView({ onBack }: Props) {
   const [depth, setDepth] = useState<GenerateOptions['depth']>('standard');
   const [tone, setTone] = useState<GenerateOptions['tone']>('professional');
   const [withNotes, setWithNotes] = useState(false);
+  // AI 生成流程可视化（v16.2.0）：四阶段 + 实时日志
+  const [genPhase, setGenPhase] = useState(0);
+  const [genLogs, setGenLogs] = useState<string[]>([]);
+  const logBoxRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<{ blockId: string; startX: number; startY: number; boxX: number; boxY: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -103,10 +107,19 @@ export default function PPTView({ onBack }: Props) {
 
   const handleGenerate = async () => {
     if (!topic.trim()) { notify('请输入主题', 'error'); return; }
-    await generate({ topic, depth, tone, language: 'zh', withNotes });
-    setShowGenerate(false);
-    setTopic('');
+    setGenPhase(1);
+    setGenLogs([]);
+    await generate({ topic, depth, tone, language: 'zh', withNotes }, (phase, msg) => {
+      setGenPhase(phase);
+      setGenLogs(prev => [...prev.slice(-40), msg]);
+    });
+    // 流程面板保持 1.2s 展示完成态后自动关闭
+    setTimeout(() => { setShowGenerate(false); setTopic(''); setGenPhase(0); }, 1200);
   };
+  useEffect(() => {
+    const el = logBoxRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [genLogs]);
 
   const handleExportJson = () => {
     const blob = new Blob([JSON.stringify(deck, null, 2)], { type: 'application/json' });
@@ -283,44 +296,97 @@ blockquote{font-size:1.5rem;font-style:italic;max-width:70vw;text-align:center}
         </div>
       )}
 
-      {/* Generate Dialog */}
+      {/* AI 生成工作台（v16.2.0）：四阶段流程可视化 + 实时日志 */}
       {showGenerate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: c.modalOverlay }} onClick={() => setShowGenerate(false)}>
-          <div className="w-[420px] rounded-xl shadow-lg p-6 space-y-4" style={{ background: c.modalBg }} onClick={(e) => e.stopPropagation()}>
-            <div className="text-center">
-              <h3 className="text-lg font-bold" style={{ color: c.text }}>AI 生成演示文稿</h3>
-              <p className="text-xs mt-1" style={{ color: c.textTertiary }}>输入主题，自动生成专业 PPT</p>
-            </div>
-            <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="例如：2024年度工作总结"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }} />
-            <div className="grid grid-cols-2 gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: c.modalOverlay }} onClick={() => !generating && setShowGenerate(false)}>
+          <div className="w-[720px] max-w-[94vw] rounded-2xl shadow-2xl p-6 flex gap-5" style={{ background: c.modalBg, maxHeight: '86vh' }} onClick={(e) => e.stopPropagation()}>
+            {/* 左：输入区 */}
+            <div className="w-[240px] shrink-0 space-y-4">
               <div>
-                <label className="text-xs mb-1 block" style={{ color: c.textSecondary }}>详细程度</label>
-                <select value={depth} onChange={(e) => setDepth(e.target.value as any)} className="w-full px-2 py-1.5 rounded-lg text-xs outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }}>
-                  <option value="brief">简洁 (5-7页)</option>
-                  <option value="standard">标准 (7-10页)</option>
-                  <option value="detailed">详尽 (10-15页)</option>
-                </select>
+                <h3 className="text-base font-bold" style={{ color: c.text }}>AI 生成演示文稿</h3>
+                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: c.textTertiary }}>输入主题，AI 自动完成策划、内容、排版</p>
               </div>
-              <div>
-                <label className="text-xs mb-1 block" style={{ color: c.textSecondary }}>语气风格</label>
-                <select value={tone} onChange={(e) => setTone(e.target.value as any)} className="w-full px-2 py-1.5 rounded-lg text-xs outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }}>
-                  <option value="professional">专业</option>
-                  <option value="minimal">简约</option>
-                  <option value="energetic">活力</option>
-                </select>
+              <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="例如：2024年度工作总结"
+                disabled={generating}
+                className="w-full px-3 py-2 rounded-lg text-[13px] outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }} />
+              <div className="space-y-2.5">
+                <div>
+                  <label className="text-[11px] mb-1 block" style={{ color: c.textSecondary }}>详细程度</label>
+                  <select value={depth} onChange={(e) => setDepth(e.target.value as any)} disabled={generating}
+                    className="w-full px-2 py-1.5 rounded-lg text-xs outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }}>
+                    <option value="brief">简洁 (5-7页)</option>
+                    <option value="standard">标准 (7-10页)</option>
+                    <option value="detailed">详尽 (10-15页)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] mb-1 block" style={{ color: c.textSecondary }}>语气风格</label>
+                  <select value={tone} onChange={(e) => setTone(e.target.value as any)} disabled={generating}
+                    className="w-full px-2 py-1.5 rounded-lg text-xs outline-none border" style={{ background: c.bgInput, color: c.text, borderColor: c.border }}>
+                    <option value="professional">专业</option>
+                    <option value="minimal">简约</option>
+                    <option value="energetic">活力</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={withNotes} onChange={(e) => setWithNotes(e.target.checked)} disabled={generating} className="rounded" />
+                  <span className="text-[11px]" style={{ color: c.textSecondary }}>生成演讲备注</span>
+                </label>
               </div>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={withNotes} onChange={(e) => setWithNotes(e.target.checked)} className="rounded" />
-              <span className="text-xs" style={{ color: c.textSecondary }}>生成演讲备注</span>
-            </label>
-            <div className="flex gap-2">
-              <button onClick={() => setShowGenerate(false)} className="flex-1 py-2 rounded-lg text-sm font-medium" style={{ background: c.buttonGhost, color: c.textSecondary }}>取消</button>
               <button onClick={handleGenerate} disabled={generating}
-                className="flex-1 py-2 rounded-lg text-sm font-medium text-white" style={{ background: theme.accent }}>
-                {generating ? genStage || '生成中...' : '开始生成'}
+                className="w-full py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity"
+                style={{ background: theme.accent, opacity: generating ? .6 : 1 }}>
+                {generating ? '生成中…' : '开始生成'}
               </button>
+            </div>
+            {/* 右：流程区 */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="text-[11px] font-medium mb-3" style={{ color: c.textTertiary }}>AI 流程</div>
+              {/* 四阶段条 */}
+              <div className="flex items-center gap-1 mb-4">
+                {([
+                  [1, '分析主题'], [2, '规划大纲'], [3, '逐页生成'], [4, '排版渲染'],
+                ] as [number, string][]).map(([n, label], i) => {
+                  const active = genPhase === n;
+                  const done = genPhase > n || (genPhase === 4 && generating === false);
+                  return (
+                    <div key={n} className="flex items-center flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0 transition-colors"
+                          style={{
+                            background: done ? '#059669' : active ? theme.accent : c.bgInput,
+                            color: done || active ? '#fff' : c.textTertiary,
+                          }}>
+                          {done ? '✓' : n}
+                        </span>
+                        <span className="text-[10.5px] whitespace-nowrap" style={{ color: active || done ? c.text : c.textTertiary }}>{label}</span>
+                      </div>
+                      {i < 3 && <div className="flex-1 h-px mx-1.5" style={{ background: genPhase > n ? '#059669' : c.borderLight }} />}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* 日志流 */}
+              <div ref={logBoxRef} className="flex-1 min-h-[180px] max-h-[300px] overflow-y-auto rounded-xl p-3 space-y-1.5 scrollbar-thin"
+                style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                {genLogs.length === 0 && (
+                  <div className="text-[11px] py-8 text-center" style={{ color: c.textTertiary }}>输入主题开始生成，这里会实时展示 AI 的每一步</div>
+                )}
+                {genLogs.map((msg, i) => (
+                  <div key={i} className="flex items-start gap-2 text-[11px] jt-log-in">
+                    <span className="text-[9px] font-mono shrink-0 mt-0.5" style={{ color: c.textTertiary }}>
+                      {new Date().toTimeString().slice(0, 8)}
+                    </span>
+                    <span style={{ color: i === genLogs.length - 1 ? c.text : c.textSecondary }}>{msg}</span>
+                  </div>
+                ))}
+                {generating && (
+                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: c.textTertiary }}>
+                    <span className="jt-thinking-dots" style={{ color: theme.accent }}><i /><i /><i /></span>
+                    正在执行…
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -479,6 +545,79 @@ function PPTBlock({ block, scale, isSelected, isEditing, accent, onMouseDown, on
             <line x1="4" y1="52" x2="96" y2="52" stroke="rgba(148,163,184,0.5)" strokeWidth="0.6" />
           </svg>
         )}
+      </div>
+    );
+  }
+
+  // ── v16.2.0 新增元素：图标 / 形状 / 代码 / 流程图 ──
+  if (block.type === 'icon') {
+    const b = block as any;
+    return (
+      <div style={style} onMouseDown={onMouseDown} onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        className={`${isSelected ? 'ring-2 ring-blue-400' : ''} flex flex-col items-center justify-center gap-1`}>
+        <svg viewBox="0 0 24 24" fill="none" stroke={b.color || accent} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" style={{ width: '52%', height: '52%' }}>
+          <path d={b.icon} />
+        </svg>
+        {b.text && <span style={{ fontSize: 11 * scale, color: '#94a3b8', textAlign: 'center' }}>{b.text}</span>}
+      </div>
+    );
+  }
+  if (block.type === 'shape') {
+    const b = block as any;
+    const fill = b.fill === 'accent' ? accent : b.fill === 'accent2' ? '#06b6d4' : (b.fill || 'none');
+    const stroke = b.stroke ? (b.stroke === 'accent' ? accent : b.stroke) : 'none';
+    return (
+      <div style={style} onMouseDown={onMouseDown} onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        className={`${isSelected ? 'ring-2 ring-blue-400' : ''} flex items-center justify-center`}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height: '100%' }}>
+          {b.shape === 'circle'
+            ? <circle cx="50" cy="50" r="46" fill={fill} stroke={stroke} strokeWidth={b.strokeWidth || 2} />
+            : b.shape === 'diamond'
+              ? <polygon points="50,4 96,50 50,96 4,50" fill={fill} stroke={stroke} strokeWidth={b.strokeWidth || 2} />
+              : b.shape === 'line'
+                ? <line x1="4" y1="50" x2="96" y2="50" stroke={stroke === 'none' ? accent : stroke} strokeWidth={b.strokeWidth || 3} />
+                : b.shape === 'arrowRight'
+                  ? <polygon points="6,38 60,38 60,20 96,50 60,80 60,62 6,62" fill={fill} />
+                  : b.shape === 'arrowDown'
+                    ? <polygon points="38,6 62,6 62,60 80,60 50,96 20,60 38,60" fill={fill} />
+                    : b.shape === 'pill'
+                      ? <rect x="4" y="24" width="92" height="52" rx="26" fill={fill} stroke={stroke} strokeWidth={b.strokeWidth || 2} />
+                      : b.shape === 'rounded'
+                        ? <rect x="4" y="4" width="92" height="92" rx="18" fill={fill} stroke={stroke} strokeWidth={b.strokeWidth || 2} />
+                        : <rect x="4" y="4" width="92" height="92" fill={fill} stroke={stroke} strokeWidth={b.strokeWidth || 2} />}
+        </svg>
+      </div>
+    );
+  }
+  if (block.type === 'code') {
+    const b = block as any;
+    return (
+      <div style={{ ...style, background: '#0b1220', border: '1px solid rgba(148,163,184,0.25)' }} onMouseDown={onMouseDown} onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        className={`${isSelected ? 'ring-2 ring-blue-400' : ''} rounded-md p-2.5 overflow-hidden`}>
+        <div className="text-[9px] font-mono mb-1" style={{ color: '#64748b' }}>{b.lang || 'code'}</div>
+        <pre className="text-left font-mono whitespace-pre-wrap" style={{ fontSize: 10 * scale, lineHeight: 1.55, color: '#7dd3fc', margin: 0 }}>{b.code}</pre>
+      </div>
+    );
+  }
+  if (block.type === 'flow') {
+    const b = block as any;
+    const nodes: { title: string; desc?: string }[] = b.nodes || [];
+    return (
+      <div style={style} onMouseDown={onMouseDown} onClick={(e) => { e.stopPropagation(); onSelect(); }}
+        className={`${isSelected ? 'ring-2 ring-blue-400' : ''} flex flex-col items-center justify-center gap-0 py-2`}>
+        {nodes.map((n, i) => (
+          <div key={i} className="flex flex-col items-center w-full">
+            <div className="px-3 py-1.5 rounded-lg text-center" style={{ background: 'rgba(148,163,184,0.12)', border: `1px solid ${accent}55`, minWidth: '62%' }}>
+              <div style={{ fontSize: 11 * scale, fontWeight: 600, color: '#e2e8f0' }}>
+                {b.numbered && <span style={{ color: accent }}>{i + 1}. </span>}{n.title}
+              </div>
+              {n.desc && <div style={{ fontSize: 9 * scale, color: '#94a3b8', marginTop: 1 }}>{n.desc}</div>}
+            </div>
+            {i < nodes.length - 1 && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v14m-6-6l6 6 6-6" /></svg>
+            )}
+          </div>
+        ))}
       </div>
     );
   }

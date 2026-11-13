@@ -6,6 +6,7 @@ export const LAYOUT_LABELS: Record<LayoutId, string> = {
   compare: '卡片对照', stats: '数据指标', quote: '金句引言', timeline: '流程步骤',
   imageText: '图文混排', closing: '结束页',
   table: '数据表格', chart: '图表分析', gallery: '多图展示',
+  iconGrid: '图标网格', shapes: '形状组合', code: '代码展示', flow: '流程图',
 };
 
 const S: Record<string, BlockStyle> = {
@@ -173,6 +174,48 @@ export function materialize(spec: SlideSpec, index: number): Slide {
           im.caption || `${t} ${i + 1}`,
         ));
       });
+      break;
+    }
+    case 'iconGrid': {
+      push(spec.eyebrow ? text('eyebrow', mkBox(80, 74, 620, 30), spec.eyebrow, S.eyebrow) : null);
+      push(text('title', mkBox(80, 112, 1120, 78), t, S.h1));
+      push(divider(mkBox(80, 204, 64, 5)));
+      const icons = spec.icons && spec.icons.length ? spec.icons : [{ icon: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z', text: '要点' }];
+      const cols = 3, gw = 352, gap = 32, gy = 250, gh = 150;
+      icons.slice(0, 6).forEach((ic, i) => {
+        const col = i % cols, row = Math.floor(i / cols);
+        blocks.push({ id: uid('ic'), type: 'icon', box: mkBox(80 + col * (gw + gap), gy + row * (gh + 24), gw, gh), icon: ic.icon, text: ic.text, style: {} });
+      });
+      break;
+    }
+    case 'shapes': {
+      push(spec.eyebrow ? text('eyebrow', mkBox(80, 74, 620, 30), spec.eyebrow, S.eyebrow) : null);
+      push(text('title', mkBox(80, 112, 1120, 78), t, S.h1));
+      push(divider(mkBox(80, 204, 64, 5)));
+      const shapes = spec.shapes && spec.shapes.length ? spec.shapes : [
+        { shape: 'rounded' as const, fill: 'accent' as const }, { shape: 'circle' as const, fill: 'accent2' as const }, { shape: 'arrowRight' as const, fill: 'accent' as const },
+      ];
+      const cols = 3, gw = 352, gap = 32, gy = 250, gh = 300;
+      shapes.slice(0, 6).forEach((sh, i) => {
+        const col = i % cols, row = Math.floor(i / cols);
+        blocks.push({ id: uid('sh'), type: 'shape', box: mkBox(80 + col * (gw + gap), gy + row * (gh + 24), gw, gh), shape: sh.shape, fill: sh.fill ?? 'accent', stroke: sh.stroke, strokeWidth: sh.strokeWidth, style: {} });
+      });
+      break;
+    }
+    case 'code': {
+      push(spec.eyebrow ? text('eyebrow', mkBox(80, 74, 620, 30), spec.eyebrow, S.eyebrow) : null);
+      push(text('title', mkBox(80, 112, 1120, 78), t, S.h1));
+      push(divider(mkBox(80, 204, 64, 5)));
+      const cd = spec.code ?? { code: 'const result = await agent.run(topic)\nconsole.log(result)', lang: 'typescript' };
+      blocks.push({ id: uid('cd'), type: 'code', box: mkBox(80, 244, 1120, 392), code: cd.code, lang: cd.lang, style: {} });
+      break;
+    }
+    case 'flow': {
+      push(spec.eyebrow ? text('eyebrow', mkBox(80, 74, 620, 30), spec.eyebrow, S.eyebrow) : null);
+      push(text('title', mkBox(80, 112, 1120, 78), t, S.h1));
+      push(divider(mkBox(80, 204, 64, 5)));
+      const fl = spec.flow ?? { nodes: [{ title: '需求确认' }, { title: '方案设计' }, { title: '开发实现' }, { title: '验收上线' }], numbered: true };
+      blocks.push({ id: uid('fl'), type: 'flow', box: mkBox(340, 240, 600, 420), nodes: fl.nodes, numbered: fl.numbered, style: {} });
       break;
     }
     case 'closing':

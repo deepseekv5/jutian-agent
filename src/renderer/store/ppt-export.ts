@@ -1,4 +1,4 @@
-import type { ChartBlock, Deck, DeckTheme, GraphicBlock, GraphicKind, ImageBlock, Slide, TableBlock, Block, BlockStyle, BulletsBlock, QuoteBlock, StatsBlock, StepsBlock, TextBlock } from '../types/ppt'
+import type { ChartBlock, Deck, DeckTheme, GraphicBlock, GraphicKind, ImageBlock, Slide, TableBlock, Block, BlockStyle, BulletsBlock, QuoteBlock, StatsBlock, StepsBlock, TextBlock , CodeBlock, FlowBlock, IconBlock, ShapeBlock} from '../types/ppt'
 import { SLIDE_W } from '../types/ppt'
 
 /**
@@ -451,9 +451,88 @@ function addBlock(s: PptxSlide, block: Block, pal: Palette, pptx: PptxInstance) 
       break
     }
 
+    // ── v16.2.0 新增元素：图标 / 形状 / 代码 / 流程图 ──
+    case 'icon': {
+      const b = block as IconBlock
+      s.addText(b.text || '', {
+        x, y: y + h * 0.62, w, h: h * 0.34,
+        fontSize: pt(Math.max(8, h * 0.09)),
+        color: hex(resolveColor(b.color, pal, pal.muted)),
+        align: 'center', fontFace: pal.fontBody,
+      })
+      // 图标：用 Unicode 符号近似（PPT 原生文本，可编辑）
+      const glyph = iconGlyph(b.icon)
+      if (glyph) s.addText(glyph, {
+        x, y: y + h * 0.08, w, h: h * 0.54,
+        fontSize: pt(Math.max(14, h * 0.3)),
+        color: hex(resolveColor(b.color, pal, pal.accent)),
+        align: 'center', fontFace: 'Segoe UI Symbol',
+      })
+      break
+    }
+    case 'shape': {
+      const b = block as ShapeBlock
+      const fillHex = resolveColor(b.fill, pal, pal.accent)
+      const shapeMap: Record<string, any> = {
+        rect: pptx.ShapeType.rect, rounded: pptx.ShapeType.roundRect, circle: pptx.ShapeType.ellipse,
+        pill: pptx.ShapeType.roundRect, diamond: pptx.ShapeType.diamond,
+        arrowRight: pptx.ShapeType.rightArrow, arrowDown: pptx.ShapeType.downArrow, line: pptx.ShapeType.line,
+      }
+      const st = b.shape === 'line'
+        ? { line: { color: fillHex, width: pt(b.strokeWidth || 2) } }
+        : { fill: { color: fillHex }, line: b.stroke ? { color: resolveColor(b.stroke, pal, pal.accent), width: pt(b.strokeWidth || 1) } : { color: fillHex, width: 0 } }
+      s.addShape(shapeMap[b.shape] || pptx.ShapeType.rect, { x, y, w, h, ...st })
+      break
+    }
+    case 'code': {
+      const b = block as CodeBlock
+      s.addText((b.lang ? b.lang + '\n' : '') + b.code, {
+        x, y, w, h,
+        fontSize: pt(11), color: '7DD3FC', fontFace: 'SF Mono, Menlo, Consolas, monospace',
+        fill: { color: '0B1220' }, valign: 'top', align: 'left',
+      })
+      break
+    }
+    case 'flow': {
+      const b = block as FlowBlock
+      const nodes: { title: string; desc?: string }[] = b.nodes || []
+      const n = Math.max(1, nodes.length)
+      const nh = Math.min(h / n - 6, 64)
+      nodes.forEach((nd, i) => {
+        const ny = y + i * (h / n)
+        s.addShape(pptx.ShapeType.roundRect, {
+          x: x + w * 0.08, y: ny, w: w * 0.84, h: nh,
+          fill: { color: hex(pal.surface, 'F1F5F9') }, line: { color: hex(pal.accent), width: 0.75 },
+        })
+        s.addText((b.numbered ? `${i + 1}. ` : '') + nd.title + (nd.desc ? `\n${nd.desc}` : ''), {
+          x: x + w * 0.1, y: ny, w: w * 0.8, h: nh,
+          fontSize: pt(12), color: hex(pal.text), fontFace: pal.fontBody, valign: 'middle',
+        })
+        if (i < n - 1) {
+          s.addShape(pptx.ShapeType.downArrow, { x: x + w / 2 - 10, y: ny + nh, w: 20, h: Math.max(4, h / n - nh), fill: { color: hex(pal.accent) } })
+        }
+      })
+      break
+    }
+
     default:
       break
   }
+}
+
+/** 图标 SVG path → PPT 原生 Unicode 符号（按形状特征近似映射） */
+function iconGlyph(path: string): string {
+  const p = String(path || '')
+  if (p.includes('M12 3l1.9') || p.includes('l1.9 5.6')) return '★'
+  if (p.includes('a9 9 0 11-18') || p.includes('l3 2m6-2')) return '◷'
+  if (p.includes('M9 12h6') || p.includes('H7a2 2')) return '▤'
+  if (p.includes('M20 7l-8-4') || p.includes('v10l-8 4')) return '⬢'
+  if (p.includes('M5 12h.01')) return '⋯'
+  if (p.includes('M20 6L9 17')) return '✓'
+  if (p.includes('M12 18v-6')) return '↳'
+  if (p.includes('M12 8v4l3')) return '◷'
+  if (p.includes('M4 6h16')) return '☰'
+  return '◆'
 }
 
 /** SVG data URI 无法被 pptxgenjs 直接嵌入 → 转成 PNG（浏览器侧异步完成） */

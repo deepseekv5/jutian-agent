@@ -9,12 +9,48 @@ export const SLIDE_H = 720;
 export type LayoutId =
   | 'cover' | 'agenda' | 'bullets' | 'twoColumn' | 'compare'
   | 'stats' | 'quote' | 'timeline' | 'imageText' | 'closing'
-  | 'table' | 'chart' | 'gallery';
+  | 'table' | 'chart' | 'gallery'
+  // v16.2.0 新增：图标网格 / 形状组合 / 代码 / 流程图
+  | 'iconGrid' | 'shapes' | 'code' | 'flow';
 
 export type BlockType =
   | 'title' | 'subtitle' | 'bullets' | 'paragraph' | 'quote'
   | 'stats' | 'graphic' | 'image' | 'eyebrow' | 'divider' | 'steps'
-  | 'table' | 'chart';
+  | 'table' | 'chart'
+  // v16.2.0 新增元素：图标 / 形状 / 代码 / 流程图
+  | 'icon' | 'shape' | 'code' | 'flow';
+
+/** 形状（v16.2.0）：基础图形 + 箭头，fill/stroke 走颜色 token */
+export type ShapeKind = 'rect' | 'rounded' | 'circle' | 'pill' | 'diamond' | 'arrowRight' | 'arrowDown' | 'line';
+export interface ShapeBlock extends BaseBlock {
+  type: 'shape';
+  shape: ShapeKind;
+  fill: ColorToken;
+  stroke?: ColorToken;
+  strokeWidth?: number;
+}
+
+/** 图标块（v16.2.0）：SVG path + 可选文字（内置图标集，导出时映射 Unicode 符号） */
+export interface IconBlock extends BaseBlock {
+  type: 'icon';
+  icon: string;          // SVG path data（24x24 viewBox）
+  text?: string;
+  color?: ColorToken;
+}
+
+/** 代码块（v16.2.0）：等宽渲染，导出为 PPTX 文本框 */
+export interface CodeBlock extends BaseBlock {
+  type: 'code';
+  code: string;
+  lang?: string;
+}
+
+/** 流程图块（v16.2.0）：竖向节点 + 箭头连接（导出为原生形状） */
+export interface FlowBlock extends BaseBlock {
+  type: 'flow';
+  nodes: { title: string; desc?: string }[];
+  numbered?: boolean;
+}
 
 export interface Box { x: number; y: number; w: number; h: number; }
 
@@ -84,7 +120,7 @@ export interface ImageBlock extends BaseBlock {
   caption?: string;
 }
 
-export type Block = TextBlock | DividerBlock | QuoteBlock | BulletsBlock | StatsBlock | StepsBlock | GraphicBlock | ImageBlock | TableBlock | ChartBlock;
+export type Block = TextBlock | DividerBlock | QuoteBlock | BulletsBlock | StatsBlock | StepsBlock | GraphicBlock | ImageBlock | TableBlock | ChartBlock | IconBlock | ShapeBlock | CodeBlock | FlowBlock;
 
 /** 表格块（导出为 PPTX 原生表格，可继续编辑） */
 export interface TableBlock extends BaseBlock {
@@ -167,6 +203,14 @@ export interface SlideSpec {
   graphic?: GraphicKind;
   background?: BackgroundMode;
   notes?: string;
+  /** v16.2.0：图标网格（icon: SVG path, text） */
+  icons?: { icon: string; text?: string }[];
+  /** v16.2.0：形状组合 */
+  shapes?: { shape: ShapeKind; fill?: ColorToken; stroke?: ColorToken; strokeWidth?: number }[];
+  /** v16.2.0：代码内容 */
+  code?: { code: string; lang?: string };
+  /** v16.2.0：流程图节点 */
+  flow?: { nodes: { title: string; desc?: string }[]; numbered?: boolean };
   /** 表格内容 */
   table?: { headers: string[]; rows: string[][] };
   /** 图表内容 */

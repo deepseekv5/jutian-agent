@@ -21,7 +21,11 @@ const LAYOUT_RULES = `可用的版式 layout 取值（必须严格使用以下�
 - closing: 结尾页（title, subtitle, background: "deep"）
 - table: 数据表格（title, table: {headers:[3~4 个列名], rows:[[每列一个单元格], ...2~5 行]}）
 - chart: 图表分析（title, chart: {kind:"bar"|"line"|"pie"|"doughnut"|"area"|"radar", categories:[3~6 个分类名], series:[{name, values:[与 categories 等长的数字]}]}）
-- gallery: 多图展示（title, images:[{caption}, {caption}, {caption}]，3 张）`
+- gallery: 多图展示（title, images:[{caption}, {caption}, {caption}]，3 张）
+- iconGrid: 图标网格（title, icons:[{icon: SVG path data(24x24), text}[3~6]]，每格一个图标+短标签）
+- shapes: 形状组合（title, shapes:[{shape:"rect"|"rounded"|"circle"|"pill"|"diamond"|"arrowRight"|"arrowDown"|"line", fill:"accent"|"accent2"}][3~6]，用于视觉分区/流程指向）
+- code: 代码展示（title, code:{code, lang}，等宽字体，深色底）
+- flow: 流程图（title, flow:{nodes:[{title, desc}[3~6]], numbered:true}，竖向节点+箭头）`
 
 function buildPrompt(opts: GenerateOptions): string {
   const count = opts.depth === 'brief' ? 5 : opts.depth === 'detailed' ? 10 : 7
@@ -55,11 +59,16 @@ interface RawSlide {
   chart?: unknown
   images?: unknown
   quote?: unknown
+  // v16.2.0
+  icons?: unknown
+  shapes?: unknown
+  code?: unknown
+  flow?: unknown
 }
 
 function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null {
   if (!Array.isArray(raw) || raw.length < 3) return null
-  const VALID = new Set(['cover', 'agenda', 'bullets', 'stats', 'compare', 'timeline', 'twoColumn', 'imageText', 'quote', 'closing', 'table', 'chart', 'gallery'])
+  const VALID = new Set(['cover', 'agenda', 'bullets', 'stats', 'compare', 'timeline', 'twoColumn', 'imageText', 'quote', 'closing', 'table', 'chart', 'gallery', 'iconGrid', 'shapes', 'code', 'flow'])
   const specs: SlideSpec[] = []
   for (const item of raw as RawSlide[]) {
     if (!item || typeof item !== 'object') continue
@@ -103,6 +112,37 @@ function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null 
         }))
       if (categories.length && series.length) spec.chart = { kind, categories, series }
     }
+    // v16.2.0：图标网格
+    if (Array.isArray(item.icons)) {
+      const ICON_PATHS = ['M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z','M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z','M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z','M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4','M5 12h.01M12 12h.01M19 12h.01','M20 6L9 17l-5-5','M12 18v-6m0-4V6m-6 6l6 6 6-6']
+      spec.icons = (item.icons as unknown[]).slice(0, 6)
+        .filter((ic): ic is { icon?: unknown; text?: unknown } => !!ic && typeof ic === 'object')
+        .map(ic => ({ icon: typeof ic.icon === 'string' && ic.icon.length > 10 ? ic.icon.slice(0, 400) : ICON_PATHS[Math.floor(Math.random() * ICON_PATHS.length)], text: typeof ic.text === 'string' ? ic.text.trim().slice(0, 16) : undefined }))
+    }
+    // v16.2.0：形状组合
+    if (Array.isArray(item.shapes)) {
+      const SHAPES = ['rect','rounded','circle','pill','diamond','arrowRight','arrowDown','line']
+      spec.shapes = (item.shapes as unknown[]).slice(0, 6)
+        .filter((sh): sh is { shape: string; fill?: unknown; stroke?: unknown; strokeWidth?: unknown } => !!sh && typeof sh === 'object' && typeof (sh as { shape?: unknown }).shape === 'string' && SHAPES.includes((sh as { shape: string }).shape))
+        .map(sh => ({ shape: sh.shape as never, fill: sh.fill === 'accent2' ? 'accent2' as const : 'accent' as const, stroke: sh.stroke === 'accent2' ? 'accent2' as const : undefined, strokeWidth: typeof sh.strokeWidth === 'number' ? sh.strokeWidth : undefined }))
+    }
+    // v16.2.0：代码
+    if (item.code && typeof item.code === 'object') {
+      const c = item.code as { code?: unknown; lang?: unknown }
+      if (typeof c.code === 'string' && c.code.trim()) spec.code = { code: c.code.slice(0, 2000), lang: typeof c.lang === 'string' ? c.lang.slice(0, 16) : 'code' }
+    }
+    // v16.2.0：流程图
+    if (item.flow && typeof item.flow === 'object') {
+      const f = item.flow as { nodes?: unknown; numbered?: unknown }
+      if (Array.isArray(f.nodes)) {
+        spec.flow = {
+          nodes: (f.nodes as unknown[]).slice(0, 6)
+            .filter((n): n is { title: string; desc?: unknown } => !!n && typeof (n as { title?: unknown }).title === 'string')
+            .map(n => ({ title: n.title.trim().slice(0, 24), desc: typeof n.desc === 'string' ? n.desc.trim().slice(0, 40) : undefined })),
+          numbered: f.numbered !== false,
+        }
+      }
+    }
     // 多图
     if (Array.isArray(item.images)) {
       const imgs = (item.images as Array<{ caption?: unknown } | null>).slice(0, 3)
@@ -114,7 +154,7 @@ function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null 
     if (layout === 'cover') { spec.background = 'gradient'; if (!spec.subtitle) spec.subtitle = dateCN() }
     if (layout === 'closing') { spec.background = 'deep' }
     // 基本校验：每个版式的必需字段
-    const need: Record<string, string> = { cover: 'title', agenda: 'bullets', bullets: 'bullets', stats: 'stats', compare: 'columns', timeline: 'steps', twoColumn: 'columns', imageText: 'bullets', quote: 'quote', closing: 'title', table: 'table', chart: 'chart', gallery: 'images' }
+    const need: Record<string, string> = { cover: 'title', agenda: 'bullets', bullets: 'bullets', stats: 'stats', compare: 'columns', timeline: 'steps', twoColumn: 'columns', imageText: 'bullets', quote: 'quote', closing: 'title', table: 'table', chart: 'chart', gallery: 'images', iconGrid: 'icons', shapes: 'shapes', code: 'code', flow: 'flow' }
     const required = need[layout]
     if (required === 'title' && !spec.title) continue
     if (required === 'bullets' && (!spec.bullets || spec.bullets.length === 0)) continue
@@ -125,6 +165,10 @@ function sanitizeSpecs(raw: unknown, opts: GenerateOptions): SlideSpec[] | null 
     if (required === 'table' && !spec.table) continue
     if (required === 'chart' && !spec.chart) continue
     if (required === 'images' && (!spec.images || spec.images.length === 0)) continue
+    if (required === 'icons' && (!spec.icons || spec.icons.length === 0)) continue
+    if (required === 'shapes' && (!spec.shapes || spec.shapes.length === 0)) continue
+    if (required === 'code' && !spec.code) continue
+    if (required === 'flow' && (!spec.flow || spec.flow.nodes.length === 0)) continue
     specs.push(spec)
   }
   // cover/closing 兜底补齐

@@ -34,7 +34,7 @@ interface PptState {
   selectBlock: (id: string | null) => void;
   setEditing: (id: string | null) => void;
 
-  generate: (opts: GenerateOptions) => Promise<void>;
+  generate: (opts: GenerateOptions, onLog?: (phase: number, msg: string) => void) => Promise<void>;
 
   addSlide: (layout?: LayoutId, afterId?: string) => void;
   duplicateSlide: (id: string) => void;
@@ -140,27 +140,36 @@ export const usePptStore = create<PptState>()(
       selectBlock: (id) => set((s) => { s.selectedBlockId = id; if (!id || s.editingBlockId !== id) s.editingBlockId = null; }),
       setEditing: (id) => set((s) => { s.editingBlockId = id; if (id) s.selectedBlockId = id; }),
 
-      generate: async (opts) => {
+      generate: async (opts, onLog) => {
+        // v16.2.0：四阶段可观测流程（分析主题 → 规划大纲 → 逐页生成 → 排版渲染）
         set({ generating: true, genStage: '正在分析主题…' });
+        onLog?.(1, `分析主题「${opts.topic}」：提取关键词与受众…`);
         try {
           // 优先 AI 智能生成（按主题产出真实内容），失败回退内置模板
           set({ genStage: 'AI 正在策划大纲与内容…' });
+          onLog?.(2, 'AI 正在规划大纲与逐页内容…');
           let plan = await aiGenerateSlides(opts);
           if (plan && plan.length > 0) {
             set({ genStage: `AI 已生成 ${plan.length} 页，正在排版…` });
+            onLog?.(2, `大纲就绪：共 ${plan.length} 页（${plan.map(p => p.name || p.layout).slice(0, 4).join('、')}…）`);
           } else {
             set({ genStage: '正在使用内置结构生成…' });
+            onLog?.(2, 'AI 生成不可用，改用内置结构模板');
             plan = localGenerate(opts);
           }
           await new Promise((r) => setTimeout(r, 80));
+          onLog?.(3, '逐页生成内容与版式…');
           mutate((deck) => {
             deck.title = opts.topic.slice(0, 40) || deck.title;
             deck.slides = plan.map((spec, i) => materialize(spec, i));
           });
+          plan.forEach((spec, i) => onLog?.(3, `第 ${i + 1}/${plan.length} 页：${spec.name || spec.layout}`));
+          onLog?.(4, `排版渲染完成，共 ${plan.length} 页`);
           set((s) => {
             s.selectedSlideId = s.deck.slides[0]?.id ?? '';
             s.selectedBlockId = null; s.editingBlockId = null; s.genStage = ''; s.generating = false;
           });
+          onLog?.(4, '完成');
           persistDeck(get().deck);
           get().notify(`已生成 ${plan.length} 页`, 'success');
         } catch (err) {
