@@ -1266,6 +1266,41 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
               {/* 任务模式（规划 / 联网 / 画画 / 造技能 / 集群 / 知识库） */}
               <div className="flex flex-wrap items-center gap-1">
+                {/* 思考程度入口（v15.9.3）：常驻行的思考 chip 已隐藏，在此集中 */}
+                <button onClick={() => { setShowToolbar(false); setShowThinking(true) }}
+                  title="调整思考程度" aria-label="调整思考程度"
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                  style={{ border: `1px solid ${c.border}`, color: THINK_COLORS[thinking] }}>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M13 2L4.5 13.5H11l-1 8.5L18.5 10H12l1-8z" />
+                  </svg>
+                  <span className="text-[12px] font-medium">思考:{curThink.label}</span>
+                </button>
+                {/* 提示词预设入口（常驻行已隐藏，展开即选） */}
+                <details className="relative">
+                  <summary className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors list-none cursor-pointer"
+                    style={{ border: `1px solid ${c.border}`, color: c.textSecondary }}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h13" /></svg>
+                    <span className="text-[12px] font-medium">预设</span>
+                  </summary>
+                  <div className="absolute left-0 bottom-9 z-30 rounded-xl py-1 shadow-lg w-44 animate-fade-in glass-strong"
+                    style={{ border: `1px solid ${c.border}` }}>
+                    {PROMPT_PRESETS.map(p => (
+                      <button key={p.id} onClick={() => { applyPreset(p.tpl); setShowToolbar(false) }}
+                        className="w-full text-left px-3 py-1.5 text-[12px] transition-colors"
+                        style={{ color: c.text }}>{p.label}</button>
+                    ))}
+                  </div>
+                </details>
+                {/* 对话模式入口（常驻行已隐藏） */}
+                {(['general', 'coding'] as const).map(id => (
+                  <button key={id} onClick={() => { switchChatMode(id); setShowToolbar(false) }}
+                    title={id === 'coding' ? '编程模式：工作目录边界 + 工具优先 + 代码规范' : '通用对话模式'}
+                    className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors"
+                    style={{ background: chatMode === id ? c.surfaceActive : 'transparent', border: `1px solid ${chatMode === id ? c.border : 'transparent'}`, color: chatMode === id ? c.textHead : c.textTertiary }}>
+                    {id === 'coding' ? 'Coding' : '通用'}
+                  </button>
+                ))}
                 {MODES.map(m => {
                   const on = modes[m.key]
                   return (
@@ -1307,7 +1342,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
 
               {/* 对话模式 / 思考程度 / 预设 */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <div className="h-8 p-0.5 rounded-full flex items-center shrink-0" style={{ background: c.surfaceInput }}>
+                <div className="h-8 p-0.5 rounded-full flex items-center shrink-0 jt-composer-secondary" style={{ background: c.surfaceInput }}>
                   {([['general', '通用'], ['coding', 'Coding']] as const).map(([id, label]) => {
                     const active = chatMode === id
                     return (
@@ -1323,7 +1358,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
                   })}
                 </div>
                 <button onClick={() => setShowThinking(v => !v)}
-                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors shrink-0"
+                  className="h-8 px-2.5 rounded-full flex items-center gap-1.5 transition-colors shrink-0 jt-composer-secondary"
                   style={{ background: showThinking ? c.surfaceActive : 'transparent' }}
                   title="调整思考程度" aria-label="调整思考程度">
                   <span className="relative flex">
