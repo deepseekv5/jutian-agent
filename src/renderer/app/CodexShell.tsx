@@ -35,6 +35,37 @@ const RAIL_DEFAULT_PINS: PageType[] = ['settings', 'files', 'tasks', 'kb', 'skil
 // 可添加的全部页面（排除首页/会话/动态扩展；与 NewTabSearch 同源取 PAGE_META）
 const RAIL_ADDABLE: PageType[] = ['chat', 'files', 'terminal', 'ppt', 'outputs', 'skills', 'code', 'memory', 'tasks', 'qqbot', 'settings', 'about', 'call', 'kb', 'diary', 'employees', 'plugins', 'freemodels', 'persona', 'legal', 'research', 'templates', 'workflow', 'snippets', 'usage', 'diagnostics', 'shortcuts', 'export', 'backup', 'todos', 'compare', 'extensions', 'harness', 'docs', 'gongwen']
 
+/** 活动栏可自定义目录（v15.9.2）：logo 固定，其余可增删 */
+export const NAV_CATALOG: { key: string; icon: string; title: string; page?: PageType }[] = [
+  { key: 'logo', icon: ICONS.logo, title: 'JT Core' },
+  { key: 'diary', icon: ICONS.clock, title: '历史' },
+  { key: 'docs', icon: ICONS.docs, title: '文档', page: 'docs' },
+  { key: 'skills', icon: ICONS.box, title: '技能', page: 'skills' },
+  { key: 'shortcuts', icon: ICONS.dots, title: '更多', page: 'shortcuts' },
+  { key: 'files', icon: ICONS.folder, title: '文件', page: 'files' },
+  { key: 'tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', title: '任务', page: 'tasks' },
+  { key: 'settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', title: '设置', page: 'settings' },
+  { key: 'kb', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', title: '知识库', page: 'kb' },
+  { key: 'plugins', icon: 'M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z', title: '插件', page: 'plugins' },
+  { key: 'freemodels', icon: ICONS.sparkle, title: '免费模型', page: 'freemodels' },
+  { key: 'gongwen', icon: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 15.5h8M9 19h5', title: '公文台', page: 'gongwen' },
+]
+const RAIL_NAV_KEY = 'lyclaw_rail_nav'
+const RAIL_NAV_DEFAULT = ['logo', 'diary', 'docs', 'skills', 'shortcuts']
+function loadRailNav(): string[] {
+  try {
+    const raw = localStorage.getItem(RAIL_NAV_KEY)
+    if (!raw) return RAIL_NAV_DEFAULT
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr) || !arr.length) return RAIL_NAV_DEFAULT
+    const rest = (arr as string[]).filter(k => k !== 'logo' && NAV_CATALOG.some(c => c.key === k))
+    return ['logo', ...rest]
+  } catch { return RAIL_NAV_DEFAULT }
+}
+function saveRailNav(nav: string[]) {
+  try { localStorage.setItem(RAIL_NAV_KEY, JSON.stringify(nav)) } catch { /* ignore */ }
+}
+
 function loadRailPins(): PageType[] {
   try {
     const raw = localStorage.getItem(RAIL_PINS_KEY)
@@ -58,6 +89,8 @@ interface RailProps {
   onOpenTab: (type: PageType) => void
   onSearch: () => void
   onCollapse: () => void
+  onExpand: () => void
+  collapsed: boolean
   onHome: () => void
   activeType: PageType
   onDelete?: (id: string) => void
@@ -187,7 +220,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
 }
 
 /** 左侧骨架：64px 活动栏 + 320px 会话栏（所有界面常驻，Codex 1:1） */
-export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onHome, activeType, onDelete, onRename }: RailProps) {
+export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onExpand, collapsed, onHome, activeType, onDelete, onRename }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   // Projects 点击 → 过滤 Recents（再点同一个取消）
@@ -243,33 +276,87 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
   const row = 'w-full flex items-center gap-2.5 py-[7px] text-[13.5px] rounded-md px-2 transition-colors text-left'
   const hover = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'var(--jt-focus)' }
   const leave = (e: React.MouseEvent<HTMLElement>) => { e.currentTarget.style.background = 'transparent' }
-  const navItems: { key: string; icon: string; title: string; page?: PageType }[] = [
-    { key: 'logo', icon: ICONS.logo, title: 'JT Core' },
-    { key: 'clock', icon: ICONS.clock, title: t('历史', 'History'), page: 'diary' },
-    { key: 'docs', icon: ICONS.docs, title: t('文档', 'Docs'), page: 'docs' },
-    { key: 'box', icon: ICONS.box, title: t('技能', 'Skills'), page: 'skills' },
-    { key: 'dots', icon: ICONS.dots, title: t('更多', 'More'), page: 'shortcuts' },
-  ]
+  // 活动栏目录（v15.9.2）：全部可自定义，logo 固定首位不可移除
+  const [nav, setNav] = useState<string[]>(() => loadRailNav())
+  const [navEdit, setNavEdit] = useState(false)
+  const [navAddOpen, setNavAddOpen] = useState(false)
+  const navByKey = new Map(NAV_CATALOG.map(n => [n.key, n]))
+  const navItems = nav.map(k => navByKey.get(k)).filter(Boolean) as { key: string; icon: string; title: string; page?: PageType }[]
+  const saveNav = (next: string[]) => { setNav(next); saveRailNav(next) }
+  const removeNav = (k: string) => { if (k !== 'logo') saveNav(nav.filter(x => x !== k)) }
+  const addNav = (k: string) => { if (!nav.includes(k)) saveNav([...nav, k]) }
   return (
     <>
-      {/* 64px 活动栏：每个图标都是可点入口 */}
-      <div className="shrink-0 flex flex-col items-center pb-3 gap-1 titlebar-drag" style={{ width: 64, background: 'var(--jt-paper-alt)', paddingTop: 76 }}>
+      {/* 64px 活动栏：图标全部可自定义（v15.9.2），logo 固定 */}
+      <div className="shrink-0 flex flex-col items-center pb-2 gap-1 titlebar-drag relative" style={{ width: 64, background: 'var(--jt-paper-alt)', paddingTop: collapsed ? 20 : 76 }}>
         {navItems.map((n, i) => (
           <div key={n.key} className="contents">
             {i === 4 && <div className="w-6 h-px my-1" style={{ background: 'var(--jt-hairline)' }} />}
             <button title={n.title} onClick={() => { if (n.key === 'logo') onHome(); else if (n.page) onOpenTab(n.page) }}
-              className="w-10 h-10 rounded-lg grid place-items-center transition-colors titlebar-nodrag"
+              className="w-10 h-10 rounded-lg grid place-items-center transition-colors titlebar-nodrag relative"
               style={{ color: activeNav === n.key ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: activeNav === n.key ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={n.icon} />
               </svg>
+              {navEdit && n.key !== 'logo' && (
+                <span onClick={e => { e.stopPropagation(); removeNav(n.key) }}
+                  className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full grid place-items-center text-[9px] z-10"
+                  style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }}
+                  title={t('从活动栏移除', 'Remove from activity bar')}>×</span>
+              )}
             </button>
           </div>
         ))}
+        {navEdit ? (
+          <>
+            <button onClick={() => setNavAddOpen(v => !v)} title={t('添加图标', 'Add icon')}
+              className="w-10 h-10 rounded-lg grid place-items-center titlebar-nodrag"
+              style={{ color: 'var(--jt-ink-3)', border: '1px dashed var(--jt-hairline)' }}
+              onMouseEnter={hover} onMouseLeave={leave}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d={ICONS.plus} /></svg>
+            </button>
+            <button onClick={() => { setNavEdit(false); setNavAddOpen(false) }} className="text-[10px] px-1 py-0.5 titlebar-nodrag" style={{ color: 'var(--jt-ink-3)' }}
+              onMouseEnter={hover} onMouseLeave={leave}>{t('完成', 'Done')}</button>
+          </>
+        ) : (
+          <button onClick={() => setNavEdit(true)} title={t('自定义活动栏', 'Customize activity bar')}
+            className="w-10 h-10 rounded-lg grid place-items-center mt-auto titlebar-nodrag"
+            style={{ color: 'var(--jt-ink-4)' }}
+            onMouseEnter={hover} onMouseLeave={leave}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}><path strokeLinecap="round" d={ICONS.dots} /></svg>
+          </button>
+        )}
+        {navAddOpen && (
+          <div className="absolute left-[68px] top-24 z-50 w-[240px] rounded-xl p-2.5 titlebar-nodrag"
+            style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 10px 32px rgba(0,0,0,.12)' }}>
+            <div className="text-[10.5px] mb-2 px-1" style={{ color: 'var(--jt-ink-3)' }}>{t('点击添加到活动栏', 'Click to add to activity bar')}</div>
+            <div className="grid grid-cols-2 gap-x-2 max-h-[300px] overflow-y-auto scrollbar-thin">
+              {NAV_CATALOG.filter(c => !nav.includes(c.key)).map(c => (
+                <button key={c.key} onClick={() => addNav(c.key)}
+                  className="flex items-center gap-1.5 py-1.5 px-1.5 rounded-md text-left text-[11.5px] transition-colors"
+                  style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
+                  <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d={c.icon} /></svg>
+                  <span className="truncate">{c.title}</span>
+                </button>
+              ))}
+            </div>
+            {NAV_CATALOG.filter(c => !nav.includes(c.key)).length === 0 && (
+              <div className="text-[10.5px] px-1 py-1" style={{ color: 'var(--jt-ink-3)' }}>{t('全部页面都已在活动栏', 'All pages are in the activity bar')}</div>
+            )}
+          </div>
+        )}
+        {collapsed && (
+          <button onClick={onExpand} title={t('展开侧栏', 'Expand sidebar')}
+            className="w-8 h-8 rounded-lg grid place-items-center mt-2 titlebar-nodrag"
+            style={{ color: 'var(--jt-ink-2)' }}
+            onMouseEnter={hover} onMouseLeave={leave}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+          </button>
+        )}
       </div>
-      {/* 320px 会话栏 */}
-      <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid var(--jt-hairline-soft)' }}>
+      {/* 320px 会话栏（收起时隐藏，只留活动栏） */}
+      {!collapsed && <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid var(--jt-hairline-soft)' }}>
         <div className="h-[76px] flex items-end justify-between px-5 pb-3 shrink-0 titlebar-drag">
           <div className="relative titlebar-nodrag">
             <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: 'var(--jt-ink)' }}
@@ -399,7 +486,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             </div>
           )}
         </div>
-      </div>
+      </div>}
       {ctx && (
         <div className="fixed z-50 rounded-xl py-1.5 min-w-[160px]" style={{ left: ctx.x, top: ctx.y, background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 8px 28px rgba(0,0,0,.14)' }} onContextMenu={e => e.preventDefault()}>
           <button onClick={() => { const val = prompt(t('重命名对话', 'Rename chat'), ctx.title); if (val && val.trim() && onRename) onRename(ctx.id, val.trim()); setCtx(null) }}
