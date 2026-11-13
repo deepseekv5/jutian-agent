@@ -30,16 +30,19 @@ export function inputBudget(contextWindow: number): number {
 export function maxOutputTokens(contextWindow: number): number {
   return Math.max(1024, Math.min(8192, Math.floor(contextWindow * OUTPUT_RESERVE_RATIO)))
 }
-/** 输入裁剪：从头部丢消息直到预算内（系统消息永远保留） */
+/** 输入裁剪：从头部丢消息直到预算内（系统消息永远保留）。
+ *  v16.0.0：原实现每丢一条都 estimate(全量) → O(n²)；改为先算总量、按单条扣减，
+ *  整体一次遍历 O(总字符数)。 */
 export function trimToBudget<T extends { role: string; content?: string }>(messages: T[], contextWindow: number, estimate: (msgs: T[]) => number): { messages: T[]; dropped: number } {
   const budget = inputBudget(contextWindow)
   const out = [...messages]
+  let total = estimate(out)
+  if (total <= budget) return { messages: out, dropped: 0 }
   let dropped = 0
-  while (out.length > 1 && estimate(out) > budget) {
-    // 保留第一条 system，丢最老的非 system
-    let i = 0
-    while (i < out.length && out[i].role === 'system') i++
-    if (i >= out.length) break
+  let i = 0
+  while (i < out.length && out[i].role === 'system') i++
+  while (out.length > 1 && total > budget && i < out.length) {
+    total -= estimate([out[i]])
     out.splice(i, 1); dropped++
   }
   return { messages: out, dropped }

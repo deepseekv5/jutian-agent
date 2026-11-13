@@ -31,7 +31,7 @@ import { ToolCallStateMachine, yieldIfBlocked, decidePolicy, ConfirmationBus, Se
 import { ToolLoopDetector, ContentLoopDetector, toolFingerprint, shouldSemanticCheck, LoopRecovery, STEP_BACK_MESSAGE } from './ultra/loopDetection'
 import { LLM_CONFIDENCE_THRESHOLD, LLM_HISTORY_TURNS } from './ultra/loopDetection'
 import { decideRetry, ModelFallback } from './ultra/retry'
-import { compress, willOverflow } from './ultra/chatCompression'
+import { compress, estimateMessagesTokens } from './ultra/chatCompression'
 import { resolveNextSpeaker, CONTINUE_PROMPT } from './ultra/nextSpeaker'
 import type { SpeakerContext } from './ultra/nextSpeaker'
 import { StuckDetector } from './ultra/stuckDetector'
@@ -107,6 +107,9 @@ export class UltraNeedsClientError extends Error {
   }
 }
 
+type ToolAccumMap = Map<number, { id: string; name: string; arguments: string }>
+type ToolAccumSlot = { id: string; name: string; arguments: string }
+
 interface UltraSSEEvent {
   choices?: { delta?: { content?: string; reasoning_content?: string; reasoning?: string; tool_calls?: unknown[] }; finish_reason?: string; message?: { tool_calls?: unknown[] } }[]
 }
@@ -126,7 +129,7 @@ function sleepAbortable(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-function buildRequestBody(messages: UltraMessage[], tools: UltraTool[], opts: { model: string; maxTokens?: number; toolChoice: boolean; wrapUp?: boolean; ideBlock?: string }): string {
+function buildRequestBody(messages: UltraMessage[], toolsSchema: { type: 'function'; function: { name: string; description: string; parameters: unknown } }[], opts: { model: string; maxTokens?: number; toolChoice: boolean; wrapUp?: boolean; ideBlock?: string }): string {
   let msgs: UltraMessage[] = messages
   if (opts.ideBlock) {
     msgs = msgs[0]?.role === 'system'
@@ -138,8 +141,8 @@ function buildRequestBody(messages: UltraMessage[], tools: UltraTool[], opts: { 
     messages: opts.wrapUp ? [...msgs, { role: 'user', content: '已接近本轮工具调用上限，请基于已有结果直接给出最终答复，不要再调用工具。' }] : msgs,
     stream: true,
   }
-  if (tools.length) {
-    body.tools = tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }))
+  if (toolsSchema.length) {
+    body.tools = toolsSchema
     body.tool_choice = opts.toolChoice ? 'auto' : 'none'
   }
   if (opts.maxTokens) body.max_tokens = opts.maxTokens
@@ -153,12 +156,17 @@ async function execOne(deps: UltraDeps, tc: UltraToolCall, signal?: AbortSignal)
     let outText: string
     if (deps.isClientTool(tc.name)) outText = deps.runClientTool ? await deps.runClientTool(tc) : '{"ok":true}'
     else {
-      const result = await Promise.race([
-        deps.runTool(tc.name, args, signal),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('工具执行超时（180 秒）')), ULTRA_TOOL_TIMEOUT_MS)),
-      ])
-      outText = result.success ? (result.output ?? '') : ('❌ 错误: ' + (result.error || '工具执行失败'))
-      if (result.changeId) tc.changeId = result.changeId
+      // v16.0.0：超时 timer 必须在结束后清除——此前工具正常返回后 timer 仍挂 180 秒，
+      // 每工具泄漏一个定时器（长会话累积数十个）。
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const result = await Promise.race([
+          deps.runTool(tc.name, args, signal),
+          new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error('工具执行超时（180 秒）')), ULTRA_TOOL_TIMEOUT_MS) }),
+        ])
+        outText = result.success ? (result.output ?? '') : ('❌ 错误: ' + (result.error || '工具执行失败'))
+        if (result.changeId) tc.changeId = result.changeId
+      } finally { if (timer) clearTimeout(timer) }
     }
     if (outText.length > ULTRA_MAX_OUTPUT) {
       outText = clampOutput(outText, ULTRA_MAX_OUTPUT)
@@ -199,6 +207,13 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
 
   const signal = deps.signal
   const tools = deps.tools.filter(t => !(deps.disabledTools || []).includes(t.name))
+  // v16.0.0：工具 schema 与 Hermes 文本块每轮/每次 attempt 重建纯属浪费——
+  // deps.tools 在会话内不变，提到循环外构建一次。
+  const toolsSchema = tools.map(t => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.parameters } }))
+  const hermesBlock = (() => {
+    if (!shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) || !tools.length) return ''
+    return buildToolsBlock(tools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true })
+  })()
   const contextWindow = resolveContextWindow(deps.model, deps.contextWindow)
   const maxTokens = deps.maxTokens || maxOutputTokens(contextWindow)
   void ignoreMatcher // 预留：文件发现接入工作区扫描时启用
@@ -217,21 +232,24 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
     turnBudget.consume()
     if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'aborted' }
 
-    // chatCompression：溢出预检 + 每轮压缩
-    if (willOverflow(messages as Array<{ role: string; content?: string }>, contextWindow, 0)) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'context-overflow', error: '上下文窗口即将溢出' }
-    const comp = compress(messages as Array<{ role: string; content?: string }>, contextWindow)
-    if (comp.status === 'compressed') messages.splice(0, messages.length, ...(comp.messages as UltraMessage[]))
-    // tokenBudget：输入裁剪
-    const trimmed = trimToBudget(messages as Array<{ role: string; content?: string }>, contextWindow, ms => (ms as UltraMessage[]).reduce((s, m) => s + Math.ceil(String(m.content || '').length / 4), 0))
-    if (trimmed.dropped > 0) messages.splice(0, messages.length, ...(trimmed.messages as UltraMessage[]))
+    // 上下文整理（v16.0.0 合并扫描）：此前 willOverflow + compress(needsCompression) + trimToBudget
+    // 各全量扫一遍消息；现在一次 estimate 复用，压缩/裁剪各只在触发时执行。
+    const tokenCount = estimateMessagesTokens(messages as Array<{ role: string; content?: string }>)
+    if (tokenCount >= contextWindow * 0.92) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'context-overflow', error: '上下文窗口即将溢出' }
+    if (tokenCount / contextWindow >= 0.5) {
+      const comp = compress(messages as Array<{ role: string; content?: string }>, contextWindow)
+      if (comp.status === 'compressed') { messages.length = 0; messages.push(...(comp.messages as UltraMessage[])) }
+    }
+    // tokenBudget：输入裁剪（模块内已改单次遍历）
+    const trimmed = trimToBudget(messages as Array<{ role: string; content?: string }>, contextWindow, estimateMessagesTokens)
+    if (trimmed.dropped > 0) { messages.length = 0; messages.push(...(trimmed.messages as UltraMessage[])) }
 
-    // Hermes 文本协议
+    // Hermes 文本协议（block 已缓存）
     let reqMessages = messages
-    if (shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) && tools.length) {
-      const block = buildToolsBlock(tools.map(t => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true })
+    if (hermesBlock) {
       reqMessages = reqMessages[0]?.role === 'system'
-        ? [{ ...reqMessages[0], content: String(reqMessages[0].content || '') + '\n\n' + block }, ...reqMessages.slice(1)]
-        : [{ role: 'system', content: block }, ...reqMessages]
+        ? [{ ...reqMessages[0], content: String(reqMessages[0].content || '') + '\n\n' + hermesBlock }, ...reqMessages.slice(1)]
+        : [{ role: 'system', content: hermesBlock }, ...reqMessages]
     }
 
     // retry：抖动退避 + 模型回落
@@ -241,7 +259,7 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
       if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'aborted' }
       deps.events.onNetStatus?.(attempt === 1 ? 'connecting' : 'retrying', { attempt })
       try {
-        res = await deps.callLLM(buildRequestBody(reqMessages, tools, { model: fallback.current, maxTokens, toolChoice: !wrappedUp, wrapUp: wrappedUp, ideBlock }), signal)
+        res = await deps.callLLM(buildRequestBody(reqMessages, toolsSchema, { model: fallback.current, maxTokens, toolChoice: !wrappedUp, wrapUp: wrappedUp, ideBlock }), signal)
         if (res.ok && res.body) break
         const status = res.status
         let bodyText = ''
@@ -262,7 +280,7 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
     if (!res || !res.ok || !res.body) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'error', error: lastErr }
 
     // SSE 收集
-    const toolCallMap = new Map<number, { id: string; name: string; arguments: string }>()
+    const toolCallMap: ToolAccumMap = new Map<number, ToolAccumSlot>()
     let roundContent = '', draftAnnounced = false
     const perf = { firstTokenMs: 0, t0: Date.now() }
     try {
@@ -275,15 +293,15 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
         if (d.reasoning_content || d.reasoning) { const t = String(d.reasoning_content || d.reasoning); fullThinking += t; deps.events.onThinking?.(t) }
         if (d.content) { if (!perf.firstTokenMs) perf.firstTokenMs = Date.now() - perf.t0; const t = String(d.content); roundContent += t; fullContent += t; deps.events.onChunk?.(t) }
         const parsed = parseToolCallsFromDelta(d)
-        if (parsed) { for (const tc of parsed) accumulateToolCallDelta(toolCallMap as unknown as Map<number, { id: string; name: string; arguments: string }>, tc); if (!draftAnnounced) { draftAnnounced = true; deps.events.onToolDraft?.(parsed[0]?.function?.name || '…') } }
-        if (ev.choices?.[0]?.finish_reason === 'tool_calls') adoptNonStreamToolCalls(toolCallMap as unknown as Map<number, { id: string; name: string; arguments: string }>, ev.choices[0].message?.tool_calls)
+        if (parsed) { for (const tc of parsed) accumulateToolCallDelta(toolCallMap, tc); if (!draftAnnounced) { draftAnnounced = true; deps.events.onToolDraft?.(parsed[0]?.function?.name || '…') } }
+        if (ev.choices?.[0]?.finish_reason === 'tool_calls') adoptNonStreamToolCalls(toolCallMap, ev.choices[0].message?.tool_calls)
       }
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'aborted' }
       return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'error', error: String((e as Error)?.message || e) }
     }
 
-    let toolCalls = toolCallsToArray(toolCallMap as unknown as Map<number, { id: string; name: string; arguments: string }>) as unknown as UltraToolCall[]
+    let toolCalls = toolCallsToArray(toolCallMap) as unknown as UltraToolCall[]
     if (!toolCalls.length && roundContent.includes('<tool_call>')) {
       const hs = parseHermesToolCalls(roundContent)
       if (hs.length) { toolCalls = hs.map((h, i) => ({ id: 'hermes_' + i + '_' + Date.now(), name: h.name, arguments: h.arguments })); roundContent = stripToolCallBlocks(roundContent) }

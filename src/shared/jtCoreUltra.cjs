@@ -94,8 +94,13 @@ function accumulateToolCallDelta(map, tc) {
   const args = tc.function?.arguments;
   if (args) {
     if (args.trimStart().startsWith("{")) {
+      if (slot.argsComplete) {
+        slot.arguments = args;
+        return;
+      }
       try {
         JSON.parse(slot.arguments);
+        slot.argsComplete = true;
         slot.arguments = args;
         return;
       } catch {
@@ -624,9 +629,6 @@ ${collapseFunctionResponse(summary)}` },
   ];
   return { messages: out, status: "compressed" };
 }
-function willOverflow(messages, contextWindow, incomingTokens = 0) {
-  return estimateMessagesTokens(messages) + incomingTokens >= contextWindow * 0.92;
-}
 
 // src/shared/ultra/nextSpeaker.ts
 var CONTINUE_PROMPT = "Please continue.";
@@ -776,11 +778,13 @@ function maxOutputTokens(contextWindow) {
 function trimToBudget(messages, contextWindow, estimate) {
   const budget = inputBudget(contextWindow);
   const out = [...messages];
+  let total = estimate(out);
+  if (total <= budget) return { messages: out, dropped: 0 };
   let dropped = 0;
-  while (out.length > 1 && estimate(out) > budget) {
-    let i = 0;
-    while (i < out.length && out[i].role === "system") i++;
-    if (i >= out.length) break;
+  let i = 0;
+  while (i < out.length && out[i].role === "system") i++;
+  while (out.length > 1 && total > budget && i < out.length) {
+    total -= estimate([out[i]]);
     out.splice(i, 1);
     dropped++;
   }
@@ -911,7 +915,7 @@ function sleepAbortable(ms, signal) {
     }, { once: true });
   });
 }
-function buildRequestBody(messages, tools, opts) {
+function buildRequestBody(messages, toolsSchema, opts) {
   let msgs = messages;
   if (opts.ideBlock) {
     msgs = msgs[0]?.role === "system" ? [{ ...msgs[0], content: String(msgs[0].content || "") + "\n\n" + opts.ideBlock }, ...msgs.slice(1)] : [{ role: "system", content: opts.ideBlock }, ...msgs];
@@ -921,8 +925,8 @@ function buildRequestBody(messages, tools, opts) {
     messages: opts.wrapUp ? [...msgs, { role: "user", content: "\u5DF2\u63A5\u8FD1\u672C\u8F6E\u5DE5\u5177\u8C03\u7528\u4E0A\u9650\uFF0C\u8BF7\u57FA\u4E8E\u5DF2\u6709\u7ED3\u679C\u76F4\u63A5\u7ED9\u51FA\u6700\u7EC8\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u5DE5\u5177\u3002" }] : msgs,
     stream: true
   };
-  if (tools.length) {
-    body.tools = tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  if (toolsSchema.length) {
+    body.tools = toolsSchema;
     body.tool_choice = opts.toolChoice ? "auto" : "none";
   }
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
@@ -938,12 +942,19 @@ async function execOne(deps, tc, signal) {
     let outText;
     if (deps.isClientTool(tc.name)) outText = deps.runClientTool ? await deps.runClientTool(tc) : '{"ok":true}';
     else {
-      const result = await Promise.race([
-        deps.runTool(tc.name, args, signal),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("\u5DE5\u5177\u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09")), ULTRA_TOOL_TIMEOUT_MS))
-      ]);
-      outText = result.success ? result.output ?? "" : "\u274C \u9519\u8BEF: " + (result.error || "\u5DE5\u5177\u6267\u884C\u5931\u8D25");
-      if (result.changeId) tc.changeId = result.changeId;
+      let timer;
+      try {
+        const result = await Promise.race([
+          deps.runTool(tc.name, args, signal),
+          new Promise((_, rej) => {
+            timer = setTimeout(() => rej(new Error("\u5DE5\u5177\u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09")), ULTRA_TOOL_TIMEOUT_MS);
+          })
+        ]);
+        outText = result.success ? result.output ?? "" : "\u274C \u9519\u8BEF: " + (result.error || "\u5DE5\u5177\u6267\u884C\u5931\u8D25");
+        if (result.changeId) tc.changeId = result.changeId;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     }
     if (outText.length > ULTRA_MAX_OUTPUT) {
       outText = clampOutput(outText, ULTRA_MAX_OUTPUT);
@@ -985,6 +996,11 @@ async function runUltraLoop(inputMessages, deps) {
   let wrappedUp = false;
   const signal = deps.signal;
   const tools = deps.tools.filter((t) => !(deps.disabledTools || []).includes(t.name));
+  const toolsSchema = tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  const hermesBlock = (() => {
+    if (!shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) || !tools.length) return "";
+    return buildToolsBlock(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
+  })();
   const contextWindow = resolveContextWindow(deps.model, deps.contextWindow);
   const maxTokens = deps.maxTokens || maxOutputTokens(contextWindow);
   if (deps.pendingTool) {
@@ -997,15 +1013,23 @@ async function runUltraLoop(inputMessages, deps) {
   for (let turn = 0; turn < maxTurns; turn++) {
     turnBudget.consume();
     if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-    if (willOverflow(messages, contextWindow, 0)) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "context-overflow", error: "\u4E0A\u4E0B\u6587\u7A97\u53E3\u5373\u5C06\u6EA2\u51FA" };
-    const comp = compress(messages, contextWindow);
-    if (comp.status === "compressed") messages.splice(0, messages.length, ...comp.messages);
-    const trimmed = trimToBudget(messages, contextWindow, (ms) => ms.reduce((s, m) => s + Math.ceil(String(m.content || "").length / 4), 0));
-    if (trimmed.dropped > 0) messages.splice(0, messages.length, ...trimmed.messages);
+    const tokenCount = estimateMessagesTokens(messages);
+    if (tokenCount >= contextWindow * 0.92) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "context-overflow", error: "\u4E0A\u4E0B\u6587\u7A97\u53E3\u5373\u5C06\u6EA2\u51FA" };
+    if (tokenCount / contextWindow >= 0.5) {
+      const comp = compress(messages, contextWindow);
+      if (comp.status === "compressed") {
+        messages.length = 0;
+        messages.push(...comp.messages);
+      }
+    }
+    const trimmed = trimToBudget(messages, contextWindow, estimateMessagesTokens);
+    if (trimmed.dropped > 0) {
+      messages.length = 0;
+      messages.push(...trimmed.messages);
+    }
     let reqMessages = messages;
-    if (shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) && tools.length) {
-      const block = buildToolsBlock(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
-      reqMessages = reqMessages[0]?.role === "system" ? [{ ...reqMessages[0], content: String(reqMessages[0].content || "") + "\n\n" + block }, ...reqMessages.slice(1)] : [{ role: "system", content: block }, ...reqMessages];
+    if (hermesBlock) {
+      reqMessages = reqMessages[0]?.role === "system" ? [{ ...reqMessages[0], content: String(reqMessages[0].content || "") + "\n\n" + hermesBlock }, ...reqMessages.slice(1)] : [{ role: "system", content: hermesBlock }, ...reqMessages];
     }
     let res = null;
     let lastErr = "";
@@ -1013,7 +1037,7 @@ async function runUltraLoop(inputMessages, deps) {
       if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
       deps.events.onNetStatus?.(attempt === 1 ? "connecting" : "retrying", { attempt });
       try {
-        res = await deps.callLLM(buildRequestBody(reqMessages, tools, { model: fallback.current, maxTokens, toolChoice: !wrappedUp, wrapUp: wrappedUp, ideBlock }), signal);
+        res = await deps.callLLM(buildRequestBody(reqMessages, toolsSchema, { model: fallback.current, maxTokens, toolChoice: !wrappedUp, wrapUp: wrappedUp, ideBlock }), signal);
         if (res.ok && res.body) break;
         const status = res.status;
         let bodyText = "";

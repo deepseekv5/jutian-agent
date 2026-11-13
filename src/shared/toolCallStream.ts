@@ -24,6 +24,8 @@ export interface ToolCallAccum {
   id: string
   name: string
   arguments: string
+  /** 内部优化（v16.0.0）：arguments 已确认为完整 JSON 快照后不再重复 parse */
+  argsComplete?: boolean
 }
 
 /**
@@ -70,9 +72,13 @@ export function accumulateToolCallDelta(
   // 判据：已累积内容本身是完整 JSON 且新片段以 '{' 开头 → 以新快照为准（取最后一份）。
   const args = tc.function?.arguments
   if (args) {
+    // v16.0.0 性能修复：此前每个 arguments 分片都 JSON.parse(累积串) 判快照，
+    // 长 arguments（数 KB）× 多分片 = O(n²)。确认完整后置标记，后续快照直接覆盖。
     if (args.trimStart().startsWith("{")) {
+      if (slot.argsComplete) { slot.arguments = args; return }
       try {
         JSON.parse(slot.arguments)
+        slot.argsComplete = true
         slot.arguments = args
         return
       } catch { /* 已累积的不完整 → 正常拼接 */ }

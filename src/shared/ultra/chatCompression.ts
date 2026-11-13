@@ -12,7 +12,8 @@ export const COLLAPSE_HISTORY_BYTE_THRESHOLD = 256 * 1024
 export const COLLAPSED_FUNCTION_RESPONSE_MAX_BYTES = 2 * 1024
 export type CompressionStatus = 'none' | 'compressed' | 'content-truncated' | 'will-overflow'
 
-/** token 估算：CJK 每字 1 token，其余每 4 字符 1 token */
+/** token 估算：CJK 每字 1 token，其余每 4 字符 1 token。
+ *  v16.0.0 曾改正则计数，基准实测反而慢 20%（match 数组分配），已回滚保留原实现。 */
 export function estimateTokens(text: string | null | undefined): number {
   if (!text) return 0
   let cjk = 0

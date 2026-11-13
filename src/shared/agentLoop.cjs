@@ -159,8 +159,13 @@ function accumulateToolCallDelta(map, tc) {
   const args = tc.function?.arguments;
   if (args) {
     if (args.trimStart().startsWith("{")) {
+      if (slot.argsComplete) {
+        slot.arguments = args;
+        return;
+      }
       try {
         JSON.parse(slot.arguments);
+        slot.argsComplete = true;
         slot.arguments = args;
         return;
       } catch {
