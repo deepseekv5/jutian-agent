@@ -2,6 +2,17 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import type { Block, Deck, FontKey, GenerateOptions, LayoutId, Slide, SlideSpec } from '../types/ppt';
 import { materialize, extractSpec, LAYOUT_LABELS } from './ppt-layouts';
+
+/** v16.3.0 AI 对话操作指令（PPTChat 解析 LLM 输出后执行） */
+export type PptAction =
+  | { op: 'setTitle'; title: string }
+  | { op: 'setTheme'; themeId: string }
+  | { op: 'addSlide'; layout?: LayoutId; title?: string; bullets?: string[]; index?: number }
+  | { op: 'deleteSlide'; index: number }
+  | { op: 'updateSlideTitle'; index: number; title: string }
+  | { op: 'updateBullets'; index: number; bullets: string[] }
+  | { op: 'replaceText'; index: number; old: string; new: string }
+  | { op: 'addNotes'; index: number; notes: string };
 import { localGenerate } from './ppt-engine';
 import { aiGenerateSlides } from './ppt-ai';
 import { uid } from '../utils/uid';
@@ -51,6 +62,8 @@ interface PptState {
   deleteBlock: (slideId: string, blockId: string) => void;
   bringForward: (slideId: string, blockId: string, toFront: boolean) => void;
 
+  /** v16.3.0：AI 对话直接改 deck（PPTChat 解析 LLM 返回的操作指令执行） */
+  applyActions: (actions: PptAction[]) => number;
   setTheme: (themeId: string) => void;
   setFont: (fontKey: FontKey) => void;
   setDeckTitle: (title: string) => void;
@@ -279,6 +292,62 @@ export const usePptStore = create<PptState>()(
         if (toFront) s.blocks.push(b); else s.blocks.unshift(b);
       }),
 
+      applyActions: (actions) => {
+        let applied = 0;
+        mutate((deck) => {
+          for (const a of actions) {
+            if (a.op === 'setTitle' && typeof a.title === 'string') { deck.title = a.title.slice(0, 60); applied++; }
+            else if (a.op === 'setTheme' && typeof a.themeId === 'string') { deck.themeId = a.themeId; applied++; }
+            else if (a.op === 'addSlide') {
+              const spec = { layout: (a.layout || 'bullets') as LayoutId, title: String(a.title || '新页面'), bullets: Array.isArray(a.bullets) ? a.bullets.map(String).slice(0, 6) : undefined, background: 'clean' as const };
+              const slide = materialize(spec, deck.slides.length);
+              if (typeof a.index === 'number') deck.slides.splice(Math.max(0, Math.min(deck.slides.length, a.index)), 0, slide);
+              else deck.slides.push(slide);
+              applied++;
+            }
+            else if (a.op === 'deleteSlide' && typeof a.index === 'number') {
+              const i = a.index - 1;
+              if (i >= 0 && i < deck.slides.length) { deck.slides.splice(i, 1); applied++; }
+            }
+            else if (a.op === 'updateSlideTitle' && typeof a.index === 'number' && typeof a.title === 'string') {
+              const sl = deck.slides[a.index - 1];
+              if (sl) {
+                sl.name = a.title.slice(0, 30);
+                const tb = sl.blocks.find(b => b.type === 'title') as any;
+                if (tb) tb.text = a.title.slice(0, 60);
+                applied++;
+              }
+            }
+            else if (a.op === 'updateBullets' && typeof a.index === 'number' && Array.isArray(a.bullets)) {
+              const sl = deck.slides[a.index - 1];
+              const bb = sl?.blocks.find(b => b.type === 'bullets') as any;
+              if (bb) { bb.items = a.bullets.map(String).slice(0, 6); applied++; }
+            }
+            else if (a.op === 'replaceText' && typeof a.index === 'number' && typeof a.old === 'string' && typeof a.new === 'string') {
+              const sl = deck.slides[a.index - 1];
+              let hit = false;
+              for (const b of sl?.blocks || []) {
+                if (b.type === 'title' || b.type === 'subtitle' || b.type === 'paragraph' || b.type === 'eyebrow') {
+                  const t = (b as any).text;
+                  if (typeof t === 'string' && t.includes(a.old)) { (b as any).text = t.split(a.old).join(a.new); hit = true; }
+                }
+                if (b.type === 'bullets') {
+                  const items = (b as any).items as string[];
+                  (b as any).items = items.map(x => x.split(a.old).join(a.new));
+                  if (items.some(x => x.includes(a.old))) hit = true;
+                }
+              }
+              if (hit) applied++;
+            }
+            else if (a.op === 'addNotes' && typeof a.index === 'number' && typeof a.notes === 'string') {
+              const sl = deck.slides[a.index - 1];
+              if (sl) { sl.notes = a.notes.slice(0, 300); applied++; }
+            }
+          }
+        });
+        persistDeck(get().deck);
+        return applied;
+      },
       setTheme: (themeId) => mutate((deck) => { deck.themeId = themeId; }),
       setFont: (fontKey) => mutate((deck) => { deck.fontKey = fontKey; }),
       setDeckTitle: (title) => mutate((deck) => { deck.title = title; }),

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
 import { CARDS, GROUPS } from './pageCatalog'
+import ChatHome from './ChatHome'
 
 /**
  * Codex Exact 布局（v15.7.0）
@@ -121,6 +122,8 @@ function CodexMark({ size = 52 }: { size?: number }) {
 export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }: HomeProps) {
   const { lang, t } = useLanguage()
   const [text, setText] = useState('')
+  // v16.3.0：主界面双模式——工作台（功能启动台）/ 对话（独立纯聊天）
+  const [mode, setMode] = useState<'workspace' | 'chat'>('workspace')
   const [q, setQ] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
   const catalogByType = new Map(CARDS.map(k => [k.type, k]))
@@ -138,6 +141,15 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
       <div className="mx-auto w-full" style={{ maxWidth: 860, padding: '40px 32px 64px' }}>
         {/* 头部：标题 + 当前上下文（不再是聊天式大问句） */}
         <div className="flex items-end justify-between gap-4 mb-6">
+          <div className="flex items-center gap-1 mb-1">
+            {([['workspace', t('工作台', 'Workspace')], ['chat', t('对话', 'Chat')]] as const).map(([m, label]) => (
+              <button key={m} onClick={() => setMode(m)}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors"
+                style={{ background: mode === m ? 'var(--jt-ink)' : 'transparent', color: mode === m ? 'var(--jt-paper)' : 'var(--jt-ink-3)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div>
             <h1 className="font-semibold" style={{ fontSize: 22, letterSpacing: '-.02em', color: 'var(--jt-ink)' }}>
               {t('工作台', 'Workspace')}
@@ -152,6 +164,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
           </div>
         </div>
 
+        {mode === 'chat' ? <ChatHome /> : (<>
         {/* 紧凑提问行：在上方、单行、不悬浮 */}
         <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-8" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.plus} /></svg>
@@ -214,6 +227,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
           <button onClick={() => onOpenTab('gongwen')} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>{t('公文写作台', 'Doc desk')}</button>
           <button onClick={() => onAsk(t('总结最近会话要点', 'Summarize recent chats'))} className="text-[11.5px]" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>{t('总结最近会话', 'Summarize recent chats')}</button>
         </div>
+        </>)}
       </div>
     </div>
   )
