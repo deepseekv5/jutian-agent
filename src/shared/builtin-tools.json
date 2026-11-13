@@ -120,7 +120,7 @@
  },
  {
   "name": "edit_file",
-  "description": "精确编辑文件中的指定内容。用 oldText 匹配唯一区域，替换为 newText。适合小范围修改，不需要重写整个文件。",
+  "description": "编辑文件：oldText→newText 精确替换（失败时自动尝试 CRLF 归一化与缩进/空白模糊匹配）；也可传 start_line/end_line 按行号范围替换（无需 oldText，模型对行号更可靠）。",
   "parameters": {
    "type": "object",
    "properties": {
@@ -139,12 +139,18 @@
     "replaceAll": {
      "type": "boolean",
      "description": "是否替换全部匹配处（默认 false 只替换第一处）。重命名变量、统一改同一写法时设为 true"
+    },
+    "start_line": {
+     "type": "integer",
+     "description": "可选：按行号编辑的起始行（与 end_line 一起传时忽略 oldText，直接替换该范围的行）"
+    },
+    "end_line": {
+     "type": "integer",
+     "description": "可选：按行号编辑的结束行（含）"
     }
    },
    "required": [
-    "path",
-    "oldText",
-    "newText"
+    "path"
    ]
   }
  },

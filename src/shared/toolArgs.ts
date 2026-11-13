@@ -100,9 +100,13 @@ export const TOOL_SPECS: Record<string, FieldSpec[]> = {
   ],
   edit_file: [
     { name: 'path', type: 'string', required: true },
-    { name: 'oldText', type: 'string', required: true },
+    // v16.1.0：oldText 不再必填——行号模式（start_line/end_line）不需要它；
+    // 二者都不传时由 edit_file 内部守卫明确报错。
+    { name: 'oldText', type: 'string' },
     { name: 'newText', type: 'string', required: true, allowEmpty: true },
     { name: 'replaceAll', type: 'boolean' },
+    { name: 'start_line', type: 'number' },
+    { name: 'end_line', type: 'number' },
   ],
   list_dir: [{ name: 'path', type: 'string', required: true }],
   move_file: [

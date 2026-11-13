@@ -112,10 +112,14 @@ describe('TOOL_SPECS — 覆盖真实踩坑点', () => {
     expect(content?.allowEmpty).toBe(true)   // 但允许清空文件
   })
 
-  it('edit_file 的 oldText / newText 都是必填', () => {
+  it('edit_file 的 newText 必填、oldText 可选（v16.1.0 行号模式）', () => {
     const names = TOOL_SPECS.edit_file.filter(s => s.required).map(s => s.name)
-    expect(names).toContain('oldText')
     expect(names).toContain('newText')
+    // oldText 不再必填：行号模式（start_line/end_line）不需要它，
+    // 二者都不传时由 edit_file 内部守卫明确报错
+    expect(names).not.toContain('oldText')
+    const lineSpec = TOOL_SPECS.edit_file.find(s => s.name === 'start_line')
+    expect(lineSpec?.type).toBe('number')
   })
 
   it('move_file 的 src / dest 都是必填', () => {

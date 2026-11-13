@@ -982,6 +982,48 @@ function recordChange(p, oldC, newC) {
  * 同目录放临时文件是必须的：跨文件系统的 rename 会退化成拷贝+删除，
  * 又变回非原子。
  */
+// ─── 编辑后自动 lint（v16.1.0）────────────────────────────────────
+// Claude Code 的核心循环：改完文件 → 自动跑 lint → 错误喂回模型 → 下一轮自修。
+// 轻量实现：仅当工作目录检测到 lint 命令时执行（package.json scripts.lint 或 eslint 配置），
+// 限时 25s，失败/超时/无错误都静默（不吵），只在真有错误时把摘要追加到工具输出。
+const LINT_CMD_CACHE = new Map();
+function detectLintCmd(dir) {
+  if (LINT_CMD_CACHE.has(dir)) return LINT_CMD_CACHE.get(dir);
+  let cmd = null;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf-8"));
+    if (pkg && pkg.scripts && typeof pkg.scripts.lint === "string" && pkg.scripts.lint.trim()) cmd = "npm run lint -- --quiet";
+  } catch { /* 无 package.json */ }
+  if (!cmd) {
+    for (const cfg of [".eslintrc", ".eslintrc.json", "eslint.config.js", "eslint.config.mjs"]) {
+      try { if (fs.existsSync(path.join(dir, cfg))) { cmd = "npx eslint . --quiet"; break } } catch { /* ignore */ }
+    }
+  }
+  LINT_CMD_CACHE.set(dir, cmd);
+  return cmd;
+}
+function autoLint(dir) {
+  const cmd = detectLintCmd(dir);
+  if (!cmd) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let cp;
+    try { cp = require("child_process") } catch { return resolve(null) }
+    let out = "";
+    const child = cp.exec(cmd, { cwd: dir || undefined, timeout: 25000, maxBuffer: 1024 * 1024, env: shellEnv() }, (err, stdout, stderr) => {
+      out = String(stdout || "") + String(stderr || "");
+      child.unref?.();
+      if (!out.trim()) return resolve(null); // 命令本身失败（缺依赖等）不吵
+      const errs = out.split("\n").map(l => l.trim()).filter(l => /error|✖|×|problem/i.test(l)).slice(0, 12);
+      if (!errs.length) return resolve(null);
+      resolve(`[自动检查] lint 发现 ${errs.length} 个问题（已运行 \`${cmd}\`）：\n` + errs.join("\n").slice(0, 800));
+    });
+  });
+}
+async function withAutoLint(output, changeId) {
+  const note = await autoLint(globalWorkDir || USER_HOME);
+  return note ? { success: true, output: output + "\n" + note, changeId } : { success: true, output, changeId };
+}
+
 async function writeFileAtomic(target, content) {
   const dir = path.dirname(target);
   const tmp = path.join(dir, `.${path.basename(target)}.tmp-${process.pid}-${Date.now()}`);
@@ -1016,11 +1058,51 @@ async function write_file(a) {
     return { success: false, error: e.message };
   }
 }
+/**
+ * 空白归一化逐行匹配（v16.1.0）：oldText 与文件内容「每行 trim 后相等」即命中，
+ * 返回真实文本块与行范围。用于模型缩进/空格抄写有出入时的容错（Claude Code fuzzy edit）。
+ */
+function fuzzyLineMatch(fileContent: string, oldText: string): { real: string; start: number; end: number } | null {
+  const fileLines = fileContent.split("\n");
+  const oldLines = String(oldText).split("\n");
+  if (!oldLines.length || !oldLines.some(l => l.trim())) return null;
+  outer: for (let i = 0; i + oldLines.length <= fileLines.length; i++) {
+    for (let j = 0; j < oldLines.length; j++) {
+      if (fileLines[i + j].trim() !== oldLines[j].trim()) continue outer;
+    }
+    return { real: fileLines.slice(i, i + oldLines.length).join("\n"), start: i, end: i + oldLines.length };
+  }
+  return null;
+}
+
 async function edit_file(a) {
   const p = resolveWork(a.path);
   if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
   try {
     let c = await fsp.readFile(p, "utf-8");
+    // 行号编辑（v16.1.0，对齐 Claude Code 行模式）：传 start_line/end_line 时按行范围替换，
+    // 无需 oldText——模型对行号比抄文本可靠得多。
+    if (a.start_line != null && a.end_line != null) {
+      const ls = c.split("\n");
+      const s0 = Math.max(1, Number(a.start_line));
+      const e0 = Math.min(ls.length, Number(a.end_line));
+      if (s0 > e0) return { success: false, error: `行号范围无效：start_line=${s0} > end_line=${e0}` };
+      const head = ls.slice(0, s0 - 1).join("\n");
+      const tail = ls.slice(e0).join("\n");
+      const __newText = String(a.newText ?? "");
+      const done = (head ? head + "\n" : "") + __newText + (tail ? "\n" + tail : "");
+      await writeFileAtomic(p, done);
+      FILE_CONTEXT.delete(p);
+      toolCacheInvalidate(p);
+      const __chgLine = recordChange(p, c, done);
+      return withAutoLint(`✅ 已编辑: ${p}（按行号替换第 ${s0}–${e0} 行）`, __chgLine);
+    }
+    if (a.start_line != null || a.end_line != null) {
+      return { success: false, error: '行号编辑需要同时传 start_line 与 end_line。' };
+    }
+    if (a.oldText == null || a.oldText === '') {
+      return { success: false, error: '缺少要替换的文本：请传 oldText（文本模式）或 start_line + end_line（行号模式）。' };
+    }
     if (!c.includes(a.oldText)) {
       // 精确匹配失败通常有三种原因：文件被外部改动、oldText 抄写有出入
       // （缩进/换行/全角空格）、或需要替换的区域已被前一次编辑改掉。
@@ -1038,8 +1120,21 @@ async function edit_file(a) {
           FILE_CONTEXT.delete(p);
     toolCacheInvalidate(p);
           const __chgCRLF = recordChange(p, c, done);
-          return { success: true, output: `✅ 已编辑: ${p}（文件为 CRLF 行尾，已统一为 LF 后完成编辑）`, changeId: __chgCRLF };
+          return withAutoLint(`✅ 已编辑: ${p}（文件为 CRLF 行尾，已统一为 LF 后完成编辑）`, __chgCRLF);
         }
+      }
+      // 空白归一化匹配（v16.1.0，对齐 Claude Code fuzzy edit）：
+      // 模型抄写 oldText 时缩进/行尾空格有出入是高频失败原因。逐行 trim 后比较，
+      // 命中则用【文件中的真实文本块】做替换（保留文件原有缩进）。
+      const __fuzzy = fuzzyLineMatch(c, String(a.oldText ?? ''));
+      if (__fuzzy) {
+        const __newText = String(a.newText ?? '');
+        const done = a.replaceAll ? c.split(__fuzzy.real).join(__newText) : c.replace(__fuzzy.real, __newText);
+        await writeFileAtomic(p, done);
+        FILE_CONTEXT.delete(p);
+        toolCacheInvalidate(p);
+        const __chgFuzzy = recordChange(p, c, done);
+        return withAutoLint(`✅ 已编辑: ${p}（oldText 与原文存在缩进/空白差异，已按模糊匹配定位到第 ${__fuzzy.start + 1}–${__fuzzy.end} 行完成替换）`, __chgFuzzy);
       }
       const firstLine = String(a.oldText || "").split("\n")[0].slice(0, 60);
       return {
@@ -1065,7 +1160,7 @@ async function edit_file(a) {
       const __occ = __oldFull.split(a.oldText).length - 1;
       if (__occ > 1) __occNote = "\n\u26A0\uFE0F oldText 在文件中出现 " + __occ + " 次，本次只替换了第 1 处。如需全部替换请传 replaceAll: true。";
     }
-    return { success: true, output: `\u2705 \u5DF2\u7F16\u8F91: ${p}${__occNote}`, changeId: __chg2 };
+    return withAutoLint(`\u2705 \u5DF2\u7F16\u8F91: ${p}${__occNote}`, __chg2);
   } catch (e) {
     return { success: false, error: e.message };
   }
