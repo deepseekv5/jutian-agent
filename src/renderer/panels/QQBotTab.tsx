@@ -258,7 +258,8 @@ export default function QQBotTab() {
             { role: 'system', content: '你是巨天（一个聪明友好的 AI 助手），正在 QQ 上和用户聊天。回复要简洁口语化、符合 QQ 聊天习惯，一般不超过 150 字，不用 markdown 格式。' },
             ...trimmed,
           ],
-          max_tokens: 500,
+          // v16.4.0：500 太小——推理模型思考就吃掉全部配额导致 content 空；正文要求 150 字，1500 足够
+          max_tokens: 1500,
           stream: false,
         }),
       })

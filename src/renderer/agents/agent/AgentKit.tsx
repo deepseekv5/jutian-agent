@@ -305,7 +305,7 @@ export function AgentComposer({
           style={{ background: accent, color: '#fff' }}
           title="发送（Enter）">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.4}>
-            <path strokeLinecap="round" stroke-linejoin="round" d="M12 19V5M5 12l7-7 7 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>
       </div>

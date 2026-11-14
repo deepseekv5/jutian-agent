@@ -71,7 +71,7 @@ export default function EmployeeChatTab({ empId, settings, onClose }: {
       const finalText = (r.text || '').trim()
       setMsgs(prev => [...prev, {
         id: agentMsgId(), kind: 'agent', empId: emp.id, name: emp.name, role: emp.role,
-        content: finalText || (r.error ? `（出错）${r.error}` : '（无回复）'),
+        content: finalText || (ctrl.signal.aborted ? '（已停止）' : r.error ? `（出错）${r.error}` : '（无回复）'),
         tools: r.tools.length ? r.tools : undefined, ts: Date.now(),
       }])
       if (r.error) setError(r.error)
@@ -154,6 +154,13 @@ export default function EmployeeChatTab({ empId, settings, onClose }: {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[13px] font-bold" style={{ color: c.textHead }}>{emp.name}</span>
                   {streamTools.length > 0 && <span className="text-[11px]" style={{ color: c.textTertiary }}>调用工具…</span>}
+                  {/* v16.4.0：生成中可随时停止（此前 abortRef 存在却没有暴露 UI） */}
+                  <button onClick={() => abortRef.current?.abort()}
+                    className="ml-auto text-[11px] flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:opacity-80"
+                    style={{ border: `1px solid ${c.border}`, color: c.textTertiary }} title="停止生成">
+                    <span className="inline-block w-2 h-2 rounded-[2px]" style={{ background: 'currentColor' }} />
+                    停止
+                  </button>
                 </div>
                 {streamTools.length > 0 && <ToolLines tools={streamTools} c={c} />}
                 {streamText

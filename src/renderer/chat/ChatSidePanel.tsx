@@ -12,6 +12,7 @@ import { estimateTokens, fmtTokens } from '../utils/tokens'
 import { effectiveApiKey } from '../store/storage'
 import { dateTimeCN } from '../utils/datetime'
 import { fetchCompat } from '../api'
+import { ssePayloads } from '../../shared/sse'
 
 type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
@@ -336,6 +337,9 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // v16.4.0：辅助对话升级——流式输出 + 可随时停止 + 空态示例
+  const abortRef = useRef<AbortController | null>(null)
+  const stop = () => { abortRef.current?.abort(); abortRef.current = null; setBusy(false) }
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
 
@@ -346,26 +350,47 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
     setBusy(true)
     const next = [...msgs, { role: 'user' as const, content: text }]
     setMsgs(next)
+    const ac = new AbortController()
+    abortRef.current = ac
+    const reply = { role: 'assistant' as const, content: '' }
+    setMsgs([...next, reply])
     try {
       const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) },
+        signal: ac.signal,
         body: JSON.stringify({
           model: settings.model,
           messages: [
             { role: 'system', content: `你是主对话旁的轻量辅助助手，帮助用户思考、翻译、润色、起名、查疑等小任务。回答简短直接。当前工作区：${workDir || '未设置'}。不要主动建议执行文件操作。` },
             ...next.slice(-10),
           ],
-          max_tokens: 800,
-          stream: false,
+          max_tokens: 4096,
+          stream: true,
         }),
       })
-      const data = await res.json()
-      const reply = (data.choices?.[0]?.message?.content || data.error?.message || '（无回复）').trim()
-      setMsgs(prev => [...prev, { role: 'assistant', content: reply }])
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      for await (const payload of ssePayloads(res.body)) {
+        if (payload === '[DONE]') break
+        let ev: any
+        try { ev = JSON.parse(payload) } catch { continue }
+        const delta = ev?.choices?.[0]?.delta
+        const piece = String(delta?.content || delta?.reasoning_content || '')
+        if (piece) {
+          reply.content += piece
+          setMsgs(prev => [...prev.slice(0, -1), { ...reply }])
+        }
+      }
+      if (!reply.content.trim()) setMsgs(prev => [...prev.slice(0, -1), { role: 'assistant', content: '（无回复）' }])
     } catch (e: any) {
-      setMsgs(prev => [...prev, { role: 'assistant', content: `错误: ${e.message}` }])
+      const stopped = e?.name === 'AbortError' || abortRef.current?.signal.aborted || String(e?.message || '').includes('取消')
+      if (stopped) {
+        if (!reply.content.trim()) setMsgs(prev => prev.slice(0, -1))
+      } else {
+        setMsgs(prev => [...prev.slice(0, -1), { role: 'assistant', content: `错误: ${e.message}` }])
+      }
     }
+    abortRef.current = null
     setBusy(false)
   }, [input, busy, msgs, settings, workDir])
 
@@ -373,23 +398,46 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 scrollbar-thin">
         {msgs.length === 0 && (
-          <div className="text-[11px] leading-relaxed pt-6 text-center" style={{ color: c.textMuted }}>
-            独立小助手，处理轻量问题<br />不影响主对话上下文
+          <div className="pt-5 text-center">
+            <div className="text-[11px] leading-relaxed" style={{ color: c.textMuted }}>
+              独立小助手，处理轻量问题<br />不影响主对话上下文
+            </div>
+            <div className="flex flex-col gap-1.5 mt-3 px-1">
+              {['帮我把这句话翻译成英文：项目今天上线', '润色：这个方案不太行，换个思路', '给一个效率工具起个名字'].map(q => (
+                <button key={q} onClick={() => { setInput(q) }}
+                  className="text-left text-[11px] px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-75"
+                  style={{ background: c.bgInput, border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {msgs.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[88%] text-[12px] leading-relaxed px-2.5 py-1.5 rounded-xl break-words ${m.role === 'user' ? 'whitespace-pre-wrap' : 'side-md'}`}
+            <div className={`max-w-[88%] text-[12px] leading-relaxed px-2.5 py-1.5 rounded-xl break-words group/rel ${m.role === 'user' ? 'whitespace-pre-wrap' : 'side-md'}`}
               style={m.role === 'user'
                 ? { background: c.bgInput, color: c.text }
                 : { background: 'transparent', border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>
               {m.role === 'assistant' ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
               ) : m.content}
+              {/* v16.4.0：hover 复制 */}
+              {m.role === 'assistant' && m.content && !busy && (
+                <button onClick={() => { navigator.clipboard.writeText(m.content).catch(() => {}) }}
+                  className="mt-1 text-[10px] opacity-0 group-hover/rel:opacity-60 hover:!opacity-100 transition-opacity"
+                  style={{ color: c.textTertiary }}>复制</button>
+              )}
             </div>
           </div>
         ))}
-        {busy && <div className="text-[11px]" style={{ color: c.textMuted }}>思考中…</div>}
+        {busy && (
+          <div className="flex items-center gap-2 text-[11px]" style={{ color: c.textMuted }}>
+            <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
+            思考中…
+            <button onClick={stop} className="ml-auto px-2 py-0.5 rounded-full transition-colors hover:opacity-80" style={{ border: `1px solid ${c.border}` }}>停止</button>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
       <div className="p-2 border-t shrink-0" style={{ borderColor: c.borderLight }}>
@@ -399,10 +447,14 @@ function AssistantChat({ settings, workDir }: { settings: Settings; workDir: str
             placeholder="问点什么…"
             className="flex-1 px-2.5 py-1.5 rounded-lg text-[12px] outline-none"
             style={{ background: c.bgInput, border: `1px solid ${c.border}`, color: c.text }} />
-          <button onClick={send} disabled={busy || !input.trim()}
-            className="px-3 rounded-lg text-[11px] font-medium text-white disabled:opacity-40" style={{ background: c.accent }}>
-            发送
-          </button>
+          {busy ? (
+            <button onClick={stop} className="px-3 rounded-lg text-[11px] font-medium text-white" style={{ background: c.accent }}>停止</button>
+          ) : (
+            <button onClick={send} disabled={!input.trim()}
+              className="px-3 rounded-lg text-[11px] font-medium text-white disabled:opacity-40" style={{ background: c.accent }}>
+              发送
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -415,6 +467,9 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
   const [result, setResult] = useState('')
   const [busy, setBusy] = useState(false)
   const [scope, setScope] = useState<'conversation' | 'last'>('conversation')
+  // v16.4.0：审查可取消 + 流式输出（长报告不再整体干等）
+  const abortRef = useRef<AbortController | null>(null)
+  const stopReview = () => { abortRef.current?.abort(); abortRef.current = null; setBusy(false) }
 
   const runReview = useCallback(async () => {
     if (busy) return
@@ -422,6 +477,8 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
     if (msgs.length === 0) { setResult('当前对话还没有内容。'); return }
     setBusy(true)
     setResult('')
+    const ac = new AbortController()
+    abortRef.current = ac
     try {
       const transcript = msgs.map(m => `${m.role === 'user' ? '用户' : '助手'}: ${(m.content || '').slice(0, 800)}`).join('\n\n')
       const makeBody = () => JSON.stringify({
@@ -430,27 +487,38 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
           { role: 'system', content: '你是一位严谨的审查员。审查给出的对话内容，输出结构化报告（中文，markdown）：\n## 总体评价\n## 事实与逻辑问题（如有，逐条列出并给出修正建议）\n## 风险点（操作风险、安全风险、遗漏项）\n## 改进建议\n只输出报告本身。若对话无明显问题，也请给出可提升的点。' },
           { role: 'user', content: transcript.slice(0, 12000) },
         ],
-        max_tokens: 1500,
-        stream: false,
+        max_tokens: 4096,
+        stream: true,
       })
       const headers = { 'Content-Type': 'application/json', 'X-Target-Base': settings.apiBaseUrl, 'X-Api-Key': effectiveApiKey(settings.apiKey) }
-      let res: Response
+      const streamOnce = async () => {
+        const res = await fetchCompat('/api/llm-proxy', { method: 'POST', headers, body: makeBody(), signal: ac.signal })
+        if (!res.ok || !res.body) {
+          const errText = await res.text().catch(() => '')
+          throw new Error(`HTTP ${res.status} ${errText.slice(0, 120)}`)
+        }
+        for await (const payload of ssePayloads(res.body)) {
+          if (payload === '[DONE]') break
+          let ev: any
+          try { ev = JSON.parse(payload) } catch { continue }
+          const delta = ev?.choices?.[0]?.delta
+          const piece = String(delta?.content || delta?.reasoning_content || '')
+          if (piece) setResult(prev => prev + piece)
+        }
+      }
       try {
-        res = await fetchCompat('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
-      } catch {
+        await streamOnce()
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || abortRef.current?.signal.aborted || String(e?.message || '').includes('取消')) throw e
         // 免费档偶发断连：自动重试一次
         await new Promise(r => setTimeout(r, 1500))
-        res = await fetchCompat('/api/llm-proxy', { method: 'POST', headers, body: makeBody() })
+        await streamOnce()
       }
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status} ${errText.slice(0, 120)}`)
-      }
-      const data = await res.json()
-      setResult((data.choices?.[0]?.message?.content || data.error?.message || '审查失败').trim())
     } catch (e: any) {
-      setResult(`审查失败: ${e.message}`)
+      const stopped = e?.name === 'AbortError' || abortRef.current?.signal.aborted || String(e?.message || '').includes('取消')
+      setResult(stopped ? '（已停止）' : `审查失败: ${e.message}`)
     }
+    abortRef.current = null
     setBusy(false)
   }, [mainMessages, scope, busy, settings])
 
@@ -475,9 +543,10 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
               {label}
             </button>
           ))}
-          <button onClick={runReview} disabled={busy}
-            className="ml-auto px-3 py-1 rounded-lg text-[10.5px] font-medium text-white disabled:opacity-40" style={{ background: c.accent }}>
-            {busy ? '审查中…' : '开始审查'}
+          {/* v16.4.0：审查中可点停止 */}
+          <button onClick={busy ? stopReview : runReview}
+            className="ml-auto px-3 py-1 rounded-lg text-[10.5px] font-medium text-white" style={{ background: c.accent }}>
+            {busy ? '停止' : '开始审查'}
           </button>
         </div>
       </div>
