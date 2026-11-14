@@ -33,16 +33,27 @@ export default function ChatHome() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
-    try { return localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general' } catch { return 'general' }
+    try {
+      if (localStorage.getItem('lyclaw_chat_mode') === 'chat') {
+        return localStorage.getItem('lyclaw_chathome_persona') === 'coding' ? 'coding' : 'general'
+      }
+      return localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general'
+    } catch { return 'general' }
   })
   const [ttsBusy, setTtsBusy] = useState(false)
   const ttsStopRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   useEffect(() => { try { localStorage.setItem('lyclaw_chathome_msgs', JSON.stringify(msgs.slice(-200))) } catch { /* 超限截断 */ } }, [msgs])
+  // v16.3.2：对话内的模式 tab 只微调 persona——写 localStorage 供下次进入读取，
+  // 派独立事件（chat-persona-changed），不触发主界面退出对话（那是侧栏三选切换器的职责）
   const switchMode = (m: 'general' | 'coding') => {
     setChatMode(m)
-    try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
-    window.dispatchEvent(new Event('chat-mode-changed'))
+    try {
+      const cur = localStorage.getItem('lyclaw_chat_mode')
+      if (cur === 'chat') localStorage.setItem('lyclaw_chathome_persona', m)
+      else localStorage.setItem('lyclaw_chat_mode', m)
+    } catch {}
+    window.dispatchEvent(new Event('chat-persona-changed'))
   }
   // 朗读：剥代码块/标记，逐条经 /api/edge-tts
   const speak = async (text: string) => {

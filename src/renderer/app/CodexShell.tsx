@@ -26,6 +26,7 @@ const ICONS = {
   arrow: 'M12 19V5m-7 7l7-7 7 7',
   chevron: 'M6 9l6 6 6-6',
   sparkle: 'M12 3l1.9 5.6L20 10l-5.1 2.4L16 18l-4-3-4 3 1.1-5.6L4 10l6.1-1.4L12 3z',
+  chatBubble: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
 }
 
 type SessionLite = { id: string; title?: string; updated_at?: string; created_at?: string; project?: string }
@@ -123,7 +124,17 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
   const { lang, t } = useLanguage()
   const [text, setText] = useState('')
   // v16.3.0：主界面双模式——工作台（功能启动台）/ 对话（独立纯聊天）
-  const [mode, setMode] = useState<'workspace' | 'chat'>('workspace')
+  // v16.3.2：模式由侧栏三选切换器统一控制（工作/编程/对话），此处跟随全局 chat_mode
+  const [mode, setMode] = useState<'workspace' | 'chat'>(() => {
+    try { return localStorage.getItem('lyclaw_chat_mode') === 'chat' ? 'chat' : 'workspace' } catch { return 'workspace' }
+  })
+  useEffect(() => {
+    const h = () => {
+      try { setMode(localStorage.getItem('lyclaw_chat_mode') === 'chat' ? 'chat' : 'workspace') } catch {}
+    }
+    window.addEventListener('chat-mode-changed', h)
+    return () => window.removeEventListener('chat-mode-changed', h)
+  }, [])
   const [q, setQ] = useState('')
   const ask = () => { const v = text.trim(); if (v) { onAsk(v); setText('') } }
   const catalogByType = new Map(CARDS.map(k => [k.type, k]))
@@ -273,10 +284,12 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
     window.addEventListener('click', close)
     return () => window.removeEventListener('click', close)
   }, [ctx])
-  const switchMode = (m: 'general' | 'coding') => {
-    setChatMode(m); setModeOpen(false)
+  // v16.3.2：三模式切换器——工作 / 编程 / 对话（对话模式进入主界面 ChatHome）
+  const switchMode = (m: 'general' | 'coding' | 'chat') => {
+    setChatMode(m === 'chat' ? 'general' : m); setModeOpen(false)
     try { localStorage.setItem('lyclaw_chat_mode', m) } catch {}
     window.dispatchEvent(new Event('chat-mode-changed'))
+    if (m === 'chat') onHome()
   }
   const allRecents = projFilter ? sessions.filter(x => (x.project || '').endsWith('/' + projFilter) || x.project === projFilter) : sessions
   const recents = allRecents.slice(0, expanded ? 18 : 8)
@@ -384,16 +397,21 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             {modeOpen && (
               <div className="absolute left-0 top-8 z-30 w-52 rounded-xl py-1.5" style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline-soft)', boxShadow: '0 8px 28px rgba(0,0,0,.10)' }}>
                 {([['general', t('工作模式', 'Work mode'), t('办公 · 写作 · 日常任务', 'Office · writing · daily tasks'), ICONS.docs],
-                   ['coding', t('编程模式', 'Coding mode'), t('代码 · 终端 · diff', 'Code · terminal · diff'), ICONS.box]] as const).map(([m, label, desc, icon]) => (
+                   ['coding', t('编程模式', 'Coding mode'), t('代码 · 终端 · diff', 'Code · terminal · diff'), ICONS.box],
+                   ['chat', t('对话模式', 'Chat mode'), t('纯聊天 · Markdown · 朗读 · 历史', 'Plain chat · Markdown · TTS · history'), ICONS.chatBubble || ICONS.docs]] as const).map(([m, label, desc, icon]) => (
                   <button key={m} onClick={() => switchMode(m)} className="w-full flex items-start gap-2.5 px-3 py-2 text-left rounded-lg"
-                    style={{ background: chatMode === m ? 'var(--jt-focus)' : 'transparent' }}
+                    style={{ background: (m === 'chat'
+                      ? (() => { try { return localStorage.getItem('lyclaw_chat_mode') === 'chat' } catch { return false } })()
+                      : chatMode === m) ? 'var(--jt-focus)' : 'transparent' }}
                     onMouseEnter={hover} onMouseLeave={leave}>
                     <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke={chatMode === m ? 'var(--jt-ink)' : 'var(--jt-ink-3)'} strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={icon} /></svg>
                     <span className="min-w-0">
                       <span className="block text-[12.5px] font-medium" style={{ color: 'var(--jt-ink)' }}>{label}</span>
                       <span className="block text-[10.5px] mt-0.5" style={{ color: 'var(--jt-ink-3)' }}>{desc}</span>
                     </span>
-                    {chatMode === m && <svg className="w-3.5 h-3.5 ml-auto mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink)" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
+                    {(m === 'chat'
+                      ? (() => { try { return localStorage.getItem('lyclaw_chat_mode') === 'chat' } catch { return false } })()
+                      : chatMode === m) && <svg className="w-3.5 h-3.5 ml-auto mt-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink)" strokeWidth={2.4}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>}
                   </button>
                 ))}
                 <div className="h-px my-1" style={{ background: 'var(--jt-hairline-soft)' }} />
