@@ -174,7 +174,12 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
                 </button>
               )
             })}
-            {sessions.length === 0 && <div className="px-2 py-4 text-center text-[11px]" style={{ color: c.textTertiary }}>还没有会话</div>}
+            {sessions.length === 0 && (
+              <div className="px-2 py-5 text-center">
+                <div className="text-[12px]" style={{ color: c.textHead }}>还没有可导出的会话</div>
+                <div className="text-[11px] mt-1 leading-relaxed" style={{ color: c.textTertiary }}>回到对话页发起第一句，<br />这里就能把对话导出为 Markdown / HTML。</div>
+              </div>
+            )}
           </div>
         </div>
 

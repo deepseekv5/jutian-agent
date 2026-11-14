@@ -258,7 +258,9 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
   // Projects 点击 → 过滤 Recents（再点同一个取消）
   const [projFilter, setProjFilter] = useState<string | null>(null)
   // Recents 右键菜单（v15.8.5）：重命名 / 删除，与原侧栏能力对齐
-  const [ctx, setCtx] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
+  // v16.4.0：右键菜单升级——原生 prompt/confirm 换 inline 交互（重命名输入框 + 删除二次确认）
+  const [ctx, setCtx] = useState<{ id: string; title: string; x: number; y: number; mode?: 'rename' | 'confirmDelete' } | null>(null)
+  const [renameVal, setRenameVal] = useState('')
   // 工作 / 编程双模式：与原侧栏切换器同源（localStorage + chat-mode-changed 事件）
   const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => {
     try { return (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general') } catch { return 'general' }
@@ -542,13 +544,35 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
         </div>
       </div>}
       {ctx && (
-        <div className="fixed z-50 rounded-xl py-1.5 min-w-[160px]" style={{ left: ctx.x, top: ctx.y, background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 8px 28px rgba(0,0,0,.14)' }} onContextMenu={e => e.preventDefault()}>
-          <button onClick={() => { const val = prompt(t('重命名对话', 'Rename chat'), ctx.title); if (val && val.trim() && onRename) onRename(ctx.id, val.trim()); setCtx(null) }}
-            className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: 'var(--jt-ink-2)' }}
-            onMouseEnter={hover} onMouseLeave={leave}>{t('重命名', 'Rename')}</button>
-          <button onClick={() => { if (confirm(t('确定删除这个对话？不可恢复。', 'Delete this chat? This cannot be undone.')) && onDelete) onDelete(ctx.id); setCtx(null) }}
-            className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: '#c7000b' }}
-            onMouseEnter={hover} onMouseLeave={leave}>{t('删除', 'Delete')}</button>
+        <div className="fixed z-50 rounded-xl py-1.5 min-w-[180px]" style={{ left: ctx.x, top: ctx.y, background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 8px 28px rgba(0,0,0,.14)' }} onContextMenu={e => e.preventDefault()}>
+          {ctx.mode === 'rename' ? (
+            /* inline 重命名：回车/失焦提交，Esc 取消 */
+            <input autoFocus value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && renameVal.trim() && onRename) { onRename(ctx.id, renameVal.trim()); setCtx(null) }
+                if (e.key === 'Escape') setCtx(null)
+                e.stopPropagation()
+              }}
+              onClick={e => e.stopPropagation()}
+              placeholder={ctx.title || t('输入新名称', 'New name')}
+              className="w-full px-3 py-2 text-[12.5px] bg-transparent outline-none"
+              style={{ color: 'var(--jt-ink)' }} />
+          ) : ctx.mode === 'confirmDelete' ? (
+            <button onClick={() => { onDelete?.(ctx.id); setCtx(null) }}
+              className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg font-medium"
+              style={{ color: '#c7000b' }}
+              onMouseEnter={hover} onMouseLeave={leave}>{t('确认删除（不可恢复）', 'Confirm delete (irreversible)')}</button>
+          ) : (
+            <>
+              <button onClick={e => { e.stopPropagation(); setRenameVal(ctx.title || ''); setCtx({ ...ctx, mode: 'rename' }) }}
+                className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: 'var(--jt-ink-2)' }}
+                onMouseEnter={hover} onMouseLeave={leave}>{t('重命名', 'Rename')}</button>
+              <button onClick={e => { e.stopPropagation(); setCtx({ ...ctx, mode: 'confirmDelete' }) }}
+                className="w-full text-left px-3 py-2 text-[12.5px] rounded-lg" style={{ color: '#c7000b' }}
+                onMouseEnter={hover} onMouseLeave={leave}>{t('删除', 'Delete')}</button>
+            </>
+          )}
         </div>
       )}
     </>
