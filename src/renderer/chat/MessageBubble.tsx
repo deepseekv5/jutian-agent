@@ -18,8 +18,11 @@ import { fetchCompat } from '../api'
 
 export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const { c } = useTheme()
-  const [open, setOpen] = useState(false)
+  // v16.3.5：运行中默认展开——用户要能看到「AI 正在写什么」；
+  // 此前参数面板默认折叠，流式期间只显示「写入 N 行」，内容完全不可见。
+  const [open, setOpen] = useState(tool.status === 'running' || tool.status === 'pending')
   const isRunning = tool.status === 'running' || tool.status === 'pending'
+  useEffect(() => { if (isRunning) setOpen(true) }, [isRunning])
   // 运行中每秒跳动的"已调用 Ns"——慢工具（如 opencode 线路、长命令）不再像卡死
   const [, bumpTick] = useState(0)
   useEffect(() => {
@@ -44,8 +47,11 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   let diffPath = ''
   switch (tool.name) {
     case 'write_file': {
+      // v16.3.5：实时显示正在写入的内容（前 3 行），流式期间逐字增长
       const n = lineCount(args.content); const p = fileName(args.path)
-      summary = `写入 ${n} 行`; diffCount = n; diffPath = p; break
+      const head = typeof args.content === 'string' ? args.content.split('\n').slice(0, 3).join(' / ').slice(0, 90) : ''
+      summary = head ? `写入 ${n} 行：${head}` : `写入 ${n} 行`
+      diffCount = n; diffPath = p; break
     }
     case 'edit_file':
       summary = '编辑文件'; diffPath = fileName(args.path); break

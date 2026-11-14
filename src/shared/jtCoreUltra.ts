@@ -56,7 +56,7 @@ export { MAX_TURNS as ULTRA_MAX_TURNS } from './ultra/turn'
 export interface UltraDeps {
   tools: UltraTool[]
   callLLM: (body: string, signal?: AbortSignal) => Promise<Response>
-  runTool: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<{ success: boolean; output?: string; error?: string; changeId?: string }>
+  runTool: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<{ success: boolean; output?: string; error?: string; changeId?: string; image?: string }>
   isClientTool: (name: string) => boolean
   runClientTool?: (tc: UltraToolCall) => Promise<string>
   confirmTool?: (tc: UltraToolCall) => Promise<string | null | undefined>
@@ -149,11 +149,12 @@ function buildRequestBody(messages: UltraMessage[], toolsSchema: { type: 'functi
   return JSON.stringify(body)
 }
 
-async function execOne(deps: UltraDeps, tc: UltraToolCall, signal?: AbortSignal): Promise<string> {
+async function execOne(deps: UltraDeps, tc: UltraToolCall, signal?: AbortSignal): Promise<{ text: string; image?: string }> {
   let args: Record<string, unknown> = {}
   try { args = JSON.parse(tc.arguments || '{}') } catch { /* 坏参数交工具层报错：args 保持空对象 */ }
   try {
     let outText: string
+    let outImage: string | undefined
     if (deps.isClientTool(tc.name)) outText = deps.runClientTool ? await deps.runClientTool(tc) : '{"ok":true}'
     else {
       // v16.0.0：超时 timer 必须在结束后清除——此前工具正常返回后 timer 仍挂 180 秒，
@@ -166,6 +167,8 @@ async function execOne(deps: UltraDeps, tc: UltraToolCall, signal?: AbortSignal)
         ])
         outText = result.success ? (result.output ?? '') : ('❌ 错误: ' + (result.error || '工具执行失败'))
         if (result.changeId) tc.changeId = result.changeId
+        // v16.3.6：截图等工具产出图片（dataUrl），随 tool 消息多模态发给模型
+        if (result.image) outImage = String(result.image)
       } finally { if (timer) clearTimeout(timer) }
     }
     if (outText.length > ULTRA_MAX_OUTPUT) {
@@ -174,8 +177,8 @@ async function execOne(deps: UltraDeps, tc: UltraToolCall, signal?: AbortSignal)
         try { const fname = await deps.saveLargeOutput(tc.name, outText); if (fname) outText = clampToolResult(outText, tc.name) + '\n[完整输出已保存到工作区: ' + fname + ']' } catch { /* 忽略 */ }
       }
     }
-    return outText
-  } catch (e) { return '❌ 错误: ' + String((e as Error)?.message || e) }
+    return { text: outText, image: outImage }
+  } catch (e) { return { text: '❌ 错误: ' + String((e as Error)?.message || e) } }
 }
 
 /** JT Core Ultra 主循环：与 runAgentLoop 同签名/同事件/同 NeedsClientError 契约 */
@@ -375,7 +378,8 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
         await Promise.all(group.map(async (p) => {
           p.fsm.transition('executing', { liveOutput: '' })
           deps.events.onToolStart?.(p.tc)
-          const outText = await execOne(deps, p.tc, signal)
+          const __exec = await execOne(deps, p.tc, signal)
+          const outText = __exec.text
           const failed = outText.startsWith('❌')
           p.tc.result = outText; p.tc.status = failed ? 'error' : 'done'; p.tc.finished_at = new Date().toISOString()
           p.fsm.transition(failed ? 'error' : 'success', failed ? { error: outText } : { result: outText })
@@ -385,7 +389,11 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
           allToolCalls.push(p.tc)
           stuck.push({ kind: failed ? 'error' : 'observation', sig: toolFingerprint(p.tc.name, outcome.output.slice(0, 80)), ok: !failed })
           if (failed) sandbox.onSandboxDenial()
-          messages.push({ role: 'tool', tool_call_id: p.tc.id, content: outText + (toolUseHint(toolUseCounter, p.tc.name) ? '\n' + toolUseHint(toolUseCounter, p.tc.name) : '') })
+          // v16.3.6：带图工具（截图）构造多模态 tool 消息，模型才看得到图
+          const __content = __exec.image
+            ? toolContentWithImage(outText + (toolUseHint(toolUseCounter, p.tc.name) ? '\n' + toolUseHint(toolUseCounter, p.tc.name) : ''), __exec.image)
+            : outText + (toolUseHint(toolUseCounter, p.tc.name) ? '\n' + toolUseHint(toolUseCounter, p.tc.name) : '')
+          messages.push({ role: 'tool', tool_call_id: p.tc.id, content: __content })
         }))
       }
     })
@@ -395,4 +403,13 @@ export async function runUltraLoop(inputMessages: UltraMessage[], deps: UltraDep
     if (wrappedUp && turn >= maxTurns - 1) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'max-turns', error: '已达最大 turn 数' }
   }
   return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: 'max-turns' }
+}
+
+/** v16.3.6：工具文本 + 图片 → 多模态 content（OpenAI 兼容 image_url） */
+function toolContentWithImage(text: string, image: string): Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  const cleaned = String(text || '').replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
+  return [
+    { type: 'text', text: cleaned || '（工具产出）' },
+    { type: 'image_url', image_url: { url: image } },
+  ]
 }

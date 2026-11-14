@@ -940,6 +940,7 @@ async function execOne(deps, tc, signal) {
   }
   try {
     let outText;
+    let outImage;
     if (deps.isClientTool(tc.name)) outText = deps.runClientTool ? await deps.runClientTool(tc) : '{"ok":true}';
     else {
       let timer;
@@ -952,6 +953,7 @@ async function execOne(deps, tc, signal) {
         ]);
         outText = result.success ? result.output ?? "" : "\u274C \u9519\u8BEF: " + (result.error || "\u5DE5\u5177\u6267\u884C\u5931\u8D25");
         if (result.changeId) tc.changeId = result.changeId;
+        if (result.image) outImage = String(result.image);
       } finally {
         if (timer) clearTimeout(timer);
       }
@@ -966,9 +968,9 @@ async function execOne(deps, tc, signal) {
         }
       }
     }
-    return outText;
+    return { text: outText, image: outImage };
   } catch (e) {
-    return "\u274C \u9519\u8BEF: " + String(e?.message || e);
+    return { text: "\u274C \u9519\u8BEF: " + String(e?.message || e) };
   }
 }
 async function runUltraLoop(inputMessages, deps) {
@@ -1189,7 +1191,8 @@ async function runUltraLoop(inputMessages, deps) {
         await Promise.all(group.map(async (p) => {
           p.fsm.transition("executing", { liveOutput: "" });
           deps.events.onToolStart?.(p.tc);
-          const outText = await execOne(deps, p.tc, signal);
+          const __exec = await execOne(deps, p.tc, signal);
+          const outText = __exec.text;
           const failed = outText.startsWith("\u274C");
           p.tc.result = outText;
           p.tc.status = failed ? "error" : "done";
@@ -1201,7 +1204,8 @@ async function runUltraLoop(inputMessages, deps) {
           allToolCalls.push(p.tc);
           stuck.push({ kind: failed ? "error" : "observation", sig: toolFingerprint(p.tc.name, outcome.output.slice(0, 80)), ok: !failed });
           if (failed) sandbox.onSandboxDenial();
-          messages.push({ role: "tool", tool_call_id: p.tc.id, content: outText + (toolUseHint(toolUseCounter, p.tc.name) ? "\n" + toolUseHint(toolUseCounter, p.tc.name) : "") });
+          const __content = __exec.image ? toolContentWithImage(outText + (toolUseHint(toolUseCounter, p.tc.name) ? "\n" + toolUseHint(toolUseCounter, p.tc.name) : ""), __exec.image) : outText + (toolUseHint(toolUseCounter, p.tc.name) ? "\n" + toolUseHint(toolUseCounter, p.tc.name) : "");
+          messages.push({ role: "tool", tool_call_id: p.tc.id, content: __content });
         }));
       }
     });
@@ -1209,6 +1213,13 @@ async function runUltraLoop(inputMessages, deps) {
     if (wrappedUp && turn >= maxTurns - 1) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "max-turns", error: "\u5DF2\u8FBE\u6700\u5927 turn \u6570" };
   }
   return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "max-turns" };
+}
+function toolContentWithImage(text, image) {
+  const cleaned = String(text || "").replace(/!\[[^\]]*\]\([^)]+\)/g, "").trim();
+  return [
+    { type: "text", text: cleaned || "\uFF08\u5DE5\u5177\u4EA7\u51FA\uFF09" },
+    { type: "image_url", image_url: { url: image } }
+  ];
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

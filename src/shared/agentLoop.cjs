@@ -25,7 +25,8 @@ __export(agentLoop_exports, {
   TOOL_TIMEOUT_MS: () => TOOL_TIMEOUT_MS,
   buildUpstreamError: () => buildUpstreamError,
   clampToolResult: () => clampToolResult,
-  runAgentLoop: () => runAgentLoop
+  runAgentLoop: () => runAgentLoop,
+  toolContentWithImage: () => toolContentWithImage
 });
 module.exports = __toCommonJS(agentLoop_exports);
 
@@ -865,6 +866,13 @@ function buildUpstreamError(status, errText) {
   if (status >= 500) return `\u4E0A\u6E38\u670D\u52A1\u5F02\u5E38\uFF08${status}\uFF09\uFF0C\u5DF2\u81EA\u52A8\u91CD\u8BD5\u4ECD\u672A\u6210\u529F\u3002${detail ? " " + detail : ""}`;
   return `\u8BF7\u6C42\u5931\u8D25\uFF08${status}\uFF09${detail ? "\uFF1A" + detail : ""}`;
 }
+function toolContentWithImage(text, image) {
+  const cleaned = String(text || "").replace(/!\[[^\]]*\]\([^)]+\)/g, "").trim();
+  return [
+    { type: "text", text: cleaned || "\uFF08\u5DE5\u5177\u4EA7\u51FA\uFF09" },
+    { type: "image_url", image_url: { url: image } }
+  ];
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   NeedsClientError,
@@ -872,5 +880,6 @@ function buildUpstreamError(status, errText) {
   TOOL_TIMEOUT_MS,
   buildUpstreamError,
   clampToolResult,
-  runAgentLoop
+  runAgentLoop,
+  toolContentWithImage
 });

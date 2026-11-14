@@ -1239,7 +1239,11 @@ async function screenshot(_a) {
     fs.writeFileSync(file, src.thumbnail.toJPEG(70));
     const token = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, "remote.json"), "utf-8")).token } catch { return "" } })();
     const url = `/api/remote/file?path=${encodeURIComponent(file)}&t=${token}`;
-    return { success: true, output: `📸 截屏完成（${src.thumbnail.getSize().width}x${src.thumbnail.getSize().height}）\n![screenshot](${url})\n文件: ${file}`, image: url, path: file };
+    // v16.3.6：image 改为 dataUrl——上游模型无法访问本机 /api/remote/file，
+    // 必须内联 base64 才能真正「看到」截图（工具消息会构造为多模态 image_url）。
+    let dataUrl = ''
+    try { dataUrl = 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64') } catch { /* 读不到退回 URL 文本 */ }
+    return { success: true, output: `📸 截屏完成（${src.thumbnail.getSize().width}x${src.thumbnail.getSize().height}）\n![screenshot](${url})\n文件: ${file}`, image: dataUrl || url, path: file };
   } catch (e) {
     return { success: false, error: e.message };
   }

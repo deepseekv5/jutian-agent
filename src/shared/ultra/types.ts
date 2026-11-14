@@ -39,7 +39,8 @@ export interface ToolOutcome {
 }
 export interface UltraMessage {
   role: string
-  content?: string
+  // v16.3.6：content 支持多模态数组（截图等工具产出图片）
+  content?: string | Array<{ type: string; text?: string; image_url?: { url: string } }>
   tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string }; index?: number }[]
   tool_call_id?: string
   [key: string]: unknown

@@ -82,6 +82,8 @@ export interface ToolRunResult {
   output?: string
   error?: string
   changeId?: string
+  /** v16.3.6：工具产出的图片（截图等），dataUrl；模型消息构造为多模态 image_url */
+  image?: string
 }
 
 export interface AgentEvents {
@@ -546,4 +548,13 @@ export function buildUpstreamError(status: number, errText: string): string {
   if (status === 429) return `请求过于频繁（429），已自动重试仍未成功。稍后再试或换模型。${detail ? ' ' + detail : ''}`
   if (status >= 500) return `上游服务异常（${status}），已自动重试仍未成功。${detail ? ' ' + detail : ''}`
   return `请求失败（${status}）${detail ? '：' + detail : ''}`
+}
+
+/** v16.3.6：工具文本 + 图片 → 多模态 content（OpenAI 兼容 image_url） */
+export function toolContentWithImage(text: string, image: string): Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  const cleaned = String(text || '').replace(/!\[[^\]]*\]\([^)]+\)/g, '').trim()
+  return [
+    { type: 'text', text: cleaned || '（工具产出）' },
+    { type: 'image_url', image_url: { url: image } },
+  ]
 }

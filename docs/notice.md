@@ -4,6 +4,8 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.3.6**：截图 AI 真正可读——用户反馈「截图功能不好用 ai 读不到」。根因：screenshot 工具返回的图片只作为**文本 URL** 进模型上下文（`/api/remote/file` 本机路径上游也访问不了），模型只看到 markdown 链接文字。修复：screenshot 产出 dataUrl（base64 内联），工具结果带 `image` 字段透传（ToolRunResult/UltraDeps.runTool/executeToolCore），两个内核的 tool 消息构造为**多模态 content**（text + image_url）——模型终于能真正看到截图内容；UltraMessage content 类型放宽支持数组。另清理误入库的 .mimosa hook 状态目录（加 .gitignore）。
+* **v16.3.5**：工具调用实时可见——用户反馈「模型在干什么输入什么都不知道，AI 正在写文件也应该是实时显示」。① 工具卡运行中**默认展开**（此前参数面板默认折叠，流式期间只显示「写入 N 行」，内容完全不可见）；② write_file 的工具卡摘要**实时显示正在写入的内容**（前 3 行，流式期间逐字增长，完成后保留）；CDP 实测：工具卡显示「写入 1 行：Hello World」，内容直接可见。
 * **v16.3.4**：安卓三大修复（同源根因）——① **关于页进不去**：`AboutContent` 挂载 effect 里 `api().onUpdateReady?.()` 未判空，安卓无 electronAPI 时取属性即抛 TypeError，错误边界替换整个设置弹窗；已改为 `api()?.onUpdateReady` 并同步修 apply/cancel/restartNow 判空、安卓更新按钮改走 APK 安装包链接、挂载时也走 GitHub 更新检查。② **每次进去要切模型**：serve.ts 有 15 处用 `sharedDb`（better-sqlite3）而不是 `hasDb`（含 jsondb）判数据库是否可用，安卓 jsondb 降级时全部返回空数组 → 服务端拿不到真 apiKey/model → `/api/llm-proxy` 回退失效报 400「尚未配置模型服务」；统一改 `allSettings()`（hasDb 判据），并修 `/api/remote/info`、`/api/remote/session`、`/api/lm-models` 同源于 settings.json 的读取。③ **agent 干不了活**：同②——模型调用第一步就 400，agent 任何动作都起不来；修复后空 key 也能用库内配置调通上游（实测 200）。另修 `getSettings()` 的 model 不回退 localStorage。
 * **v16.3.3**：界面降噪——侧栏「工作区」入口组默认收起（一行「工作区 · N」+ 展开箭头，记住展开状态），与顶部标签条/主区卡片墙不再三处重复堆叠；侧栏回归 Codex 式结构（标题/新对话/最近/项目）。另修复默认主题被切深色的问题（亮色为默认）。
 * **v16.3.2**：模式切换器升级三选——侧栏「巨天 ⌄」下拉在「工作模式 / 编程模式」之外新增「对话模式」（纯聊天 · Markdown · 朗读 · 历史），选中即进入主界面 ChatHome；模式由全局 `lyclaw_chat_mode` 统一驱动（工作/编程 → 工作台，对话 → ChatHome），主界面「工作台/对话」tab 同步跟随；ChatHome 内的「工作/编程」tab 改为对话内 persona 微调（独立事件，不退出对话）。CDP 实测：下拉三项、选对话进 ChatHome（历史恢复）、选工作回工作台。
