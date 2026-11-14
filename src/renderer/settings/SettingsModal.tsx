@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent } from '../hooks/useTheme';
+import { useTheme, ACCENT_PRESETS, getAccentKey, setAccentKey, setCustomAccent, getCustomAccent } from '../hooks/useTheme';
 import { useModalBehavior } from '../hooks/useModalBehavior';
 import { reportError } from '../app/ErrorToast';
 import { loadVisualSettings, saveVisualSettings, resolveWallpaper, DEFAULT_VISUAL, type VisualSettings } from '../store/visual';
@@ -1482,9 +1482,15 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   })}
                 </div>
                 <p className="text-[10.5px] mt-1.5" style={{ color: c.textTertiary }}>{t('影响新建对话、链接与选中态等强调元素。', 'Affects primary buttons, links and active states.')}</p>
-                {/* v11 自定义种子色：任意颜色，暗色变体自动派生 */}
+                {/* v11 自定义种子色：任意颜色，暗色变体自动派生。
+                    v16.4.0：type=color 不接受 var()，defaultValue 里写 var 实际显示黑色——改为受控 value=当前生效 hex */}
                 <div className="flex items-center gap-2 mt-2">
-                  <input type="color" defaultValue="var(--brand, #10a37f)"
+                  <input type="color" value={(() => {
+                    const custom = getCustomAccent()
+                    if (custom) return theme === 'dark' ? custom.dark : custom.light
+                    const preset = ACCENT_PRESETS[getAccentKey()]
+                    return (theme === 'dark' ? preset?.dark : preset?.light) || '#10a37f'
+                  })()}
                     onChange={e => { setCustomAccent(e.target.value); setAccentTick(x => x + 1) }}
                     className="w-8 h-8 rounded-lg cursor-pointer bg-transparent"
                     style={{ border: `1px solid ${c.border}` }}
@@ -1934,7 +1940,7 @@ function CliBanner() {
         className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full grid place-items-center border"
         style={{ background: c.surfaceCard, borderColor: c.border, color: c.textTertiary }}
         title={t('收起这条提示', 'Dismiss')}>
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 18L18 6M6 6l12 12" /></svg>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6}><path d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </div>
   )

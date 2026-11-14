@@ -1223,9 +1223,19 @@ input:focus, textarea:focus, select:focus { animation: jt-focus-ring .24s var(--
   }
 }
 
-/* Codex Exact 首页：强制中性灰，不受党政红/深色主题的暖色变量影响 */
-.jt-codex-input::placeholder { color: #9a9a9a !important; }
-.jt-codex-input { caret-color: #111 !important; }
+/* Codex Exact 首页：强制中性灰，不受党政红/深色主题的暖色变量影响。
+   v16.4.0：caret/placeholder 走 ink token——此前 caret 硬编码 #111，暗色主题下光标几乎不可见 */
+.jt-codex-input::placeholder { color: var(--jt-ink-4, #9a9a9a) !important; }
+.jt-codex-input { caret-color: var(--jt-ink, #111) !important; }
+
+/* v16.4.0：scrollbar-thin 在 77 处 tsx 中被引用但从未定义（死类）——
+   所有滚动区实际渲染默认 8px 粗滚动条，是全局「小厂感」的隐性来源 */
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--jt-ink-4, rgba(0,0,0,.16)) transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--jt-ink-4, rgba(0,0,0,.16)); border-radius: 9999px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+[data-theme="dark"] .scrollbar-thin { scrollbar-color: rgba(255,255,255,.14) transparent; }
+[data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); }
 
 
 /* 新标签页启动台：整页可滚动，与聊天页（消息流+悬浮 composer）彻底区分 */

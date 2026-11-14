@@ -43,6 +43,9 @@ export default function ChatHome() {
   const [ttsBusy, setTtsBusy] = useState(false)
   const ttsStopRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // v16.4.0 大厂标配：停止生成 + 多行输入 + 复制消息
+  const abortRef = useRef<AbortController | null>(null)
+  const stopGen = () => { abortRef.current?.abort(); abortRef.current = null; setBusy(false) }
   useEffect(() => { try { localStorage.setItem('lyclaw_chathome_msgs', JSON.stringify(msgs.slice(-200))) } catch { /* 超限截断 */ } }, [msgs])
   // v16.3.2：对话内的模式 tab 只微调 persona——写 localStorage 供下次进入读取，
   // 派独立事件（chat-persona-changed），不触发主界面退出对话（那是侧栏三选切换器的职责）
@@ -54,6 +57,14 @@ export default function ChatHome() {
       else localStorage.setItem('lyclaw_chat_mode', m)
     } catch {}
     window.dispatchEvent(new Event('chat-persona-changed'))
+  }
+  // v16.4.0：复制消息（复制成功短暂反馈）
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  const copyMsg = async (text: string, i: number) => {
+    try { await navigator.clipboard.writeText(text) } catch {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove()
+    }
+    setCopiedIdx(i); setTimeout(() => setCopiedIdx(c => (c === i ? null : c)), 1500)
   }
   // 朗读：剥代码块/标记，逐条经 /api/edge-tts
   const speak = async (text: string) => {
@@ -75,7 +86,7 @@ export default function ChatHome() {
     } catch { /* 静默 */ } finally { setTtsBusy(false) }
   }
   const bottomRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, busy])
 
@@ -93,10 +104,13 @@ export default function ChatHome() {
     setBusy(true)
     const reply: Msg = { role: 'assistant', content: '' }
     setMsgs([...next, reply])
+    const ac = new AbortController()
+    abortRef.current = ac
     try {
       const res = await fetchCompat('/api/llm-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Target-Base': s.apiBaseUrl, 'X-Api-Key': effectiveApiKey(s.apiKey) },
+        signal: ac.signal,
         body: JSON.stringify({
           model: s.model || 'default',
           messages: [
@@ -105,7 +119,7 @@ export default function ChatHome() {
               : '你是「巨天」的办公形态：直接高效，先结论后细节；需要时给出结构化 Markdown（标题/列表/表格/代码块）。' },
             ...next.map(m => ({ role: m.role, content: m.content })),
           ].slice(-21),
-          stream: true, max_tokens: 1024,
+          stream: true, max_tokens: 4096,
         }),
       })
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
@@ -122,8 +136,17 @@ export default function ChatHome() {
       }
       if (!reply.content.trim()) setMsgs(prev => [...prev.slice(0, -1), { role: 'assistant', content: t('（模型没有返回内容，请检查密钥/模型配置）', '(Empty response — check model/key settings)') }])
     } catch (e) {
-      setMsgs(prev => [...prev.slice(0, -1), { role: 'assistant', content: t(`对话失败：${String((e as Error)?.message || e)}`, `Chat failed: ${String((e as Error)?.message || e)}`) }])
+      // 用户主动停止：保留已生成的部分，不算错误。
+      // fetchCompat abort 抛 ApiError('abort')（message「请求已取消」），流中途断开才是原生 AbortError——两者都按停止处理
+      const err = e as Error
+      const stopped = err?.name === 'AbortError' || abortRef.current?.signal.aborted || String(err?.message || '').includes('取消')
+      if (stopped) {
+        if (!reply.content.trim()) setMsgs(prev => prev.slice(0, -1))
+      } else {
+        setMsgs(prev => [...prev.slice(0, -1), { role: 'assistant', content: t(`对话失败：${String((e as Error)?.message || e)}`, `Chat failed: ${String((e as Error)?.message || e)}`) }])
+      }
     } finally {
+      abortRef.current = null
       setBusy(false)
       inputRef.current?.focus()
     }
@@ -166,17 +189,31 @@ export default function ChatHome() {
             </div>
           )}
           {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-3 jt-msg-in`}>
-              <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed"
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 jt-msg-in`}>
+              {/* v16.4.0：assistant 无气泡全宽（ChatGPT 式），user 保留右对齐气泡——层级更清晰 */}
+              <div className={m.role === 'user'
+                ? 'max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed'
+                : 'w-full text-[13.5px] leading-relaxed'}
                 style={m.role === 'user'
-                  ? { background: 'var(--jt-ink)', color: 'var(--jt-paper)', borderBottomRightRadius: 6, whiteSpace: 'pre-wrap' }
-                  : { background: 'var(--jt-paper-alt)', color: 'var(--jt-ink)', border: `1px solid var(--jt-hairline-soft)`, borderBottomLeftRadius: 6 }}>
+                  ? { background: 'var(--jt-ink)', color: 'var(--jt-paper)', borderBottomRightRadius: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }
+                  : { color: 'var(--jt-ink)' }}>
                 {m.role === 'assistant' && m.content
                   ? <MdText text={m.content} />
                   : (m.role === 'assistant' && busy ? <span className="jt-thinking-dots" style={{ color: 'var(--jt-ink-3)' }}><i /><i /><i /></span> : m.content)}
+                {/* 流式尾部光标：生成中最后一帧的实时感知 */}
+                {m.role === 'assistant' && m.content && busy && i === msgs.length - 1 && (
+                  <span className="inline-block w-[7px] h-[15px] align-[-2px] ml-0.5 rounded-[1px]" style={{ background: 'var(--jt-ink)', opacity: .75, animation: 'typing-cursor 1s steps(2) infinite' }} />
+                )}
                 {m.role === 'assistant' && m.content && !busy && (
-                  <div className="mt-1.5 pt-1.5 flex items-center gap-2" style={{ borderTop: '1px dashed var(--jt-hairline-soft)' }}>
-                    <button onClick={() => speak(m.content)} className="text-[10.5px] flex items-center gap-1 transition-colors"
+                  <div className="mt-1.5 pt-1.5 flex items-center gap-3" style={{ borderTop: '1px dashed var(--jt-hairline-soft)' }}>
+                    <button onClick={() => copyMsg(m.content, i)} className="text-[10.5px] flex items-center gap-1 transition-colors hover:opacity-70"
+                      style={{ color: copiedIdx === i ? 'var(--brand, #10a37f)' : 'var(--jt-ink-3)' }}>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>{copiedIdx === i
+                        ? <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        : <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 012-2h10" /></>}</svg>
+                      {copiedIdx === i ? t('已复制', 'Copied') : t('复制', 'Copy')}
+                    </button>
+                    <button onClick={() => speak(m.content)} className="text-[10.5px] flex items-center gap-1 transition-colors hover:opacity-70"
                       style={{ color: ttsBusy ? 'var(--brand, #10a37f)' : 'var(--jt-ink-3)' }}>
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.5 8.5a4 4 0 010 7m-3-7v7m-6-4.5v3a2 2 0 002 2h1l4 3V6l-4 3h-1a2 2 0 00-2 2z" /></svg>
                       {ttsBusy ? t('停止', 'Stop') : t('朗读', 'Speak')}
@@ -190,20 +227,34 @@ export default function ChatHome() {
         </div>
       </div>
 
-      {/* 输入区 */}
+      {/* 输入区（v16.4.0：多行 textarea 自动增高 + 停止生成，对齐大厂聊天输入） */}
       <div className="shrink-0" style={{ padding: '0 24px 20px' }}>
         <div className="mx-auto w-full" style={{ maxWidth: 780 }}>
-          <div className="flex items-center gap-2 rounded-2xl px-3 py-2.5"
+          <div className="flex items-end gap-2 rounded-2xl px-3 py-2.5 transition-shadow"
             style={{ background: 'var(--jt-paper)', border: '1px solid var(--jt-hairline)', boxShadow: '0 2px 12px rgba(0,0,0,.035)' }}>
-            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) } }}
-              placeholder={t('发消息…', 'Send a message…')}
-              className="flex-1 bg-transparent outline-none text-[14px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
-            <button onClick={() => send(input)} disabled={busy || !input.trim()}
-              className="w-8 h-8 rounded-full grid place-items-center transition-all disabled:opacity-40"
-              style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6l6 6-6 6" /></svg>
-            </button>
+            <textarea ref={inputRef} value={input} rows={1}
+              onChange={e => {
+                setInput(e.target.value)
+                const el = e.currentTarget
+                el.style.height = 'auto'
+                el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+              }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); const el = e.currentTarget; setTimeout(() => { el.style.height = 'auto' }, 0) } }}
+              placeholder={t('发消息，Shift+Enter 换行…', 'Send a message, Shift+Enter for newline…')}
+              className="flex-1 bg-transparent outline-none text-[14px] jt-codex-input resize-none leading-relaxed"
+              style={{ color: 'var(--jt-ink)', maxHeight: 200 }} />
+            {busy ? (
+              <button onClick={stopGen} className="w-8 h-8 rounded-full grid place-items-center shrink-0 transition-transform active:scale-95"
+                style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('停止生成', 'Stop generating')}>
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              </button>
+            ) : (
+              <button onClick={() => send(input)} disabled={!input.trim()}
+                className="w-8 h-8 rounded-full grid place-items-center shrink-0 transition-all disabled:opacity-30 active:scale-95"
+                style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6l6 6-6 6" /></svg>
+              </button>
+            )}
           </div>
           <div className="text-[10px] text-center mt-2" style={{ color: 'var(--jt-ink-4)' }}>
             {t('对话模式 · 内容不保存到会话历史', 'Chat mode · not saved to session history')}

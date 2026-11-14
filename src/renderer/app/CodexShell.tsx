@@ -452,8 +452,8 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
               style={{ color: s.id === activeId ? 'var(--jt-ink)' : 'var(--jt-ink-2)', background: s.id === activeId ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
               <span className="flex-1 truncate">{s.title || t('新对话', 'New chat')}</span>
-              {(s.project || (i % 3 === 1)) && <span className="text-[11px] shrink-0" style={muted}>{shortName(s.project) || 'Miniapp'}</span>}
-              {i % 3 === 0 && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: '#3787f4' }} />}
+              {/* v16.4.0：只显示真实项目标签/未读——此前 i%3 伪造「Miniapp」标签和蓝点，一眼假 */}
+              {s.project && <span className="text-[11px] shrink-0" style={muted}>{shortName(s.project)}</span>}
             </button>
           ))}
           {sessions.length > 8 && (
@@ -462,7 +462,11 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             </button>
           )}
           <div className="px-2 mt-7 mb-2 text-[11px] font-medium" style={muted}>{t('项目', 'Projects')}</div>
-          {(projects.length ? projects : ['iOS', 'Miniapp', 'Superapp']).map(p => (
+          {/* v16.4.0：无项目时显示真实空态，不再硬编码假项目名 */}
+          {!projects.length && (
+            <div className="px-2 py-1.5 text-[11px]" style={muted}>{t('还没有项目——在对话里创建文件后自动归组', 'No projects yet — created files group automatically')}</div>
+          )}
+          {projects.map(p => (
             <button key={p} onClick={() => onOpenTab('files')} className={row} style={{ color: 'var(--jt-ink-2)' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.folder} /></svg>
               {p}

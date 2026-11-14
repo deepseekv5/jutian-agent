@@ -42,7 +42,7 @@ export default function SubAgentTracker() {
           className="ml-auto w-5 h-5 rounded grid place-items-center"
           style={{ color: c.textTertiary }}
           title="收起">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 18L18 6M6 6l12 12" /></svg>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}><path d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
       {/* 每个子代理 */}
