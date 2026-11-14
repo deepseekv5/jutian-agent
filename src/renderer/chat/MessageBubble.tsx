@@ -55,12 +55,22 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
     }
     case 'edit_file':
       summary = '编辑文件'; diffPath = fileName(args.path); break
-    case 'read_file':
-      summary = fileName(args.path); break
+    case 'read_file': {
+      // v16.3.7：完成后也显示读到的内容摘要（前 3 行），不只是文件名
+      const p = fileName(args.path)
+      const out = typeof tool.result === 'string' ? tool.result.replace(/\s+/g, ' ').slice(0, 90) : ''
+      summary = out ? `${p}：${out}` : p
+      break
+    }
     case 'list_dir':
       summary = typeof args.path === 'string' ? args.path : ''; break
-    case 'shell':
-      summary = typeof args.command === 'string' ? args.command.replace(/\s+/g, ' ').slice(0, 80) : ''; break
+    case 'shell': {
+      // v16.3.7：显示命令 + 输出摘要（前 2 行），完成后也能看到结果
+      const cmd = typeof args.command === 'string' ? args.command.replace(/\s+/g, ' ').slice(0, 60) : ''
+      const out = typeof tool.result === 'string' ? tool.result.replace(/\s+/g, ' ').slice(0, 80) : ''
+      summary = out ? `${cmd} → ${out}` : cmd
+      break
+    }
     case 'web_search':
     case 'search_content':
       summary = typeof args.query === 'string' ? args.query.slice(0, 60) : ''; break
