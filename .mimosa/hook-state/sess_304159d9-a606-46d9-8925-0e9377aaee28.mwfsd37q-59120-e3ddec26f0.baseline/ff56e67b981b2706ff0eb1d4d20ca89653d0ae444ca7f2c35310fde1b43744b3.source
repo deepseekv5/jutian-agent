@@ -1,0 +1,78 @@
+"""B 站封面渲染 —— 纸白编辑杂志风，1920×1080。
+
+复用 reel 引擎的 Canvas 与 theme 调色板，独立于时间线渲染单帧。
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from mg.core import Canvas
+
+from jutian_promo import chrome
+from jutian_promo import theme as T
+from jutian_promo.scenes import _cjk, _mono, grid
+
+
+def main():
+    c = Canvas(T.W, T.H, ss=2, out=(T.OUT_W, T.OUT_H))
+    c.clear(T.BG0)
+
+    # 编辑风底纹：细网格 + 角落青绿版色块
+    p = c.pass_()
+    grid(p, 24, 12, 0.03)
+
+    # 右侧竖排版色条（杂志书脊）
+    p.rect(T.W - 26, 0, 26, T.H, T.ACCENT, 0.9)
+    p.rect(T.W - 34, 0, 4, T.H, T.ACCENT, 0.35)
+
+    # 右下角墨色角色卡（视觉锚点）
+    kx, ky, kw, kh = T.W - 700, T.H - 560, 520, 430
+    p.rect(kx, ky, kw, kh, T.ACCENT, 0.20, radius=22)
+    p.rect(kx + 6, ky + 6, kw - 12, kh - 12, T.CARD, 0.98, radius=18)
+    acx, acy = kx + kw / 2, ky + 120
+    p.rect(acx - 62, acy - 62, 124, 124, (52, 211, 153), 0.95, radius=62)
+    p.rect(acx - 40, acy - 40, 80, 80, (14, 165, 233), 0.9, radius=40)
+    p.text(acx, acy, "巨", _cjk(34), (255, 255, 255), 0.0, "mm", 0.98)
+    p.text(kx + kw / 2, ky + 232, "AI 角色 · 小巨", _cjk(24), T.WHITE, 0.0, "mm", 0.95)
+    p.text(kx + kw / 2, ky + 274, "有记忆 · 能说话 · 会画画", _cjk(15), T.GREY, 0.0, "mm", 0.85)
+    chips = ["记忆", "朗读", "画画", "免费"]
+    cw = 104
+    for i, label in enumerate(chips):
+        x = kx + 34 + i * (cw + 14)
+        p.rect(x, ky + 316, cw, 42, T.ACCENT, 0.13, radius=10)
+        p.text(x + cw / 2, ky + 337, label, _cjk(15), T.ACCENT_LT, 0.0, "mm", 0.95)
+
+    # 刊头（左上）
+    _mono(p, 56, 64, "JUTIAN — PAPER EDITION / ISSUE 11", T.ACCENT, 13, 2.6, 0.95, "ls")
+    p.rect(56, 84, 300, 3, T.ACCENT, 0.6)
+
+    # 主标题（左侧，超大墨字）
+    p.text(56, 250, "把活，", _cjk(128), T.WHITE, -3.0, "ls", 1.0)
+    p.text(56, 386, "干完。", _cjk(128), T.WHITE, -3.0, "ls", 1.0)
+    p.rect(60, 448, 360, 8, T.ACCENT, 0.9)
+
+    # 副题
+    p.text(56, 502, "开源本地优先的 AI 桌面工作台", _cjk(30), T.WHITE, 0.0, "ls", 0.95)
+    p.text(56, 556, "39 个内置工具 · 免费模型零门槛 · 数据不出本机", _cjk(19), T.GREY, 0.0, "ls", 0.9)
+
+    # 能力标签条（左下）
+    tags = ["AI 角色", "深度调研", "目标模式", "Agent 集群", "技能市场"]
+    tw = 176
+    for i, label in enumerate(tags):
+        x = 56 + i * (tw + 16)
+        p.rect(x, T.H - 176, tw, 54, T.ACCENT, 0.12, radius=12)
+        p.text(x + tw / 2, T.H - 149, label, _cjk(17), T.ACCENT_LT, 0.0, "mm", 0.95)
+
+    # 下载指引（底部）
+    _mono(p, 56, T.H - 74, "GITHUB.COM/DEEPSEEKV5/JUTIAN-AGENT · MIT · FREE", T.GREY, 13, 2.2, 0.85, "ls")
+
+    c.commit()
+
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "cover-bilibili.png")
+    c.image().save(out)
+    print("saved:", out)
+
+
+if __name__ == "__main__":
+    main()

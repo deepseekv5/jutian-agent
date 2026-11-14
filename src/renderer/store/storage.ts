@@ -127,7 +127,7 @@ export async function getSettings(): Promise<Settings> {
       ...DEFAULT_SETTINGS,
       apiBaseUrl: result.apiBaseUrl || DEFAULT_SETTINGS.apiBaseUrl,
       apiKey: result.apiKey || DEFAULT_SETTINGS.apiKey,
-      model: result.model || DEFAULT_SETTINGS.model,
+      model: result.model || localSettings.model || DEFAULT_SETTINGS.model,
       provider: (result.provider === 'local' ? 'local' : 'api') as 'api' | 'local',
       localModel: result.localModel || DEFAULT_SETTINGS.localModel,
       voiceId: result.voiceId || DEFAULT_SETTINGS.voiceId,

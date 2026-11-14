@@ -1,0 +1,282 @@
+{
+  "name": "jutian-agent",
+  "version": "16.3.3",
+  "private": true,
+  "main": "electron/main.cjs",
+  "type": "module",
+  "description": "巨天agent — 开源本地优先的 AI 桌面工作台:39 工具直连终端文件、免费模型零门槛、AI 角色(记忆/朗读/画画)、深度调研、目标模式",
+  "keywords": [
+    "electron",
+    "ai-agent",
+    "desktop",
+    "local-first",
+    "llm",
+    "free-models",
+    "openai-compatible",
+    "ai-persona",
+    "mcp",
+    "react",
+    "typescript",
+    "chatgpt-alternative",
+    "privacy"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseekv5/jutian-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deepseekv5/jutian-agent/issues"
+  },
+  "homepage": "https://deepseekv5.github.io/jutian-agent/",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:server && vite build",
+    "serve": "NODE_OPTIONS='--max-old-space-size=512' node serve.cjs",
+    "start": "node scripts/run.js",
+    "electron:dev": "vite build && electron .",
+    "electron:build": "vite build && bash scripts/rebuild-for-electron.sh && electron-builder --mac --config scripts/eb-config.cjs",
+    "electron:build:win": "vite build && electron-builder --win --config scripts/eb-config.cjs",
+    "electron:dist": "npm run electron:build",
+    "patch": "node scripts/patch-update.mjs",
+    "patch:fast": "node scripts/patch-update.mjs --no-build",
+    "build:server": "esbuild src/server/serve.ts --format=cjs --platform=node --target=node18 --outfile=serve.cjs && esbuild src/shared/personas.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/personas.cjs && esbuild src/shared/sessionCleanup.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/sessionCleanup.cjs && esbuild src/shared/opencodeZen.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/opencodeZen.cjs && esbuild src/shared/localApi.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/localApi.cjs && esbuild src/shared/toolArgs.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/toolArgs.cjs && esbuild src/shared/announcement.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/announcement.cjs && esbuild src/shared/skillMarket.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/skillMarket.cjs && esbuild src/shared/shellGuard.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/shellGuard.cjs && esbuild src/shared/cron.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/cron.cjs && esbuild src/shared/workflow.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/workflow.cjs && esbuild src/shared/agentLoop.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/agentLoop.cjs && esbuild src/shared/permission.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/permission.cjs && esbuild src/shared/toolFilter.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/toolFilter.cjs && esbuild src/shared/extensions.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/extensions.cjs && esbuild src/shared/localActivity.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/localActivity.cjs && esbuild src/shared/securityShield.ts --format=cjs --platform=node --target=node18 --outfile=src/shared/securityShield.cjs && esbuild src/shared/jtCoreUltra.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/jtCoreUltra.cjs && esbuild src/shared/ultra/tools.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/ultraTools.cjs && esbuild src/shared/ultra/prompts.ts --bundle --format=cjs --platform=node --target=node18 --outfile=src/shared/ultraPrompts.cjs",
+    "check": "tsc --noEmit && npm run build:server",
+    "verify": "node scripts/verify.mjs",
+    "gen:legal-site": "node scripts/gen-legal-site.mjs",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:tui": "esbuild tui/App.jsx --bundle --platform=node --format=esm --jsx=automatic --outfile=tui/App.mjs --external:react-devtools-core --external:ink --external:react --external:react-reconciler --external:marked --external:marked-terminal --external:ink-spinner --external:yoga-layout",
+    "tui": "npm run -s build:tui && node tui/index.mjs"
+  },
+  "build": {
+    "appId": "com.jutian.agent",
+    "productName": "巨天agent",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "serve.cjs",
+      "src/shared/**/*",
+      "src/server/serve.ts",
+      "package.json",
+      "node_modules/better-sqlite3/lib/**/*",
+      "node_modules/better-sqlite3/package.json",
+      "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "node_modules/file-uri-to-path/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/@codemirror/**/*",
+      "node_modules/@lezer/**/*",
+      "node_modules/qrcode/**/*",
+      "node_modules/react/**/*",
+      "node_modules/react-dom/**/*",
+      "node_modules/react-markdown/**/*",
+      "node_modules/rehype-highlight/**/*",
+      "node_modules/remark-gfm/**/*",
+      "node_modules/pptxgenjs/**/*",
+      "node_modules/zustand/**/*",
+      "!**/*.map",
+      "!**/*.o",
+      "!**/*.obj",
+      "!**/test_extension.node"
+    ],
+    "asarUnpack": [
+      "**/better_sqlite3.node"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.plist",
+      "entitlementsInherit": "electron/entitlements.plist",
+      "extraResources": [
+        {
+          "from": "python-runtime",
+          "to": "python-runtime",
+          "filter": [
+            "bin/**",
+            "lib/python3.11/site-packages/**",
+            "!**/onnxruntime/**",
+            "!**/av/**",
+            "!**/onnxruntime",
+            "!**/av",
+            "!**/pip/**",
+            "!**/pip-*.dist-info/**",
+            "!**/setuptools/**",
+            "!**/*.pyc",
+            "!**/*.pyo",
+            "!**/__pycache__/**",
+            "!**/tests/**",
+            "!**/test_*.py"
+          ]
+        },
+        {
+          "from": "${env.EDGE_TTS_DIR}",
+          "to": "edge-tts",
+          "filter": [
+            "**/*",
+            "!__pycache__",
+            "!*.pyc"
+          ]
+        },
+        {
+          "from": "src/shared/stt.py",
+          "to": "stt/stt.py"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.ico",
+      "artifactName": "jutian-agent-${version}-${arch}-setup.${ext}",
+      "extraResources": [
+        {
+          "from": "python-runtime",
+          "to": "python-runtime",
+          "filter": [
+            "bin/**",
+            "Scripts/**",
+            "lib/python3.11/site-packages/**",
+            "!**/onnxruntime/**",
+            "!**/av/**",
+            "!**/pip/**",
+            "!**/pip-*.dist-info/**",
+            "!**/setuptools/**",
+            "!**/*.pyc",
+            "!**/__pycache__/**",
+            "!**/tests/**",
+            "!**/test_*.py"
+          ]
+        },
+        {
+          "from": "${env.EDGE_TTS_DIR}",
+          "to": "edge-tts",
+          "filter": [
+            "**/*",
+            "!__pycache__",
+            "!*.pyc"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "巨天agent"
+    },
+    "dmg": {
+      "title": "巨天agent",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "asar": true,
+    "npmRebuild": false
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.82",
+    "ai": "^7.0.159",
+    "better-sqlite3": "^12.10.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/search": "^6.7.1",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.1",
+    "@electron/asar": "^3.2.18",
+    "@eslint/js": "^9.17.0",
+    "@lezer/highlight": "^1.2.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.21.5",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "immer": "^11.1.21",
+    "ink": "^5.2.1",
+    "ink-spinner": "^5.0.0",
+    "katex": "^0.19.1",
+    "marked": "^18.1.3",
+    "marked-terminal": "^8.0.0",
+    "mermaid": "^12.2.0",
+    "postcss": "^8.4.49",
+    "pptxgenjs": "^4.0.1",
+    "puppeteer-core": "^25.16.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.1",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vite": "^5.4.11",
+    "vitest": "^3.2.7",
+    "zustand": "^5.0.15"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "巨天工作室",
+    "email": "agent@jutian.local"
+  },
+  "bin": {
+    "jt": "tui/index.mjs"
+  }
+}

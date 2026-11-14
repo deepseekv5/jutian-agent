@@ -1,0 +1,434 @@
+"""OpenCode Zen Free — 十个镜头，六张模型数据卡。
+
+主角是六轴雷达图（上下文 / 输出 / 多模态 / 推理档 / 附件 / 新近度），
+每个模型的形状都由真实 catalog 数据驱动，形状差异即能力差异。
+
+高级动画三件套：
+  · 雷达扫描线（radar sweep）——一条亮线绕中心扫，带衰减拖尾
+  · 数据多边形从中心弹性生长 + 顶点逐个弹入
+  · 数字滚动计数（context / output 从 0 涨到真值）
+"""
+from __future__ import annotations
+
+import numpy as np
+
+from mg import anim as A
+from mg import fonts as F
+from mg.core import clip01
+
+from . import theme as T
+from . import models as M
+
+W, H = T.W, T.H
+BEAT = T.BEAT
+CX, CY = W / 2.0, H / 2.0
+
+# 雷达默认几何（Datasheet 用）：放在右半，左侧留给文字。
+# 半径/圆心按最宽模型名实测校准：Nemotron 3.5 Lightning 在 40px 字号下
+# 右边缘到 x≈620，雷达（含轴标签）的左边缘必须留出安全间距，否则长名字
+# 会压到图上（实测撞车过）。RR 从 250 收到 205、RX 右移到 905 后，
+# 轴标签最左 ≈657，留 37px 余量。
+RX, RY, RR = 905.0, 362.0, 205.0
+AXIS_ANGLES = [-90 + i * 60 for i in range(6)]   # 从正上方顺时针
+
+
+# --------------------------------------------------------------------------
+# shared helpers
+# --------------------------------------------------------------------------
+def _cjk(size):
+    return F.cjk(size)
+
+
+def _mono(p, x, y, s, color, size=T.S_TAG, track=T.TRACK_HUD, alpha=1.0, anchor="ls"):
+    return p.text(x, y, s, F.mono(size), color, track, anchor, alpha)
+
+
+def reveal_cjk(p, cx, cy, text, size, color, prog, alpha=1.0, spacing=0.0):
+    f = _cjk(size)
+    n = max(1, len(text))
+    widths = []
+    for ch in text:
+        bb = f.getbbox(ch)
+        widths.append((bb[2] - bb[0]) if bb else size)
+    total_w = sum(widths) + spacing * max(0, n - 1)
+    x = cx - total_w / 2
+    for i, ch in enumerate(text):
+        a = float(np.clip(prog * n - i, 0.0, 1.0))
+        if a > 0.01:
+            p.text(x, cy, ch, f, color, 0.0, "lm", alpha * a)
+        x += widths[i] + spacing
+    return total_w
+
+
+def plate(c, cx, cy, tint, gain=1.0, rx=640, ry=300):
+    c.add += (np.asarray(tint, np.float32).reshape(1, 1, 3) * gain
+              * _gauss(W, H, cx, cy, rx, ry)[..., None])
+
+
+def _gauss(w, h, cx, cy, rx, ry):
+    x = np.arange(w, dtype=np.float32)
+    y = np.arange(h, dtype=np.float32)
+    gx = np.exp(-((x - cx) / rx) ** 2)
+    gy = np.exp(-((y - cy) / ry) ** 2)
+    return np.outer(gy, gx).astype(np.float32)
+
+
+def axis_point(angle_deg, r, cx=RX, cy=RY):
+    a = np.deg2rad(angle_deg)
+    return (cx + r * np.cos(a), cy + r * np.sin(a))
+
+
+# --------------------------------------------------------------------------
+# 雷达图本体（全部接收显式圆心，绝不改模块全局——场景是顺序渲染的）
+# --------------------------------------------------------------------------
+def radar_grid(p, ring_prog, cx=RX, cy=RY, rr=RR, alpha=1.0):
+    """同心六边形环 + 六条辐条，逐环淡入。
+    环线刻意加强（0.16→0.30、外圈 0.45）——初版太淡，反色后几乎看不见，
+    六边形图因此读起来"不分明"。外圈加粗成参考边界，数据形状才好比对。"""
+    rings = 4
+    for k in range(1, rings + 1):
+        e = A.out_expo(clip01((ring_prog - (k - 1) * 0.12) / 0.5), 3.0)
+        if e <= 0.01:
+            continue
+        r = rr * k / rings
+        outer = (k == rings)
+        pts = [axis_point(a, r, cx, cy) for a in AXIS_ANGLES]
+        pts.append(pts[0])
+        p.line(pts, T.ACCENT, 1.2 if outer else 0.7, (0.45 if outer else 0.30) * e * alpha)
+    for i, a in enumerate(AXIS_ANGLES):
+        e = A.out_expo(clip01((ring_prog - 0.1 - i * 0.05) / 0.4), 3.0)
+        if e <= 0.01:
+            continue
+        x2, y2 = axis_point(a, rr * e, cx, cy)
+        p.line([(cx, cy), (x2, y2)], T.ACCENT, 1.0, 0.34 * alpha)
+
+
+def radar_sweep(p, t, cx=RX, cy=RY, rr=RR, alpha=1.0):
+    """雷达扫描线：一条亮线绕中心扫，带短促渐隐拖尾。
+
+    拖尾要克制：早期版本 14 条满半径线在静态帧里糊成一团放射状，
+    看着像爆炸不像扫描。收窄到 7 条、指数衰减、降透明度后，
+    单帧读起来是"一条线 + 一点残影"，动起来才是真正的雷达扫掠。
+    """
+    ang = (t / (T.BAR * 1.6)) % 1.0 * 360.0
+    for k in range(7):
+        a = ang - k * 2.6
+        x2, y2 = axis_point(a, rr, cx, cy)
+        p.line([(cx, cy), (x2, y2)], T.ACCENT_BR, 1.2, (1 - k / 7) ** 2.4 * 0.16 * alpha)
+    x2, y2 = axis_point(ang, rr, cx, cy)
+    p.line([(cx, cy), (x2, y2)], T.ACCENT_BR, 2.0, 0.85 * alpha)
+
+
+def radar_shape(p, values, grow, cx=RX, cy=RY, rr=RR, alpha=1.0, fill=0.24, lw=3.0, dots=True):
+    """数据多边形：从中心按 grow 弹性生长，顶点逐个弹入。
+    lw 线宽、dots 是否画顶点圆点——叠影场景要细线去点，否则六形压一起糊成团。"""
+    if grow <= 0.01:
+        return
+    pts = []
+    for i, a in enumerate(AXIS_ANGLES):
+        v = values[M.AXES[i]]
+        g = A.out_back(clip01((grow - i * 0.06) / 0.6), 1.3)
+        pts.append(axis_point(a, rr * v * g, cx, cy))
+    closed = pts + [pts[0]]
+    p.poly(closed, T.ACCENT, fill * alpha)
+    p.line(closed, T.ACCENT_BR, lw, 0.95 * alpha)
+    for i, (x, y) in enumerate(pts):
+        if not dots:
+            break
+        pe = A.out_elastic(clip01((grow - 0.3 - i * 0.05) / 0.5))
+        if pe > 0.02:
+            p.dot(x, y, 4.2 * pe, T.ACCENT_BR, 0.95 * alpha)
+            p.dot(x, y, 2.0 * pe, T.WHITE, 0.9 * alpha)
+
+
+def axis_value(ax, m):
+    """把模型的该轴原始真值压成一个可读短串——数据卡轴标签要「名 + 值」。"""
+    if ax == "ctx":
+        return M.fmt_ctx(m["ctx"])
+    if ax == "out":
+        return M.fmt_ctx(m["out"])
+    if ax == "mm":
+        return f"{m['mm']} 种"
+    if ax == "eff":
+        return f"{m['eff']} 档" if m["eff"] else "无"
+    if ax == "att":
+        return "支持" if m["att"] else "无"
+    if ax == "rel":
+        return m["release"][2:7].replace("-", "/")   # 26/09
+    return ""
+
+
+def radar_labels(p, prog, cx=RX, cy=RY, rr=RR, alpha=1.0, model=None):
+    """六轴标签（CJK）沿顶点外侧排布。
+    传 model 时在轴名下方叠一行该轴的真实数值（青绿）——
+    「上文 1M / 输出 524K」让每个六边形一眼可读，不再只是抽象形状。"""
+    for i, a in enumerate(AXIS_ANGLES):
+        e = A.out_expo(clip01((prog - 0.25 - i * 0.05) / 0.4), 3.0)
+        if e <= 0.02:
+            continue
+        ax = M.AXES[i]
+        x, y = axis_point(a, rr + 30, cx, cy)
+        if abs(x - cx) < 6:
+            anchor = "mm"
+        elif x > cx:
+            anchor = "lm"
+        else:
+            anchor = "rm"
+        p.text(x, y, M.AXIS_LABELS[ax], _cjk(13), T.WHITE, 1.0, anchor, 0.85 * e * alpha)
+        if model is not None:
+            val = axis_value(ax, model)
+            if val:
+                p.text(x, y + 17, val, F.mono(12, 500), T.ACCENT_BR, 0.0, anchor, 0.9 * e * alpha)
+
+
+# --------------------------------------------------------------------------
+# 数字滚动
+# --------------------------------------------------------------------------
+def count_fmt(v, prog):
+    return int(round(v * prog))
+
+
+# ==========================================================================
+# 01 / OPEN — 封面：六边形线框 + 主张
+# ==========================================================================
+class Open:
+    def render(self, c, tl, t):
+        c.clear(T.BG0)
+        plate(c, CX, CY - 20, (0.014, 0.052, 0.030), 1.0, 640, 340)
+        p = c.pass_()
+
+        # 背景：一个大的空心六边形——只做极轻微呼吸（±1.5%），不旋转。
+        # 实测旋转版在片中读成"一直在乱转"，干扰主体。
+        pulse = 1.0 + 0.015 * np.sin(tl * 2.4)
+        pts = [(CX + 300 * pulse * np.cos(np.deg2rad(-90 + i * 60)),
+                CY + 300 * pulse * np.sin(np.deg2rad(-90 + i * 60))) for i in range(6)]
+        pts.append(pts[0])
+        p.line(pts, T.ACCENT, 1.4, 0.14)
+
+        # 六轴小雷达在中央成形（用 Space Bunny 的满配形状做封面）
+        grow = A.out_expo(clip01(tl / 1.4), 3.0)
+        _draw_cover_radar(p, grow, CX, CY - 30)
+
+        reveal_cjk(p, CX, 96, "免 key · 六个免费模型", 46, T.WHITE,
+                   A.out_expo(clip01(tl / 0.6), 4.0), 0.96)
+        _mono(p, CX, 150, "OPENCODE ZEN FREE · NO KEY · NO SIGNUP",
+              T.ACCENT_BR, 11.5, 3.2, 0.8 * A.out_expo(clip01((tl - 0.35) / 0.5), 4.0), "ms")
+
+        # 底部：六个模型名一字排开，逐个亮起
+        names = [m["name"] for m in M.MODELS]
+        for i, nm in enumerate(names):
+            e = A.out_expo(clip01((tl - 0.7 - i * 0.08) / 0.4), 4.0)
+            if e > 0.02:
+                x = CX - 470 + i * 188
+                p.dot(x, H - 150, 3.0, T.ACCENT_BR, 0.9 * e)
+                _mono(p, x, H - 143, nm, (200, 220, 210), 11.5, 0.6, e * 0.9, "mm")
+        c.commit()
+
+
+def _draw_cover_radar(p, grow, cx, cy):
+    """封面用的简化雷达（圆心由调用方给定）。"""
+    vals = M.MODELS[5]["axes"]
+    pts = []
+    for i, a in enumerate(AXIS_ANGLES):
+        g = A.out_back(clip01((grow - i * 0.05) / 0.6), 1.3)
+        ang = np.deg2rad(-90 + i * 60)
+        r = 150 * vals[M.AXES[i]] * g
+        pts.append((cx + r * np.cos(ang), cy + r * np.sin(ang)))
+    closed = pts + [pts[0]]
+    p.poly(closed, T.ACCENT, 0.14)
+    p.line(closed, T.ACCENT_BR, 2.0, 0.9)
+    for (x, y) in pts:
+        p.dot(x, y, 3.6, T.ACCENT_BR, 0.95)
+
+
+# ==========================================================================
+# 02..07 / 六张模型数据卡
+# ==========================================================================
+class Datasheet:
+    IDX = 0
+
+    def render(self, c, tl, t):
+        m = M.MODELS[self.IDX]
+        c.clear(T.BG0)
+        plate(c, RX, RY, (0.012, 0.050, 0.028), 1.0, 520, 360)
+        plate(c, 300, 300, (0.020, 0.010, 0.028), 0.7, 420, 360)
+        p = c.pass_()
+
+        # 左侧文字栏
+        # 编号
+        e0 = A.out_expo(clip01(tl / 0.4), 4.0)
+        _mono(p, 92, 150, f"0{self.IDX + 1} / 06", T.ACCENT_LT, 12, 2.4, 0.8 * e0)
+        # 英文名（大字，逐字揭示）
+        reveal_latin(p, 92, 210, m["name"], 40, T.WHITE,
+                     A.out_expo(clip01((tl - 0.1) / 0.6), 4.0))
+        # 中文标签
+        reveal_cjk(p, 92, 268, m["tag"], 22, T.ACCENT_BR,
+                   A.out_expo(clip01((tl - 0.35) / 0.5), 4.0), 0.95)
+        # 描述
+        reveal_cjk(p, 92, 306, m["desc"], 13.5, T.WHITE,
+                   A.out_expo(clip01((tl - 0.5) / 0.5), 4.0), 0.7)
+
+        # 两个关键数字：上下文 / 最大输出（滚动计数）
+        self._stat(p, 92, 400, "上下文", m["ctx"], tl, 0.7, "ctx")
+        self._stat(p, 92, 470, "最大输出", m["out"], tl, 0.85, "out")
+
+        # 多模态小标签
+        self._mm_chips(p, 92, 545, m, tl)
+
+        # 右侧雷达。不放扫描线——它在整镜里持续旋转，静态帧上读成
+        # "一堆乱转的线"，而且盖住数据本体；这一镜只留入场动画。
+        ring = A.out_expo(clip01(tl / 0.7), 3.0)
+        radar_grid(p, ring)
+        grow = A.out_expo(clip01((tl - 0.35) / 0.85), 2.4)
+        radar_shape(p, m["axes"], grow)
+        radar_labels(p, tl / 0.9, model=m)   # 轴名 + 真实数值
+
+        c.commit()
+
+    def _stat(self, p, x, y, label, val, tl, t0, key):
+        e = A.out_expo(clip01((tl - t0) / 0.5), 4.0)
+        if e <= 0.02:
+            return
+        reveal_cjk(p, x, y, label, 12.5, T.GREY, e, 0.7)
+        cnt = count_fmt(val, A.out_quint(clip01((tl - t0) / 0.7)))
+        s = M.fmt_ctx(cnt)
+        p.text(x, y + 34, s, F.mono(34), T.ACCENT_BR, -1.0, "ls", e)
+
+    def _mm_chips(self, p, x, y, m, tl):
+        e = A.out_expo(clip01((tl - 1.0) / 0.5), 4.0)
+        if e <= 0.02:
+            return
+        reveal_cjk(p, x, y - 16, "输入模态", 11, T.GREY, e, 0.6)
+        mm = m["mm_list"]
+        cx = x
+        for k, modality in enumerate(mm):
+            ee = A.out_expo(clip01((tl - 1.05 - k * 0.06) / 0.35), 4.0) * e
+            if ee <= 0.02:
+                continue
+            lab = {"text": "文本", "image": "图像", "audio": "音频",
+                   "video": "视频", "pdf": "PDF"}.get(modality, modality)
+            wlab = 40
+            p.rect(cx, y, wlab, 24, T.ACCENT, 0.12 * ee, radius=6)
+            p.text(cx + wlab / 2, y + 12, lab, _cjk(11.5), T.WHITE, 0.0, "mm", 0.9 * ee)
+            cx += wlab + 8
+
+
+def reveal_latin(p, x, y, text, size, color, prog):
+    """逐字母揭示。
+    推进量用 getlength（字体真实推进宽度），不能用 getbbox 的墨迹宽度——
+    后者不含字母左右边距，拼出来会挤在一起，末字母看着像游离在词外。"""
+    f = F.mono(size, 500)
+    cx = x
+    n = max(1, len(text))
+    for i, ch in enumerate(text):
+        a = float(np.clip(prog * n - i, 0.0, 1.0))
+        if a > 0.01:
+            p.text(cx, y, ch, f, color, 0.0, "ls", a)
+        cx += f.getlength(ch)
+
+
+class D1(Datasheet): IDX = 0
+class D2(Datasheet): IDX = 1
+class D3(Datasheet): IDX = 2
+class D4(Datasheet): IDX = 3
+class D5(Datasheet): IDX = 4
+class D6(Datasheet): IDX = 5
+
+
+# ==========================================================================
+# 08 / OVERLAY — 六个雷达叠在一起对比
+# ==========================================================================
+class Overlay:
+    def render(self, c, tl, t):
+        c.clear(T.BG0)
+        plate(c, CX, CY, (0.014, 0.050, 0.030), 1.0, 560, 400)
+        p = c.pass_()
+
+        reveal_cjk(p, CX, 92, "六形叠影", 40, T.WHITE,
+                   A.out_expo(clip01(tl / 0.5), 4.0), 0.95)
+        _mono(p, CX, 140, "SIX SHAPES · ONE RADAR · REAL SPECS",
+              T.ACCENT_BR, 10.5, 3.0, 0.75 * A.out_expo(clip01((tl - 0.3) / 0.4), 4.0), "ms")
+
+        # 缩小半径 + 下移圆心：半径 205、圆心 CY+42，顶部轴标签落在 y≈237，
+        # 稳稳在副标题（y=140）下方，不再撞车。
+        ocx, ocy, orr = CX, CY + 42, 205
+        ring = A.out_expo(clip01(tl / 0.7), 3.0)
+        radar_grid(p, ring, cx=ocx, cy=ocy, rr=orr)
+        # 叠影镜头不加扫描线：这一镜的主题是「六形对比」，扫描线只会
+        # 在六个轮廓上再叠一层交叉，盖掉想表达的形状差异。数据卡里
+        # 雷达是主角，扫描合理；这里关掉。
+
+        # 六个多边形错峰展开：细线、去圆点、低填充——六形叠一起时
+        # 粗描边和顶点会糊成一张网，收细才看得出各自的轮廓差异
+        for i, m in enumerate(M.MODELS):
+            grow = A.out_expo(clip01((tl - 0.4 - i * 0.12) / 0.7), 2.2)
+            radar_shape(p, m["axes"], grow, cx=ocx, cy=ocy, rr=orr,
+                        alpha=0.5, fill=0.04, lw=1.3, dots=False)
+        # 轴标签
+        for j, a in enumerate(AXIS_ANGLES):
+            x, y = axis_point(a, orr + 26, ocx, ocy)
+            anchor = "mm" if abs(x - ocx) < 6 else ("lm" if x > ocx else "rm")
+            p.text(x, y, M.AXIS_LABELS[M.AXES[j]], _cjk(12), T.WHITE, 1.0, anchor, 0.7)
+        c.commit()
+
+
+# ==========================================================================
+# 09 / METRICS — 数字一版
+# ==========================================================================
+class Metrics:
+    def render(self, c, tl, t):
+        c.clear(T.BG0)
+        plate(c, CX, CY, (0.014, 0.050, 0.030), 1.0, 640, 340)
+        p = c.pass_()
+        grid(p, 20, 10, 0.022)
+
+        reveal_cjk(p, CX, 96, "不是功能列表，是能力", 44, T.WHITE,
+                   A.out_expo(clip01(tl / 0.5), 4.0), 0.95)
+        _mono(p, CX, 150, "SIX FREE MODELS · REAL NUMBERS",
+              T.ACCENT_BR, 11, 3.0, 0.75 * A.out_expo(clip01((tl - 0.3) / 0.4), 4.0), "ms")
+
+        stats = [
+            ("6", "免 key 模型"),
+            ("1M", "最大上下文"),
+            ("524K", "最大输出"),
+            ("0", "元 · 无需注册"),
+        ]
+        for i, (big, small) in enumerate(stats):
+            x = CX - 450 + i * 300
+            e = A.out_expo(clip01((tl - 0.5 - i * 0.12) / 0.45), 4.0)
+            if e > 0.01:
+                p.text(x, H - 150, big, F.mono(64), T.ACCENT_BR, -2.0, "mm", e)
+                reveal_cjk(p, x, H - 100, small, 14, T.WHITE,
+                           A.out_expo(clip01((tl - 0.55 - i * 0.12) / 0.4), 4.0), e * 0.85, 2.0)
+        c.commit()
+
+
+def grid(p, gx, gy, alpha):
+    for i in range(1, gx):
+        p.line([(W * i / gx, 0), (W * i / gx, H)], T.ACCENT, 0.7, alpha)
+    for j in range(1, gy):
+        p.line([(0, H * j / gy), (W, H * j / gy)], T.ACCENT, 0.7, alpha * 0.8)
+
+
+# ==========================================================================
+# 10 / SIGN OFF — 封底
+# ==========================================================================
+class SignOff:
+    def render(self, c, tl, t):
+        c.clear(T.BG0)
+        p = c.pass_()
+        reveal_cjk(p, CX, CY - 30, "巨天agent", 76, T.WHITE,
+                   A.out_expo(clip01(tl / 0.6), 4.0), 0.98)
+        _mono(p, CX, CY + 40, "SIX FREE MODELS · ONE DESKTOP AGENT",
+              T.ACCENT_BR, 12, 3.2, 0.85 * A.out_expo(clip01((tl - 0.3) / 0.5), 4.0), "ms")
+        # 一个小六边形在下方
+        e = A.out_expo(clip01((tl - 0.5) / 0.6), 3.0)
+        if e > 0.02:
+            pts = [(CX + 34 * np.cos(np.deg2rad(-90 + i * 60)),
+                    CY + 96 + 34 * np.sin(np.deg2rad(-90 + i * 60))) for i in range(6)]
+            pts.append(pts[0])
+            p.line(pts, T.ACCENT_BR, 2.0, 0.9 * e)
+        c.commit()
+
+
+SCENES = [Open, D1, D2, D3, D4, D5, D6, Overlay, Metrics, SignOff]

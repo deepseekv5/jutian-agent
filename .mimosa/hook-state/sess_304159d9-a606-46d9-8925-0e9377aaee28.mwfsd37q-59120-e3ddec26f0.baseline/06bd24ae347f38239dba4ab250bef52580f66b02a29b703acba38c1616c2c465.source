@@ -1,0 +1,18 @@
+"""生成 mark.png — 巨天agent 品牌标志"""
+from PIL import Image, ImageDraw
+W = H = 936
+img = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+dr = ImageDraw.Draw(img)
+# 圆角矩形底板
+dr.rounded_rectangle([0, 0, W-1, H-1], radius=210, fill=(16, 163, 127, 255))
+# 内容线条（模拟对话气泡/工作台）
+sw = 36
+for y in [280, 380, 480]:
+    dr.line([(220, y), (W-220, y)], fill=(255,255,255,230), width=sw)
+# 竖线
+dr.line([(220, 280), (220, 480)], fill=(255,255,255,230), width=sw)
+dr.line([(W-220, 280), (W-220, 480)], fill=(255,255,255,230), width=sw)
+# 中间横线
+dr.line([(220, 380), (W-220, 380)], fill=(255,255,255,230), width=sw)
+img.save('assets/mark.png')
+print('mark.png generated:', img.size)

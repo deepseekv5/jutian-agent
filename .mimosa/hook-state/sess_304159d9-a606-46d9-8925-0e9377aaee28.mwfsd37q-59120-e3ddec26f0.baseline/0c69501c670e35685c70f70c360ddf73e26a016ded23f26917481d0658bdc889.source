@@ -1,0 +1,134 @@
+"""Soundtrack — same 128 BPM marimba bed as the paper edition, extended to
+ten bars.
+
+The user asked for the same background music. So rather than invent a new
+score, this imports the *identical* synth voices (kick / clap / hat / sub /
+pluck / bell / pad / riser / impact) and the identical chord progression from
+the paper-edition reel, and just runs the 8-bar loop out to ten bars. The
+timbre, the groove, and the harmony are literally the same code path — only
+the length changes to fit six model datasheets.
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+import numpy as np
+
+# 复用同引擎的 DSP 与纸版音色的实现（不复制粘贴，直接 import）
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+_OLD = os.path.join(os.path.dirname(_ROOT), "jutian-promo")
+if _OLD not in sys.path:
+    sys.path.insert(0, _OLD)
+
+from mg.dsp import (SR, analyse, analyse_beats, bp, env_ad, filt, hp, lp, noise,
+                    peak_norm, place, reverb_tail, t_axis, write_wav)
+
+# 纸版的音色与和声进行 —— 同一套函数、同一份 PROG
+from jutian_promo.audio import (NOTE, PROG, ARP, LEAD, kick, clap, hat, sub,
+                                pluck, bell, pad_chord, riser, impact)
+
+from . import theme as T
+
+# 十小节：把 8 小节进行循环，第 9、10 小节回到主和弦收束
+PROG10 = (PROG + PROG)[:T.BARS]
+# 后半段的 bell 主旋律铺到十小节（原 8 小节 LEAD + 两小节收束）
+LEAD10 = LEAD + [(8, 2.0, "G5"), (9, 0.0, "C5")]
+
+
+def build(dur=None, sr=SR):
+    dur = dur or T.DUR
+    n = int(round(dur * sr))
+    L = np.zeros(n, np.float32)
+    R = np.zeros(n, np.float32)
+
+    def at(bar, beat=0.0):
+        return int(round((bar * T.BAR + beat * T.BEAT) * sr))
+
+    K = kick(sr)
+    CL = clap(sr)
+    HH = hat(sr)
+    HO = hat(sr, dur=0.22, open_=True)
+
+    last = T.BARS - 1
+    for bar in range(T.BARS):
+        root, chord = PROG10[bar]
+        full = bar not in (0,)
+        # --- pad
+        p = pad_chord([NOTE[x] for x in chord], sr, T.BAR * 1.05,
+                      cut=1650.0 if bar == 0 else 2300.0)
+        g = 0.30 if bar == 0 else (0.24 if bar in (7, last) else 0.20)
+        place(L, p, at(bar), g * 0.95)
+        place(R, p, at(bar), g * 1.05)
+
+        # --- sub bass
+        riff = [(0.0, 1.0), (0.75, 0.55), (1.5, 0.85), (2.25, 0.5), (3.0, 1.0)]
+        if bar == 0:
+            riff = [(0.0, 1.0), (2.0, 0.8)]
+        for off, gl in riff:
+            b = sub(NOTE[root], sr, 0.50)
+            place(L, b, at(bar, off), 0.32 * gl)
+            place(R, b, at(bar, off), 0.32 * gl)
+
+        # --- drums
+        for beat in range(4):
+            if bar == 0 and beat not in (0, 2):
+                continue
+            place(L, K, at(bar, beat), 0.88)
+            place(R, K, at(bar, beat), 0.88)
+            if beat in (1, 3):
+                place(L, CL, at(bar, beat), 0.36)
+                place(R, CL, at(bar, beat), 0.35)
+            place(L, HO, at(bar, beat + 0.5), 0.15)
+            place(R, HO, at(bar, beat + 0.5), 0.16)
+            for s_off in (0.25, 0.75):
+                place(L, HH, at(bar, beat + s_off), 0.10)
+                place(R, HH, at(bar, beat + s_off), 0.095)
+
+        # --- arpeggio: 16ths, octave-jumping, panned
+        if full:
+            for i in range(16):
+                nm = ARP[i % len(ARP)]
+                f = NOTE[nm] * (0.5 if (i // 8) % 2 == 1 else 1.0)
+                pl = pluck(f, sr, 0.30)
+                pan = 0.5 + 0.40 * np.sin(i * 1.13)
+                place(L, pl, at(bar, i * 0.25), 0.135 * (1.0 - pan * 0.5))
+                place(R, pl, at(bar, i * 0.25), 0.135 * pan)
+
+        # --- transitions（每三小节一次 riser，切点更密以贴合十小节的镜头节奏）
+        if bar in (2, 5, 8):
+            r = riser(sr, T.BAR * 0.96, 320.0, 7000.0, seed=21 + bar)
+            place(L, r, at(bar, 0.05), 0.34)
+            place(R, r, at(bar, 0.05), 0.34)
+        if bar in (1, 4, 7, 9):
+            im = impact(sr, 1.1, seed=51 + bar)
+            place(L, im, at(bar), 0.70 if bar == 4 else 0.52)
+            place(R, im, at(bar), 0.70 if bar == 4 else 0.52)
+
+    # --- bell lead over the back half
+    for bar, beat, nm in LEAD10:
+        b = bell(NOTE[nm], sr, 1.8)
+        place(L, b, at(bar, beat), 0.20)
+        place(R, b, at(bar, beat), 0.16)
+
+    # --- mix
+    L = filt(L, sr, lp(15500, 2.2)).astype(np.float32)
+    R = filt(R, sr, lp(15500, 2.2)).astype(np.float32)
+    L = filt(L, sr, hp(30, 2.0)).astype(np.float32)
+    R = filt(R, sr, hp(30, 2.0)).astype(np.float32)
+    L = reverb_tail(L, sr, taps=((0.091, 0.17), (0.157, 0.10), (0.241, 0.06)))
+    R = reverb_tail(R, sr, taps=((0.103, 0.17), (0.173, 0.10), (0.263, 0.06)))
+
+    st = np.stack([L, R], -1)
+    peak = float(np.abs(st).max())
+    st = np.tanh(st / max(peak, 1e-6) * 1.9) / np.tanh(1.9)
+    f = int(0.012 * sr)
+    st[:f] *= np.linspace(0, 1, f, dtype=np.float32)[:, None]
+    g = int(0.30 * sr)
+    st[-g:] *= np.linspace(1.0, 0.0, g, dtype=np.float32)[:, None]
+    st *= 0.84 / max(1e-6, float(np.abs(st).max()))
+    return st.astype(np.float32), sr
+
+
+__all__ = ["build", "write_wav", "analyse", "analyse_beats", "SR"]

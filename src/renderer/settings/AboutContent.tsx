@@ -82,18 +82,20 @@ export default function AboutContent() {
         setStats({ sessions: Array.isArray(sessions) ? sessions.length : 0, memories: Object.keys(mem || {}).length })
       } catch {}
     })()
-    if (api()?.updateCheck) {
-      doCheck()
-      api().onUpdateProgress((p: Prog) => setProg(p))
-    }
+    // v16.3.4：安卓无 updateCheck 也要走 GitHub 分支检查（doCheck 内部分流）；
+    // onUpdateProgress 仅桌面有，判空后再注册
+    doCheck()
+    api()?.onUpdateProgress?.((p: Prog) => setProg(p))
     // doCheck 是每次渲染新建的普通函数：纳入依赖会让本 effect 每渲染重跑，重复注册 onUpdateProgress 监听
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const apply = () => {
-    if (!upd?.asarUrl) return
+    const a = api()
+    // v16.3.4：安卓无 updateApply，点了不崩（引导去下载安装包）
+    if (!upd?.asarUrl || !a?.updateApply) return
     setProg({ stage: 'download', got: 0, total: 0, pct: 0 })
-    api().updateApply(upd.asarUrl).then((r: any) => {
+    a.updateApply(upd.asarUrl).then((r: any) => {
       if (!r?.ok && !r?.started) setProg({ stage: 'error', error: r?.error || '更新失败' })
     }).catch((e: any) => setProg({ stage: 'error', error: String(e?.message || e) }))
     // 兜底（v14.7.2）：6 秒内没收到任何下载字节 = 后台下载没启动，
@@ -108,11 +110,15 @@ export default function AboutContent() {
     }, 6000)
   }
 
-  const cancel = () => { api().updateCancel?.(); setProg(null) }
+  const cancel = () => { api()?.updateCancel?.(); setProg(null) }
 
   // v11.0.4:主进程下载完成后推送 update-ready(自动更新,无需用户点检查)
   useEffect(() => {
-    const off = api().onUpdateReady?.(() => setUpd((u) => ({ ...(u || { ok: true, current: '' }), available: true })))
+    // v16.3.4 修复：安卓无 electronAPI，此前 `api().onUpdateReady` 取属性即抛 TypeError，
+    // 错误边界替换整个设置弹窗 → 用户感知「关于页进不去」。必须先判 api() 本身。
+    const a = api()
+    if (!a?.onUpdateReady) return
+    const off = a.onUpdateReady(() => setUpd((u) => ({ ...(u || { ok: true, current: '' }), available: true })))
     return () => { if (off && typeof off === 'function') off() }
   }, [])
 
@@ -136,7 +142,7 @@ export default function AboutContent() {
   const updating = prog && ['download', 'verify', 'apply', 'restarting'].includes(prog.stage)
   const pct = prog?.stage === 'download' ? (prog.pct ?? null) : (updating ? null : 0)
   // v11.0.4 自动更新:下载替换完成后主进程推 update-ready,此处展示「重启即用」
-  const restartNow = () => { api().updateRestart?.() }
+  const restartNow = () => { api()?.updateRestart?.() }
 
   return (
     <>
@@ -171,7 +177,7 @@ export default function AboutContent() {
             {lang === 'en' ? `Update to v${upd?.latest} available` : `可更新至 v${upd?.latest}`}
           </span>
           <span className="flex-1" />
-          {upd.asarUrl ? (
+          {api()?.updateApply && upd.asarUrl ? (
             <button onClick={apply} disabled={!!updating}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
               style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>

@@ -1,0 +1,65 @@
+/**
+ * 工具执行框架（v13.9.5）—— 多端统一执行层
+ *
+ * 重写背景：此前 50 个工具各自为政——没有平台声明（安卓上 open_path 直接
+ * ENOENT 挂掉）、没有统一超时（个别工具可无限等待）、没有统一输出上限。
+ * 工具的实现逻辑（踩坑沉淀）保留在 serve.ts，本框架只接管**执行层**：
+ *
+ *   1. 平台声明：每个工具声明可运行的平台，不支持时给出明确、可操作的报错
+ *   2. 硬超时：未声明专属超时的工具统一 180s 中止（shell 等自带更短超时的先到先生效）
+ *   3. 结果归一：任何返回值（含 undefined/原始类型）包装为 { success, output }
+ *   4. 输出上限：服务端统一 512KB 截断（渲染端另有 40K 上下文保护）
+ *
+ * 多端矩阵（v13.9.5 起按此表降级）：
+ *   - 安卓（nodejs-mobile / Termux）：无 GUI（screenshot/open_path）、
+ *     无系统剪贴板命令、无 lsof（netstat 降级已有）、shell 用 toybox sh
+ *   - Windows：powershell 通道（既有）
+ *   - macOS/Linux：zsh/sh 通道（既有）
+ */
+
+export type ToolPlatform = 'mac' | 'win' | 'linux' | 'android'
+
+export interface ToolGuardMeta {
+  /** 允许运行的平台；缺省 = 全平台 */
+  platforms?: ToolPlatform[]
+  /** 超时毫秒；缺省 180s（框架统一中止） */
+  timeoutMs?: number
+  /** 安卓不支持时的替代建议（报错信息里附带给用户） */
+  androidHint?: string
+}
+
+export const DEFAULT_TOOL_TIMEOUT_MS = 180_000
+
+/** 当前运行平台（与 serve.ts 的 IS_ANDROID 判定一致） */
+export function currentPlatform(isAndroidFlag: boolean): ToolPlatform {
+  if (isAndroidFlag) return 'android'
+  const p = process.platform
+  if (p === 'darwin') return 'mac'
+  if (p === 'win32') return 'win'
+  return 'linux'
+}
+
+/** 平台检查：不支持时返回面向用户的报错（含替代建议） */
+export function platformError(meta: ToolGuardMeta | undefined, platform: ToolPlatform): string | null {
+  if (!meta?.platforms || meta.platforms.includes(platform)) return null
+  const need = meta.platforms.join(' / ')
+  const hint = meta.androidHint ? `\n${meta.androidHint}` : ''
+  return `「${need}」环境专属工具，当前平台（${platform}）不可用。${hint}`
+}
+
+/** 统一超时包装 */
+export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`工具 ${label} 执行超时（${Math.round(ms / 1000)} 秒），已中止。如需长时间运行请拆分任务。`)), ms)),
+  ])
+}
+
+/** 结果归一：非对象/undefined 包装为 { success, output } */
+export function normalizeResult(r: unknown, label: string): { success: boolean; output: string; [k: string]: unknown } {
+  if (r && typeof r === 'object' && 'success' in (r as Record<string, unknown>)) {
+    return r as { success: boolean; output: string }
+  }
+  if (r == null) return { success: true, output: `(${label} 完成，无返回内容)` }
+  return { success: true, output: typeof r === 'string' ? r : JSON.stringify(r, null, 2) }
+}

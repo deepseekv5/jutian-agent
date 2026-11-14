@@ -1,0 +1,114 @@
+"""B站封面渲染 —— 1920×1200（B站推荐 16:10）。
+
+复用 zenv4 的雷达绘制与纸白反色管线，保证封面与正片同一套视觉语言。
+主张：免 key · 六个免费模型；主角是那张真实数据驱动的六边形雷达。
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+import numpy as np
+
+_HERE = os.path.dirname(os.path.abspath(__file__))   # promo-v4
+_OLD = os.path.join(os.path.dirname(_HERE), "jutian-promo")
+for _p in (_OLD, _HERE):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from mg.core import Canvas
+from mg import anim as A
+from mg import fonts as F
+
+from zenv4 import theme as T
+from zenv4 import models as M
+from zenv4 import scenes as S
+from zenv4 import chrome
+
+
+def render_cover(out_path, ss=2):
+    # 封面用与正片相同的作者画布 1280×720 → 输出 1920×1080（16:9，B站标准封面）。
+    # 这样能直接复用 chrome.finish：那条后处理链按作者尺寸取梯度/色差，
+    # 换成别的画布尺寸会因作者/输出尺寸不一致而广播报错。
+    CW, CH = T.W, T.H
+    c = Canvas(CW, CH, ss=ss, out=(T.OUT_W, T.OUT_H))
+    c.clear(T.BG0)
+
+    cx = CW / 2.0
+    cy = CH / 2.0 + 40
+    RRC = 200   # 封面雷达半径（比正片小一点，给标题让位）
+
+    # 背景绿色微光：与正片同款 plate，反色后是暖纸白而非死灰
+    S.plate(c, cx, cy, (0.014, 0.052, 0.030), 1.0, 460, 320)
+    S.plate(c, cx, 86, (0.020, 0.010, 0.028), 0.6, 400, 130)
+
+    # 中央大雷达：Space Bunny 满配形状（最能代表"六个模型的能力上限"）
+    S.RX, S.RY, S.RR = cx, cy, RRC
+    S.AXIS_ANGLES = [-90 + i * 60 for i in range(6)]
+    p = c.pass_()
+
+    # 淡底纹：同心环 + 辐条（全亮，静态）
+    _grid(p, cx, cy, RRC)
+    # 数据多边形（满 grow）
+    _shape(p, M.MODELS[5]["axes"], cx, cy, RRC)
+    # 六轴标签
+    for i, a in enumerate(S.AXIS_ANGLES):
+        x, y = _pt(a, RRC + 30, cx, cy)
+        anchor = "mm" if abs(x - cx) < 8 else ("lm" if x > cx else "rm")
+        p.text(x, y, M.AXIS_LABELS[M.AXES[i]], F.cjk(15), T.WHITE, 1.0, anchor, 0.85)
+
+    # 标题（顶部）
+    p.text(cx, 84, "免 key · 六个免费模型", F.cjk(54), T.WHITE, -1.0, "mm", 1.0)
+    p.text(cx, 128, "OPENCODE ZEN FREE · NO KEY · NO SIGNUP", F.mono(12), T.ACCENT_BR,
+           3.0, "mm", 0.9)
+
+    # 底部：六个模型名
+    names = [m["name"] for m in M.MODELS]
+    for i, nm in enumerate(names):
+        x = 130 + i * ((CW - 260) / 5)
+        p.dot(x, CH - 66, 3.5, T.ACCENT_BR, 0.9)
+        p.text(x, CH - 58, nm, F.mono(12), T.WHITE, 0.4, "mm", 0.9)
+
+    c.commit()
+
+    # 后处理直接复用正片的 chrome.finish —— 同一套 bloom→grade→vignette→
+    # 反色→grain→tonemap 链，封面与正片视觉语言完全一致。
+    # 之前手写顺序把 vignette 放在反色之后，纸白底被压成灰底。
+    # t 取 0.5 让切点闪光衰减到 0（封面是静态图，不要那一下白闪）。
+    chrome.finish(c, 0.5, 0)
+    c.image().save(out_path)
+    return out_path
+
+
+def _pt(angle_deg, r, cx, cy):
+    a = np.deg2rad(angle_deg)
+    return (cx + r * np.cos(a), cy + r * np.sin(a))
+
+
+def _grid(p, cx, cy, rr):
+    for k in range(1, 5):
+        r = rr * k / 4
+        pts = [_pt(a, r, cx, cy) for a in S.AXIS_ANGLES] + [_pt(-90, r, cx, cy)]
+        p.line(pts, T.ACCENT, 0.8, 0.14)
+    for a in S.AXIS_ANGLES:
+        x2, y2 = _pt(a, rr, cx, cy)
+        p.line([(cx, cy), (x2, y2)], T.ACCENT, 0.9, 0.16)
+
+
+def _shape(p, vals, cx, cy, rr):
+    pts = []
+    for i, a in enumerate(S.AXIS_ANGLES):
+        v = vals[M.AXES[i]]
+        pts.append(_pt(a, rr * max(v, 0.05), cx, cy))
+    closed = pts + [pts[0]]
+    p.poly(closed, T.ACCENT, 0.15)
+    p.line(closed, T.ACCENT_BR, 2.6, 0.95)
+    for (x, y) in pts:
+        p.dot(x, y, 5.0, T.ACCENT_BR, 0.95)
+        p.dot(x, y, 2.2, T.WHITE, 0.9)
+
+
+if __name__ == "__main__":
+    out = os.path.join(_HERE, "out", "cover-bilibili.png")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    print(render_cover(out))

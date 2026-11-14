@@ -125,7 +125,7 @@ function sttTranscribe(wavPath) {
 async function cloudAsr(audioBuf, mime) {
   let base = "", key = "", model = "";
   try {
-    for (const r of (sharedDb ? db.getAllSettings() : [])) {
+    for (const r of (allSettings())) {
       if (r.key === "apiBaseUrl") base = String(r.value || "");
       if (r.key === "apiKey") key = String(r.value || "");
       if (r.key === "asrModel") model = String(r.value || "");
@@ -234,6 +234,13 @@ var db = sharedDb || makeDbFallback();
 // 数据层可用性：sqlite（桌面）或 jsondb（手机/降级）都视为"有库"。
 // 只有两者皆无（极端故障）才走"数据库不可用"分支。
 var hasDb = !!sharedDb || db.__jsondb === true;
+
+// v16.3.4：统一设置读取判据——此前 15 处用 sharedDb（better-sqlite3）判空，
+// 安卓 jsondb 降级时全部返回 []，导致服务端拿不到真 apiKey/model，
+// /api/llm-proxy 回退失效报 400「尚未配置模型服务」。jsondb 是合法库，判据必须是 hasDb。
+function allSettings() {
+  try { return hasDb ? db.getAllSettings() : [] } catch { return [] }
+}
 // 空会话清理模块（判据与选集都有测试）—— 与前端共用 src/shared/sessionCleanup.ts
 var CLEANUP_MOD = (() => { try { return require("./src/shared/sessionCleanup.cjs"); } catch (e) { console.error("sessionCleanup.cjs load failed:", e.message); return null; } })();
 // 工具参数校验（严格化）：规格表 + 覆盖提醒，见 shared/toolArgs（有测试）
@@ -2062,7 +2069,7 @@ var __settingsCache: { rows: { key: string; value: string }[] | null; at: number
 function getAllSettingsCached() {
   const now = Date.now();
   if (__settingsCache.rows && now - __settingsCache.at < 250) return __settingsCache.rows;
-  const rows = sharedDb ? db.getAllSettings() : [];
+  const rows = allSettings();
   __settingsCache = { rows, at: now };
   return rows;
 }
@@ -2367,7 +2374,7 @@ function kbRowsCached() {
 }
 
 async function kbEmbedFor(texts) {
-  const rows = sharedDb ? db.getAllSettings() : [];
+  const rows = allSettings();
   const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const base = st.apiBaseUrl || "";
   const key = st.apiKey || "";
@@ -3677,7 +3684,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       // 7. 模型 API 连通性（用配置的 baseUrl + key 请求 /models）
       let apiOk = false, apiDetail = "";
       try {
-        const rawSettings = sharedDb && db.getAllSettings ? db.getAllSettings() : [];
+        const rawSettings = allSettings();
         const allSettings = Array.isArray(rawSettings) ? Object.fromEntries(rawSettings.map((r) => [r.key, r.value])) : (rawSettings || {});
         const base = String(allSettings.apiBaseUrl || "").replace(/\/+$/, "");
         const key = String(allSettings.apiKey || "");
@@ -3739,7 +3746,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const payload = await body(req);
       const messages = Array.isArray(payload.messages) ? payload.messages : [];
       const tools = Array.isArray(payload.tools) ? payload.tools : [];
-      const rows = sharedDb ? db.getAllSettings() : [];
+      const rows = allSettings();
       const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
       const apiBase = String(payload.apiBase || st.apiBaseUrl || "");
       const apiKey = String(payload.apiKey || st.apiKey || "");
@@ -3956,7 +3963,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       if (!hookTokenOk(decodeURIComponent(hookMatch[2]))) return json(res, { error: "token 无效" }, 403);
       const wf = loadWorkflows().find((x) => x.id === hookMatch[1]);
       if (!wf) return json(res, { error: "未找到工作流" }, 404);
-      const rows = sharedDb ? db.getAllSettings() : [];
+      const rows = allSettings();
       const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
       if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
       const payload = await body(req);
@@ -3994,7 +4001,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         const { description } = await body(req);
         const desc = String(description || "").trim();
         if (!desc) return json(res, { error: "请描述你想要的自动化流程" }, 400);
-        const rows = sharedDb ? db.getAllSettings() : [];
+        const rows = allSettings();
         const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
         if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
         const sys = [
@@ -4023,7 +4030,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       if (idx < 0) return json(res, { error: "未找到工作流" }, 404);
       if (wfRun && req.method === "POST") {
         if (!WORKFLOW_MOD) return json(res, { error: "工作流模块不可用" }, 500);
-        const rows = sharedDb ? db.getAllSettings() : [];
+        const rows = allSettings();
         const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
         if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
         const { inputs } = await body(req);
@@ -4180,7 +4187,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         const id = taskId;
         const task = loadTasks().find((x) => x.id === id);
         if (!task) return json(res, { error: "未找到任务" }, 404);
-        const rows2 = sharedDb ? db.getAllSettings() : [];
+        const rows2 = allSettings();
         const st = Object.fromEntries(rows2.map((r) => [r.key, r.value]));
         if (!st.apiBaseUrl || !st.apiKey || !st.model) return json(res, { error: "未配置模型服务" }, 400);
         try {
@@ -4300,7 +4307,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         if (!headerKeyUsable || !targetBase) {
           let __dbKey = "", __dbBase = "", __dbKiloKey = "";
           try {
-            const __rows = sharedDb ? db.getAllSettings() : [];
+            const __rows = allSettings();
             for (const __r of __rows) {
               if (__r.key === "apiKey" && __r.value) __dbKey = String(__r.value);
               if (__r.key === "apiBaseUrl" && __r.value) __dbBase = String(__r.value);
@@ -5027,7 +5034,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (url.pathname === "/api/security/pack/update" && req.method === "POST") {
       // GitHub raw（公开仓库，无网墙时首选）→ Gitee API contents（私有仓友好，需 gitee_token 设置，base64 解码）
       let giteeToken = "";
-      try { giteeToken = String(Object.fromEntries((sharedDb ? db.getAllSettings() : []).map((r) => [r.key, r.value])).gitee_token || ""); } catch {}
+      try { giteeToken = String(Object.fromEntries((allSettings()).map((r) => [r.key, r.value])).gitee_token || ""); } catch {}
       const sources: { url: string; kind: "json" | "gitee" }[] = [
         { url: "https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/src/shared/maliciousPack.json", kind: "json" },
         { url: `https://gitee.com/api/v5/repos/deepseekv5/jutian-agent/contents/src/shared/maliciousPack.json${giteeToken ? `?access_token=${encodeURIComponent(giteeToken)}` : ""}`, kind: "gitee" },
@@ -5327,7 +5334,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         for (const list of Object.values(ifs)) for (const i of list) if (i.family === "IPv4" && !i.internal) return i.address;
         return "127.0.0.1";
       })();
-      const __st = (() => { try { return loadJson("settings.json") || {}; } catch { return {}; } })();
+      // v16.3.4：与 /api/settings 一致——hasDb 优先，jsondb 模式读库而不是遗留 settings.json
+      const __st = (() => {
+        if (hasDb) { const m = Object.fromEntries(allSettings().map((r) => [r.key, r.value])); return { model: m.model || "" } }
+        try { return loadJson("settings.json") || {} } catch { return {} }
+      })();
       return json(res, { ip: __lan, port: PORT, token: __token, url: `http://${__lan}:${PORT}/remote.html?t=${__token}`, model: __st.model || "" });
     }
     if (url.pathname === "/api/remote/rotate" && req.method === "POST") {
@@ -5346,8 +5357,12 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       } catch (e) { return json(res, { tools: [], error: e.message }, 500); }
     }
     if (url.pathname === "/api/remote/session" && req.method === "GET") {
-      const __st = (() => { try { return loadJson("settings.json") || {}; } catch { return {}; } })();
-      return json(res, { model: __st.model || "", agent: "巨天agent" });
+      // v16.3.4：与 /api/settings 一致（hasDb 优先，jsondb 模式读库）
+      const __m = (() => {
+        if (hasDb) { const m = Object.fromEntries(allSettings().map((r) => [r.key, r.value])); return m.model || "" }
+        try { return (loadJson("settings.json") || {}).model || "" } catch { return "" }
+      })()
+      return json(res, { model: __m, agent: "巨天agent" });
     }
 
     // ─── 会话/消息/记忆 — 统一 SQLite（ly-next 单一数据源）───
@@ -6303,7 +6318,14 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     }
     if (url.pathname === "/api/lm-models" && req.method === "GET") {
       try {
-        const settings2 = loadJson("settings.json");
+        // v16.3.4：hasDb 优先——jsondb 模式（安卓）此前读不到 settings.json 直接返回空列表
+        const settings2 = (() => {
+          if (hasDb) {
+            const m = Object.fromEntries(allSettings().map((r) => [r.key, r.value]))
+            return { apiBaseUrl: m.apiBaseUrl || "", apiKey: m.apiKey || "" }
+          }
+          return loadJson("settings.json");
+        })()
         if (!settings2.apiBaseUrl || !settings2.apiKey) return json(res, { models: [] });
         const r = await fetch(`${settings2.apiBaseUrl}/models`, {
           headers: { "Authorization": `Bearer ${settings2.apiKey}` },
@@ -6458,7 +6480,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         // 掩码回显不是真钥匙:为空/含 **** 时回退 SQLite 存储密钥
         if (!apiKey || apiKey.indexOf("****") >= 0) {
           try {
-            const __rows = sharedDb ? db.getAllSettings() : [];
+            const __rows = allSettings();
             for (const __r of __rows) { if (__r.key === "apiKey" && __r.value) apiKey = String(__r.value); }
           } catch {}
         }
@@ -6863,7 +6885,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     async function serverLLM(messages, maxTokens, temperature) {
       let cfgBase = "", cfgKey = "", cfgModel = "";
       try {
-        const rows = sharedDb ? db.getAllSettings() : [];
+        const rows = allSettings();
         for (const r of rows) {
           if (r.key === "apiBaseUrl") cfgBase = String(r.value || "");
           if (r.key === "apiKey") cfgKey = String(r.value || "");
@@ -7195,7 +7217,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
     // ─── 知识库 RAG ───
     // embeddings 代理：按设置自动选地址与密钥（未配置时明确报错）
     async function kbEmbedTexts(texts) {
-      const rows = sharedDb ? db.getAllSettings() : [];
+      const rows = allSettings();
       const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
       const base = st.apiBaseUrl || "";
       const key = st.apiKey || "";
@@ -7588,7 +7610,7 @@ function loadTaskToolSchemas() {
 
 /* ─── Webhook 集成（v14.2）：结果推出去、外部事件触发进来 ─── */
 function hookSettings() {
-  const rows = sharedDb ? db.getAllSettings() : [];
+  const rows = allSettings();
   const st = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return {
     url: String(st.webhook_url || "").trim(),
@@ -7711,7 +7733,7 @@ async function runTaskAgent(base, key, model, task) {
 }
 
 function runScheduler() {  try {
-    const rows = sharedDb ? db.getAllSettings() : [];
+    const rows = allSettings();
     const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     const base = s.apiBaseUrl || "";
     const key = s.apiKey || "";
