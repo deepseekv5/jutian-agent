@@ -248,6 +248,13 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
 export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onExpand, collapsed, onHome, activeType, onDelete, onRename }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
+  // v16.3.3：侧栏「工作区」入口组默认收起（与顶部标签条/主区卡片墙三处重复，收起后侧栏更接近 Codex）
+  const [pinsOpen, setPinsOpen] = useState(() => {
+    try { return localStorage.getItem('lyclaw_rail_pins_open') === '1' } catch { return false }
+  })
+  const togglePins = () => {
+    setPinsOpen(v => { const n = !v; try { localStorage.setItem('lyclaw_rail_pins_open', n ? '1' : '0') } catch {} return n })
+  }
   // Projects 点击 → 过滤 Recents（再点同一个取消）
   const [projFilter, setProjFilter] = useState<string | null>(null)
   // Recents 右键菜单（v15.8.5）：重命名 / 删除，与原侧栏能力对齐
@@ -461,15 +468,25 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
               {p}
             </button>
           ))}
-          {/* 功能入口（Codex 骨架下不显示原侧栏图标行，这里补纯文字快捷入口） */}
-          <div className="px-2 mt-7 mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-medium" style={muted}>{t('工作区', 'Workspace')}</span>
-            <button onClick={() => setAddOpen(v => !v)} title={t('添加 / 移除入口', 'Add / remove entries')}
-              className="text-[11px] px-1.5 py-0.5 rounded transition-colors" style={{ color: addOpen ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: addOpen ? 'var(--jt-focus)' : 'transparent' }}
-              onMouseEnter={hover} onMouseLeave={leave}>{addOpen ? t('完成', 'Done') : t('+ 添加', '+ Add')}</button>
+          {/* 功能入口（v16.3.3 默认收起：与顶部标签条/主区卡片墙重复，需要时展开） */}
+          <div className="px-2 mt-7 mb-2">
+            <button onClick={togglePins} className="w-full flex items-center justify-between py-1"
+              onMouseEnter={hover} onMouseLeave={leave}>
+              <span className="text-[11px] font-medium" style={muted}>{t('工作区', 'Workspace')} · {pins.length}</span>
+              <span className="flex items-center gap-1">
+                {!pinsOpen && <span className="text-[10px]" style={muted}>{t('展开', 'More')}</span>}
+                <svg className="w-3 h-3 transition-transform" style={{ transform: pinsOpen ? 'rotate(90deg)' : 'none', color: 'var(--jt-ink-4)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
+              </span>
+            </button>
+            {pinsOpen && (
+              <button onClick={() => setAddOpen(v => !v)} title={t('添加 / 移除入口', 'Add / remove entries')}
+                className="text-[11px] px-1.5 py-0.5 rounded transition-colors mt-0.5" style={{ color: addOpen ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: addOpen ? 'var(--jt-focus)' : 'transparent' }}
+                onMouseEnter={hover} onMouseLeave={leave}>{addOpen ? t('完成', 'Done') : t('+ 添加', '+ Add')}</button>
+            )}
           </div>
+          {!pinsOpen && <div className="mx-2 my-1 h-px" style={{ background: 'var(--jt-hairline-soft)' }} />}
           {/* 自定义入口（v15.8.0）：设置固定首位不可移除，其余 hover 出 × 可移除 */}
-          {pins.map(type => {
+          {pinsOpen && pins.map(type => {
             const meta = PAGE_META[type]
             const label = lang === 'en' && meta?.labelEn ? meta.labelEn : (meta?.label || type)
             const fixed = type === 'settings'
@@ -493,7 +510,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             )
           })}
           {/* 添加面板：全部可用页面（已添加的排除），纯文字两列 */}
-          {addOpen && (
+          {pinsOpen && addOpen && (
             <div className="mt-2 rounded-xl p-2.5" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
               <div className="text-[10.5px] mb-2 px-1" style={muted}>{t('点击添加到侧栏', 'Click to add to sidebar')}</div>
               <div className="grid grid-cols-2 gap-x-2">
