@@ -31,6 +31,21 @@ const ICONS = {
 
 type SessionLite = { id: string; title?: string; updated_at?: string; created_at?: string; project?: string }
 
+/**
+ * 品牌标（v16.5.0 新 logo）：穹弧 =「天」（巨天），四芒星 = AI 智能体。
+ * 应用图标同源设计（electron/logo.svg → icns/ico 由 scripts/icon-render.mjs 生成）。
+ * 弧线走 currentColor 适配主题；星点走品牌色。
+ */
+export function BrandMark({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" />
+      <path d="M7.6 19.5 Q12 16.5 16.4 19.5" stroke="currentColor" opacity={0.38} strokeWidth={1.5} strokeLinecap="round" />
+      <path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="var(--brand, #10a37f)" />
+    </svg>
+  )
+}
+
 /** 侧栏「工作区」自定义入口（v15.8.0）：用户可增删，设置固定不可移除 */
 const RAIL_PINS_KEY = 'lyclaw_rail_pins'
 const RAIL_DEFAULT_PINS: PageType[] = ['settings', 'files', 'tasks', 'kb', 'skills', 'workflow', 'gongwen', 'freemodels', 'export', 'plugins']
@@ -334,9 +349,12 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
               className="w-10 h-10 rounded-lg grid place-items-center transition-colors titlebar-nodrag relative"
               style={{ color: activeNav === n.key ? 'var(--jt-ink)' : 'var(--jt-ink-3)', background: activeNav === n.key ? 'var(--jt-focus)' : 'transparent' }}
               onMouseEnter={hover} onMouseLeave={leave}>
-              <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={n.icon} />
-              </svg>
+              {/* v16.5.0：logo 位换新品牌标（穹弧+星），其余图标仍走描边 path */}
+              {n.key === 'logo' ? <BrandMark size={21} /> : (
+                <svg className="w-[19px] h-[19px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={n.icon} />
+                </svg>
+              )}
               {navEdit && n.key !== 'logo' && (
                 <span onClick={e => { e.stopPropagation(); removeNav(n.key) }}
                   className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full grid place-items-center text-[9px] z-10"
@@ -395,13 +413,19 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
       </div>
       {/* 320px 会话栏（收起时隐藏，只留活动栏） */}
       {!collapsed && <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid var(--jt-hairline-soft)' }}>
-        <div className="h-[76px] flex items-end justify-between px-5 pb-3 shrink-0 titlebar-drag">
+        {/* v16.5.0 顶栏利用：76px 顶部拆成「品牌行（贴顶）+ 模式切换器（贴底）」——
+            hiddenInset 后红绿灯右侧的空白此前完全闲置，现在放 logo 字标并充当拖拽区 */}
+        <div className="shrink-0 titlebar-drag" style={{ height: 76 }}>
+          <div className="h-[38px] flex items-center px-5 gap-2">
+            <BrandMark size={17} />
+            <span className="text-[13px] font-semibold tracking-tight select-none" style={{ color: 'var(--jt-ink)' }}>{t('巨天agent', 'Jutian agent')}</span>
+          </div>
+          <div className="h-[38px] flex items-center justify-between px-5 pb-1.5">
           <div className="relative titlebar-nodrag">
-            <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: 'var(--jt-ink)' }}
+            <button onClick={() => setModeOpen(v => !v)} className="flex items-center gap-1.5" style={{ color: 'var(--jt-ink)' }}
               title={t('切换工作 / 编程模式', 'Switch Office / Coding mode')}>
-              {t('巨天', 'Jutian')}
-              {/* v16.4.0：编程徽章走 accent（此前硬编码 #2563eb 不随主题） */}
-              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? 'var(--brand, #10a37f)' : 'var(--jt-ink-2)', background: chatMode === 'coding' ? 'var(--jt-focus)' : 'var(--jt-paper-alt)' }}>
+              {/* v16.5.0：品牌名已在上方品牌行，切换器只留模式徽章不再重复「巨天」 */}
+              <span className="text-[12.5px] font-medium px-2 py-0.5 rounded-lg" style={{ color: chatMode === 'coding' ? 'var(--brand, #10a37f)' : 'var(--jt-ink-2)', background: chatMode === 'coding' ? 'var(--jt-focus)' : 'var(--jt-paper-alt)' }}>
                 {chatMode === 'coding' ? t('编程', 'Coding') : t('工作', 'Work')}
               </span>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>
@@ -429,7 +453,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
                 <div className="h-px my-1" style={{ background: 'var(--jt-hairline-soft)' }} />
                 <button onClick={() => { setModeOpen(false); onHome() }} className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-[12px] rounded-lg" style={{ color: 'var(--jt-ink-2)' }}
                   onMouseEnter={hover} onMouseLeave={leave}>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.logo} /></svg>
+                  <span className="w-4 h-4 grid place-items-center shrink-0"><BrandMark size={15} /></span>
                   {t('回到首页', 'Back to home')}
                 </button>
               </div>
@@ -442,6 +466,7 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             <button title={t('收起侧栏', 'Collapse')} onClick={onCollapse} className="w-8 h-8 rounded-md grid place-items-center" style={{ color: 'var(--jt-ink-3)' }} onMouseEnter={hover} onMouseLeave={leave}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.panel} /></svg>
             </button>
+          </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-3 pb-6">

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- 巨天agent logo v3：黑底 squircle + 天穹双弧 + 品牌绿四芒星。
+       穹弧 =「天」（巨天），四芒星 = AI 智能体（sparkle 语言）；
+       v3 收紧构图——星嵌入弧顶正上方，主次分明，16px 仍可辨。 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c1c"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40e2ae"/>
+      <stop offset="1" stop-color="#0e9a6d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="232" fill="url(#bg)"/>
+  <path d="M 232 640 Q 512 468 792 640" stroke="#ffffff" stroke-width="64" fill="none" stroke-linecap="round"/>
+  <path d="M 340 748 Q 512 614 684 748" stroke="#ffffff" opacity=".32" stroke-width="40" fill="none" stroke-linecap="round"/>
+  <path d="M512 312c13 66 33 86 99 99-66 13-86 33-99 99-13-66-33-86-99-99 66-13 86-33 99-99z" fill="url(#star)"/>
+</svg>
