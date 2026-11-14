@@ -1237,6 +1237,14 @@ input:focus, textarea:focus, select:focus { animation: jt-focus-ring .24s var(--
 [data-theme="dark"] .scrollbar-thin { scrollbar-color: rgba(255,255,255,.14) transparent; }
 [data-theme="dark"] .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); }
 
+/* v16.4.1：骨架屏脉冲条（侧栏会话列表首屏加载等） */
+.jt-skeleton {
+  background: linear-gradient(90deg, var(--jt-paper-alt, rgba(0,0,0,.05)) 25%, var(--jt-focus, rgba(0,0,0,.09)) 50%, var(--jt-paper-alt, rgba(0,0,0,.05)) 75%);
+  background-size: 200% 100%;
+  animation: jt-skeleton-wave 1.4s ease infinite;
+}
+@keyframes jt-skeleton-wave { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
 
 /* 新标签页启动台：整页可滚动，与聊天页（消息流+悬浮 composer）彻底区分 */
 .jt-tab-home { overflow: hidden !important; }

@@ -111,7 +111,7 @@ function loadPersistedTabs(): WorkTab[] | null {
 
 function MainApp() {
   const { settings, loaded, saveSettings } = useSettings();
-  const { sessions, activeId, setActiveId: setActiveIdRaw, create, remove, updateTitle, setProject, refresh } = useSessions();
+  const { sessions, activeId, setActiveId: setActiveIdRaw, create, remove, updateTitle, setProject, refresh, loaded: sessionsLoaded } = useSessions();
   // 记录上次活跃会话（v14.8）：供「启动恢复上次会话」用
   const setActiveId = useCallback((id: string | null) => {
     try { if (id) localStorage.setItem('lyclaw_last_session', id); else localStorage.removeItem('lyclaw_last_session') } catch { /* ignore */ }
@@ -892,7 +892,7 @@ function MainApp() {
   // 右侧仍是完整工作台——多标签条、页面内容、状态栏、所有面板入口与按钮全部保留。
   if (codexShell) return (
     <div className="h-screen w-screen overflow-hidden flex" style={{ background: 'var(--jt-paper)' }}>
-      <CodexRail sessions={sessions} activeId={activeId} activeType={activeTab?.type || 'newtab'}
+      <CodexRail sessions={sessions} activeId={activeId} activeType={activeTab?.type || 'newtab'} sessionsLoaded={sessionsLoaded}
         onSelect={(sid) => handleSelectSession(sid)} onCreate={() => handleCreateSession()}
         onOpenTab={(type) => openTab(type)} onSearch={() => setCmdOpen(true)}
         onCollapse={() => setSidebarCollapsed(true)} onExpand={() => setSidebarCollapsed(false)}

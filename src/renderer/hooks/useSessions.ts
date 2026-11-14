@@ -5,10 +5,13 @@ import * as storage from '../store/storage'
 export function useSessions() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
+  // v16.4.1：首屏加载态——供侧栏骨架屏区分「加载中」与「真的没有会话」
+  const [loaded, setLoaded] = useState(false)
 
   const refresh = useCallback(async () => {
     const list = await storage.listSessions()
     setSessions(list)
+    setLoaded(true)
     if (list.length > 0 && !activeId) {
       setActiveId(list[0].id)
     }
@@ -57,5 +60,5 @@ export function useSessions() {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, title: safeTitle } : s))
   }, [])
 
-  return { sessions, activeId, setActiveId, create, remove, updateTitle, setProject, refresh }
+  return { sessions, activeId, setActiveId, create, remove, updateTitle, setProject, refresh, loaded }
 }

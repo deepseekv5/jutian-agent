@@ -97,6 +97,8 @@ interface RailProps {
   activeType: PageType
   onDelete?: (id: string) => void
   onRename?: (id: string, title: string) => void
+  /** v16.4.1：会话列表首屏加载态——加载中显示骨架行而非空白 */
+  sessionsLoaded?: boolean
 }
 
 interface HomeProps {
@@ -245,7 +247,7 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
 }
 
 /** 左侧骨架：64px 活动栏 + 320px 会话栏（所有界面常驻，Codex 1:1） */
-export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onExpand, collapsed, onHome, activeType, onDelete, onRename }: RailProps) {
+export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, onSearch, onCollapse, onExpand, collapsed, onHome, activeType, onDelete, onRename, sessionsLoaded = true }: RailProps) {
   const { lang, t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   // v16.3.3：侧栏「工作区」入口组默认收起（与顶部标签条/主区卡片墙三处重复，收起后侧栏更接近 Codex）
@@ -448,6 +450,12 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             {t('新对话', 'New chat')}
           </button>
           <div className="px-2 mb-2 text-[11px] font-medium" style={muted}>{t('最近', 'Recents')}</div>
+          {/* v16.4.1：首屏加载骨架——3 行脉冲条，避免打开应用侧栏空一拍 */}
+          {!sessionsLoaded && recents.length === 0 && [0, 1, 2].map(i => (
+            <div key={`sk-${i}`} className={row} style={{ pointerEvents: 'none' }} aria-hidden>
+              <span className="flex-1 rounded-md jt-skeleton" style={{ height: 12, width: `${72 - i * 14}%` }} />
+            </div>
+          ))}
           {recents.map((s, i) => (
             <button key={s.id} onClick={() => onSelect(s.id)}
               onContextMenu={e => { e.preventDefault(); setCtx({ id: s.id, title: s.title || '', x: e.clientX, y: e.clientY }) }}

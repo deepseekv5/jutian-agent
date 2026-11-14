@@ -360,7 +360,12 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
       res = null
       await sleepAbortable(decision.delayMs, signal)
     }
-    if (!res) throw lastErr ?? new Error('请求失败：未知原因')
+    // 重试额度耗尽：把「试了 N 次」讲清楚，用户一眼知道是线路持续不可用而非偶发抖动
+    if (!res) {
+      throw lastErr
+        ? new Error(`${lastErr.message}（已自动重试 ${MAX_ATTEMPTS} 次仍失败——免费线路高峰期容易持续排队，稍后再试或到设置换一条线路）`)
+        : new Error('请求失败：未知原因')
+    }
     if (!res.body) throw new Error('No response body')
 
     let roundContent = ''

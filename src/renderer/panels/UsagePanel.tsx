@@ -72,19 +72,19 @@ export default function UsagePanel({ onClose }: { onClose: () => void }) {
         </div>
 
         {sum.unpriced > 0 && (
-          <div className="text-[11px] px-3 py-2 rounded-lg" style={{ background: 'rgba(245,158,11,.1)', color: '#8a5a00' }}>
+          <div className="text-[11px] px-3 py-2 rounded-lg" style={{ background: `${c.toolWarn}14`, color: c.toolWarn }}>
             有 {sum.unpriced} 次请求的模型不在本地定价表里，未计入花费 —— 实际金额可能更高。
           </div>
         )}
         {budget > 0 && (
-          <div className="rounded-xl px-3.5 py-3" style={{ background: bud.over ? 'rgba(239,68,68,.09)' : c.bgInput, border: `1px solid ${c.borderLight}` }}>
+          <div className="rounded-xl px-3.5 py-3" style={{ background: bud.over ? `${c.toolErr}17` : c.bgInput, border: `1px solid ${c.borderLight}` }}>
             <div className="flex items-center text-[11.5px]" style={{ color: c.textSecondary || c.textTertiary }}>
               预算 {formatUSD(budget)} · 已用 {bud.pct}%
               <span className="flex-1" />
-              <span style={{ color: bud.over ? '#ef4444' : c.textTertiary }}>{bud.over ? '已超出预算' : `剩余 ${formatUSD(bud.remaining)}`}</span>
+              <span style={{ color: bud.over ? c.toolErr : c.textTertiary }}>{bud.over ? '已超出预算' : `剩余 ${formatUSD(bud.remaining)}`}</span>
             </div>
             <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: c.borderLight }}>
-              <div className="h-full rounded-full" style={{ width: `${Math.min(100, bud.pct)}%`, background: bud.over ? '#ef4444' : (c.accent || 'var(--brand, #10a37f)') }} />
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, bud.pct)}%`, background: bud.over ? c.toolErr : (c.accent || 'var(--brand, #10a37f)') }} />
             </div>
           </div>
         )}

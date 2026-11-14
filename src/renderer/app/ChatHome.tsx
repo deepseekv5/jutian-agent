@@ -15,7 +15,7 @@ import rehypeHighlight from 'rehype-highlight'
  * 与 ChatTab 的 agent 循环互补：这里轻、快、即开即聊。
  */
 
-interface Msg { role: 'user' | 'assistant'; content: string }
+interface Msg { role: 'user' | 'assistant'; content: string; ts?: number }
 
 const QUICK = [
   { zh: '给我讲讲量子计算', en: 'Explain quantum computing' },
@@ -109,7 +109,7 @@ export default function ChatHome() {
       setMsgs(prev => [...prev, { role: 'user', content: v }, { role: 'assistant', content: t('请先在「设置 → 推理」配置模型与密钥，或使用一键免费模型。', 'Configure a model in Settings → Inference first, or enable free models.') }])
       return
     }
-    const next = [...msgs, { role: 'user' as const, content: v }]
+    const next = [...msgs, { role: 'user' as const, content: v, ts: Date.now() }]
     setMsgs(next)
     setInput('')
     setBusy(true)
@@ -200,7 +200,8 @@ export default function ChatHome() {
             </div>
           )}
           {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 jt-msg-in`}>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} mb-4 jt-msg-in`}
+              title={m.ts ? new Date(m.ts).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN') : undefined}>
               {/* v16.4.0：assistant 无气泡全宽（ChatGPT 式），user 保留右对齐气泡——层级更清晰 */}
               <div className={m.role === 'user'
                 ? 'max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed'
