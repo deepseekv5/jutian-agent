@@ -4,6 +4,7 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.4.0**：品质大轮（40 项 UI 硬伤清理）。首页对话补齐大厂标配——多行输入框（自动增高、Shift+Enter 换行）、停止生成、复制消息、流式打字光标、assistant 无气泡全宽排版；修复 max_tokens 1024 截断。全局修复：scrollbar-thin 此前是死类（77 处引用从未生效，滚动条粗 8px）、暗色主题输入光标不可见、侧栏假数据（伪造项目标签/未读点/假项目列表）、取色器显示黑色、8 处硬编码颜色 token 化。旁路聊天面（辅助对话/审查/员工对话）补流式输出与停止按钮。
 * **v16.3.8**：截图不再截到本应用窗口——用户反馈「截图时自身窗口还没有隐藏」。根因：hide 后固定等 280ms，macOS 隐藏动画未完成时 desktopCapturer 的 thumbnail 仍含本窗口残影。改为轮询确认所有窗口 `isVisible()===false`（最多 1.5s）+ 150ms 合成余量再截；重试路径同样先重新隐藏（此前 finally 恢复显示后重试会截到本应用）。
 * **v16.3.7**：工具卡结果可见——read_file 完成后显示读到的内容摘要（文件名+前 90 字）、shell 显示命令+输出摘要（`命令 → 输出` 前 80 字），不再只显示「已完成」；与 v16.3.5 的写入内容预览配套，工具「输入什么、产出什么」全程可见。
 * **v16.3.6**：截图 AI 真正可读——用户反馈「截图功能不好用 ai 读不到」。根因：screenshot 工具返回的图片只作为**文本 URL** 进模型上下文（`/api/remote/file` 本机路径上游也访问不了），模型只看到 markdown 链接文字。修复：screenshot 产出 dataUrl（base64 内联），工具结果带 `image` 字段透传（ToolRunResult/UltraDeps.runTool/executeToolCore），两个内核的 tool 消息构造为**多模态 content**（text + image_url）——模型终于能真正看到截图内容；UltraMessage content 类型放宽支持数组。另清理误入库的 .mimosa hook 状态目录（加 .gitignore）。
