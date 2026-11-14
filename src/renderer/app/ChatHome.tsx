@@ -85,10 +85,21 @@ export default function ChatHome() {
       })
     } catch { /* 静默 */ } finally { setTtsBusy(false) }
   }
-  const bottomRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
-
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, busy])
+  // v16.4.0：stick-to-bottom 守卫——用户上翻阅读时不被流式输出强行拽回底部（对齐 ChatView 同款）
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const stickRef = useRef(true)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => { stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90 }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight
+  }, [msgs, busy])
 
   const send = async (text: string) => {
     const v = text.trim()
@@ -155,7 +166,7 @@ export default function ChatHome() {
   return (
     <div className="flex-1 min-w-0 flex flex-col" style={{ background: 'var(--jt-paper)' }}>
       {/* 消息流 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto w-full" style={{ maxWidth: 780, padding: '32px 24px 16px' }}>
           {msgs.length === 0 && (
             <div className="pt-12 text-center">
@@ -223,7 +234,7 @@ export default function ChatHome() {
               </div>
             </div>
           ))}
-          <div ref={bottomRef} />
+          <div />
         </div>
       </div>
 

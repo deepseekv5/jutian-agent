@@ -326,7 +326,7 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
         )}
         <span className="flex-1" />
         {gitTip && (
-          <span className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0" style={{ background: '#d9f2e6', color: '#0b6b4f' }}>{gitTip}</span>
+          <span className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0" style={{ background: `${c.toolOk}1a`, color: c.toolOk }}>{gitTip}</span>
         )}
         {/* 每次对话后可撤销本轮文件更改（Git 检查点） */}
         {lastCheckpoint && streamingId === null && (
@@ -341,7 +341,7 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
           </button>
         )}
         {kbSavedTip && (
-          <span className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0" style={{ background: '#d9f2e6', color: '#0b6b4f' }}>
+          <span className="text-[10.5px] px-2 py-0.5 rounded-full shrink-0" style={{ background: `${c.toolOk}1a`, color: c.toolOk }}>
             已存入知识库（对话 笔记本）
           </span>
         )}
@@ -512,7 +512,7 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
             </>
           )}
           {error && (
-            <div className="px-6 py-2 text-xs shrink-0" style={{ color: '#ef4444' }}>{error}</div>
+            <div className="px-6 py-2 text-xs shrink-0" style={{ color: c.toolErr }}>{error}</div>
           )}
         </div>
         </div>

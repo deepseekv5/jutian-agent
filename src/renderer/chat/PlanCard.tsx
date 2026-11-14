@@ -121,7 +121,7 @@ export default function PlanCard({ plan, onClear, planModeOn = false, planApprov
               <div className="flex items-center gap-2">
                 <button onClick={() => onApprove?.(feedback)} disabled={!feedback.trim()}
                   className="h-7 px-3 rounded-lg text-[12px] font-medium transition-opacity disabled:opacity-40"
-                  style={{ background: '#7c3aed', color: '#fff' }}>
+                  style={{ background: c.accent, color: '#fff' }}>
                   {t('按意见改方案', 'Revise with feedback')}
                 </button>
                 <button onClick={() => { setShowFeedback(false); setFeedback('') }}
@@ -135,7 +135,7 @@ export default function PlanCard({ plan, onClear, planModeOn = false, planApprov
             <div className="flex items-center gap-2">
               <button onClick={() => onApprove?.()}
                 className="h-7 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5"
-                style={{ background: '#7c3aed', color: '#fff' }}
+                style={{ background: c.accent, color: '#fff' }}
                 title={t('批准后我开始按计划执行', 'Approve to start executing')}>
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />

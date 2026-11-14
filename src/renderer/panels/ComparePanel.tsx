@@ -205,7 +205,7 @@ export default function ComparePanel({ settings, onClose }: { settings: Settings
           </div>
           {running ? (
             <button onClick={stop} className="px-4 py-1.5 rounded-lg text-[12px] font-medium shrink-0"
-              style={{ background: '#ef4444', color: '#fff' }}>{t('停止', 'Stop')}</button>
+              style={{ background: c.toolErr, color: '#fff' }}>{t('停止', 'Stop')}</button>
           ) : (
             <button onClick={run} disabled={!prompt.trim() || !left.model || !right.model}
               className="px-4 py-1.5 rounded-lg text-[12px] font-medium text-white disabled:opacity-40 shrink-0"

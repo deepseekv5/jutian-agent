@@ -396,7 +396,8 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
             <button onClick={() => setModeOpen(v => !v)} className="text-[16px] font-semibold flex items-center gap-1.5" style={{ color: 'var(--jt-ink)' }}
               title={t('切换工作 / 编程模式', 'Switch Office / Coding mode')}>
               {t('巨天', 'Jutian')}
-              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? '#2563eb' : 'var(--jt-ink-2)', background: chatMode === 'coding' ? 'rgba(37,99,235,.08)' : 'var(--jt-paper-alt)' }}>
+              {/* v16.4.0：编程徽章走 accent（此前硬编码 #2563eb 不随主题） */}
+              <span className="text-[11px] font-normal px-1.5 py-0.5 rounded" style={{ color: chatMode === 'coding' ? 'var(--brand, #10a37f)' : 'var(--jt-ink-2)', background: chatMode === 'coding' ? 'var(--jt-focus)' : 'var(--jt-paper-alt)' }}>
                 {chatMode === 'coding' ? t('编程', 'Coding') : t('工作', 'Work')}
               </span>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.chevron} /></svg>

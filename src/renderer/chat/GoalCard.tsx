@@ -16,10 +16,11 @@ export default function GoalCard({ goal, onStop, onDismiss }: { goal: GoalState;
   const { c } = useTheme()
   const running = goal.status === 'running'
   const done = goal.status === 'done'
-  const ring = done ? '#0b6b4f' : running ? c.accent : c.textMuted
+  // v16.4.0：完成态走 toolOk token（此前 #0b6b4f 硬编码，暗色下文字过暗）
+  const ring = done ? c.toolOk : running ? c.accent : c.textMuted
   return (
     <div className="mx-auto w-full rounded-2xl px-4 py-3.5 glass-strong"
-      style={{ border: `1px solid ${done ? 'rgba(16,185,129,0.35)' : c.border}`, maxWidth: 760, background: c.bgCard }}>
+      style={{ border: `1px solid ${done ? `${c.toolOk}55` : c.border}`, maxWidth: 760, background: c.bgCard }}>
       <div className="flex items-center gap-2.5">
         <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: `${ring}18`, color: ring }}>
@@ -38,7 +39,7 @@ export default function GoalCard({ goal, onStop, onDismiss }: { goal: GoalState;
           <div className="flex items-center gap-2">
             <span className="text-[12.5px] font-semibold" style={{ color: c.textHead }}>目标模式</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{ background: done ? 'rgba(16,185,129,0.12)' : running ? `${c.accent}18` : c.bgInput, color: done ? '#0b6b4f' : running ? c.accent : c.textTertiary }}>
+              style={{ background: done ? `${c.toolOk}1e` : running ? `${c.accent}18` : c.bgInput, color: done ? c.toolOk : running ? c.accent : c.textTertiary }}>
               {done ? '已达成' : running ? `进行中 · 第 ${goal.rounds}/3 轮` : '已停止'}
             </span>
           </div>
