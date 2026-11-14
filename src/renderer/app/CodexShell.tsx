@@ -3,6 +3,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { PAGE_META, type PageType } from './TabBar'
 import { CARDS, GROUPS } from './pageCatalog'
 import ChatHome from './ChatHome'
+import BrandMark from './BrandMark'
 
 /**
  * Codex Exact 布局（v15.7.0）
@@ -30,21 +31,6 @@ const ICONS = {
 }
 
 type SessionLite = { id: string; title?: string; updated_at?: string; created_at?: string; project?: string }
-
-/**
- * 品牌标（v16.5.0 新 logo）：穹弧 =「天」（巨天），四芒星 = AI 智能体。
- * 应用图标同源设计（electron/logo.svg → icns/ico 由 scripts/icon-render.mjs 生成）。
- * 弧线走 currentColor 适配主题；星点走品牌色。
- */
-export function BrandMark({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" />
-      <path d="M7.6 19.5 Q12 16.5 16.4 19.5" stroke="currentColor" opacity={0.38} strokeWidth={1.5} strokeLinecap="round" />
-      <path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="var(--brand, #10a37f)" />
-    </svg>
-  )
-}
 
 /** 侧栏「工作区」自定义入口（v15.8.0）：用户可增删，设置固定不可移除 */
 const RAIL_PINS_KEY = 'lyclaw_rail_pins'

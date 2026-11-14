@@ -350,8 +350,9 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
 
   // ─── 空状态 —— 办公/编程两套引导（文案集中定义在 shared/chatModes）───
   if (messages.length === 0) {
-    const w = WELCOME[chatMode]
-    const accent = MODE_ACCENT[chatMode]
+    // v16.5.1：兜底——父级可能传进未归一化的模式值（如 localStorage 脏值），绝不能让 w/accent 变 undefined
+    const w = WELCOME[chatMode] || WELCOME.general
+    const accent = MODE_ACCENT[chatMode] || MODE_ACCENT.general
     return (
       <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto px-6">
         <div className="flex flex-col items-center text-center -mt-8">

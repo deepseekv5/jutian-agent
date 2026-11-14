@@ -4,6 +4,8 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.5.1**：修复切到「对话模式」后白屏崩溃（`Cannot read properties of undefined (reading 'color')`）——对话模式的标记值（'chat'）流入 ComposerStatusBar 后 `MODE_ACCENT[chatMode]` 取到 undefined 直接取 .color 炸掉整个渲染树。三处兜底：MessageInput 初始化读 localStorage 时归一化（非法值一律归 general）、MODE_ACCENT/WELCOME 取值全部 `|| .general` 兜底；顺带把两处重复的 BrandMark 组件合并为 app/BrandMark 单一来源（新品牌标弧线随主题、星点随品牌色）。
+
 * **v16.5.0**：全新品牌标识与顶栏利用。新 logo——黑底 squircle + 白色天穹双弧 + 品牌绿四芒星（穹弧即「天」，星即 AI 智能体，对齐业界 sparkle 语言），icns/ico/iconset 全套由 scripts/icon-render.mjs（Chrome headless 栅格化）一键生成；mac 顶栏 hiddenInset 后红绿灯右侧的空白启用为「品牌行（logo+巨天agent 字标，可拖拽）」+ 模式切换器贴底，活动栏与「回到首页」菜单换用新标。
 
 * **v16.4.3**：内核文件上下文跟踪补全——edit_file 三条成功路径（精确/模糊/行号）现在都会检测「文件在你上次读取后被外部修改过」并提醒模型确认，防止基于过期内容覆盖用户改动（此前只有 write_file 有此防护，对齐 Cline FileContextTracker）。

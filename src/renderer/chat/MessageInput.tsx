@@ -136,8 +136,9 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled, engine, on
     return () => { alive = false; clearTimeout(t) }
   }, [workDir, disabled])
   const base = workDir ? workDir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : ''
-  // 模式色与空态/切换器同源（shared/chatModes）：办公绿 / 编程蓝，一眼可辨
-  const mode = MODE_ACCENT[chatMode]
+  // 模式色与空态/切换器同源（shared/chatModes）：办公绿 / 编程蓝，一眼可辨。
+  // v16.5.1：|| general 兜底——模式值来源多（localStorage/props），绝不让 mode 变 undefined
+  const mode = MODE_ACCENT[chatMode] || MODE_ACCENT.general
   return (
     <div className="flex items-center gap-2 px-1 pb-1.5 text-[10.5px] min-w-0" style={{ color: c.textMuted }}>
       <span className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded"
@@ -184,8 +185,11 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
   const [transcribing, setTranscribing] = useState(false)
   const [volume, setVolume] = useState(0)
   const [focused, setFocused] = useState(false)
-  // 对话模式：通用 / Coding（全局记忆，随时切换）
-  const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') as 'general' | 'coding') || 'general')
+  // 对话模式：通用 / Coding（全局记忆，随时切换）。
+  // v16.5.1 崩溃修复：localStorage 可能存着非法值（'chat' 是 App 层的对话模式标记、
+  // 也可能被外部写进任意脏值）——直接 as-cast 后 MODE_ACCENT[chatMode] 取到 undefined，
+  // ComposerStatusBar 里 mode.color 白屏。读时归一，非法值一律归 general。
+  const [chatMode, setChatMode] = useState<'general' | 'coding'>(() => (localStorage.getItem('lyclaw_chat_mode') === 'coding' ? 'coding' : 'general'))
   const switchChatMode = (m: 'general' | 'coding') => { setChatMode(m); try { localStorage.setItem('lyclaw_chat_mode', m) } catch {} }
 
   // 草稿自动保存：输入停顿 800ms 落盘一次。
