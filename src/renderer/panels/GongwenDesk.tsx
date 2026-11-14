@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { fetchCompat } from '../api'
+import { ssePayloads } from '../../shared/sse'
 import { wrapGongwenDocument, markdownToHtml } from '../../shared/exportHtml'
 import { GONGWEN_PROMPT } from '../../shared/chatModes'
 
@@ -82,6 +83,24 @@ export default function GongwenDesk() {
   const [f, setF] = useState<Fields>(initial)
   const [aiBusy, setAiBusy] = useState(false)
   const [aiErr, setAiErr] = useState('')
+  // v16.4.1：起草可取消 + 流式实时预览
+  const abortRef = useRef<AbortController | null>(null)
+  const [drafting, setDrafting] = useState('')
+  const draftingRef = useRef('')
+  const fillBody = (raw: string) => {
+    let text = raw.trim()
+    const fence = text.match(/```(?:markdown|md)?\s*([\s\S]*?)```/)
+    if (fence) text = fence[1].trim()
+    const start = text.search(/(?:^|\n)[^\n]{2,40}：|^\s*根据|^\s*为[^\n]{2,30}，|^\s*一、/)
+    if (start > 0) text = text.slice(start).trim()
+    text = text.replace(/^(?:好的|以下是|根据您的要求)[^\n]*\n+/, '').trim()
+    const bodyOnly = text
+      .replace(/\n{0,2}[^\n]{2,30}：\s*\n/, '\n')
+      .replace(/\n{0,2}\d{4}年\d{1,2}月\d{1,2}日\s*$/, '')
+      .trim()
+    setF(prev => ({ ...prev, body: bodyOnly || text }))
+    setPreviewKey(k => k + 1)
+  }
   const [previewKey, setPreviewKey] = useState(0)
   const set = <K extends keyof Fields>(k: K, v: Fields[K]) => setF(prev => ({ ...prev, [k]: v }))
 
@@ -113,6 +132,8 @@ export default function GongwenDesk() {
   const aiDraft = async () => {
     if (aiBusy) return
     setAiBusy(true); setAiErr('')
+    const ac = new AbortController()
+    abortRef.current = ac
     try {
       const topic = f.title.trim() || '有关工作事项'
       const brief = [
@@ -124,36 +145,42 @@ export default function GongwenDesk() {
         `要点：${f.body.slice(0, 600)}`,
       ].join('\n')
       const res = await fetchCompat('/api/llm-proxy', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ac.signal,
         body: JSON.stringify({
           model: (() => { try { return JSON.parse(localStorage.getItem('lyclaw_settings') || '{}').model || '' } catch { return '' } })(),
           messages: [
             { role: 'system', content: `${GONGWEN_PROMPT}\n\n【额外约束】只输出公文正文（从主送机关开始到落款结束），不要输出思考过程、不要解释、不要复述本指令、不要写「以上模板供参考」。正文段落之间用空行分隔，结构层次严格按一、（一）1.（1）。` },
             { role: 'user', content: brief },
           ],
-          stream: false, max_tokens: 1600,
+          // v16.4.1：非流式 1600 → 流式 4096——长公文不再截断，起草过程实时可见
+          stream: true, max_tokens: 4096,
         }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json().catch(() => null)
-      let text = String(data?.choices?.[0]?.message?.content || '').trim()
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      let text = ''
+      for await (const payload of ssePayloads(res.body)) {
+        if (payload === '[DONE]') break
+        let ev: any
+        try { ev = JSON.parse(payload) } catch { continue }
+        const piece = String(ev?.choices?.[0]?.delta?.content || '')
+        if (piece) { text += piece; draftingRef.current = text; setDrafting(text.slice(-220)) }
+      }
+      text = text.trim()
       if (!text) throw new Error('模型返回为空')
-      // 剥掉模型常见的解释性外壳：只保留从主送机关/引据开始的正文
-      const fence = text.match(/```(?:markdown|md)?\s*([\s\S]*?)```/)
-      if (fence) text = fence[1].trim()
-      const start = text.search(/(?:^|\n)[^\n]{2,40}：|^\s*根据|^\s*为[^\n]{2,30}，|^\s*一、/)
-      if (start > 0) text = text.slice(start).trim()
-      text = text.replace(/^(?:好的|以下是|根据您的要求)[^\n]*\n+/, '').trim()
-      // AI 输出塞进 body，但主送/落款仍由表单控制，预览保持一致
-      const bodyOnly = text
-        .replace(/\n{0,2}[^\n]{2,30}：\s*\n/, '\n')  // 去掉它可能自带的主送行
-        .replace(/\n{0,2}\d{4}年\d{1,2}月\d{1,2}日\s*$/, '')
-        .trim()
-      setF(prev => ({ ...prev, body: bodyOnly || text }))
-      setPreviewKey(k => k + 1)
+      fillBody(text)
     } catch (e) {
+      // 用户停止：把已生成部分剥壳填进正文，不算失败
+      const err = e as Error
+      const stopped = err?.name === 'AbortError' || abortRef.current?.signal.aborted || String(err?.message || '').includes('取消')
+      const partial = (draftingRef.current || '').trim()
+      if (stopped && partial) { fillBody(partial); return }
+      if (stopped) return
       setAiErr(`起草失败：${String((e as Error)?.message || e)}。请检查设置里的模型与密钥，或直接在左侧编辑。`)
-    } finally { setAiBusy(false) }
+    } finally {
+      abortRef.current = null
+      setDrafting('')
+      setAiBusy(false)
+    }
   }
 
   const download = (ext: 'doc' | 'html') => {
@@ -224,10 +251,17 @@ export default function GongwenDesk() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={aiDraft} disabled={aiBusy} className={btn}
-            style={{ background: '#c7000b', color: '#fff', opacity: aiBusy ? .6 : 1 }}>
-            {aiBusy ? '起草中…' : 'AI 起草正文'}
-          </button>
+          {aiBusy ? (
+            <button onClick={() => abortRef.current?.abort()} className={btn}
+              style={{ background: '#c7000b', color: '#fff' }}>
+              <span className="inline-block w-2.5 h-2.5 mr-1 rounded-[2px] align-[0px]" style={{ background: '#fff' }} />
+              停止并保留已生成
+            </button>
+          ) : (
+            <button onClick={aiDraft} className={btn} style={{ background: '#c7000b', color: '#fff' }}>
+              AI 起草正文
+            </button>
+          )}
           <button onClick={() => setPreviewKey(k => k + 1)} className={btn}
             style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>刷新预览</button>
           <button onClick={() => download('doc')} className={btn}
@@ -236,6 +270,14 @@ export default function GongwenDesk() {
             style={{ background: c.bgInput, color: c.textSecondary, border: `1px solid ${c.borderLight}` }}>导出 HTML</button>
         </div>
         {aiErr && <div className="mt-3 text-[11px] leading-relaxed" style={{ color: '#c7000b' }}>{aiErr}</div>}
+        {/* 起草中实时尾流：能看到正文正在逐段生成 */}
+        {aiBusy && drafting && (
+          <div className="mt-3 px-3 py-2 rounded-lg text-[11px] leading-relaxed whitespace-pre-wrap"
+            style={{ background: c.bgInput, border: `1px solid ${c.borderLight}`, color: c.textTertiary, maxHeight: 120, overflow: 'hidden' }}>
+            <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin align-[-2px] mr-1.5" style={{ borderColor: '#c7000b', borderTopColor: 'transparent' }} />
+            {drafting}
+          </div>
+        )}
       </div>
 
       {/* 右：实时红头预览（iframe 隔离整页 CSS，sandbox 不给 allow-same-origin） */}

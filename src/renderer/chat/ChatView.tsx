@@ -409,17 +409,18 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
         </div>
       )}
 
-      {/* 对话健康提示（v12.1）：只在 notice/warn 时出现；good 状态不打扰 */}
+      {/* 对话健康提示（v12.1）：只在 notice/warn 时出现；good 状态不打扰。
+          v16.4.1：红/amber 硬编码 → toolErr/toolWarn token（暗色下对比度自动跟随） */}
       {health.level !== 'good' && messages.length > 0 && (
         <div className="mx-auto px-6 pt-2" style={{ maxWidth: contentWidth }}>
           <div className="flex items-start gap-2 px-3 py-2 rounded-xl text-[11.5px]"
             style={{
-              background: health.level === 'warn' ? 'rgba(239,68,68,.07)' : 'rgba(245,158,11,.08)',
-              border: `1px solid ${health.level === 'warn' ? 'rgba(239,68,68,.2)' : 'rgba(245,158,11,.2)'}`,
+              background: health.level === 'warn' ? `${c.toolErr}12` : `${c.toolWarn}14`,
+              border: `1px solid ${health.level === 'warn' ? `${c.toolErr}33` : `${c.toolWarn}33`}`,
               color: c.textSecondary || c.textTertiary,
             }}>
             <svg className="mt-0.5 shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none"
-              stroke={health.level === 'warn' ? '#ef4444' : '#f59e0b'} strokeWidth={2} strokeLinecap="round">
+              stroke={health.level === 'warn' ? c.toolErr : c.toolWarn} strokeWidth={2} strokeLinecap="round">
               <path d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div className="min-w-0 flex-1">
@@ -450,10 +451,10 @@ export default function ChatView({ messages, streamingId, chatMode = 'general', 
           {netSec >= 5 && <span style={{ color: c.textMuted }}>{lang === 'en' ? '· free tiers can queue at peak hours' : '· 免费线路高峰期会排队'}</span>}
         </div>
       )}
-      {/* 上游降级提示（v15.2） */}
+      {/* 上游降级提示（v15.2）。v16.4.1：amber 硬编码 → toolWarn token */}
       {relayHint && (
         <div className="shrink-0 px-6 py-1 text-[10.5px] flex items-center gap-2"
-          style={{ color: '#b45309', background: '#f59e0b14', borderBottom: '1px solid #f59e0b33' }} role="status">
+          style={{ color: c.toolWarn, background: `${c.toolWarn}14`, borderBottom: `1px solid ${c.toolWarn}33` }} role="status">
           <span>⚠</span>
           <span>{lang === 'en'
             ? `Primary model unavailable — fell back to free route (${relayHint}). Tool calling may be weaker.`

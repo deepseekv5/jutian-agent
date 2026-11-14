@@ -59,8 +59,11 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
     finally { setSaving(false) }
   }
 
+  // v16.4.1：原生 confirm → 二次点击确认
+  const [delArmedId, setDelArmedId] = useState<string | null>(null)
   const remove = async (id: string) => {
-    if (!confirm('删除这篇日记？不可恢复。')) return
+    if (delArmedId !== id) { setDelArmedId(id); setTimeout(() => setDelArmedId(cur => (cur === id ? null : cur)), 2500); return }
+    setDelArmedId(null)
     await fetchCompat('/api/diary/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     const list = await load()
     setEntries(list)
@@ -143,8 +146,10 @@ export default function DiaryPanel({ onClose }: { onClose: () => void }) {
                   style={{ background: 'transparent', color: c.textHead, border: 'none', fontWeight: 600 }} />
                 {dirty && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: c.bgInput, color: c.textTertiary }}>未保存</span>}
                 <button onClick={() => { if (draft.id) remove(draft.id) }} disabled={!draft.id}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30"
-                  style={{ color: c.toolErr }} title="删除这篇">
+                  className="w-8 h-8 rounded-lg flex items-center justify-center disabled:opacity-30 transition-colors"
+                  style={delArmedId && delArmedId === draft.id
+                    ? { background: c.toolErr, color: '#fff' }
+                    : { color: c.toolErr }} title={delArmedId === draft.id ? '再点一次确认删除' : '删除这篇'}>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>

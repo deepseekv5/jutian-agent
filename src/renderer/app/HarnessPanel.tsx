@@ -72,7 +72,7 @@ export default function HarnessPanel({ onClose }: { onClose: () => void }) {
         <div className="px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-xl grid place-items-center" style={{ background: c.accent }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.accentText} strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" /></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.accentText} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" /></svg>
             </span>
             <div>
               <h1 className="text-[17px] font-bold tracking-wide" style={{ color: c.textHead }}>LY HARNESS · 插件中心</h1>

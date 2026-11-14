@@ -170,7 +170,7 @@ export default function EmployeeChatTab({ empId, settings, onClose }: {
             </div>
           )}
 
-          {error && <div className="text-[12px] px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,.12)', color: '#ef4444' }}>{error}</div>}
+          {error && <div className="text-[12px] px-3 py-2 rounded-xl" style={{ background: `${c.toolErr}1f`, color: c.toolErr }}>{error}</div>}
         </div>
       </div>
 
@@ -223,13 +223,20 @@ function ToolLines({ tools, c }: { tools: AgentToolLine[]; c: any }) {
 
 function AgentBubble({ msg, c }: { msg: AgentMsg; c: any }) {
   const emp: Employee = { id: msg.empId || 'x', name: msg.name || 'AI', role: msg.role || '', prompt: '' }
+  // v16.4.1：hover 复制整条回复（此前只有代码块内复制）
+  const [copied, setCopied] = useState(false)
   return (
-    <div className="flex gap-3 agent-msg-in">
+    <div className="flex gap-3 agent-msg-in group/msg">
       <AgentAvatar emp={emp} size={30} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[13px] font-bold" style={{ color: c.textHead }}>{msg.name}</span>
           {msg.role && <span className="text-[11px]" style={{ color: c.textTertiary }}>{msg.role}</span>}
+          {msg.content && (
+            <button onClick={async () => { try { await navigator.clipboard.writeText(msg.content); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {} }}
+              className="ml-auto text-[10.5px] opacity-0 group-hover/msg:opacity-70 hover:!opacity-100 transition-opacity"
+              style={{ color: copied ? c.toolOk : c.textTertiary }}>{copied ? '已复制' : '复制'}</button>
+          )}
         </div>
         {msg.tools && msg.tools.length > 0 && <ToolLines tools={msg.tools} c={c} />}
         <AgentMarkdown text={msg.content} />

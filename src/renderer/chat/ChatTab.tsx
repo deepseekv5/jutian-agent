@@ -175,21 +175,25 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
       .catch(() => {})
   }, [ownWorkDir, settings.workDir, saveCheckpointLocal])
 
+  // v16.4.1：原生 confirm → 按钮二次点击确认（armed 态按钮变红显示「确认撤销？」）
+  const [undoArmed, setUndoArmed] = useState(false)
+  const UNDO_HINT = '恢复到本轮开始前的检查点；当前未提交的改动会先自动保底提交（可找回）'
   const undoLastTurn = useCallback(async () => {
     if (!lastCheckpoint || gitBusy) return
     const dir = (ownWorkDir || settings.workDir || '').trim()
     if (!dir) return
-    if (!confirm('撤销本轮对话对工作区文件的更改？\n\n恢复到本轮开始前的检查点；当前未提交的改动会先自动保底提交（可找回）。')) return
+    if (!undoArmed) { setUndoArmed(true); setTimeout(() => setUndoArmed(false), 2500); return }
+    setUndoArmed(false)
     setGitBusy(true)
     try {
       const r = await fetchCompat('/api/git/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dir, hash: lastCheckpoint.hash }) }).then(r => r.json())
       if (r.success) {
         setLastCheckpoint(null); saveCheckpointLocal(null); setGitRefresh(v => v + 1)
         setGitTip('已撤销本轮更改'); setTimeout(() => setGitTip(''), 2600)
-      } else { alert('撤销失败：' + (r.error || '未知错误')) }
-    } catch { alert('撤销失败：服务不可用') }
+      } else { setGitTip('撤销失败：' + (r.error || '未知错误')); setTimeout(() => setGitTip(''), 3200) }
+    } catch { setGitTip('撤销失败：服务不可用'); setTimeout(() => setGitTip(''), 3200) }
     finally { setGitBusy(false) }
-  }, [lastCheckpoint, gitBusy, ownWorkDir, settings.workDir, saveCheckpointLocal])
+  }, [lastCheckpoint, gitBusy, ownWorkDir, settings.workDir, saveCheckpointLocal, undoArmed])
 
   // 消息队列：流式回复中发送不丢失，排队等待上一条完成自动发出
   const [showExportMenu, setShowExportMenu] = useState(false)
@@ -332,12 +336,14 @@ function ChatTab({ sessionId, settings, onTitleGenerated, onAiTitle, onOpenBrows
         {lastCheckpoint && streamingId === null && (
           <button onClick={undoLastTurn} disabled={gitBusy}
             className="h-6 px-2 rounded-full flex items-center gap-1 text-[10.5px] font-medium shrink-0 transition-colors disabled:opacity-40"
-            style={{ background: `${c.accent}12`, color: c.accent }}
-            title={`恢复到本轮开始前的检查点 ${lastCheckpoint.hash}（${lastCheckpoint.label}）`}>
+            style={undoArmed
+              ? { background: `${c.toolErr}1f`, color: c.toolErr }
+              : { background: `${c.accent}12`, color: c.accent }}
+            title={`${UNDO_HINT} · 检查点 ${lastCheckpoint.hash}（${lastCheckpoint.label}）`}>
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v5h5M3.05 13A9 9 0 106 5.3L3 8" />
             </svg>
-            {gitBusy ? '撤销中…' : '撤销本轮更改'}
+            {gitBusy ? '撤销中…' : undoArmed ? '确认撤销？' : '撤销本轮更改'}
           </button>
         )}
         {kbSavedTip && (

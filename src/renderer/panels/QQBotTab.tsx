@@ -648,9 +648,13 @@ export default function QQBotTab() {
                     {m.chatLabel !== '系统' && ' · '}{m.time}
                     {m.direction === 'out' && <span className="ml-1 px-1 rounded" style={{ background: `${c.accent}15`, color: c.accent }}>机器人</span>}
                   </div>
-                  <div className="text-[13px] leading-relaxed px-3 py-2 rounded-xl inline-block self-start max-w-[85%] whitespace-pre-wrap break-words"
+                  <div className="text-[13px] leading-relaxed px-3 py-2 rounded-xl inline-block self-start max-w-[85%] whitespace-pre-wrap break-words group/qq relative"
                     style={{ background: m.direction === 'out' ? `${c.accent}12` : c.bgCard, border: `1px solid ${m.direction === 'out' ? `${c.accent}30` : c.borderLight}`, color: c.text }}>
                     {m.text}
+                    {/* v16.4.1：hover 复制消息 */}
+                    <button onClick={() => { navigator.clipboard.writeText(m.text).catch(() => {}) }}
+                      className="absolute right-1.5 bottom-1 text-[10px] opacity-0 group-hover/qq:opacity-70 hover:!opacity-100 transition-opacity"
+                      style={{ color: c.textTertiary }}>复制</button>
                   </div>
                 </>
               )}

@@ -58,11 +58,33 @@ function exportSessionMarkdown(messages: Message[]) {
 export default function ChatSidePanel({ workDir, mainMessages, settings, tab, onTabChange }: Props) {
   const { c } = useTheme()
   const { lang } = useLanguage()
+  // v16.4.1：8 个 tab 挤 340px 出现常驻横向滚动条（与内容区滚动条叠加成双条）——
+  // 高频 5 个留主列，其余收进「更多」下拉
+  const [moreOpen, setMoreOpen] = useState(false)
+  useEffect(() => {
+    if (!moreOpen) return
+    const close = () => setMoreOpen(false)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [moreOpen])
+  const MAIN_TABS: [SideTab, string, string][] = [
+    ['assistant', '辅助', 'Assist'],
+    ['files', '文件', 'Files'],
+    ['terminal', '终端', 'Shell'],
+    ['subagent', '子Agent', 'Agents'],
+    ['git', 'Git', 'Git'],
+  ]
+  const MORE_TABS: [SideTab, string, string][] = [
+    ['review', '审查', 'Review'],
+    ['browser', '浏览器', 'Browser'],
+    ['stats', '统计', 'Stats'],
+  ]
+  const inMore = MORE_TABS.some(([id]) => id === tab)
 
   return (
     <div className="h-full flex flex-col min-h-0 border-l glass" style={{ borderColor: c.borderLight }}>
-      {/* 面板标签（8 个 tab 在 340px 内放不下 → 横向滚动，不换行） */}
-      <div className="h-9 flex items-center gap-0.5 px-2 border-b shrink-0 overflow-x-auto whitespace-nowrap scrollbar-thin" style={{ borderColor: c.borderLight }}>
+      {/* 面板标签：主列 + 更多 */}
+      <div className="h-9 flex items-center gap-0.5 px-2 border-b shrink-0 whitespace-nowrap" style={{ borderColor: c.borderLight }}>
         <button
           onClick={() => exportSessionMarkdown(mainMessages)}
           title="导出当前对话为 Markdown"
@@ -73,22 +95,33 @@ export default function ChatSidePanel({ workDir, mainMessages, settings, tab, on
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m-5-5l5 5 5-5M4 21h16"/></svg>
         </button>
-        {([
-          ['assistant', '辅助', 'Assist'],
-          ['review', '审查', 'Review'],
-          ['files', '文件', 'Files'],
-          ['terminal', '终端', 'Shell'],
-          ['browser', '浏览器', 'Browser'],
-          ['subagent', '子Agent', 'Agents'],
-          ['git', 'Git', 'Git'],
-          ['stats', '统计', 'Stats'],
-        ] as [SideTab, string, string][]).map(([id, label, labelEn]) => (
+        {MAIN_TABS.map(([id, label, labelEn]) => (
           <button key={id} onClick={() => onTabChange(id)}
             className="px-2 py-1 rounded-lg text-[11px] font-medium transition-colors"
             style={{ background: tab === id ? `${c.accent}12` : 'transparent', color: tab === id ? c.accent : c.textTertiary }}>
             {lang === 'en' ? labelEn : label}
           </button>
         ))}
+        <div className="relative ml-auto">
+          <button onClick={e => { e.stopPropagation(); setMoreOpen(v => !v) }}
+            className="px-2 py-1 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-0.5"
+            style={{ background: inMore ? `${c.accent}12` : 'transparent', color: inMore ? c.accent : c.textTertiary }}>
+            {inMore ? MORE_TABS.find(([id]) => id === tab)![lang === 'en' ? 2 : 1] : (lang === 'en' ? 'More' : '更多')}
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} style={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+          {moreOpen && (
+            <div className="absolute right-0 top-full mt-1 rounded-xl py-1 z-30 min-w-[110px]"
+              style={{ background: c.bgCard, border: `1px solid ${c.borderLight}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
+              {MORE_TABS.map(([id, label, labelEn]) => (
+                <button key={id} onClick={() => { onTabChange(id); setMoreOpen(false) }}
+                  className="w-full text-left px-3 py-1.5 text-[11.5px] transition-colors"
+                  style={{ color: tab === id ? c.accent : c.textSecondary }}>
+                  {lang === 'en' ? labelEn : label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col">
@@ -551,8 +584,22 @@ function ReviewChat({ mainMessages, settings }: { mainMessages: Message[]; setti
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3 scrollbar-thin">
-        {!result && !busy && <div className="text-[11px] pt-4 text-center" style={{ color: c.textMuted }}>让 AI 以第三方视角审查当前对话：事实、逻辑、风险、改进建议</div>}
-        {busy && <div className="text-[11px] pt-4 text-center" style={{ color: c.textMuted }}>正在审查…</div>}
+        {!result && !busy && (
+          <div className="pt-4 text-center">
+            <div className="text-[11.5px] leading-relaxed" style={{ color: c.textMuted }}>
+              让 AI 以第三方视角审查当前对话<br />事实 · 逻辑 · 风险 · 改进建议
+            </div>
+            <button onClick={runReview} className="mt-3 px-3.5 py-1.5 rounded-lg text-[11.5px] font-medium text-white" style={{ background: c.accent }}>
+              {scope === 'last' ? '审查最近几条' : '审查整个对话'}
+            </button>
+          </div>
+        )}
+        {busy && (
+          <div className="pt-4 flex items-center justify-center gap-2 text-[11px]" style={{ color: c.textMuted }}>
+            <span className="inline-block w-3 h-3 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: c.accent, borderTopColor: 'transparent' }} />
+            正在审查…
+          </div>
+        )}
         {result && renderMd(result)}
       </div>
     </div>
@@ -598,7 +645,19 @@ function BrowserPane() {
             allowpopups={'true' as any}
           />
         ) : (
-          <div className="h-full flex items-center justify-center text-[11px]" style={{ color: c.textMuted }}>输入网址开始浏览</div>
+          // v16.4.1：空态加常用网址快捷入口，不再是孤零零一行字
+          <div className="h-full flex flex-col items-center justify-center gap-3">
+            <div className="text-[11.5px]" style={{ color: c.textMuted }}>输入网址开始浏览，或从这里出发</div>
+            <div className="flex flex-wrap justify-center gap-1.5 px-4">
+              {[['GitHub', 'github.com'], ['Bing', 'bing.com'], ['MDN', 'developer.mozilla.org'], ['知乎', 'zhihu.com']].map(([name, host]) => (
+                <button key={host} onClick={() => go(host)}
+                  className="px-2.5 py-1 rounded-full text-[11px] transition-colors hover:opacity-80"
+                  style={{ background: c.bgCard, border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

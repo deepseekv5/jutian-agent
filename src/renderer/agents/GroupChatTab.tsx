@@ -292,7 +292,7 @@ export default function GroupChatTab({ groupId, settings, onClose }: {
             </div>
           )}
 
-          {error && <div className="text-[12px] px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,.12)', color: '#ef4444' }}>{error}</div>}
+          {error && <div className="text-[12px] px-3 py-2 rounded-xl" style={{ background: `${c.toolErr}1f`, color: c.toolErr }}>{error}</div>}
         </div>
       </div>
 
@@ -303,7 +303,7 @@ export default function GroupChatTab({ groupId, settings, onClose }: {
           <div className="flex items-center justify-center gap-3 mt-2">
             <span className="text-[10.5px]" style={{ color: c.textTertiary }}>Enter 发送 · @ 点名 · 老板可在回复里 @ 指派同事</span>
             {busy && (
-              <button onClick={stop} className="text-[10.5px] px-2 py-0.5 rounded-md" style={{ background: 'rgba(239,68,68,.14)', color: '#ef4444' }}>停止</button>
+              <button onClick={stop} className="text-[10.5px] px-2 py-0.5 rounded-md" style={{ background: `${c.toolErr}24`, color: c.toolErr }}>停止</button>
             )}
           </div>
         </div>
@@ -363,8 +363,10 @@ function ToolLines({ tools, c }: { tools: AgentToolLine[]; c: any }) {
 
 function AgentBubble({ msg, c, isBoss }: { msg: AgentMsg; c: any; isBoss?: boolean }) {
   const emp: Employee = { id: msg.empId || 'x', name: msg.name || 'AI', role: msg.role || '', prompt: '' }
+  // v16.4.1：hover 复制整条回复
+  const [copied, setCopied] = useState(false)
   return (
-    <div className="flex gap-3 agent-msg-in">
+    <div className="flex gap-3 agent-msg-in group/msg">
       <div className="relative shrink-0">
         <AgentAvatar emp={emp} size={30} ring={isBoss} />
         {isBoss && (
@@ -376,6 +378,11 @@ function AgentBubble({ msg, c, isBoss }: { msg: AgentMsg; c: any; isBoss?: boole
           <span className="text-[13px] font-bold" style={{ color: c.textHead }}>{msg.name}</span>
           {msg.role && <span className="text-[11px]" style={{ color: c.textTertiary }}>{msg.role}</span>}
           {isBoss && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,.16)', color: '#f59e0b' }}>老板</span>}
+          {msg.content && (
+            <button onClick={async () => { try { await navigator.clipboard.writeText(msg.content); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {} }}
+              className="ml-auto text-[10.5px] opacity-0 group-hover/msg:opacity-70 hover:!opacity-100 transition-opacity"
+              style={{ color: copied ? c.toolOk : c.textTertiary }}>{copied ? '已复制' : '复制'}</button>
+          )}
         </div>
         {msg.tools && msg.tools.length > 0 && <ToolLines tools={msg.tools} c={c} />}
         <AgentMarkdown text={msg.content} />

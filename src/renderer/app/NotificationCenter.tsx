@@ -75,7 +75,7 @@ export default function NotificationCenter() {
         className="w-6 h-6 rounded-md grid place-items-center transition-colors relative"
         style={{ color: open ? c.textHead : c.textTertiary }}
         title="LY HARNESS · 通知与插件" aria-label="LY HARNESS">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2l2.4 4.8 5.3.8-3.8 3.7.9 5.3-4.8-2.5-4.8 2.5.9-5.3L4.3 7.6l5.3-.8z" />
         </svg>
         {badge > 0 && (
@@ -140,7 +140,7 @@ export default function NotificationCenter() {
                       style={{ borderColor: c.borderLight, background: n.read ? 'transparent' : 'rgba(16,163,127,.05)' }}
                       onClick={() => { if (isTask) { setOpen(false); window.dispatchEvent(new CustomEvent('jutian-open-tab-tasks')) } }}>
                       <span className="w-6 h-6 rounded-lg grid place-items-center shrink-0 mt-0.5" style={{ background: 'rgba(16,163,127,.12)' }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} stroke-linecap="round" stroke-linejoin="round"><path d={meta.icon} /></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand, #10a37f)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={meta.icon} /></svg>
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

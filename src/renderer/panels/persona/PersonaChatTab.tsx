@@ -235,15 +235,20 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
     URL.revokeObjectURL(a.href)
   }
 
+  // v16.4.1：原生 confirm → 二次点击确认（第一次点进入 armed 态变红提示，2.5s 未点自动解除）
+  const [clearArmed, setClearArmed] = useState(false)
+  const [delArmedId, setDelArmedId] = useState<string | null>(null)
   const doClear = async () => {
     if (!active) return
-    if (!confirm(`清空与「${active.name}」的全部对话记录？此操作不可恢复。`)) return
+    if (!clearArmed) { setClearArmed(true); setTimeout(() => setClearArmed(false), 2500); return }
+    setClearArmed(false)
     await clearSession(active.id)
     setMsgs([])
   }
 
   const doDeletePersona = async (p: Persona) => {
-    if (!confirm(`删除角色「${p.name}」？\n该角色的对话记录与长期记忆会一并移除，不可恢复。`)) return
+    if (delArmedId !== p.id) { setDelArmedId(p.id); setTimeout(() => setDelArmedId(cur => (cur === p.id ? null : cur)), 2500); return }
+    setDelArmedId(null)
     await deletePersona(p.id)
     await clearSession(p.id)
     setPersonas(prev => prev.filter(x => x.id !== p.id))
@@ -330,8 +335,12 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487z" /></svg>
                   </button>
                   {!p.isPreset && (
-                    <button onClick={e => { e.stopPropagation(); doDeletePersona(p) }} title="删除"
-                      className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: c.bg, border: `1px solid ${c.borderLight}`, color: c.toolErr }}>
+                    <button onClick={e => { e.stopPropagation(); doDeletePersona(p) }}
+                      title={delArmedId === p.id ? '再点一次确认删除' : '删除'}
+                      className="w-6 h-6 rounded-md flex items-center justify-center transition-colors"
+                      style={delArmedId === p.id
+                        ? { background: c.toolErr, border: `1px solid ${c.toolErr}`, color: '#fff' }
+                        : { background: c.bg, border: `1px solid ${c.borderLight}`, color: c.toolErr }}>
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                     </button>
                   )}
@@ -423,8 +432,11 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
           </button>
           <button onClick={doExport} disabled={msgs.length === 0} className="h-8 px-3 rounded-lg text-[12px] disabled:opacity-30"
             style={{ border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>导出</button>
-          <button onClick={doClear} disabled={msgs.length === 0} className="h-8 px-3 rounded-lg text-[12px] disabled:opacity-30"
-            style={{ border: `1px solid ${c.borderLight}`, color: c.toolErr }}>清空</button>
+          <button onClick={doClear} disabled={msgs.length === 0} className="h-8 px-3 rounded-lg text-[12px] font-medium disabled:opacity-30 transition-colors"
+            style={clearArmed
+              ? { background: c.toolErr, color: '#fff', border: `1px solid ${c.toolErr}` }
+              : { border: `1px solid ${c.borderLight}`, color: c.toolErr }}>
+            {clearArmed ? '确认清空？' : '清空'}</button>
           <button onClick={() => { setActive(null); setView('chat') }} className="h-8 px-3 rounded-lg text-[12px]"
             style={{ border: `1px solid ${c.borderLight}`, color: c.textSecondary }}>切换角色</button>
         </div>
