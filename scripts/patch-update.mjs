@@ -68,6 +68,38 @@ async function main() {
   const outDir = path.join(tmp, 'out')
   fs.mkdirSync(outDir, { recursive: true })
   const [ab, ...aa] = asarBin()
+  // v16.5.1 治本坑：原始安装包的 unpacked 集合可能比 patch 的 pack('--unpack **/*.node') 宽
+  // （老构建把 better-sqlite3 整目录 unpacked）。上一次 patch 产出的 unpacked 只含 .node，
+  // 下一次 extract 读「标记为 unpacked 的其它文件」就 ENOENT 失败。这里先把原始 unpacked
+  // 完整留底，pack 完成后合并回新 unpacked（超集），保证 extract 永远找得到文件。
+  const UNPACKED_DIR = path.join(path.dirname(ASAR), 'app.asar.unpacked')
+  const unpackedOrig = path.join(tmp, 'unpacked-orig')
+  if (fs.existsSync(UNPACKED_DIR)) fs.cpSync(UNPACKED_DIR, unpackedOrig, { recursive: true })
+  // v16.5.1 自愈：asar 头里标记 unpacked 但磁盘缺失的文件（多为构建中间产物/LICENSE，
+  // 运行时不读）补成空占位——否则 asar extract 会 ENOENT 直接失败。
+  try {
+    const fd = fs.openSync(ASAR, 'r')
+    const sizeBuf = Buffer.alloc(8)
+    fs.readSync(fd, sizeBuf, 0, 8, 0)
+    const size = sizeBuf.readUInt32LE(4)
+    const jsLen = Buffer.alloc(4)
+    fs.readSync(fd, jsLen, 0, 4, 12)
+    const js = Buffer.alloc(jsLen.readUInt32LE(0))
+    fs.readSync(fd, js, 0, js.length, 16)
+    fs.closeSync(fd)
+    const header = JSON.parse(js.toString())
+    const missing = []
+    ;(function walk(node, pre) {
+      if (node.files) { for (const k of Object.keys(node.files)) walk(node.files[k], pre + '/' + k); return }
+      if (node.unpacked && !fs.existsSync(path.join(UNPACKED_DIR, pre))) missing.push(pre)
+    })(header, '')
+    for (const rel of missing) {
+      const abs = path.join(UNPACKED_DIR, rel)
+      fs.mkdirSync(path.dirname(abs), { recursive: true })
+      fs.writeFileSync(abs, '')
+    }
+    if (missing.length) log(`已补齐 ${missing.length} 个缺失的 unpacked 占位文件（自愈）`)
+  } catch { /* 头解析失败就让 extract 走原路径报错 */ }
   log('解包 app.asar ...')
   run(ab, [...aa, 'extract', ASAR, cur])
 
@@ -87,6 +119,11 @@ async function main() {
   // 4. 重打包（.node 原生模块继续 unpack 到 app.asar.unpacked）
   log('重打包 app.asar ...')
   run(ab, [...aa, 'pack', cur, path.join(outDir, 'app.asar'), '--unpack', '**/*.node'])
+  // 原始 unpacked 超集合并（v16.5.1）：缺的补回来，pack 已产出的不覆盖
+  if (fs.existsSync(unpackedOrig)) {
+    fs.cpSync(unpackedOrig, path.join(outDir, 'app.asar.unpacked'), { recursive: true, force: true })
+    log('已合并原始 unpacked 目录（防下次 extract 缺文件）')
+  }
 
   // 5. 原子替换 + 备份
   const isRunning = spawnSync('pgrep', ['-f', `${APP_NAME}`]).status === 0
