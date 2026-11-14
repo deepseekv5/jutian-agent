@@ -988,6 +988,13 @@ body { color: var(--jt-ink); }
 .glass-strong { background: var(--jt-paper) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: 0 8px 30px rgba(0,0,0,.09) !important; }
 .global-veil { display: none !important; }
 
+/* v16.6.0 原生液态玻璃（macOS vibrancy='sidebar'）：
+   主进程标记 data-vibrancy 后，大面积底色改半透明让系统材质（NSVisualEffectView，
+   macOS 26 上即液态玻璃）从侧栏/活动栏透出；主区保持近实色保证正文可读性。
+   glass 容器的实色来自 var(--jt-paper)，变量半透后自动玻璃化，无需逐个组件改。 */
+html[data-vibrancy="1"] { --jt-paper: rgba(255,255,255,.88); --jt-paper-alt: rgba(247,247,245,.60); }
+html[data-vibrancy="1"][data-theme="dark"] { --jt-paper: rgba(23,23,25,.85); --jt-paper-alt: rgba(31,31,35,.58); }
+
 /* 卡片：白底 + 极细发丝线，不再用阴影堆叠 */
 .rounded-2xl, .rounded-xl, .rounded-lg { box-shadow: none !important; }
 .rounded-2xl { border: 1px solid var(--jt-hairline-soft) !important; }

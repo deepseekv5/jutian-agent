@@ -242,6 +242,10 @@ function createWindow() {
     // 隐藏原生标题栏（保留 macOS 红绿灯），界面直通窗口顶部
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 15 } : undefined,
+    // v16.6.0 原生液态玻璃：sidebar 材质（NSVisualEffectView；macOS 26 上即为系统级液态玻璃）。
+    // 渲染层经 data-vibrancy 标记把侧栏/活动栏底色改半透明让材质透出，主区保持近实色保证可读。
+    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
+    visualEffectState: process.platform === 'darwin' ? 'followWindow' : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -268,6 +272,16 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  // v16.6.0：标记 vibrancy 生效，渲染层据此把大面积容器底色改半透明让原生材质透出。
+  // 必须挂 did-finish-load（页面从 loading.html 跳转到 3211 主页面，ready-to-show 时注入会随跳转丢失）
+  if (process.platform === 'darwin') {
+    mainWindow.webContents.on('did-finish-load', () => {
+      const url = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents.getURL() : ''
+      if (url.includes('3211') || url.startsWith('file://') && !url.includes('loading')) {
+        mainWindow?.webContents.executeJavaScript("document.documentElement.dataset.vibrancy = '1'").catch(() => {})
+      }
+    })
+  }
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.show()
@@ -610,6 +624,10 @@ function showAbout() {
   })
 }
 
+function sendMenuAction(action) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('menu-action', action)
+}
+
 function setupMenu() {
   const isMac = process.platform === 'darwin'
   const template = [
@@ -617,6 +635,11 @@ function setupMenu() {
       label: app.name,
       submenu: [
         { label: '关于 巨天agent', click: showAbout },
+        { type: 'separator' },
+        // v16.6.0：大厂标配「设置… Cmd+,」直达应用设置
+        { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendMenuAction('settings') },
+        { type: 'separator' },
+        { label: '检查更新…', click: () => sendMenuAction('check-update') },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -627,6 +650,15 @@ function setupMenu() {
         { role: 'quit' },
       ],
     }] : []),
+    // v16.6.0：文件菜单——新建对话 Cmd+N 是聊天类应用的大厂标配
+    {
+      label: '文件',
+      submenu: [
+        { label: '新建对话', accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new-chat') },
+        ...(isMac ? [] : [{ type: 'separator' }, { label: '设置…', accelerator: 'Ctrl+,', click: () => sendMenuAction('settings') }]),
+        ...(isMac ? [{ type: 'separator' }, { role: 'close' }] : []),
+      ],
+    },
     {
       label: '编辑',
       submenu: [
@@ -636,12 +668,20 @@ function setupMenu() {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
+        ...(isMac ? [{ role: 'pasteAndMatchStyle' }] : []),
         { role: 'selectAll' },
       ],
     },
     {
       label: '视图',
       submenu: [
+        // v16.6.0：模式三选直达（与侧栏三选切换器同源）
+        { label: '工作模式', click: () => sendMenuAction('mode-general') },
+        { label: '编程模式', click: () => sendMenuAction('mode-coding') },
+        { label: '对话模式', click: () => sendMenuAction('mode-chat') },
+        { type: 'separator' },
+        { label: '命令面板', accelerator: 'CmdOrCtrl+K', click: () => sendMenuAction('cmdk') },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
@@ -658,8 +698,7 @@ function setupMenu() {
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
-        { type: 'separator' },
-        { role: 'front' },
+        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ type: 'separator' }, { role: 'close' }]),
       ],
     },
     {
@@ -668,6 +707,10 @@ function setupMenu() {
         {
           label: '关于 巨天agent',
           click: showAbout,
+        },
+        {
+          label: '项目主页',
+          click: () => sendMenuAction('open-homepage'),
         },
       ],
     },

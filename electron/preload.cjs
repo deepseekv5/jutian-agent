@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-progress', (_event, p) => callback(p))
   },
 
+  // ─── 原生菜单动作（v16.6.0）：macOS 顶栏菜单（设置 Cmd+, / 新建对话 / 模式切换 / 命令面板）转发渲染层 ───
+  onMenuAction: (callback) => {
+    ipcRenderer.on('menu-action', (_e, action) => callback(action))
+  },
+
   // Loading page status listeners
   onStatus: (callback) => {
     ipcRenderer.on('status-update', (_event, msg) => callback(msg))

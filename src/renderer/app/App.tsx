@@ -721,6 +721,32 @@ function MainApp() {
   }, [create, openTab, settings.workDir]);
   handleCreateSessionRef.current = handleCreateSession;
 
+  // v16.6.0 原生菜单动作：macOS 顶栏菜单（设置 Cmd+, / 文件→新建对话 / 视图→模式切换 / 命令面板）
+  // 由主进程经 preload onMenuAction 转发到这里——与侧栏三选切换器、命令面板走同一套入口逻辑
+  useEffect(() => {
+    const api = (window as any).electronAPI
+    if (!api?.onMenuAction) return
+    api.onMenuAction((action: string) => {
+      switch (action) {
+        case 'settings': openTab('settings'); break
+        case 'new-chat': handleCreateSessionRef.current?.(); break
+        case 'cmdk': setCmdOpen(true); break
+        case 'mode-general':
+        case 'mode-coding':
+        case 'mode-chat': {
+          const mode = action.replace('mode-', '')
+          try { localStorage.setItem('lyclaw_chat_mode', mode) } catch {}
+          window.dispatchEvent(new Event('chat-mode-changed'))
+          if (mode === 'chat') openTab('newtab')
+          break
+        }
+        case 'check-update': openTab('settings'); break
+        case 'open-homepage': window.open('https://deepseekv5.github.io/jutian-agent/', '_blank'); break
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 新标签页选择功能入口：对话需先建会话（openTab('chat') 无 sessionId 渲染为空）
   const handleNewTabPick = useCallback(async (type: PageType) => {
     if (type === 'newtab') return;

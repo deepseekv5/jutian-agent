@@ -397,8 +397,9 @@ export function CodexRail({ sessions, activeId, onSelect, onCreate, onOpenTab, o
           </button>
         )}
       </div>
-      {/* 320px 会话栏（收起时隐藏，只留活动栏） */}
-      {!collapsed && <div className="shrink-0 flex flex-col h-full" style={{ width: 320, borderRight: '1px solid var(--jt-hairline-soft)' }}>
+      {/* 320px 会话栏（收起时隐藏，只留活动栏）。
+          v16.6.0：显式 paper-alt 底——vibrancy 下为半透明，原生液态玻璃从这里透出 */}
+      {!collapsed && <div className="shrink-0 flex flex-col h-full" style={{ width: 320, background: 'var(--jt-paper-alt)', borderRight: '1px solid var(--jt-hairline-soft)' }}>
         {/* v16.5.0 顶栏利用：76px 顶部拆成「品牌行（贴顶）+ 模式切换器（贴底）」——
             hiddenInset 后红绿灯右侧的空白此前完全闲置，现在放 logo 字标并充当拖拽区 */}
         <div className="shrink-0 titlebar-drag" style={{ height: 76 }}>
