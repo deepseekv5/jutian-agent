@@ -4,6 +4,7 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.3.8**：截图不再截到本应用窗口——用户反馈「截图时自身窗口还没有隐藏」。根因：hide 后固定等 280ms，macOS 隐藏动画未完成时 desktopCapturer 的 thumbnail 仍含本窗口残影。改为轮询确认所有窗口 `isVisible()===false`（最多 1.5s）+ 150ms 合成余量再截；重试路径同样先重新隐藏（此前 finally 恢复显示后重试会截到本应用）。
 * **v16.3.7**：工具卡结果可见——read_file 完成后显示读到的内容摘要（文件名+前 90 字）、shell 显示命令+输出摘要（`命令 → 输出` 前 80 字），不再只显示「已完成」；与 v16.3.5 的写入内容预览配套，工具「输入什么、产出什么」全程可见。
 * **v16.3.6**：截图 AI 真正可读——用户反馈「截图功能不好用 ai 读不到」。根因：screenshot 工具返回的图片只作为**文本 URL** 进模型上下文（`/api/remote/file` 本机路径上游也访问不了），模型只看到 markdown 链接文字。修复：screenshot 产出 dataUrl（base64 内联），工具结果带 `image` 字段透传（ToolRunResult/UltraDeps.runTool/executeToolCore），两个内核的 tool 消息构造为**多模态 content**（text + image_url）——模型终于能真正看到截图内容；UltraMessage content 类型放宽支持数组。另清理误入库的 .mimosa hook 状态目录（加 .gitignore）。
 * **v16.3.5**：工具调用实时可见——用户反馈「模型在干什么输入什么都不知道，AI 正在写文件也应该是实时显示」。① 工具卡运行中**默认展开**（此前参数面板默认折叠，流式期间只显示「写入 N 行」，内容完全不可见）；② write_file 的工具卡摘要**实时显示正在写入的内容**（前 3 行，流式期间逐字增长，完成后保留）；CDP 实测：工具卡显示「写入 1 行：Hello World」，内容直接可见。

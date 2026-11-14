@@ -1209,10 +1209,21 @@ async function screenshot(_a) {
     const { desktopCapturer, screen, BrowserWindow } = electron;
     const primary = screen.getPrimaryDisplay();
     const scale = Math.min(primary.scaleFactor || 1, 2);
-    // 隐藏本应用窗口，避免截到自己
+    // 隐藏本应用窗口，避免截到自己。
+    // v16.3.8：此前固定等 280ms——macOS 窗口隐藏动画未完成时截图仍带本窗口残影
+    // （用户反馈「截图时自身窗口还没有隐藏」）。改为轮询确认所有窗口真正隐藏
+    // （最多 1.5s），全部隐藏后再留一帧合成余量。
     const wins = BrowserWindow.getAllWindows().filter((w) => w.isVisible());
     wins.forEach((w) => w.hide());
-    await new Promise((r) => setTimeout(r, 280));
+    const waitHidden = async () => {
+      const deadline = Date.now() + 1500;
+      while (Date.now() < deadline) {
+        if (!BrowserWindow.getAllWindows().some((w) => w.isVisible())) return;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    };
+    await waitHidden();
+    await new Promise((r) => setTimeout(r, 150));
     let sources;
     try {
       sources = await desktopCapturer.getSources({
@@ -1223,14 +1234,22 @@ async function screenshot(_a) {
       wins.forEach((w) => { try { w.show(); } catch {} });
     }
     let src = sources[0];
-    // 竞态防护：启动后首帧捕获可能为空，延迟重试一次
+    // 竞态防护：启动后首帧捕获可能为空，延迟重试一次。
+    // v16.3.8：重试前窗口已被 finally 恢复显示，必须先重新隐藏，否则重试帧截到本应用。
     if (!src || src.thumbnail.isEmpty()) {
+      BrowserWindow.getAllWindows().filter((w) => w.isVisible()).forEach((w) => w.hide());
+      const retryDeadline = Date.now() + 1500;
+      while (Date.now() < retryDeadline) {
+        if (!BrowserWindow.getAllWindows().some((w) => w.isVisible())) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       await new Promise((r) => setTimeout(r, 500));
       sources = await desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: { width: Math.round(primary.size.width * scale), height: Math.round(primary.size.height * scale) },
       });
       src = sources[0];
+      BrowserWindow.getAllWindows().forEach((w) => { try { w.show(); } catch {} });
     }
     if (!src || src.thumbnail.isEmpty()) return { success: false, error: "屏幕捕获为空，请重试" };
     const dir = path.join(DATA_DIR, "screenshots");
