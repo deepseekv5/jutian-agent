@@ -696,7 +696,9 @@ async function runAgentLoop(messages, deps) {
       res = null;
       await sleepAbortable(decision.delayMs, signal);
     }
-    if (!res) throw lastErr ?? new Error("\u8BF7\u6C42\u5931\u8D25\uFF1A\u672A\u77E5\u539F\u56E0");
+    if (!res) {
+      throw lastErr ? new Error(`${lastErr.message}\uFF08\u5DF2\u81EA\u52A8\u91CD\u8BD5 ${MAX_ATTEMPTS} \u6B21\u4ECD\u5931\u8D25\u2014\u2014\u514D\u8D39\u7EBF\u8DEF\u9AD8\u5CF0\u671F\u5BB9\u6613\u6301\u7EED\u6392\u961F\uFF0C\u7A0D\u540E\u518D\u8BD5\u6216\u5230\u8BBE\u7F6E\u6362\u4E00\u6761\u7EBF\u8DEF\uFF09`) : new Error("\u8BF7\u6C42\u5931\u8D25\uFF1A\u672A\u77E5\u539F\u56E0");
+    }
     if (!res.body) throw new Error("No response body");
     let roundContent = "";
     const toolCallMap = /* @__PURE__ */ new Map();

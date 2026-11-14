@@ -1098,11 +1098,12 @@ async function edit_file(a) {
       const tail = ls.slice(e0).join("\n");
       const __newText = String(a.newText ?? "");
       const done = (head ? head + "\n" : "") + __newText + (tail ? "\n" + tail : "");
+      const __stale = staleReadWarning(p);
       await writeFileAtomic(p, done);
       FILE_CONTEXT.delete(p);
       toolCacheInvalidate(p);
       const __chgLine = recordChange(p, c, done);
-      return withAutoLint(`✅ 已编辑: ${p}（按行号替换第 ${s0}–${e0} 行）`, __chgLine);
+      return withAutoLint(`✅ 已编辑: ${p}（按行号替换第 ${s0}–${e0} 行）${__stale ? '\n' + __stale : ''}`, __chgLine);
     }
     if (a.start_line != null || a.end_line != null) {
       return { success: false, error: '行号编辑需要同时传 start_line 与 end_line。' };
@@ -1137,11 +1138,12 @@ async function edit_file(a) {
       if (__fuzzy) {
         const __newText = String(a.newText ?? '');
         const done = a.replaceAll ? c.split(__fuzzy.real).join(__newText) : c.replace(__fuzzy.real, __newText);
+        const __staleF = staleReadWarning(p);
         await writeFileAtomic(p, done);
         FILE_CONTEXT.delete(p);
         toolCacheInvalidate(p);
         const __chgFuzzy = recordChange(p, c, done);
-        return withAutoLint(`✅ 已编辑: ${p}（oldText 与原文存在缩进/空白差异，已按模糊匹配定位到第 ${__fuzzy.start + 1}–${__fuzzy.end} 行完成替换）`, __chgFuzzy);
+        return withAutoLint(`✅ 已编辑: ${p}（oldText 与原文存在缩进/空白差异，已按模糊匹配定位到第 ${__fuzzy.start + 1}–${__fuzzy.end} 行完成替换）${__staleF ? '\n' + __staleF : ''}`, __chgFuzzy);
       }
       const firstLine = String(a.oldText || "").split("\n")[0].slice(0, 60);
       return {
@@ -1156,6 +1158,7 @@ async function edit_file(a) {
     c = a.replaceAll
       ? c.split(a.oldText).join(a.newText)
       : c.replace(a.oldText, a.newText);
+    const __stale2 = staleReadWarning(p);
     await writeFileAtomic(p, c);
     FILE_CONTEXT.delete(p);
     toolCacheInvalidate(p);
@@ -1167,7 +1170,7 @@ async function edit_file(a) {
       const __occ = __oldFull.split(a.oldText).length - 1;
       if (__occ > 1) __occNote = "\n\u26A0\uFE0F oldText 在文件中出现 " + __occ + " 次，本次只替换了第 1 处。如需全部替换请传 replaceAll: true。";
     }
-    return withAutoLint(`\u2705 \u5DF2\u7F16\u8F91: ${p}${__occNote}`, __chg2);
+    return withAutoLint(`\u2705 \u5DF2\u7F16\u8F91: ${p}${__occNote}${__stale2 ? '\n' + __stale2 : ''}`, __chg2);
   } catch (e) {
     return { success: false, error: e.message };
   }
