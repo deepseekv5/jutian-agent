@@ -1,238 +1,180 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>核心亮点 — 巨天agent</title>
-<meta name="description" content="六件事,做到位:说人话它动手、代码模式、集群指挥室、终端即入口、本地优先、越用越懂你。">
-<meta name="theme-color" content="#0a0a0b">
+<meta name="description" content="巨天agent 核心亮点：说人话它动手、代码模式、集群指挥室、终端即入口、本地优先、越用越懂你。">
+<meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
-<link rel="stylesheet" href="assets/css/tokens.css">
-<link rel="stylesheet" href="assets/css/base.css">
-<link rel="stylesheet" href="assets/css/layout.css">
-<link rel="stylesheet" href="assets/css/components.css">
-<link rel="stylesheet" href="assets/css/motion.css">
-<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/apple.css">
 </head>
 <body>
-<a class="skip-link" href="#main">跳到主内容</a>
 
-<header class="nav">
-  <div class="nav__inner">
-    <a class="brand" href="index.html" aria-label="巨天agent 首页">
-      <span class="brand__mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
-      </span>
+<nav class="a-nav">
+  <div class="a-nav__inner">
+    <a class="a-nav__brand" href="index.html" aria-label="巨天agent 首页">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
       巨天agent
     </a>
-    <nav class="nav__links" aria-label="主导航">
-      <a class="nav__link" href="index.html">首页</a>
-      <a class="nav__link" href="highlights.html">亮点</a>
-      <a class="nav__link" href="features.html">特性</a>
-      <a class="nav__link" href="scenarios.html">场景</a>
-      <a class="nav__link" href="about.html">关于</a>
-      
+    <nav class="a-nav__links" aria-label="主导航">
+      <a href="index.html">首页</a>
+      <a href="highlights.html">亮点</a>
+      <a href="features.html">特性</a>
+      <a href="scenarios.html">场景</a>
+      <a href="about.html">关于</a>
     </nav>
-    <div class="nav__actions">
-      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
-        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      </button>
-      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
-      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      </button>
-    </div>
+    <a class="a-nav__cta" href="index.html#download">下载</a>
   </div>
-  <span class="nav__progress" aria-hidden="true"></span>
-</header>
+</nav>
 
-<main id="main">
+<main>
 
-  <section class="section" style="padding-bottom:clamp(40px,5vw,64px)">
-    <div class="container">
-      <div class="sectionHead" data-reveal>
-        <span class="t-eyebrow">核心亮点 / HIGHLIGHTS</span>
-        <h1 class="t-h2">六件事，做到位。</h1>
-        <p class="t-lead">功能多不代表能力强。这几件，我们做到了不用解释第二遍。</p>
-      </div>
+  <section class="a-hero" style="padding-bottom:0">
+    <div class="a-wrap">
+      <p class="a-eyebrow a-reveal">核心亮点</p>
+      <h2 class="a-h2 a-reveal" style="margin-top:14px">六件事，做到位。</h2>
+      <p class="a-lead a-reveal" style="margin-top:22px;max-width:620px">功能多不代表能力强。这几件，我们做到了不用解释第二遍。</p>
     </div>
   </section>
 
-  <section class="section" style="padding-top:0">
-    <div class="container">
-      <div data-reveal-group>
-        <div class="edrow">
-          <span class="edrow__idx">01</span>
-          <h3 class="edrow__title">说人话，它动手</h3>
-          <p class="edrow__desc">43 个内置工具直连真实终端与文件系统。你说目标，它拆步骤、调工具、验证、给结果。整个过程看得见，每一步都能打断。不是建议，是执行。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-        <div class="edrow">
-          <span class="edrow__idx">02</span>
-          <h3 class="edrow__title">代码模式</h3>
-          <p class="edrow__desc">完整开发环境，不离开窗口。文件树、多标签、语法高亮、内置终端、代码统计；每轮对话前自动快照，一整轮改动一键撤销。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-        <div class="edrow">
-          <span class="edrow__idx">03</span>
-          <h3 class="edrow__title">集群指挥室</h3>
-          <p class="edrow__desc">一个目标，一支团队。总管拆任务，员工互相 @ 接管，自动汇总交付。员工可自定义，可拉群，可指定老板。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-        <div class="edrow">
-          <span class="edrow__idx">04</span>
-          <h3 class="edrow__title">终端即入口</h3>
-          <p class="edrow__desc">装上 jtcode，一行命令唤起助手。终端里、脚本里、CI 里都能用，不用切窗口。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-        <div class="edrow">
-          <span class="edrow__idx">05</span>
-          <h3 class="edrow__title">本地优先</h3>
-          <p class="edrow__desc">文件、记忆、对话，都存在这台电脑。断网可用，换机你自己说了算。不训练你的数据，不留你的日志。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-        <div class="edrow">
-          <span class="edrow__idx">06</span>
-          <h3 class="edrow__title">越用越懂你</h3>
-          <p class="edrow__desc">长期记忆只存索引，细节按需取；知识库文档随时检索。它记得你的偏好、你的项目、你说话的方式。</p>
-          <span class="edrow__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section cv-auto" style="background:var(--c-bg-sunken)">
-    <div class="container">
-      <div class="grid" style="align-items:center">
-        <div class="col-5">
-          <div class="sectionHead" style="margin-bottom:0" data-reveal>
-            <span class="t-eyebrow">实证 / 01</span>
-            <h3 class="t-h2" style="font-size:var(--fs-h2)">不是建议，<br>是执行。</h3>
-            <p class="t-lead">你只说目标。读代码、跑命令、验结果，是它的事。每次回答都带完整的工具调用记录，点开就能核对。</p>
+  <section class="a-section" style="padding-top:clamp(50px,6vw,80px)">
+    <div class="a-wrap">
+      <div class="a-rows">
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">01</span>
+          <div>
+            <div class="a-row__title">说人话，它动手</div>
+            <p class="a-row__desc">43 个内置工具直连真实终端与文件系统。你说目标，它拆步骤、调工具、验证、给结果。整个过程看得见，每一步都能打断。不是建议，是执行。</p>
           </div>
+          <span class="a-row__aside"><b>43</b>内置工具</span>
         </div>
-        <div class="col-7" data-reveal>
-          <div class="term" role="img" aria-label="终端演示：一句话整理 TODO 清单">
-            <div class="term__bar" aria-hidden="true"><i></i><i></i><i></i><span style="margin-left:8px">jtcode — zsh</span></div>
-            <div class="term__body">
-              <div><span class="p">$</span> <span class="cmd">jtcode "把项目里所有 TODO 按模块整理成清单"</span></div>
-              <div class="dim">⚙ search_code → 命中 12 处</div>
-              <div class="dim">⚙ write_file → TODO.md</div>
-              <div><span class="ok">✓</span> <span class="cmd">6 个模块的清单已生成</span></div>
-            </div>
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">02</span>
+          <div>
+            <div class="a-row__title">代码模式</div>
+            <p class="a-row__desc">完整开发环境，不离开窗口。文件树、多标签、语法高亮、内置终端、代码统计；每轮对话前自动快照，一整轮改动一键撤销。</p>
           </div>
+          <span class="a-row__aside"><b>±</b>按改动撤销</span>
+        </div>
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">03</span>
+          <div>
+            <div class="a-row__title">集群指挥室</div>
+            <p class="a-row__desc">一个目标，一支团队。总管拆任务，员工互相 @ 接管，自动汇总交付。员工可自定义，可拉群，可指定老板。</p>
+          </div>
+          <span class="a-row__aside"><b>@</b>接力协作</span>
+        </div>
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">04</span>
+          <div>
+            <div class="a-row__title">终端即入口</div>
+            <p class="a-row__desc">装上 jtcode，一行命令唤起助手。终端里、脚本里、CI 里都能用，不用切窗口。</p>
+          </div>
+          <span class="a-row__aside"><b>jt</b>一行唤起</span>
+        </div>
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">05</span>
+          <div>
+            <div class="a-row__title">本地优先</div>
+            <p class="a-row__desc">文件、记忆、对话，都存在这台电脑。断网可用，换机你自己说了算。不训练你的数据，不留你的日志。</p>
+          </div>
+          <span class="a-row__aside"><b>LAN</b>仅局域网</span>
+        </div>
+        <div class="a-row a-reveal">
+          <span class="a-row__idx">06</span>
+          <div>
+            <div class="a-row__title">越用越懂你</div>
+            <p class="a-row__desc">长期记忆只存索引，细节按需取；知识库文档随时检索。它记得你的偏好、你的项目、你说话的方式。</p>
+          </div>
+          <span class="a-row__aside"><b>0</b>上传云端</span>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="section cv-auto">
-    <div class="container">
-      <div class="grid" style="align-items:center">
-        <div class="col-7" data-reveal>
-          <div class="card card--dark" style="padding:var(--sp-8)">
-            <svg viewBox="0 0 560 190" style="width:100%;height:auto" role="img" aria-label="集群流程:目标输入经总管拆解,员工互相接力,最终汇总交付">
-              <g fill="none" stroke="rgba(255,255,255,.16)" stroke-width="1.4">
-                <rect x="8" y="58" width="108" height="74" rx="12"/>
-                <rect x="164" y="44" width="128" height="102" rx="14" stroke="var(--c-accent)"/>
-                <rect x="336" y="58" width="118" height="74" rx="12"/>
-                <rect x="486" y="58" width="66" height="74" rx="12"/>
-              </g>
-              <g stroke="var(--c-accent)" stroke-width="1.5" fill="none">
-                <path d="M116 95 H 162"/><path d="M292 95 H 334"/><path d="M454 95 H 484"/>
-              </g>
-              <g font-family="-apple-system,PingFang SC,sans-serif" text-anchor="middle">
-                <text x="62" y="90" font-size="13" font-weight="600" fill="rgba(255,255,255,.85)">目标输入</text>
-                <text x="62" y="110" font-size="10" fill="rgba(255,255,255,.4)">自然语言</text>
-                <text x="228" y="88" font-size="14" font-weight="700" fill="var(--c-accent)">总管</text>
-                <text x="228" y="108" font-size="10" fill="rgba(255,255,255,.4)">拆解 · 分派</text>
-                <text x="228" y="126" font-size="10" fill="rgba(255,255,255,.4)">@互相接力</text>
-                <text x="395" y="90" font-size="13" font-weight="600" fill="rgba(255,255,255,.85)">数字员工</text>
-                <text x="395" y="110" font-size="10" fill="rgba(255,255,255,.4)">产品/开发/测试</text>
-                <text x="519" y="90" font-size="13" font-weight="600" fill="rgba(255,255,255,.85)">交付</text>
-                <text x="519" y="110" font-size="10" fill="rgba(255,255,255,.4)">汇总验收</text>
-              </g>
-            </svg>
-          </div>
-        </div>
-        <div class="col-5">
-          <div class="sectionHead" style="margin-bottom:0" data-reveal>
-            <span class="t-eyebrow">实证 / 03</span>
-            <h3 class="t-h2" style="font-size:var(--fs-h2)">一个目标，<br>一支团队。</h3>
-            <p class="t-lead">总管拆解任务，产品、开发、测试互相接管，自动汇总交付。员工可以随时增删改：起个名字、写段职责，立刻上工。</p>
-          </div>
-        </div>
+  <div class="a-hairline" aria-hidden="true"></div>
+
+  <!-- 实证：真实工作流截图 -->
+  <section class="a-section">
+    <div class="a-wrap a-center">
+      <p class="a-eyebrow a-reveal">实证</p>
+      <h2 class="a-h2 a-reveal" style="margin:14px 0 26px">不是建议，<br>是执行。</h2>
+      <p class="a-desc a-reveal">你只说目标。读代码、跑命令、验结果，是它的事。每次回答都带<b>完整的工具调用记录</b>，点开就能核对。</p>
+    </div>
+    <div class="a-wrap a-wrap--wide a-reveal" style="margin-top:clamp(44px,6vw,72px)">
+      <div class="a-shot" role="img" aria-label="巨天agent 真实工作流截图：AI 读取文件、修改内容并汇报">
+        <img src="assets/img/app/flow.jpg" alt="巨天agent 真实工作流截图" loading="lazy">
       </div>
+      <p style="text-align:center;color:var(--a-gray2);font-size:12.5px;margin-top:22px">一次真实任务：读取 demo.txt → 修改内容 → 汇报结果。工具卡展开可见全部参数与输出。</p>
     </div>
   </section>
 
-  <section class="section dark">
-    <div class="container cta" data-reveal>
-      <h2 class="on-dark">说清楚，它就能办。</h2>
-      <p>装上一个窗口，把重复的活交出去。</p>
-      <div class="cta__row">
-        <a class="btn" href="index.html#download" data-magnetic="0.24">下载 for macOS
-          <svg class="btn__arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-        </a>
-        <a class="btn btn--ghost" href="features.html">看特性与参数</a>
+  <!-- ═══ 下载 CTA ═══ -->
+  <section class="a-cta" id="download">
+    <div class="a-aurora" aria-hidden="true"></div>
+    <div class="a-wrap a-reveal" style="position:relative">
+      <h2 class="a-h2">眼见为实。</h2>
+      <p class="a-lead" style="margin-top:16px">装上它，自己试一遍。</p>
+      <div class="a-cta__row">
+        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
+        <a class="a-btn a-btn--ghost" href="index.html">回到首页</a>
       </div>
     </div>
   </section>
 
 </main>
 
-<footer class="footer dark">
-  <div class="container">
-    <div class="footer__grid">
-      <div class="footer__col">
-        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
-          <span class="brand__mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
-          </span>
-          巨天agent
-        </a>
-        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
-      </div>
-      <div class="footer__col">
-        <h4>产品</h4>
-        <ul>
-          <li><a href="highlights.html">核心亮点</a></li>
-          <li><a href="features.html">特性与参数</a></li>
-          <li><a href="scenarios.html">使用场景</a></li>
-          <li><a href="index.html#download">下载</a></li>
-        </ul>
-      </div>
-      <div class="footer__col">
-        <h4>资源</h4>
-        <ul>
-          <li><a href="features.html#specs">系统要求</a></li>
-          <li><a href="about.html">关于我们</a></li>
-          <li><a href="legal.html">用户协议与隐私政策</a></li>
-          
-        </ul>
-      </div>
-      <div class="footer__col">
-        <h4>工作室</h4>
-        <ul>
-          <li><a href="about.html">巨天工作室</a></li>
-          <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
-          <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
-          
-        </ul>
-      </div>
+<footer class="a-footer">
+  <div class="a-footer__grid">
+    <div>
+      <a class="a-footer__brand" href="index.html">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
+        巨天agent
+      </a>
+      <p style="line-height:1.6;max-width:260px">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
     </div>
-    <div class="footer__bottom">
-      <span>© 2026 巨天工作室 (Jutian Studio)</span>
-      <span>本地优先 · 数据归你</span>
+    <div>
+      <h4>产品</h4>
+      <ul>
+        <li><a href="highlights.html">核心亮点</a></li>
+        <li><a href="features.html">特性与参数</a></li>
+        <li><a href="scenarios.html">使用场景</a></li>
+        <li><a href="index.html#download">下载</a></li>
+      </ul>
     </div>
+    <div>
+      <h4>资源</h4>
+      <ul>
+        <li><a href="features.html">系统要求</a></li>
+        <li><a href="about.html">关于我们</a></li>
+        <li><a href="legal.html">用户协议与隐私政策</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>工作室</h4>
+      <ul>
+        <li><a href="about.html">巨天工作室</a></li>
+        <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
+        <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="a-footer__bottom">
+    <span>© 2026 巨天工作室</span>
+    <span>本地优先 · 数据归你</span>
   </div>
 </footer>
 
-<div class="transition-veil" aria-hidden="true"></div>
-
-<script src="assets/js/scroll.js" defer></script>
-<script src="assets/js/interactions.js" defer></script>
-<script src="assets/js/app.js" defer></script>
+<script>
+(function () {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target) }
+    })
+  }, { threshold: .12, rootMargin: '0px 0px -8% 0px' })
+  document.querySelectorAll('.a-reveal, .a-stagger').forEach(function (el) { io.observe(el) })
+})()
+</script>
 </body>
 </html>

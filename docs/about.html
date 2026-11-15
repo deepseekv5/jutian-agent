@@ -1,189 +1,202 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>关于 — 巨天agent</title>
-<meta name="description" content="巨天工作室:我们做工具,不做玩具。三条原则——本地优先、一次到位、克制。">
-<meta name="theme-color" content="#06070c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>关于我们 — 巨天agent</title>
+<meta name="description" content="巨天工作室：做桌面软件。本地优先，一次到位，克制。">
+<meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
-<link rel="stylesheet" href="assets/css/tokens.css">
-<link rel="stylesheet" href="assets/css/base.css">
-<link rel="stylesheet" href="assets/css/layout.css">
-<link rel="stylesheet" href="assets/css/components.css">
-<link rel="stylesheet" href="assets/css/motion.css">
-<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/apple.css">
 </head>
 <body>
-<a class="skip-link" href="#main">跳到主内容</a>
 
-<header class="nav">
-  <div class="nav__inner">
-    <a class="brand" href="index.html" aria-label="巨天agent 首页">
-      <span class="brand__mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
-      </span>
+<nav class="a-nav">
+  <div class="a-nav__inner">
+    <a class="a-nav__brand" href="index.html" aria-label="巨天agent 首页">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
       巨天agent
     </a>
-    <nav class="nav__links" aria-label="主导航">
-      <a class="nav__link" href="index.html">首页</a>
-      <a class="nav__link" href="highlights.html">亮点</a>
-      <a class="nav__link" href="features.html">特性</a>
-      <a class="nav__link" href="scenarios.html">场景</a>
-      <a class="nav__link" href="about.html">关于</a>
-      
+    <nav class="a-nav__links" aria-label="主导航">
+      <a href="index.html">首页</a>
+      <a href="highlights.html">亮点</a>
+      <a href="features.html">特性</a>
+      <a href="scenarios.html">场景</a>
+      <a href="about.html">关于</a>
     </nav>
-    <div class="nav__actions">
-      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
-        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      </button>
-      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
-      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      </button>
-    </div>
+    <a class="a-nav__cta" href="index.html#download">下载</a>
   </div>
-  <span class="nav__progress" aria-hidden="true"></span>
-</header>
+</nav>
 
-<main id="main">
+<main>
 
-  <!-- ═══════════ 页头 ═══════════ -->
-  <section class="section" style="padding-bottom:clamp(48px,6vw,72px)">
-    <div class="container">
-      <div class="sectionHead" data-reveal>
-        <span class="t-eyebrow">关于</span>
-        <h1 class="t-h2">我们做工具,<br>不做玩具。</h1>
-      </div>
+  <section class="a-hero" style="padding-bottom:0">
+    <div class="a-wrap">
+      <p class="a-eyebrow a-reveal">巨天工作室</p>
+      <h1 class="a-h1 a-lines" style="font-size:clamp(44px,7.4vw,96px)">做桌面软件。</h1>
+      <p class="a-lead a-reveal" style="margin-top:26px;max-width:680px;margin-left:auto;margin-right:auto">我们相信一台电脑应该比一串服务器更懂它的主人，相信好工具的终点是「忘了它在」，相信一个窗口能办完的事，不值得拆成五个标签、三次跳转和两段等待。</p>
     </div>
   </section>
 
-  <!-- ═══════════ 品牌故事 ═══════════ -->
-  <section class="section" style="padding-top:0">
-    <div class="container">
-      <div class="story" data-reveal>
-        <p><strong>巨天工作室</strong>做桌面软件。我们相信一台电脑应该比一串服务器更懂它的主人,相信好工具的终点是「忘了它在」,相信一个窗口能办完的事,不值得拆成五个标签、三次跳转和两段等待。</p>
-        <p>巨天agent 从「帮我把这个干完」开始:不写提示词教程,不卖概念,先把 50 个工具接到真实系统上,再把一支数字员工团队放进同一个窗口。它读你的文件、跑你的命令、记得你的偏好,然后把时间还给你。</p>
-        <p>我们不追风口。功能可以少,但每一件都要做到不用解释第二遍。</p>
-      </div>
+  <section class="a-section" style="padding-top:clamp(50px,6vw,90px)">
+    <div class="a-wrap">
+      <div class="a-desc a-reveal" style="max-width:720px">巨天agent 从「<b>帮我把这个干完</b>」开始：不写提示词教程，不卖概念，先把 50 个工具接到真实系统上，再把一支数字员工团队放进同一个窗口。它读你的文件、跑你的命令、记得你的偏好，<b>然后把时间还给你</b>。</div>
+      <p class="a-desc a-reveal" style="max-width:720px;margin-top:34px">我们不追风口。功能可以少，但每一件都要做到<b>不用解释第二遍</b>。</p>
     </div>
   </section>
 
-  <!-- ═══════════ 三条原则 ═══════════ -->
-  <section class="section cv-auto" style="background:var(--c-bg-sunken)">
-    <div class="container">
-      <div class="sectionHead" data-reveal>
-        <span class="t-eyebrow">我们的原则</span>
-        <h2 class="t-h2">三条,从不例外。</h2>
-      </div>
-      <div class="principles" data-reveal-group>
-        <div class="principle">
-          <h3>本地优先</h3>
-          <p>你的文件、记忆、对话,都存在这台电脑。不经过别人的服务器,不听别人的安排。断网也能干活,导出随时带走。</p>
+  <div class="a-hairline" aria-hidden="true"></div>
+
+  <!-- 三原则 -->
+  <section class="a-section">
+    <div class="a-wrap a-wrap--wide">
+      <p class="a-eyebrow a-reveal" style="text-align:center">我们的原则</p>
+      <h2 class="a-h2 a-reveal a-center" style="margin:14px 0 clamp(40px,5vw,64px)">三条，从不例外。</h2>
+      <div class="a-cards a-stagger" style="grid-template-columns:repeat(3,1fr)">
+        <div class="a-card a-reveal">
+          <p class="a-card__kicker">原则 01</p>
+          <p class="a-card__big">本地优先</p>
+          <p class="a-card__sub" style="line-height:1.7">你的文件、记忆、对话，都存在这台电脑。不经过别人的服务器，不听别人的安排。断网也能干活，导出随时带走。</p>
         </div>
-        <div class="principle">
-          <h3>一次到位</h3>
-          <p>它不说「你可以试试」。读文件、跑命令、改代码、验结果,一步做完再开口。能一次说清的,不分两次讲。</p>
+        <div class="a-card a-reveal">
+          <p class="a-card__kicker">原则 02</p>
+          <p class="a-card__big">一次到位</p>
+          <p class="a-card__sub" style="line-height:1.7">它不说「你可以试试」。读文件、跑命令、改代码、验结果，一步做完再开口。能一次说清的，不分两次讲。</p>
         </div>
-        <div class="principle">
-          <h3>克制</h3>
-          <p>界面只做一件事:不打扰。动画服务内容,快捷键服务手速,其余全部收起来。你感觉不到它,它就成功了。</p>
+        <div class="a-card a-reveal">
+          <p class="a-card__kicker">原则 03</p>
+          <p class="a-card__big">克制</p>
+          <p class="a-card__sub" style="line-height:1.7">界面只做一件事：不打扰。动画服务内容，快捷键服务手速，其余全部收起来。你感觉不到它，它就成功了。</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════════ 数字 ═══════════ -->
-  <section class="section section--tight">
-    <div class="container">
-      <div class="statRow" data-reveal-group>
-        <div class="stat">
-          <span class="stat__num"><span data-count="37">0</span></span>
-          <span class="stat__label">内置工具</span>
+  <div class="a-hairline" aria-hidden="true"></div>
+
+  <!-- 数字 -->
+  <section class="a-section">
+    <div class="a-wrap">
+      <div class="a-specs">
+        <div class="a-spec a-reveal">
+          <div class="a-spec__num"><span data-count="43">0</span> <em>个</em></div>
+          <div class="a-spec__sub">内置工具</div>
         </div>
-        <div class="stat">
-          <span class="stat__num"><span data-count="6">0</span></span>
-          <span class="stat__label">核心界面</span>
+        <div class="a-spec a-reveal">
+          <div class="a-spec__num"><span data-count="32">0</span> <em>项</em></div>
+          <div class="a-spec__sub">核心界面直达</div>
         </div>
-        <div class="stat">
-          <span class="stat__num"><span data-count="1">0</span><small>个进程</small></span>
-          <span class="stat__label">装完即用</span>
+        <div class="a-spec a-reveal">
+          <div class="a-spec__num">1 <em>个进程</em></div>
+          <div class="a-spec__sub">装完即用</div>
         </div>
-        <div class="stat">
-          <span class="stat__num"><span data-count="0">0</span><small>字节</small></span>
-          <span class="stat__label">上传到云端</span>
+        <div class="a-spec a-reveal">
+          <div class="a-spec__num">0 <em>字节</em></div>
+          <div class="a-spec__sub">上传到云端</div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="section dark">
-    <div class="container cta" data-reveal>
-      <h2 class="on-dark">想聊聊?我们在线。</h2>
-      <p>需求、合作、吐槽,都欢迎。</p>
-      <div class="cta__row">
-        <a class="btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener" data-magnetic="0.24">联系我们
-          <svg class="btn__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        </a>
-        <a class="btn btn--ghost" href="index.html#download">先下载试试</a>
+  <!-- ═══ CTA ═══ -->
+  <section class="a-cta" id="download">
+    <div class="a-aurora" aria-hidden="true"></div>
+    <div class="a-wrap a-reveal" style="position:relative">
+      <h2 class="a-h2">想聊聊？我们在线。</h2>
+      <p class="a-lead" style="margin-top:16px">需求、合作、吐槽，都欢迎。</p>
+      <div class="a-cta__row">
+        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub 联系我们</a>
+        <a class="a-btn a-btn--ghost" href="index.html#download">先下载试试</a>
       </div>
     </div>
   </section>
 
 </main>
 
-<footer class="footer dark">
-  <div class="container">
-    <div class="footer__grid">
-      <div class="footer__col">
-        <a class="brand" href="index.html" style="color:var(--c-on-dark)">
-          <span class="brand__mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg>
-          </span>
-          巨天agent
-        </a>
-        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端,和一支数字员工团队。</p>
-      </div>
-      <div class="footer__col">
-        <h4>产品</h4>
-        <ul>
-          <li><a href="highlights.html">核心亮点</a></li>
-          <li><a href="features.html">特性与参数</a></li>
-          <li><a href="scenarios.html">使用场景</a></li>
-          <li><a href="index.html#download">下载</a></li>
-        </ul>
-      </div>
-      <div class="footer__col">
-        <h4>资源</h4>
-        <ul>
-          <li><a href="features.html#specs">系统要求</a></li>
-          <li><a href="about.html">关于我们</a></li>
-          <li><a href="legal.html">用户协议与隐私政策</a></li>
-          
-        </ul>
-      </div>
-      <div class="footer__col">
-        <h4>工作室</h4>
-        <ul>
-          <li><a href="about.html">巨天工作室</a></li>
-          <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
-          <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
-          
-        </ul>
-      </div>
+<footer class="a-footer">
+  <div class="a-footer__grid">
+    <div>
+      <a class="a-footer__brand" href="index.html">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
+        巨天agent
+      </a>
+      <p style="line-height:1.6;max-width:260px">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
     </div>
-    <div class="footer__bottom">
-      <span>© 2026 巨天工作室 (Jutian Studio)</span>
-      <span>本地优先 · 数据归你</span>
+    <div>
+      <h4>产品</h4>
+      <ul>
+        <li><a href="highlights.html">核心亮点</a></li>
+        <li><a href="features.html">特性与参数</a></li>
+        <li><a href="scenarios.html">使用场景</a></li>
+        <li><a href="index.html#download">下载</a></li>
+      </ul>
     </div>
+    <div>
+      <h4>资源</h4>
+      <ul>
+        <li><a href="features.html">系统要求</a></li>
+        <li><a href="about.html">关于我们</a></li>
+        <li><a href="legal.html">用户协议与隐私政策</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>工作室</h4>
+      <ul>
+        <li><a href="about.html">巨天工作室</a></li>
+        <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
+        <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="a-footer__bottom">
+    <span>© 2026 巨天工作室</span>
+    <span>本地优先 · 数据归你</span>
   </div>
 </footer>
 
-<div class="transition-veil" aria-hidden="true"></div>
-
-<script src="assets/js/scroll.js" defer></script>
-<script src="assets/js/interactions.js" defer></script>
-<script src="assets/js/app.js" defer></script>
+<script>
+(function () {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target) }
+    })
+  }, { threshold: .12, rootMargin: '0px 0px -8% 0px' })
+  document.querySelectorAll('.a-reveal, .a-stagger').forEach(function (el) { io.observe(el) })
+  var cio = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return
+      cio.unobserve(e.target)
+      var el = e.target, target = Number(el.dataset.count || 0)
+      if (!target) { el.textContent = String(target); return }
+      var t0 = null, dur = 1400
+      var step = function (ts) {
+        if (!t0) t0 = ts
+        var p = Math.min(1, (ts - t0) / dur)
+        el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3))))
+        if (p < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    })
+  }, { threshold: .4 })
+  document.querySelectorAll('[data-count]').forEach(function (el) { cio.observe(el) })
+  // about 页 hero 也做逐行升起
+  document.querySelectorAll('.a-lines').forEach(function (h) {
+    var nodes = Array.prototype.slice.call(h.childNodes)
+    var lines = [[]]
+    nodes.forEach(function (n) {
+      if (n.nodeType === 1 && n.tagName === 'BR') lines.push([])
+      else lines[lines.length - 1].push(n)
+    })
+    h.textContent = ''
+    lines.filter(function (l) { return l.length }).forEach(function (parts) {
+      var wrap = document.createElement('span'); wrap.className = 'line'
+      var inner = document.createElement('span')
+      parts.forEach(function (p) { inner.appendChild(p) })
+      wrap.appendChild(inner); h.appendChild(wrap)
+    })
+    requestAnimationFrame(function () { requestAnimationFrame(function () { h.classList.add('is-in') }) })
+  })
+})()
+</script>
 </body>
 </html>
