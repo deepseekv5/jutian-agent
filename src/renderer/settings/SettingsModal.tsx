@@ -990,11 +990,11 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium" style={{ color: c.textTertiary }}>{t('JT Core 内核', 'JT Core engine')}</label>
                     <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${c.borderLight}` }}>
-                      {([['vercel', 'Pro+ Vercel'], ['server', 'Pro+ 服务端'], ['client', 'Pro+ 兼容'], ['ultra', 'Ultra 移植'], ['harness', 'Harness']] as const).map(([v, zh]) => (
+                      {([['vercel', 'Pro+ Vercel'], ['server', 'Pro+ 服务端'], ['client', 'Pro+ 兼容'], ['ultra', 'Ultra 移植'], ['harness', 'Harness'], ['grok', 'Grok']] as const).map(([v, zh]) => (
                         <button key={v} type="button" onClick={() => persistNow({ agentEngine: v })}
                           className="flex-1 px-1 py-1 text-[10px] transition-colors"
                           style={{ background: ((form.agentEngine as string) || 'vercel') === v ? (c.accent || 'var(--brand, #10a37f)') : 'transparent', color: ((form.agentEngine as string) || 'vercel') === v ? '#fff' : c.textTertiary }}>
-                          {t(zh, v === 'vercel' ? 'Pro+ Vercel' : v === 'server' ? 'Pro+ Server' : v === 'client' ? 'Pro+ Legacy' : v === 'ultra' ? 'Ultra (ported)' : 'Harness')}
+                          {t(zh, v === 'vercel' ? 'Pro+ Vercel' : v === 'server' ? 'Pro+ Server' : v === 'client' ? 'Pro+ Legacy' : v === 'ultra' ? 'Ultra (ported)' : v === 'grok' ? 'Grok (xAI)' : 'Harness')}
                         </button>
                       ))}
                     </div>
@@ -1017,6 +1017,26 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                           style={{ background: c.accent || 'var(--brand, #10a37f)', color: '#fff' }}>
                           {t('打开 Harness 面板', 'Open Harness panel')}
                         </button>
+                      </div>
+                    )}
+                    {/* v16.8：Grok 内核（xai-org/grok-build 官方二进制，Apache-2.0）——巨天只做接入兼容 */}
+                    {(form.agentEngine as string) === 'grok' && (
+                      <div className="mt-2 rounded-lg p-2.5 space-y-2" style={{ background: c.bgInput }}>
+                        <div className="text-[10.5px] leading-relaxed" style={{ color: c.textTertiary }}>
+                          {t('Grok 内核完全使用 xAI 官方 grok CLI（Apache-2.0）的代码与工具，巨天只做接入兼容：把任务交给 grok headless 执行，过程实时渲染。需要 xAI 账号（console.x.ai 获取 API Key），或已在终端 grok login。工具与安全策略由 grok 自身提供。',
+                             'The Grok engine runs the official xAI grok CLI (Apache-2.0) as-is; Jutian only bridges it: tasks go to grok headless with live streaming. Requires an xAI account (API key from console.x.ai) or an existing grok login.')}
+                        </div>
+                        <input
+                          value={form.xaiApiKey || ''}
+                          onChange={e => persistNow({ xaiApiKey: e.target.value })}
+                          placeholder="XAI_API_KEY（xai-…，可选：已 grok login 可留空）"
+                          type="password"
+                          className="w-full h-8 px-2.5 rounded-lg text-[11.5px] font-mono outline-none"
+                          style={{ background: c.surfaceCard || '#fff', color: c.text, border: `1px solid ${c.borderLight}` }} />
+                        <div className="text-[10.5px] font-mono leading-relaxed" style={{ color: c.textMuted }}>
+                          {t('安装：curl -fsSL https://x.ai/cli/install.sh | bash（或把二进制放到 ~/.lyclaw/grok/bin/grok）',
+                             'Install: curl -fsSL https://x.ai/cli/install.sh | bash (or place the binary at ~/.lyclaw/grok/bin/grok)')}
+                        </div>
                       </div>
                     )}
                   </div>

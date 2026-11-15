@@ -289,6 +289,8 @@ var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } 
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 var ULTRA_TOOLS = (() => { try { return require("./src/shared/ultraTools.cjs"); } catch (e) { return null; } })();
 var ULTRA_PROMPTS = (() => { try { return require("./src/shared/ultraPrompts.cjs"); } catch (e) { return null; } })();
+// Grok 内核桥（v16.8.0）：接入 xai-org/grok-build（Apache-2.0）官方二进制的 headless 流式协议
+var GROK_BRIDGE = (() => { try { return require("./src/shared/grokBridge.cjs"); } catch (e) { console.error("grokBridge.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
@@ -3759,11 +3761,12 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       let cur = "vercel";
       try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
       return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP,
-        engines: ["vercel", "server", "client", "ultra", "harness"] });
+        grokAvailable: !!(GROK_BRIDGE && GROK_BRIDGE.grokStatus().available), grokPath: GROK_BRIDGE ? GROK_BRIDGE.grokStatus().path : null,
+        engines: ["vercel", "server", "client", "ultra", "harness", "grok"] });
     }
     if (url.pathname === "/api/agent/engine" && req.method === "POST") {
       const d = await body(req);
-      const v = ["vercel", "server", "client", "ultra", "harness"].includes(String(d.engine)) ? String(d.engine) : "vercel";
+      const v = ["vercel", "server", "client", "ultra", "harness", "grok"].includes(String(d.engine)) ? String(d.engine) : "vercel";
       try { db.setSetting("agentEngine", v); invalidateSettingsCache(); } catch {}
       return json(res, { ok: true, engine: v });
     }
@@ -3801,8 +3804,42 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
 
       try {
-        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；其余一律 JT Core Pro+（原逻辑零改动）
+        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；engine=grok → xAI Grok 内核桥（官方二进制）；其余一律 JT Core Pro+（原逻辑零改动）
         const __engine = String(payload.engine || '');
+        // Grok 桥（v16.8.0）：完全使用 xai-org/grok-build 官方二进制的 headless 流式协议，巨天只做事件映射。
+        // 会话连续性：grok --session-id 与巨天 session 一一映射，历史由 grok 侧管理；本轮把新消息拼进 prompt。
+        if (__engine === 'grok' && GROK_BRIDGE) {
+          const st0 = GROK_BRIDGE.grokStatus();
+          if (!st0.available) {
+            send({ type: 'error', error: '未找到 grok 内核（官方安装：curl -fsSL https://x.ai/cli/install.sh | bash，或把二进制放到 ~/.lyclaw/grok/bin/）' });
+            clearInterval(heartbeat);
+            try { res.end() } catch {}
+            return;
+          }
+          const __gUser = [...messages].reverse().find((m: any) => m.role === 'user');
+          const __gPrompt = String(__gUser?.content || '').slice(0, 60000) || '继续';
+          const __gSess = String(payload.sessionId || payload.resume || 'grok-' + Date.now());
+          const __gKey = String(st.xaiApiKey || '');
+          const g = await GROK_BRIDGE.runGrokTurn({
+            prompt: __gPrompt,
+            workDir: String(payload.workDir || st.workDir || process.cwd()),
+            sessionId: __gSess.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 36) || 'grok-' + Date.now(),
+            model: model && /^grok-/.test(model) ? model : undefined,
+            permissionLevel: String(payload.permissionLevel || '标准'),
+            xaiApiKey: __gKey,
+            signal: abort.signal,
+          }, {
+            onDelta: (t) => send({ type: 'delta', text: t }),
+            onThinking: (t) => send({ type: 'thinking', text: t }),
+            onTool: (tc) => send({ type: 'tool', call: { id: tc.id, name: tc.name, arguments: tc.arguments } }),
+            onToolEnd: (tc) => send({ type: 'tool_end', call: { id: tc.id, name: tc.name, ok: tc.ok, result: tc.result } }),
+            onNetStatus: (phase, info) => send({ type: 'net', phase, info }),
+          });
+          clearInterval(heartbeat);
+          send({ type: 'done', text: g.text, stopped: g.stopped, error: g.error, usage: g.usage });
+          try { __restoreWorkDir() } catch {}
+          return;
+        }
         const __ultra = __engine === 'ultra' && ULTRA_LOOP;
         const __loop = __ultra ? ULTRA_LOOP : AGENT_LOOP;
         const __runner = __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;

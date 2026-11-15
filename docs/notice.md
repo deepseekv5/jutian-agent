@@ -4,6 +4,8 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.8.0**：新增 **Grok 内核**——接入 xAI 官方开源 [grok-build](https://github.com/xai-org/grok-build)（Apache-2.0）：完全使用 grok 官方代码与工具（sidecar 子进程跑官方二进制，零源码改动），巨天只做接入兼容——任务交给 `grok -p --output-format streaming-json` headless，事件流实时映射到巨天的消息流/思考/工具卡；会话用 `--session-id` 与巨天会话一一映射（历史由 grok 侧管理）；权限三档映射 grok 工具白名单与审批策略。需要 xAI 账号（console.x.ai 的 API Key 填入设置，或终端已 `grok login`）；安装 `curl -fsSL https://x.ai/cli/install.sh | bash`。设置 → 推理 → JT Core 内核新增「Grok (xAI)」档。桌面端可用（安卓不含该内核）。
+
 * **v16.7.0**：安卓文件保存原生改造——文件系统就保留在应用内部，用户想导出时点「保存」即调起 **Android 系统原生保存对话框**（Storage Access Framework），由你选择落到哪个文件夹；全部 14 处导出/下载入口（文件空间「保存到设备」、对话导出、备份、公文 Word、PPT、分享卡图片、诊断报告等）统一走这一条路，文本与二进制同一条管线，取消或失败自动回退浏览器下载。桌面端行为不变。
 
 * **v16.6.0**：macOS 原生液态玻璃 + 系统菜单栏深化。主窗口启用 vibrancy='sidebar'（NSVisualEffectView，macOS 26 上即系统级液态玻璃）——侧栏/活动栏底色改半透明让桌面实时色彩透出，主区保持近实色保证可读性；系统菜单栏补齐大厂标配——「设置… Cmd+,」「文件→新建对话 Cmd+N」「视图→工作/编程/对话模式直达 + 命令面板 Cmd+K」「检查更新」「项目主页」，菜单动作经 IPC 转发渲染层与页面入口同源。应用图标（icns/ico）已随 v16.5.0 更新为新 logo，安装包自动携带。

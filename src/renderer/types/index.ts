@@ -81,10 +81,13 @@ export interface Settings {
   /** Hermes 文本协议注入（v13.10.1）：auto=免费/小模型线路自动注入（默认）；on=恒注入；off=关闭 */
   hermesProtocol?: 'auto' | 'on' | 'off'
   /** Agent 内核（v14.3）：server=循环跑在服务端（默认，工具零回环）；client=旧渲染层循环；
-   *  v14.11 harness=嵌入 DeepSeek Harness WebUI（独立服务，巨天只当壳，不替换自身循环） */
-  agentEngine?: 'vercel' | 'server' | 'client' | 'harness' | 'ultra' | 'ultra'
+   *  v14.11 harness=嵌入 DeepSeek Harness WebUI（独立服务，巨天只当壳，不替换自身循环）；
+   *  v16.8 grok=xAI 官方 grok CLI 内核（Apache-2.0 sidecar，巨天只做接入兼容） */
+  agentEngine?: 'vercel' | 'server' | 'client' | 'harness' | 'ultra' | 'grok'
   /** DeepSeek Harness WebUI 地址（v14.11），默认 http://127.0.0.1:3080 */
   harnessUrl?: string
+  /** xAI API Key（v16.8 Grok 内核）：注入 grok 子进程的 XAI_API_KEY；已 grok login 可留空 */
+  xaiApiKey?: string
   /** Webhook 集成（v14.2）：出站通知地址 / 订阅事件 / 入站触发令牌 */
   webhook_url?: string
   webhook_events?: string
