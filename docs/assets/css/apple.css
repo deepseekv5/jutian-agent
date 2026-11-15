@@ -298,3 +298,7 @@ img, svg { display: block; }
 
 /* 接入卡片 hover 提亮 */
 .a-cards .a-card:hover .a-card__big { background: linear-gradient(180deg, #fff, rgba(255,255,255,.6)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* v16.6.1：卡片图标统一顶部放置（接入/升级卡全部带专属图标） */
+.a-card__icon { margin: 0 auto 16px; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: var(--a-green); background: linear-gradient(180deg, rgba(48,209,88,.14), rgba(48,209,88,.05)); box-shadow: 0 0 0 1px rgba(48,209,88,.22) inset; }
+.a-card__icon svg { width: 24px; height: 24px; }
