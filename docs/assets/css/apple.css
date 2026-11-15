@@ -242,3 +242,59 @@ img, svg { display: block; }
 /* ─── 真实截图容器（金属边框 + 落影，与 a-app 同质感） ─── */
 .a-shot { border-radius: 18px; overflow: hidden; background: #101012; box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 2px 0 0 rgba(255,255,255,.05) inset, 0 60px 140px rgba(0,0,0,.75); }
 .a-shot img { width: 100%; height: auto; display: block; }
+
+/* ─── v16.6.1 编排素材窗口：1:1 复刻应用真实视觉（浅色 UI），内容人工编排 ─── */
+.a-win { border-radius: 18px; overflow: hidden; background: #fbfbfa; color: #1d1d1f; text-align: left;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 60px 140px rgba(0,0,0,.78), 0 24px 60px rgba(0,0,0,.5); }
+.a-win__tabs { display: flex; gap: 6px; align-items: center; padding: 10px 14px 8px; background: #f2f2f0; border-bottom: 1px solid #e8e8e6; }
+.a-win__tab { font-size: 11.5px; color: #9a9a97; padding: 5px 13px; border-radius: 9px; white-space: nowrap; }
+.a-win__tab.is-on { background: #fff; color: #1d1d1f; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.a-win__path { padding: 8px 18px; font-size: 11px; color: #a5a5a2; background: #f7f7f5; border-bottom: 1px solid #e8e8e6; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+.a-win__main { padding: 20px 22px 14px; display: flex; flex-direction: column; gap: 13px; }
+.a-win__urow { display: flex; justify-content: flex-end; }
+.a-win__user { max-width: 72%; background: #ececea; border-radius: 16px; border-bottom-right-radius: 5px; padding: 11px 16px; font-size: 13.5px; line-height: 1.55; }
+.a-win__think { display: flex; align-items: center; gap: 8px; color: #a5a5a2; font-size: 12px; padding-left: 6px; }
+.a-win__dots { letter-spacing: 3px; font-weight: 700; }
+.a-win__caret { color: #c9c9c6; font-size: 11px; }
+.a-win__say { color: #3a3a3c; font-size: 13.5px; line-height: 1.6; padding-left: 6px; }
+.a-win__tool { border: 1px solid #e3e3e1; border-radius: 13px; padding: 11px 14px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 12.5px; }
+.a-win__tool.is-ok .a-win__tick { color: #30a158; }
+.a-win__tool .a-win__tick { font-weight: 700; }
+.a-win__tool b { font-weight: 650; color: #1d1d1f; }
+.a-win__tool code { color: #86868b; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; }
+.a-win__tool pre { flex-basis: 100%; margin: 7px 0 0; padding: 10px 12px; background: #f6f6f4; border-radius: 9px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.75; color: #55555a; white-space: pre-wrap; overflow: hidden; }
+.a-win__tool pre::first-line { color: #1d1d1f; }
+.a-win__row { display: flex; }
+.a-win__ai { max-width: 86%; background: #f2f2f0; border-radius: 16px; border-bottom-left-radius: 5px; padding: 13px 16px; font-size: 13.5px; line-height: 1.65; color: #1d1d1f; }
+.a-win__ai b { font-weight: 650; }
+.a-win__typecaret { display: inline-block; width: 7px; height: 15px; background: #1d1d1f; vertical-align: -2px; margin-left: 3px; border-radius: 1px; animation: a-blink 1.05s steps(2) infinite; }
+@keyframes a-blink { 50% { opacity: 0 } }
+.a-win__input { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #e3e3e1; border-radius: 15px; padding: 13px 16px; color: #a5a5a2; font-size: 13px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.a-win__send { width: 26px; height: 26px; border-radius: 50%; background: #d9d9d6; display: grid; place-items: center; }
+.a-win__send svg { width: 12px; height: 12px; stroke: #fff; fill: none; stroke-width: 2.4; }
+.a-win__foot { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 11px; color: #a5a5a2; }
+.a-win__mode { display: inline-flex; align-items: center; gap: 6px; }
+.a-win__mode::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #30a158; }
+
+/* ─── v16.6.1 华丽度终击 ─── */
+/* 标题金属流光：渐变字上叠加一条缓慢扫过的光带 */
+.a-h1, .a-h2 { position: relative; }
+.a-h1::after, .a-h2::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.5) 50%, transparent 62%);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; animation: a-shine 7s ease-in-out infinite; mix-blend-mode: screen; }
+@keyframes a-shine { 0%, 55% { background-position: 180% 0 } 100% { background-position: -80% 0 } }
+
+/* 卡片 hover 光带扫过 */
+.a-card::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.09) 50%, transparent 58%);
+  transform: translateX(-130%); transition: transform .9s cubic-bezier(.22,.61,.36,1); }
+.a-card:hover::after { transform: translateX(130%); }
+
+/* 页脚顶部光带 */
+.a-footer { position: relative; overflow: hidden; }
+.a-footer::before { content: ''; position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(48,209,88,.5), rgba(41,151,255,.5), transparent); }
+
+/* 接入卡片 hover 提亮 */
+.a-cards .a-card:hover .a-card__big { background: linear-gradient(180deg, #fff, rgba(255,255,255,.6)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }

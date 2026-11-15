@@ -54,9 +54,43 @@
       <p class="a-hero__meta a-reveal" style="transition-delay:.56s">macOS 13+ / Windows 10+ &nbsp;·&nbsp; MIT 开源 &nbsp;·&nbsp; 免费模型开箱即聊</p>
     </div>
     <div class="a-hero__stage" data-parallax>
-      <!-- v16.6 真素材：一次真实任务（读取 → 修改 → 汇报）的实况截图 -->
-      <div class="a-shot" role="img" aria-label="巨天agent 真实工作流：AI 读取文件、修改内容并汇报">
-        <img src="assets/img/app/flow.jpg" alt="巨天agent 真实工作流截图" loading="eager">
+      <!-- v16.6 编排素材：一次完整任务的过程复刻（内容人工编排，视觉 1:1 复刻应用） -->
+      <div class="a-win" role="img" aria-label="巨天agent 工作流演示：TODO 分析任务从读取到写入的完整过程">
+        <div class="a-win__tabs">
+          <span class="a-win__tab">新标签页</span>
+          <span class="a-win__tab is-on">Lumen · TODO 发布计划</span>
+          <span class="a-win__tab">周报 · 第 45 周</span>
+          <span class="a-win__tab">终端</span>
+        </div>
+        <div class="a-win__path">lumen-dashboard</div>
+        <div class="a-win__main">
+          <div class="a-win__urow"><div class="a-win__user">看一下 lumen-dashboard 这个项目：src/chart.js 里有 3 个 TODO，逐个分析怎么改，把结论写进 CHANGELOG.md 的 Unreleased 段</div></div>
+          <div class="a-win__think"><span class="a-win__dots">•••</span><span class="a-win__caret">›</span> 思考了 4.2 秒</div>
+          <p class="a-win__say">先把 chart.js 和 CHANGELOG 各读一遍，再逐条对。</p>
+          <div class="a-win__tool is-ok">
+            <span class="a-win__tick">✓</span><b>读取文件</b><code>lumen-dashboard/src/chart.js</code>
+            <pre>// TODO(1): y 轴自适应刻度——目前固定 0-100，数据超范围会被截断
+// TODO(2): 图例目前不支持点击隐藏对应系列；长名称会溢出容器
+// TODO(3): 数据窗口只有 7 天；希望支持 24h/7d/30d 切换…</pre>
+          </div>
+          <div class="a-win__tool is-ok">
+            <span class="a-win__tick">✓</span><b>读取文件</b><code>lumen-dashboard/CHANGELOG.md</code>
+            <pre>## Unreleased
+（待整理）</pre>
+          </div>
+          <div class="a-win__tool is-ok">
+            <span class="a-win__tick">✓</span><b>编辑文件</b><code>CHANGELOG.md</code>
+            <pre>+ ### TODO 分析（0.5.0 前落地）
++ 1. y 轴改 nice-ticks（1/2/5×10ⁿ 步进），空数据回退 0-100
++ 2. 图例点击置灰隐藏对应系列（Set 存索引），溢出省略号
++ 3. 时间窗 24h/7d/30d 三档，切换保留 zoom domain</pre>
+          </div>
+          <div class="a-win__row"><div class="a-win__ai">
+            三条都对齐到改动方案了：<b>y 轴</b>用 nice-ticks 步进算法，空数据回退现在的 0-100；<b>图例</b>加隐藏态（一个 Set 记索引），长名称溢出省略；<b>时间窗</b>做三档分段控件，切换时保留缩放 domain。<br><br>结论已写进 CHANGELOG.md 的 Unreleased 段，0.5.0 发布前按这个顺序落地即可。<span class="a-win__typecaret"></span>
+          </div></div>
+          <div class="a-win__input">给 巨天 发送消息<span class="a-win__send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+          <div class="a-win__foot"><span class="a-win__mode">办公模式</span><span class="a-win__ctx">上下文 12.4% · 16.2K/128K</span></div>
+        </div>
       </div>
     </div>
   </section>
@@ -164,11 +198,57 @@
           <p class="a-chip__panel">macOS 原生窗口材质与系统菜单齐备；红绿灯贴进界面，顶栏零浪费。</p>
         </div>
         <div class="a-reveal">
-          <!-- v16.6 真素材：工作台首页实况（32 项功能直达 + 会话导航） -->
-          <div class="a-shot" role="img" aria-label="巨天agent 工作台实况：全部功能一屏直达">
-            <img src="assets/img/app/home.jpg" alt="巨天agent 工作台截图" loading="lazy">
+          <!-- 编排素材：工作台首页（功能墙 1:1 复刻） -->
+          <div class="a-win" role="img" aria-label="巨天agent 工作台：全部功能一屏直达">
+            <div class="a-win__tabs">
+              <span class="a-win__tab is-on">新标签页</span>
+              <span class="a-win__tab">Lumen · TODO 发布计划</span>
+              <span class="a-win__tab">周报 · 第 45 周</span>
+            </div>
+            <div class="a-win__path">lumen-dashboard</div>
+            <div class="a-win__main" style="gap:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;gap:8px"><span style="background:#1d1d1f;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;border-radius:999px">工作台</span><span style="font-size:12px;color:#86868b;padding:7px 14px">对话</span></div>
+                <span style="font-size:11px;color:#a5a5a2">spark-x2.6 · lumen-dashboard</span>
+              </div>
+              <div style="text-align:center;padding:18px 0 6px">
+                <div style="font-size:26px;font-weight:700;letter-spacing:-.02em">工作台</div>
+                <div style="font-size:12.5px;color:#86868b;margin-top:6px">全部 32 项功能 · 点击直达</div>
+              </div>
+              <div style="background:#fff;border:1px solid #e3e3e1;border-radius:15px;padding:13px 16px;color:#a5a5a2;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.04)">＋ 输入一句话开始新对话，或搜索下面的功能…</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:4px">
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">对话</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">和 AI 直接对话，一句话让它把活干完</div></div>
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">公文写作台</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">要素表单 + 红头实时预览 + 一键导出 Word</div></div>
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">深度调研</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">多路检索 · 交叉验证 · 带引用报告</div></div>
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">Code</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">文件 · 终端 · diff 一体的编程工作台</div></div>
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">集群指挥室</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">一支数字员工团队，互相 @ 接管</div></div>
+                <div style="background:#fff;border:1px solid #ececea;border-radius:13px;padding:13px 15px"><b style="font-size:13px">通话</b><div style="font-size:11.5px;color:#a5a5a2;margin-top:3px">全屏语音通话，边说边执行任务</div></div>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 多端接入（一个引擎，处处可用） ═══ -->
+  <div class="a-hairline" aria-hidden="true"></div>
+  <section class="a-section">
+    <div class="a-wrap a-center">
+      <p class="a-eyebrow a-reveal">接入</p>
+      <h2 class="a-h2 a-reveal" style="margin:14px 0 26px">一个引擎，处处可用。</h2>
+      <p class="a-desc a-reveal">同一个工作台，从<b>桌面</b>到<b>终端</b>，从<b>手机</b>到<b>聊天软件</b>——所有入口连的是同一份记忆、同一套工具。</p>
+    </div>
+    <div class="a-wrap a-wrap--wide" style="margin-top:clamp(44px,6vw,72px)">
+      <div class="a-cards a-stagger" style="grid-template-columns:repeat(4,1fr)">
+        <div class="a-card"><p class="a-card__kicker">macOS</p><p class="a-card__big" style="font-size:24px">原生窗口<br>液态玻璃</p></div>
+        <div class="a-card"><p class="a-card__kicker">Windows</p><p class="a-card__big" style="font-size:24px">安装包<br>一键装</p></div>
+        <div class="a-card"><p class="a-card__kicker">Linux</p><p class="a-card__big" style="font-size:24px">全发行<br>AppImage</p></div>
+        <div class="a-card"><p class="a-card__kicker">Android</p><p class="a-card__big" style="font-size:24px">独立运行<br>离线可用</p></div>
+        <div class="a-card"><p class="a-card__kicker">终端 · jtcode</p><p class="a-card__big" style="font-size:24px">一行命令<br>唤起助手</p></div>
+        <div class="a-card"><p class="a-card__kicker">手机远程</p><p class="a-card__big" style="font-size:24px">局域网<br>配对码</p></div>
+        <div class="a-card"><p class="a-card__kicker">QQ 机器人</p><p class="a-card__big" style="font-size:24px">官方网关<br>群里使唤</p></div>
+        <div class="a-card"><p class="a-card__kicker">MCP 协议</p><p class="a-card__big" style="font-size:24px">工具<br>无限扩展</p></div>
       </div>
     </div>
   </section>
@@ -369,29 +449,8 @@
   }, { threshold: .4 })
   document.querySelectorAll('[data-count]').forEach(function (el) { cio.observe(el) })
 
-  /* 4. 惯性平滑滚动（Lenis 式，桌面端 + 不降级无障碍） */
-  if (!reduce && finePointer) {
-    var target = window.scrollY, current = target, ticking = false
-    var max = function () { return document.documentElement.scrollHeight - innerHeight }
-    var lerp = function () {
-      current += (target - current) * .1
-      if (Math.abs(target - current) < .6) { current = target; ticking = false }
-      window.scrollTo(0, current)
-      if (ticking) requestAnimationFrame(lerp)
-    }
-    window.addEventListener('wheel', function (e) {
-      if (e.ctrlKey) return
-      e.preventDefault()
-      target = Math.max(0, Math.min(max(), target + e.deltaY))
-      if (!ticking) { ticking = true; requestAnimationFrame(lerp) }
-    }, { passive: false })
-    // 键盘/锚点跳转保持原生：同步 target
-    var sync = function () { target = current = window.scrollY }
-    window.addEventListener('keydown', function (e) { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key)) setTimeout(sync, 60) })
-    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
-      a.addEventListener('click', function () { setTimeout(sync, 900) })
-    })
-  }
+  /* 4. 滚动：v16.6 回归原生——自写 wheel lerp 会与触控板惯性打架（实测「滑动太难受」），
+     原生滚动 + 视差/入场动画已足够顺滑；只保留锚点平滑（CSS scroll-behavior 已有） */
 
   /* 5. hero 窗口滚动视差（轻微下沉+缩放，scroll-linked） */
   var stage = document.querySelector('[data-parallax]')
