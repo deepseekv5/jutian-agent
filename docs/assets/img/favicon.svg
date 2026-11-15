@@ -1,6 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#10a37f"/>
-  <g fill="none" stroke="#fff" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M17 21h30M47 21v22M17 43h30M17 21v22M17 32h30"/>
-  </g>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c1c"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40e2ae"/>
+      <stop offset="1" stop-color="#0e9a6d"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <path d="M 14.5 42.5 Q 32 31.5 49.5 42.5" stroke="#fff" stroke-width="4.2" fill="none" stroke-linecap="round"/>
+  <path d="M 21.5 50.2 Q 32 41.6 42.5 50.2" stroke="#fff" opacity=".32" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+  <path d="M32 19.5c.85 4.6 2.2 6 6.8 6.8-4.6.85-6 2.2-6.8 6.8-.85-4.6-2.2-6-6.8-6.8 4.6-.85 6-2.2 6.8-6.8z" fill="url(#star)"/>
 </svg>
