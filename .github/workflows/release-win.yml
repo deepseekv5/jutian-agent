@@ -40,6 +40,16 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # v16.8.1 Grok 内核预装（xai-org/grok-build 官方二进制，Apache-2.0）
+      - name: 预装 Grok 内核（x64）
+        shell: bash
+        run: |
+          mkdir -p grok
+          VER=$(curl -fsSL https://x.ai/cli/stable | tr -d '[:space:]')
+          echo "grok version: $VER"
+          curl -fsSL "https://x.ai/cli/grok-${VER}-windows-x86_64.exe" -o grok/grok.exe
+          ./grok/grok.exe --version || true
+
       # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
       # 只警告不拦，避免基建波动堵住发版。
       # shell: bash 必须显式指定——Windows runner 默认 PowerShell，

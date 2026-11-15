@@ -30,30 +30,41 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/shared/grokBridge.ts
 var grokBridge_exports = {};
 __export(grokBridge_exports, {
+  grokHomeDir: () => grokHomeDir,
   grokStatus: () => grokStatus,
   locateGrok: () => locateGrok,
   runGrokTurn: () => runGrokTurn
 });
 module.exports = __toCommonJS(grokBridge_exports);
 var import_node_child_process = require("node:child_process");
-var import_node_fs = require("node:fs");
+var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var BIN_NAMES = process.platform === "win32" ? ["grok.exe", "grok.bat"] : ["grok"];
 function locateGrok() {
   const fromEnv = process.env.GROK_BIN;
-  if (fromEnv && (0, import_node_fs.existsSync)(fromEnv)) return fromEnv;
+  if (fromEnv && import_node_fs.default.existsSync(fromEnv)) return fromEnv;
+  try {
+    const rp = process.resourcesPath;
+    if (rp) {
+      for (const n of BIN_NAMES) {
+        const p = import_node_path.default.join(rp, "grok", n);
+        if (import_node_fs.default.existsSync(p)) return p;
+      }
+    }
+  } catch {
+  }
   const home = import_node_path.default.join(import_node_os.default.homedir(), ".lyclaw", "grok", "bin");
   for (const n of BIN_NAMES) {
     const p = import_node_path.default.join(home, n);
-    if ((0, import_node_fs.existsSync)(p)) return p;
+    if (import_node_fs.default.existsSync(p)) return p;
   }
   const dirs = String(process.env.PATH || "").split(import_node_path.default.delimiter);
   for (const d of dirs) {
     if (!d) continue;
     for (const n of BIN_NAMES) {
       const p = import_node_path.default.join(d, n);
-      if ((0, import_node_fs.existsSync)(p)) return p;
+      if (import_node_fs.default.existsSync(p)) return p;
     }
   }
   return null;
@@ -64,6 +75,40 @@ function permissionArgs(level) {
     return ["--tools", "read_file,grep,list_dir,web_search"];
   }
   return ["--allow", "Bash", "--deny", "Bash(rm -rf*)", "--deny", "Bash(shutdown*)", "--deny", "Bash(sudo*)"];
+}
+function grokHomeDir() {
+  return process.env.GROK_HOME || import_node_path.default.join(import_node_os.default.homedir(), ".lyclaw", "grok-home");
+}
+function ensureGrokModelConfig(opts) {
+  const home = grokHomeDir();
+  try {
+    if (!import_node_fs.default.existsSync(home)) import_node_fs.default.mkdirSync(home, { recursive: true });
+    const lines = [];
+    const hasJutianModel = !!(opts.modelBase && opts.model);
+    if (hasJutianModel) {
+      const base = String(opts.modelBase).replace(/[\\/]+$/, "");
+      lines.push("[model.jutian-active]");
+      lines.push(`model = ${JSON.stringify(opts.model)}`);
+      lines.push(`base_url = ${JSON.stringify(base)}`);
+      lines.push('name = "\u5DE8\u5929\u5F53\u524D\u6A21\u578B"');
+      if (opts.contextWindow && opts.contextWindow > 1e3) lines.push(`context_window = ${Math.floor(opts.contextWindow)}`);
+      lines.push("");
+      lines.push("[models]");
+      lines.push('default = "jutian-active"');
+      lines.push("");
+    }
+    const target = import_node_path.default.join(home, "config.toml");
+    const tmp = target + ".tmp";
+    import_node_fs.default.writeFileSync(tmp, lines.join("\n"));
+    import_node_fs.default.renameSync(tmp, target);
+    const token = (hasJutianModel ? opts.modelKey || "" : opts.xaiApiKey || "") || "";
+    import_node_fs.default.writeFileSync(import_node_path.default.join(home, "model-key"), token);
+    import_node_fs.default.writeFileSync(import_node_path.default.join(home, "grok-auth.sh"), '#!/bin/sh\ncat "$(dirname "$0")/model-key" 2>/dev/null\n');
+    import_node_fs.default.chmodSync(import_node_path.default.join(home, "grok-auth.sh"), 448);
+    return home;
+  } catch {
+    return process.env.GROK_HOME || import_node_path.default.join(import_node_os.default.homedir(), ".grok");
+  }
 }
 function runGrokTurn(opts, events = {}) {
   return new Promise((resolve) => {
@@ -84,9 +129,12 @@ function runGrokTurn(opts, events = {}) {
       opts.sessionId,
       ...permissionArgs(opts.permissionLevel || "\u6807\u51C6")
     ];
-    if (opts.model) args.push("-m", opts.model);
+    if (opts.model && /^grok-/i.test(opts.model)) args.push("-m", opts.model);
     const env = { ...process.env };
     if (opts.xaiApiKey) env.XAI_API_KEY = opts.xaiApiKey;
+    env.GROK_HOME = ensureGrokModelConfig(opts);
+    env.GROK_AUTH_PROVIDER_COMMAND = import_node_path.default.join(env.GROK_HOME, "grok-auth.sh");
+    env.GROK_AUTH_PROVIDER_LABEL = "Jutian";
     events.onNetStatus?.("connecting");
     let child;
     try {
@@ -191,6 +239,7 @@ function grokStatus() {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  grokHomeDir,
   grokStatus,
   locateGrok,
   runGrokTurn

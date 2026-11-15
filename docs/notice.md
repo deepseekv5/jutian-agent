@@ -4,6 +4,8 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.8.1**：Grok 内核两项关键升级。① **模型自动接入**——巨天当前模型（含免费网关/本地模型）自动成为 Grok 内核的默认模型：spawn 时动态生成 `GROK_HOME/config.toml`（OpenAI 兼容端点+context_window），鉴权经 grok 官方「外部认证程序」通道（巨天作为 auth provider 输出令牌，不依赖 xAI 账号）——实测鉴权链路全通，推理请求直达巨天模型端点；xAI API Key 变为可选项（填了可额外用官方 grok-4.6）。② **桌面安装包预装** grok 官方二进制（CI 三平台构建时下载，Apache-2.0），装完即用无需手动安装；base_url 规范化防双斜杠 404。另修 SSE 分支二次写 headers 崩溃与会话 ID 的 UUID 映射（sha256 确定性转换，同会话同 UUID）。
+
 * **v16.8.0**：新增 **Grok 内核**——接入 xAI 官方开源 [grok-build](https://github.com/xai-org/grok-build)（Apache-2.0）：完全使用 grok 官方代码与工具（sidecar 子进程跑官方二进制，零源码改动），巨天只做接入兼容——任务交给 `grok -p --output-format streaming-json` headless，事件流实时映射到巨天的消息流/思考/工具卡；会话用 `--session-id` 与巨天会话一一映射（历史由 grok 侧管理）；权限三档映射 grok 工具白名单与审批策略。需要 xAI 账号（console.x.ai 的 API Key 填入设置，或终端已 `grok login`）；安装 `curl -fsSL https://x.ai/cli/install.sh | bash`。设置 → 推理 → JT Core 内核新增「Grok (xAI)」档。桌面端可用（安卓不含该内核）。
 
 * **v16.7.0**：安卓文件保存原生改造——文件系统就保留在应用内部，用户想导出时点「保存」即调起 **Android 系统原生保存对话框**（Storage Access Framework），由你选择落到哪个文件夹；全部 14 处导出/下载入口（文件空间「保存到设备」、对话导出、备份、公文 Word、PPT、分享卡图片、诊断报告等）统一走这一条路，文本与二进制同一条管线，取消或失败自动回退浏览器下载。桌面端行为不变。

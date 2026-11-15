@@ -16,7 +16,7 @@
  * 安卓不启用（Rust 二进制无法在 nodejs-mobile 环境运行）。
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -38,6 +38,10 @@ export interface GrokTurnOptions {
   /** 受限 / 标准 / 完全访问 → grok 工具白名单与审批策略 */
   permissionLevel?: string
   xaiApiKey?: string
+  /** v16.8.1 模型自动接入：巨天当前模型（OpenAI 兼容）注入 grok，成为其默认模型 */
+  modelBase?: string
+  modelKey?: string
+  contextWindow?: number
   /** 本轮新增的用户消息历史（拼进 prompt 前缀，grok 侧用 session 记忆上下文） */
   signal?: AbortSignal
 }
@@ -52,14 +56,24 @@ export interface GrokTurnResult {
 
 const BIN_NAMES = process.platform === 'win32' ? ['grok.exe', 'grok.bat'] : ['grok']
 
-/** 定位 grok 二进制：GROK_BIN 环境变量 → ~/.lyclaw/grok/bin → PATH */
+/** 定位 grok 二进制：GROK_BIN 环境变量 → 安装包 resources/grok（预装）→ ~/.lyclaw/grok/bin → PATH */
 export function locateGrok(): string | null {
   const fromEnv = process.env.GROK_BIN
-  if (fromEnv && existsSync(fromEnv)) return fromEnv
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv
+  // v16.8.1 预装：Electron 打包后在 app/resources/grok/grok（eb-config extraResources）
+  try {
+    const rp = (process as any).resourcesPath
+    if (rp) {
+      for (const n of BIN_NAMES) {
+        const p = path.join(rp, 'grok', n)
+        if (fs.existsSync(p)) return p
+      }
+    }
+  } catch { /* 非 Electron 环境（TUI）无 resourcesPath */ }
   const home = path.join(os.homedir(), '.lyclaw', 'grok', 'bin')
   for (const n of BIN_NAMES) {
     const p = path.join(home, n)
-    if (existsSync(p)) return p
+    if (fs.existsSync(p)) return p
   }
   // PATH 探测
   const dirs = String(process.env.PATH || '').split(path.delimiter)
@@ -67,7 +81,7 @@ export function locateGrok(): string | null {
     if (!d) continue
     for (const n of BIN_NAMES) {
       const p = path.join(d, n)
-      if (existsSync(p)) return p
+      if (fs.existsSync(p)) return p
     }
   }
   return null
@@ -81,6 +95,55 @@ function permissionArgs(level: string): string[] {
   }
   // 标准：放开常规工具，明确拒绝高危 shell 模式（deny 优先于 allow）
   return ['--allow', 'Bash', '--deny', 'Bash(rm -rf*)', '--deny', 'Bash(shutdown*)', '--deny', 'Bash(sudo*)']
+}
+
+/** 巨天管理的 grok 配置目录（不污染用户 ~/.grok） */
+export function grokHomeDir(): string {
+  return process.env.GROK_HOME || path.join(os.homedir(), '.lyclaw', 'grok-home')
+}
+
+/**
+ * v16.8.1 模型自动接入：把巨天当前模型写成 grok 的默认模型。
+ * grok 读 GROK_HOME/config.toml（[model.*] OpenAI 兼容 + [models] default）。
+ * 原子写（tmp+rename），并发 spawn 时以最后一次为准——每次 spawn 前重写为当前会话的模型。
+ *
+ * 鉴权走「外部认证程序」通道（GROK_AUTH_PROVIDER_COMMAND）：grok 启动时会重写
+ * config.toml 并剥掉明文 api_key/env_key 字段（实测），auth provider 的 stdout
+ * token 是唯一稳定路径——巨天写一个极小脚本读取 key 文件输出，token 会发给
+ * default 模型的 base_url（即巨天模型端点）。
+ */
+function ensureGrokModelConfig(opts: GrokTurnOptions): string {
+  const home = grokHomeDir()
+  try {
+    if (!fs.existsSync(home)) fs.mkdirSync(home, { recursive: true })
+    const lines: string[] = []
+    const hasJutianModel = !!(opts.modelBase && opts.model)
+    if (hasJutianModel) {
+      // base_url 规范化：grok 自己拼 /chat/completions——尾部斜杠会产生双斜杠（讯飞网关实测 404）
+      const base = String(opts.modelBase).replace(/[\\/]+$/, '')
+      lines.push('[model.jutian-active]')
+      lines.push(`model = ${JSON.stringify(opts.model)}`)
+      lines.push(`base_url = ${JSON.stringify(base)}`)
+      lines.push('name = "巨天当前模型"')
+      if (opts.contextWindow && opts.contextWindow > 1000) lines.push(`context_window = ${Math.floor(opts.contextWindow)}`)
+      lines.push('')
+      lines.push('[models]')
+      lines.push('default = "jutian-active"')
+      lines.push('')
+    }
+    const target = path.join(home, 'config.toml')
+    const tmp = target + '.tmp'
+    fs.writeFileSync(tmp, lines.join('\n'))
+    fs.renameSync(tmp, target)
+    // 鉴权 token 文件 + auth provider 脚本（stdout 只输出 token，官方约定）
+    const token = (hasJutianModel ? (opts.modelKey || '') : (opts.xaiApiKey || '')) || ''
+    fs.writeFileSync(path.join(home, 'model-key'), token)
+    fs.writeFileSync(path.join(home, 'grok-auth.sh'), '#!/bin/sh\ncat "$(dirname "$0")/model-key" 2>/dev/null\n')
+    fs.chmodSync(path.join(home, 'grok-auth.sh'), 0o700)
+    return home
+  } catch {
+    return process.env.GROK_HOME || path.join(os.homedir(), '.grok')
+  }
 }
 
 /** 跑一轮 grok headless：prompt → streaming-json 事件流 → 结果 */
@@ -99,10 +162,16 @@ export function runGrokTurn(opts: GrokTurnOptions, events: GrokEvents = {}): Pro
       '--session-id', opts.sessionId,
       ...permissionArgs(opts.permissionLevel || '标准'),
     ]
-    if (opts.model) args.push('-m', opts.model)
+    // 模型选择：grok-* 走 xAI 官方；其余不传 -m——default=jutian-active（巨天当前模型）生效
+    if (opts.model && /^grok-/i.test(opts.model)) args.push('-m', opts.model)
 
     const env: Record<string, string> = { ...process.env as Record<string, string> }
     if (opts.xaiApiKey) env.XAI_API_KEY = opts.xaiApiKey
+    // 模型自动接入：GROK_HOME 指向巨天管理的配置目录（config.toml 已写入巨天模型为默认）；
+    // 鉴权经外部认证程序（stdout token = 巨天模型 key），不依赖 grok login
+    env.GROK_HOME = ensureGrokModelConfig(opts)
+    env.GROK_AUTH_PROVIDER_COMMAND = path.join(env.GROK_HOME, 'grok-auth.sh')
+    env.GROK_AUTH_PROVIDER_LABEL = 'Jutian'
     events.onNetStatus?.('connecting')
 
     let child: ChildProcess

@@ -3818,13 +3818,32 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           }
           const __gUser = [...messages].reverse().find((m: any) => m.role === 'user');
           const __gPrompt = String(__gUser?.content || '').slice(0, 60000) || '继续';
-          const __gSess = String(payload.sessionId || payload.resume || 'grok-' + Date.now());
-          const __gKey = String(st.xaiApiKey || '');
+          // grok 要求 --session-id 为合法 UUID：把巨天 sessionId 确定性映射为 UUID v4 形态
+          // （sha256 → 32 hex → 8-4-4-4-12；同会话每次得到同一 UUID，grok 侧历史得以延续）
+          const __gUuid = (() => {
+            const h = crypto.createHash("sha256").update("grok-session:" + String(payload.sessionId || payload.resume || "default")).digest("hex");
+            return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+          })();
+          // v16.8.1 模型自动接入取真值：db.getSetting 单键对 apiKey 有掩码处理（GET 出口
+          // 语义），与 llm-proxy 取真钥匙同款走 allSettings() 遍历（存储层真值）
+          const dbGet = (k: string) => {
+            try { for (const __r of allSettings()) if (__r.key === k && __r.value) return String(__r.value) } catch {}
+            try { const __st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8")); if (__st[k]) return String(__st[k]) } catch {}
+            return '';
+          };
+          const __gKey = dbGet('xaiApiKey');
+          const __gModel = model || dbGet('model');
+          const __gBase = apiBase || dbGet('apiBaseUrl');
+          const __gCw = Number(payload.contextWindow) || Number(dbGet('contextWindow')) || 0;
           const g = await GROK_BRIDGE.runGrokTurn({
             prompt: __gPrompt,
             workDir: String(payload.workDir || st.workDir || process.cwd()),
-            sessionId: __gSess.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 36) || 'grok-' + Date.now(),
-            model: model && /^grok-/.test(model) ? model : undefined,
+            sessionId: __gUuid,
+            model: __gModel,
+            // 巨天当前模型（含免费网关/本地模型）成为 grok 的默认模型
+            modelBase: __gBase,
+            modelKey: dbGet('apiKey'),
+            contextWindow: __gCw,
             permissionLevel: String(payload.permissionLevel || '标准'),
             xaiApiKey: __gKey,
             signal: abort.signal,

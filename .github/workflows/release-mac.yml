@@ -36,6 +36,17 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
+      # v16.8.1 Grok 内核预装（xai-org/grok-build 官方二进制，Apache-2.0）
+      - name: 预装 Grok 内核（${{ matrix.arch }}）
+        run: |
+          mkdir -p grok
+          VER=$(curl -fsSL https://x.ai/cli/stable | tr -d '[:space:]')
+          echo "grok version: $VER"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then A=aarch64; else A=x86_64; fi
+          curl -fsSL "https://x.ai/cli/grok-${VER}-macos-${A}" -o grok/grok
+          chmod +x grok/grok
+          ./grok/grok --version
+
       - name: 构建后端
         run: npm run build:server
 
