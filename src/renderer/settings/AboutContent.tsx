@@ -7,6 +7,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { getAllMemories } from '../store/storage'
 import { hhmm } from '../utils/datetime'
 import { fetchCompat } from '../api'
+import { downloadFile } from '../utils/nativeSave'
 
 /**
  * AboutContent — 关于页内容(单一来源,设置弹窗与独立关于页共用)
@@ -130,11 +131,7 @@ export default function AboutContent() {
       stats, notes: 'diagnostics only, no keys included',
     }
     const blob = new Blob([JSON.stringify(info, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'jutian-diagnostics.json'
-    a.click()
-    URL.revokeObjectURL(a.href)
+    void downloadFile('jutian-diagnostics.json', blob)
   }
 
   const version = upd?.current || '—'

@@ -21,6 +21,7 @@ import { recommendModels, inferCapability, TASK_LABEL, type TaskKind } from '../
 import { successRates, type ModelSuccessRate } from '../../shared/usageCost';
 import { fetchCompat } from '../api'
 import { relTime } from '../../shared/localActivity'
+import { downloadFile } from '../utils/nativeSave'
 
 interface Props {
   settings: Settings;
@@ -541,10 +542,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
       })))
       const payload = { app: 'lyclaw', version: APP_VERSION, exported_at: new Date().toISOString(), settings: settingsRow, memories, sessions: sessionsWithMsgs }
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `lyclaw-backup-${new Date().toISOString().slice(0, 10)}.json`
-      a.click(); URL.revokeObjectURL(a.href)
+      void downloadFile(`lyclaw-backup-${new Date().toISOString().slice(0, 10)}.json`, blob)
     } catch (e: any) { alert(`备份失败: ${e.message}`) }
   }
 
@@ -1339,11 +1337,7 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
                       const d = await r.json()
                       if (!r.ok || d.error) { reportError(`导出失败：${d.error || `服务端返回 ${r.status}`}`); return }
                       const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' })
-                      const a2 = document.createElement('a')
-                      a2.href = URL.createObjectURL(blob)
-                      a2.download = `巨天备份-${new Date().toISOString().slice(0, 10)}.json`
-                      a2.click()
-                      URL.revokeObjectURL(a2.href)
+                      void downloadFile(`巨天备份-${new Date().toISOString().slice(0, 10)}.json`, blob)
                     } catch (e: any) { reportError('导出失败: ' + e.message) }
                   }} className="flex-1 py-2.5 rounded-lg text-[12px] font-medium" style={{ background: c.accent, color: c.accentText }}>
                     {t('导出全部数据', 'Export all data')}

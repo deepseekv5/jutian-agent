@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme'
 import { buildMultiExport, collectStats, exportFileName, type ExportFilter, type ExportSession } from '../../shared/exportSessions'
 import { markdownToHtml, wrapHtmlDocument, wrapGongwenDocument } from '../../shared/exportHtml'
 import type { Session } from '../types'
+import { downloadFile } from '../utils/nativeSave'
 
 interface Props {
   sessions: Session[]
@@ -77,12 +78,8 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
         const name = exportFileName(title + (isGw ? '-公文红头' : ''), kind === 'gongwen-doc' ? 'doc' : 'html')
         const mime = kind === 'gongwen-doc' ? 'application/msword' : 'text/html;charset=utf-8'
         const blob = new Blob([html], { type: mime })
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = name
-        a.click()
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000)
-        setMsg(`已导出 HTML → ${name}（浏览器打开可打印为 PDF）`)
+        void downloadFile(name, blob)
+      setMsg(`已导出 HTML → ${name}（浏览器打开可打印为 PDF）`)
         return
       }
       const api = (window as any).electronAPI
@@ -122,11 +119,7 @@ export default function ExportPanel({ sessions, loadMessages, onClose }: Props) 
       const stats = collectStats(list)
       const name = exportFileName(picked.size === 1 ? (list[0].title || '会话') : '会话合集', 'md')
       const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = name
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+      void downloadFile(name, blob)
       setMsg(`已导出 ${stats.sessions} 个会话 / ${stats.messages} 条消息 → ${name}`)
     } catch (e) {
       setMsg(`导出失败：${(e as Error)?.message || e}`)

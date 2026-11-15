@@ -11,11 +11,15 @@ package com.jutian.agent;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -43,6 +47,8 @@ public class MainActivity extends Activity {
         // 允许明文 http：手机连的是局域网内的电脑，没有证书
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         web.setWebViewClient(new WebViewClient());
+        // v16.7：文件保存桥——前端「保存」按钮 → 系统原生保存对话框（SAF），文件落到用户选的位置
+        web.addJavascriptInterface(new FileSaverBridge(), "JutianNative");
 
         String host = prefs.getString("host", "");
         String token = prefs.getString("token", "");
@@ -532,6 +538,77 @@ public class MainActivity extends Activity {
         String url = "http://" + host + "/remote.html?t=" + token;
         setContentView(web);
         web.loadUrl(url);
+    }
+
+    // ═══ v16.7 文件保存（SAF）：文件系统就在 app 内部；用户想导出时点「保存」→
+    // 调起系统原生的保存对话框（ACTION_CREATE_DOCUMENT），由用户选择落在哪里。 ═══
+
+    /** SAF 保存请求码 */
+    private static final int REQ_SAVE = 4721;
+    /** 待写入的内容（base64）与回调 id，等待用户在系统对话框里选位置 */
+    private String pendingSaveB64 = null;
+    private String pendingSaveId = null;
+
+    /** 前端桥：window.JutianNative.saveBlob(name, mime, base64) → 系统保存对话框 */
+    private class FileSaverBridge {
+        @JavascriptInterface
+        public String saveBlob(String name, String mime, String base64) {
+            final String id = String.valueOf(System.currentTimeMillis());
+            final String m = (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime;
+            runOnUiThread(() -> {
+                try {
+                    pendingSaveB64 = base64 == null ? "" : base64;
+                    pendingSaveId = id;
+                    Intent it = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    it.addCategory(Intent.CATEGORY_OPENABLE);
+                    it.setType(m);
+                    it.putExtra(Intent.EXTRA_TITLE, name == null || name.isEmpty() ? "未命名" : name);
+                    startActivityForResult(it, REQ_SAVE);
+                } catch (Exception e) {
+                    notifySaveResult(id, false);
+                }
+            });
+            return id;
+        }
+    }
+
+    /** 用户在系统对话框选完位置（或取消）后写文件 */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_SAVE) return;
+        final String id = pendingSaveId;
+        final String b64 = pendingSaveB64;
+        pendingSaveId = null;
+        pendingSaveB64 = null;
+        if (id == null) return;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            notifySaveResult(id, false);
+            return;
+        }
+        final Uri uri = data.getData();
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
+                try (java.io.OutputStream os = getContentResolver().openOutputStream(uri)) {
+                    if (os != null) {
+                        os.write(bytes);
+                        os.flush();
+                        ok = true;
+                    }
+                }
+            } catch (Exception ignored) { /* 写失败也回调 false，前端提示 */ }
+            final boolean done = ok;
+            runOnUiThread(() -> notifySaveResult(id, done));
+        }).start();
+    }
+
+    /** 通知前端保存结果：window.__jutianSaveDone(id, ok) */
+    private void notifySaveResult(String id, boolean ok) {
+        if (web == null) return;
+        final String js = "window.__jutianSaveDone && window.__jutianSaveDone(" + id + "," + (ok ? "true" : "false") + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
     }
 
     @Override

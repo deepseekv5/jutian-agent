@@ -33,6 +33,7 @@ import PersonaConsent, { loadIdentity, saveIdentity } from './PersonaConsent'
 import PersonaMemoryPanel from './PersonaMemoryPanel'
 import PersonaEditor from './PersonaEditor'
 import { dateTimeCN } from '../../utils/datetime'
+import { downloadFile } from '../../utils/nativeSave'
 
 type View = 'chat' | 'memory' | 'disclaimer' | 'create' | 'edit'
 
@@ -228,11 +229,7 @@ export default function PersonaChatTab({ settings, onClose }: { settings: Settin
       EXPORT_LABEL_FOOTER,
     ]
     const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${active.name}-对话-${new Date().toISOString().slice(0, 10)}.txt`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    void downloadFile(`${active.name}-对话-${new Date().toISOString().slice(0, 10)}.txt`, blob)
   }
 
   // v16.4.1：原生 confirm → 二次点击确认（第一次点进入 armed 态变红提示，2.5s 未点自动解除）

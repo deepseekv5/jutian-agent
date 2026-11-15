@@ -3,6 +3,7 @@ import { useTheme } from '../hooks/useTheme'
 import type { Settings } from '../types'
 import { isWindows } from '../utils/platform'
 import { fetchCompat } from '../api'
+import { downloadFile } from '../utils/nativeSave'
 
 interface DirEntry {
   name: string
@@ -84,6 +85,19 @@ export default function FilesTab({ settings }: { settings: Settings }) {
       await fetchCompat('/api/trash-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) })
       load(path)
     } catch {}
+  }
+
+  // v16.7 安卓原生保存：文件行「保存到设备」——内容走 /api/remote/file，交给统一入口
+  // （安卓上 downloadFile 调起系统原生保存对话框；桌面保持浏览器下载）
+  const saveToDevice = async (p: string, name: string) => {
+    try {
+      const res = await fetchCompat('/api/remote/file?path=' + encodeURIComponent(p))
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const extMime: Record<string, string> = { txt: 'text/plain', md: 'text/markdown', json: 'application/json', js: 'text/javascript', ts: 'text/typescript', html: 'text/html', css: 'text/css', csv: 'text/csv', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', mp3: 'audio/mpeg', wav: 'audio/wav' }
+      const ext = name.split('.').pop()?.toLowerCase() || ''
+      await downloadFile(name, blob, extMime[ext] || 'application/octet-stream')
+    } catch { /* 静默：保存失败不打断浏览 */ }
   }
 
   const isWin = isWindows()
@@ -183,6 +197,11 @@ export default function FilesTab({ settings }: { settings: Settings }) {
                   {!entry.isDir && (
                     <button onClick={(e) => { e.stopPropagation(); openFile(fullPath) }} className="w-6 h-6 rounded flex items-center justify-center" style={{ color: c.textMuted }} title="打开">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </button>
+                  )}
+                  {!entry.isDir && (
+                    <button onClick={(e) => { e.stopPropagation(); saveToDevice(fullPath, entry.name) }} className="w-6 h-6 rounded flex items-center justify-center" style={{ color: c.textMuted }} title="保存到设备（安卓调起系统保存）">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v11m0 0l-4-4m4 4l4-4M5 21h14" /></svg>
                     </button>
                   )}
                   <button onClick={(e) => { e.stopPropagation(); trashFile(fullPath) }} className="w-6 h-6 rounded flex items-center justify-center" style={{ color: c.toolErr }} title="删除">

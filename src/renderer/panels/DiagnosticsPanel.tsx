@@ -12,6 +12,7 @@ import { APP_VERSION } from '../brand'
 import { fetchCompat } from '../api'
 import { perfSummary } from '../../shared/agentPerf'
 import type { PerfReport } from '../engine/agentPerf'
+import { downloadFile } from '../utils/nativeSave'
 
 
 
@@ -165,11 +166,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
     } catch {
       // 剪贴板不可用时退回下载
       const blob = new Blob([md], { type: 'text/markdown' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = 'jutian-diagnostics.md'
-      a.click()
-      URL.revokeObjectURL(a.href)
+      void downloadFile('jutian-diagnostics.md', blob)
     }
   }
 

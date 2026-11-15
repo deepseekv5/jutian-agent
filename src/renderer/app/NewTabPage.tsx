@@ -21,6 +21,7 @@ const TOOL_COUNT = BUILTIN_TOOLS.length
 
 // CARDS / GROUPS 已抽到 pageCatalog.ts（v15.8.4）：CodexHome「全部功能」折叠区共用同一份数据
 import { CARDS, GROUPS } from './pageCatalog'
+import { downloadFile } from '../utils/nativeSave'
 
 export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: PageType) => void; sessions?: { id: string; title?: string; updated_at?: string; created_at?: string }[] }) {
   const [exts, setExts] = useState(getRegisteredExts)
@@ -144,11 +145,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
                 <button onClick={() => {
                   const md = favs.map(f => `- [${f.role === 'user' ? '问' : '答'}] ${f.excerpt.replace(/\n/g, ' ')}`).join('\n')
                   const blob = new Blob([`# 收藏的消息\n\n${md}\n`], { type: 'text/markdown' })
-                  const a = document.createElement('a')
-                  a.href = URL.createObjectURL(blob)
-                  a.download = `jutian-favorites-${new Date().toISOString().slice(0, 10)}.md`
-                  a.click(); URL.revokeObjectURL(a.href)
-                }} className="text-[10.5px]" style={{ color: c.accent, background: 'transparent', border: 'none' }}>{t('导出', 'Export')}</button>
+                  void downloadFile(`jutian-favorites-${new Date().toISOString().slice(0, 10)}.md`, blob)                }} className="text-[10.5px]" style={{ color: c.accent, background: 'transparent', border: 'none' }}>{t('导出', 'Export')}</button>
               </>
             )}
             {favs.length === 0 && !favHintClosed && (

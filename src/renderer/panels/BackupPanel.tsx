@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { buildPlan, humanBytes, sizeWarning, SCOPE_LABEL, type BackupScope } from '../../shared/backupPlan'
 import { post, requestJson } from '../api'
+import { downloadFile } from '../utils/nativeSave'
 
 interface Stats {
   settings?: number
@@ -62,11 +63,7 @@ export default function BackupPanel({ onClose }: { onClose: () => void }) {
       if (scopes.includes('memory')) picked.memories = data.memories
       const json = JSON.stringify(picked, null, 1)
       const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `jutian-backup-${new Date().toISOString().slice(0, 10)}.json`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+      void downloadFile(`jutian-backup-${new Date().toISOString().slice(0, 10)}.json`, blob)
       setMsg(`已导出 ${humanBytes(blob.size)}（${scopes.map(s => SCOPE_LABEL[s]).join('、')}）`)
     } catch (e) {
       setMsg(`导出失败：${(e as Error)?.message || e}`)

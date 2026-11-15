@@ -4,6 +4,7 @@ import { fetchCompat } from '../api'
 import { ssePayloads } from '../../shared/sse'
 import { wrapGongwenDocument, markdownToHtml } from '../../shared/exportHtml'
 import { GONGWEN_PROMPT } from '../../shared/chatModes'
+import { downloadFile } from '../utils/nativeSave'
 
 /**
  * 公文写作台（v15.5.0）
@@ -185,11 +186,7 @@ export default function GongwenDesk() {
 
   const download = (ext: 'doc' | 'html') => {
     const blob = new Blob([html], { type: ext === 'doc' ? 'application/msword' : 'text/html;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${title.replace(/[\\/:*?"<>|]/g, '_')}-${new Date().toISOString().slice(0, 10)}.${ext}`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    void downloadFile(`${title.replace(/[\\/:*?"<>|]/g, '_')}-${new Date().toISOString().slice(0, 10)}.${ext}`, blob)
   }
 
   const label = 'block text-[11px] font-medium mb-1'

@@ -188,12 +188,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-/** dataUrl → 触发下载。命名含日期防覆盖。 */
-export function downloadDataUrl(dataUrl: string, filename: string) {
-  const a = document.createElement('a')
-  a.href = dataUrl
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+/** dataUrl → 保存（v16.7：安卓走系统原生保存对话框）。命名含日期防覆盖。 */
+export async function downloadDataUrl(dataUrl: string, filename: string) {
+  const { downloadFile } = await import('./nativeSave')
+  const blob = await (await fetch(dataUrl)).blob()
+  await downloadFile(filename, blob, 'image/png')
 }

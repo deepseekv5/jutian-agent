@@ -13,6 +13,7 @@ import { effectiveApiKey } from '../store/storage'
 import { dateTimeCN } from '../utils/datetime'
 import { fetchCompat } from '../api'
 import { ssePayloads } from '../../shared/sse'
+import { downloadFile } from '../utils/nativeSave'
 
 type SideTab = 'assistant' | 'review' | 'files' | 'terminal' | 'browser' | 'subagent' | 'git' | 'stats'
 
@@ -45,13 +46,8 @@ function exportSessionMarkdown(messages: Message[]) {
     lines.push('', '---', '')
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  a.href = url
-  a.download = `巨天agent-${title.replace(/[\\/:*?"<>|\s]+/g, '-')}-${stamp}.md`
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1500)
+  void downloadFile(`巨天agent-${title.replace(/[\\/:*?"<>|\s]+/g, '-')}-${stamp}.md`, blob)
 }
 
 /** 对话侧边面板：辅助对话 / 审查 / 文件 / 终端 / 浏览器 / 子Agent */

@@ -3,6 +3,7 @@ import { usePptStore, selectCurrentSlide } from '../store/pptStore';
 import { useTheme } from '../hooks/useTheme';
 import { LAYOUT_LABELS } from '../store/ppt-layouts';
 import type { GenerateOptions, Slide, Block } from '../types/ppt';
+import { downloadFile } from '../utils/nativeSave'
 
 const PPT_THEMES = [
   { id: 'hongtou', name: '红头公文', accent: '#c7000b', accent2: '#a3260f' },
@@ -123,10 +124,7 @@ export default function PPTView({ onBack }: Props) {
 
   const handleExportJson = () => {
     const blob = new Blob([JSON.stringify(deck, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${deck.title}.json`; a.click();
-    URL.revokeObjectURL(url);
+    void downloadFile(`${deck.title}.json`, blob);
     notify('已导出 JSON', 'success');
   };
 
@@ -144,10 +142,7 @@ blockquote{font-size:1.5rem;font-style:italic;max-width:70vw;text-align:center}
 .stat{text-align:center}.stat-value{font-size:2.5rem;font-weight:700}
 .stat-label{font-size:.9rem;opacity:.7;margin-top:.5rem}</style></head><body>\n${slidesHtml}\n</body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${deck.title}.html`; a.click();
-    URL.revokeObjectURL(url);
+    void downloadFile(`${deck.title}.html`, blob);
     notify('已导出 HTML', 'success');
   };
 

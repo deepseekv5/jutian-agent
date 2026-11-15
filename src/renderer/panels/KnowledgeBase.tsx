@@ -12,6 +12,7 @@ import { effectiveApiKey } from '../store/storage'
 import PageShell from '../app/PageShell'
 import type { KbEntry } from '../types/kb'
 import { fetchCompat } from '../api'
+import { downloadFile } from '../utils/nativeSave'
 
 type Tab = 'notes' | 'graph' | 'index'
 
@@ -188,11 +189,7 @@ function NotesWorkspace({ entries, byId, selectedId, selected, onSelect, onChang
   // 导出当前笔记为 Markdown 文件
   const exportNote = () => {
     const blob = new Blob([`# ${title || '未命名'}\n\n${content}`], { type: 'text/markdown;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${(title || '未命名').replace(/[\\/:*?"<>|]/g, '_')}.md`
-    a.click(); URL.revokeObjectURL(a.href)
-  }
+    void downloadFile(`${(title || '未命名').replace(/[\\/:*?"<>|]/g, '_')}.md`, blob)  }
 
   const save = async () => {
     if (!title.trim() && !content.trim()) return
