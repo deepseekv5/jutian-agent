@@ -105,14 +105,10 @@ export function grokHomeDir(): string {
 }
 
 /**
- * v16.8.1 模型自动接入：把巨天当前模型写成 grok 的默认模型。
- * grok 读 GROK_HOME/config.toml（[model.*] OpenAI 兼容 + [models] default）。
- * 原子写（tmp+rename），并发 spawn 时以最后一次为准——每次 spawn 前重写为当前会话的模型。
- *
- * 鉴权走「外部认证程序」通道（GROK_AUTH_PROVIDER_COMMAND）：grok 启动时会重写
- * config.toml 并剥掉明文 api_key/env_key 字段（实测），auth provider 的 stdout
- * token 是唯一稳定路径——巨天写一个极小脚本读取 key 文件输出，token 会发给
- * default 模型的 base_url（即巨天模型端点）。
+ * v16.8.3 模型自动接入（源码直改版）：巨天编译的 grok 已内置 JUTIAN_COMPAT 补丁
+ * （见 third_party/grok-build/patches/）——鉴权优先 XAI_API_KEY（=巨天模型 key），
+ * [model.*] 表在外部鉴权模式下保留，default 模型即巨天当前模型。
+ * 这里只写 config.toml（模型定义+default）与注入环境变量，不再需要 auth provider 脚本。
  */
 function ensureGrokModelConfig(opts: GrokTurnOptions): string {
   const home = grokHomeDir()
@@ -137,11 +133,6 @@ function ensureGrokModelConfig(opts: GrokTurnOptions): string {
     const tmp = target + '.tmp'
     fs.writeFileSync(tmp, lines.join('\n'))
     fs.renameSync(tmp, target)
-    // 鉴权 token 文件 + auth provider 脚本（stdout 只输出 token，官方约定）
-    const token = (hasJutianModel ? (opts.modelKey || '') : (opts.xaiApiKey || '')) || ''
-    fs.writeFileSync(path.join(home, 'model-key'), token)
-    fs.writeFileSync(path.join(home, 'grok-auth.sh'), '#!/bin/sh\ncat "$(dirname "$0")/model-key" 2>/dev/null\n')
-    fs.chmodSync(path.join(home, 'grok-auth.sh'), 0o700)
     return home
   } catch {
     return process.env.GROK_HOME || path.join(os.homedir(), '.grok')
@@ -168,12 +159,15 @@ export function runGrokTurn(opts: GrokTurnOptions, events: GrokEvents = {}): Pro
     if (opts.model && /^grok-/i.test(opts.model)) args.push('-m', opts.model)
 
     const env: Record<string, string> = { ...process.env as Record<string, string> }
-    if (opts.xaiApiKey) env.XAI_API_KEY = opts.xaiApiKey
-    // 模型自动接入：GROK_HOME 指向巨天管理的配置目录（config.toml 已写入巨天模型为默认）；
-    // 鉴权经外部认证程序（stdout token = 巨天模型 key），不依赖 grok login
+    // v16.8.3 模型自动接入（源码直改版）：
+    //  · XAI_API_KEY = 巨天模型 key（有巨天模型时）或用户填的 xAI key——补丁鉴权优先用它
+    //  · JUTIAN_COMPAT = 1 —— 触发 grok 补丁：[model.*] 保留 + 鉴权优先 API-key（跳过 OAuth）
+    //  · GROK_HOME = 巨天管理目录（config.toml 模型定义，default=jutian-active）
+    const hasJutianModel = !!(opts.modelBase && opts.model)
+    const keyForAuth = hasJutianModel ? (opts.modelKey || opts.xaiApiKey || '') : (opts.xaiApiKey || '')
+    if (keyForAuth) env.XAI_API_KEY = keyForAuth
+    env.JUTIAN_COMPAT = '1'
     env.GROK_HOME = ensureGrokModelConfig(opts)
-    env.GROK_AUTH_PROVIDER_COMMAND = path.join(env.GROK_HOME, 'grok-auth.sh')
-    env.GROK_AUTH_PROVIDER_LABEL = 'Jutian'
     events.onNetStatus?.('connecting')
 
     let child: ChildProcess

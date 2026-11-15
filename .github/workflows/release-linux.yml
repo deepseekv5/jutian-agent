@@ -42,16 +42,17 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      # v16.8.1 Grok 内核预装（xai-org/grok-build 官方二进制，Apache-2.0）
-      - name: 预装 Grok 内核（${{ matrix.arch }}）
+      # v16.9 Grok 内核预装：源码编译（xai-org/grok-build Apache-2.0 + Jutian 兼容补丁）
+      - name: 预装 Grok 内核（源码编译 / ${{ matrix.arch }}）
         run: |
-          mkdir -p grok
-          VER=$(curl -fsSL https://x.ai/cli/stable | tr -d '[:space:]')
-          echo "grok version: $VER"
-          if [ "${{ matrix.arch }}" = "arm64" ]; then A=aarch64; else A=x86_64; fi
-          curl -fsSL "https://x.ai/cli/grok-${VER}-linux-${A}" -o grok/grok
-          chmod +x grok/grok
-          ./grok/grok --version
+          git clone --depth 1 https://github.com/xai-org/grok-build.git /tmp/grok-src
+          cd /tmp/grok-src
+          git apply "$GITHUB_WORKSPACE/third_party/grok-build/patches/jutian-compat.patch"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then sudo apt-get update && sudo apt-get install -y protobuf-compiler gcc-aarch64-linux-gnu; RUST_TARGET=aarch64-unknown-linux-gnu; rustup target add $RUST_TARGET; export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc; else sudo apt-get update && sudo apt-get install -y protobuf-compiler; RUST_TARGET=x86_64-unknown-linux-gnu; fi
+          cargo build --release --target $RUST_TARGET -p xai-grok-pager-bin
+          mkdir -p "$GITHUB_WORKSPACE/grok"
+          cp "target/$RUST_TARGET/release/xai-grok-pager-bin" "$GITHUB_WORKSPACE/grok/grok"
+          "$GITHUB_WORKSPACE/grok/grok" --version || true
 
       - name: 构建后端
         run: npm run build:server
