@@ -4,6 +4,8 @@
 
 # 巨天 Agent 版本更新要点
 
+* **v16.8.2**：Grok 内核全链路打通。模型请求改走巨天本机 OpenAI 兼容端点（`/v1/chat/completions` → llm-proxy）——模型路由与免费源特判全部复用巨天能力，不再直连第三方（直连遇 free 哨兵必 401）；实测 Grok 内核流式输出、工具执行（写文件真实落盘）、工具卡显示工具名与命令/输出。修正 grok 1.0.x streaming-json 的真实字段映射（文本在 `data`、工具名在 `title`、结果在 content 两层嵌套与 rawOutput 对象）、终态事件去重（同工具只上报一次）、权限映射（标准档 `--always-approve`，实测 `--allow` 匹配不上工具审批）；全局 catch 防二次写头崩溃（独立服务模式实测踩到）。
+
 * **v16.8.1**：Grok 内核两项关键升级。① **模型自动接入**——巨天当前模型（含免费网关/本地模型）自动成为 Grok 内核的默认模型：spawn 时动态生成 `GROK_HOME/config.toml`（OpenAI 兼容端点+context_window），鉴权经 grok 官方「外部认证程序」通道（巨天作为 auth provider 输出令牌，不依赖 xAI 账号）——实测鉴权链路全通，推理请求直达巨天模型端点；xAI API Key 变为可选项（填了可额外用官方 grok-4.6）。② **桌面安装包预装** grok 官方二进制（CI 三平台构建时下载，Apache-2.0），装完即用无需手动安装；base_url 规范化防双斜杠 404。另修 SSE 分支二次写 headers 崩溃与会话 ID 的 UUID 映射（sha256 确定性转换，同会话同 UUID）。
 
 * **v16.8.0**：新增 **Grok 内核**——接入 xAI 官方开源 [grok-build](https://github.com/xai-org/grok-build)（Apache-2.0）：完全使用 grok 官方代码与工具（sidecar 子进程跑官方二进制，零源码改动），巨天只做接入兼容——任务交给 `grok -p --output-format streaming-json` headless，事件流实时映射到巨天的消息流/思考/工具卡；会话用 `--session-id` 与巨天会话一一映射（历史由 grok 侧管理）；权限三档映射 grok 工具白名单与审批策略。需要 xAI 账号（console.x.ai 的 API Key 填入设置，或终端已 `grok login`）；安装 `curl -fsSL https://x.ai/cli/install.sh | bash`。设置 → 推理 → JT Core 内核新增「Grok (xAI)」档。桌面端可用（安卓不含该内核）。

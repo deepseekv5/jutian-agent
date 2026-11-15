@@ -3833,16 +3833,17 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           };
           const __gKey = dbGet('xaiApiKey');
           const __gModel = model || dbGet('model');
-          const __gBase = apiBase || dbGet('apiBaseUrl');
           const __gCw = Number(payload.contextWindow) || Number(dbGet('contextWindow')) || 0;
+          // v16.8.2：grok 的模型请求走巨天本机 OpenAI 兼容端点（/v1/chat/completions → llm-proxy）——
+          // 免费源特判与模型路由全由 llm-proxy 承担，不再直连第三方（直连遇 free 哨兵必 401）
+          const __gBase = `http://127.0.0.1:${PORT}/v1`;
           const g = await GROK_BRIDGE.runGrokTurn({
             prompt: __gPrompt,
             workDir: String(payload.workDir || st.workDir || process.cwd()),
             sessionId: __gUuid,
             model: __gModel,
-            // 巨天当前模型（含免费网关/本地模型）成为 grok 的默认模型
             modelBase: __gBase,
-            modelKey: dbGet('apiKey'),
+            modelKey: __gKey || APP_UI_TOKEN || '',
             contextWindow: __gCw,
             permissionLevel: String(payload.permissionLevel || '标准'),
             xaiApiKey: __gKey,
@@ -4371,6 +4372,48 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // ─── 内置免费 API 车道已于 v4.1 下线（外部工具请使用自己的提供商 Key）───
     if (url.pathname === "/api/free/models" || url.pathname === "/v1/models") {
       return json(res, { error: { message: "内置免费 API 服务已下线" } }, 410);
+    }
+    // ─── v16.8.2 OpenAI 兼容端点（Grok 内核桥）：grok 子进程直连本机此端点，
+    // 内部转发到 /api/llm-proxy——模型路由/免费源特判全部复用 llm-proxy 的能力。
+    // 仅本机放行（grok 由本进程 spawn，host 必为 127.0.0.1），不对外暴露。 ───
+    if (url.pathname === "/v1/chat/completions" && req.method === "POST") {
+      try {
+        const rawChunks = [];
+        for await (const c of req) rawChunks.push(c);
+        const bodyData = JSON.parse(Buffer.concat(rawChunks).toString());
+        // 取真值配置（llm-proxy 同款：遍历 allSettings + settings.json 兜底）
+        let dbKey = "", dbBase = "";
+        try {
+          for (const r of allSettings()) {
+            if (r.key === "apiKey" && r.value) dbKey = String(r.value);
+            if (r.key === "apiBaseUrl" && r.value) dbBase = String(r.value);
+          }
+        } catch {}
+        if (!dbKey || !dbBase) {
+          try {
+            const st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8"));
+            if (!dbBase && st.apiBaseUrl) dbBase = String(st.apiBaseUrl);
+            if (!dbKey && st.apiKey) dbKey = String(st.apiKey);
+          } catch {}
+        }
+        const upstream = await fetch(`http://127.0.0.1:${PORT}/api/llm-proxy`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Target-Base": dbBase, "X-Api-Key": dbKey },
+          body: JSON.stringify(bodyData),
+          signal: AbortSignal.timeout(90000),
+        });
+        const text = await upstream.text();
+        const status = upstream.status;
+        try {
+          const parsed = JSON.parse(text);
+          return jsonOut(parsed, status);
+        } catch {
+          res.writeHead(status, { "Content-Type": "application/json" });
+          res.end(text);
+        }
+      } catch (e) {
+        return json(res, { error: { message: String((e as Error).message || e), type: "invalid_request_error" } }, 400);
+      }
     }
     if (url.pathname === "/api/llm-proxy" && req.method === "POST") {
       try {
@@ -7546,8 +7589,9 @@ async function globalSearch(q, limit = 8) {
     }
 
     await serveStatic(req, res);
-  } catch (e) {
-    json(res, { error: e.message }, 500);
+  } catch (e2) {
+    // v16.8.2 独立模式实测：静态处理可能已写过响应头，二次 json 触发 ERR_HTTP_HEADERS_SENT
+    if (!res.headersSent) json(res, { error: e2.message }, 500); else { try { res.end() } catch {} }
   }
 
 

@@ -74,7 +74,7 @@ function permissionArgs(level) {
   if (level === "\u53D7\u9650" || level === "readonly") {
     return ["--tools", "read_file,grep,list_dir,web_search"];
   }
-  return ["--allow", "Bash", "--deny", "Bash(rm -rf*)", "--deny", "Bash(shutdown*)", "--deny", "Bash(sudo*)"];
+  return ["--always-approve"];
 }
 function grokHomeDir() {
   return process.env.GROK_HOME || import_node_path.default.join(import_node_os.default.homedir(), ".lyclaw", "grok-home");
@@ -174,32 +174,67 @@ function runGrokTurn(opts, events = {}) {
       }
       const type = String(ev.type || "");
       if (type === "text") {
-        const piece = String(ev.text ?? ev.delta ?? "");
+        const piece = String(ev.data ?? ev.text ?? ev.delta ?? ev.deltaText ?? "");
         if (piece) {
           finalText += piece;
           events.onDelta?.(piece);
         }
       } else if (type === "thought") {
-        const piece = String(ev.text ?? ev.thought ?? ev.delta ?? "");
+        const piece = String(ev.data ?? ev.thought ?? ev.text ?? ev.delta ?? "");
         if (piece) events.onThinking?.(piece);
       } else if (type === "tool_call") {
-        const name = String(ev.name || ev.tool_name || "");
-        const id = String(ev.id || ev.tool_call_id || "");
-        const argsStr = typeof ev.arguments === "string" ? ev.arguments : JSON.stringify(ev.arguments ?? ev.input ?? {});
+        const name = String(ev.title || ev.toolName || ev.name || ev.kind || "");
+        const id = String(ev.toolCallId || ev.id || ev.tool_call_id || "");
+        const argsRaw = ev.rawInput ?? ev.arguments ?? ev.input ?? {};
+        const argsStr = typeof argsRaw === "string" ? argsRaw : JSON.stringify(argsRaw ?? {});
         if (id) toolOpen.set(id, { name, args: argsStr });
         events.onTool?.({ id, name, arguments: argsStr });
       } else if (type === "tool_call_update") {
-        const id = String(ev.id || ev.tool_call_id || "");
+        const id = String(ev.toolCallId || ev.id || ev.tool_call_id || "");
+        if (!id) return;
         const open = toolOpen.get(id);
         const status = String(ev.status || ev.state || "");
-        const ok = !/fail|error|denied/i.test(status) && ev.error == null;
-        const result = String(ev.output ?? ev.result ?? ev.content ?? status);
-        events.onToolEnd?.({ id, name: open?.name || String(ev.name || ""), ok, result: result.slice(0, 4e3) });
+        if (!/completed|failed|error|denied|cancelled/i.test(status)) {
+          if (id && !open) toolOpen.set(id, { name: String(ev.title || ev.toolName || ""), args: "" });
+          return;
+        }
+        const ok = /completed/i.test(status);
+        const content = Array.isArray(ev.content) ? ev.content : [];
+        const parts = [];
+        for (const c of content) {
+          if (!c) continue;
+          if (c.type === "diff") {
+            parts.push(`${c.path}${c.oldText ? `:
+- ${String(c.oldText).slice(0, 200)}
++ ${String(c.newText).slice(0, 200)}` : ` \u2192 ${String(c.newText).slice(0, 200)}`}`);
+          } else {
+            const inner = c.content;
+            const t2 = String(typeof inner === "string" ? inner : inner?.text ?? inner?.output ?? c.text ?? c.data ?? c.message ?? c.stdout ?? "");
+            if (t2.trim()) parts.push(t2.slice(0, 1500));
+          }
+        }
+        const rO = ev.rawOutput;
+        const rawPieces = [];
+        if (rO && typeof rO === "object") {
+          if (rO.command) rawPieces.push("$ " + String(rO.command).slice(0, 120));
+          if (rO.output_for_prompt) rawPieces.push(String(rO.output_for_prompt).slice(0, 1500));
+          if (!rO.output_for_prompt && Array.isArray(rO.output) && rO.output.length) {
+            try {
+              rawPieces.push(Buffer.from(rO.output).toString("utf-8").slice(0, 1500));
+            } catch {
+            }
+          }
+        } else if (typeof rO === "string" && rO.trim()) {
+          rawPieces.push(rO.slice(0, 1500));
+        }
+        const result = [parts.join("\n"), rawPieces.join("\n")].filter(Boolean).join("\n").slice(0, 4e3);
+        events.onToolEnd?.({ id, name: open?.name || String(ev.title || ev.toolName || ""), ok, result });
         if (id) toolOpen.delete(id);
       } else if (type === "usage") {
+        const u = ev.usage && typeof ev.usage === "object" ? ev.usage : ev;
         usage = {
-          inputTokens: Number(ev.input_tokens ?? ev.inputTokens ?? 0) || void 0,
-          outputTokens: Number(ev.output_tokens ?? ev.outputTokens ?? 0) || void 0
+          inputTokens: Number(u.input_tokens ?? u.inputTokens ?? 0) || void 0,
+          outputTokens: Number(u.output_tokens ?? u.outputTokens ?? 0) || void 0
         };
         events.onUsage?.(usage);
       } else if (type === "error") {
