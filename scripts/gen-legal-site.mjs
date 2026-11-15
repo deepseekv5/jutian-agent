@@ -39,106 +39,93 @@ ${secs}
     </section>`
 }
 
-// ─── 巨天agent 官网：复用 docs 的设计系统（tokens/base/layout/components/pages）───
-const AGENT_BRAND = `<span class="brand__mark" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 8h11.2"/><path d="M17.6 8v8"/><path d="M6.4 16h11.2"/><path d="M6.4 8v8"/><path d="M6.4 12h11.2"/></svg></span>`
+// ─── 巨天agent 官网：v16.6 Apple 底（自包含样式，与全站 .a-* 体系一致）───
+const AGENT_BRAND = `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>`
 
-const agentNav = `  <div class="nav__inner">
-    <a class="brand" href="index.html" aria-label="巨天agent 首页">${AGENT_BRAND}巨天agent</a>
-    <nav class="nav__links" aria-label="主导航">
-      <a class="nav__link" href="index.html">首页</a>
-      <a class="nav__link" href="highlights.html">亮点</a>
-      <a class="nav__link" href="features.html">特性</a>
-      <a class="nav__link" href="scenarios.html">场景</a>
-      <a class="nav__link" href="about.html">关于</a>
+const agentNav = `  <div class="a-nav__inner">
+    <a class="a-nav__brand" href="index.html" aria-label="巨天agent 首页">${AGENT_BRAND}巨天agent</a>
+    <nav class="a-nav__links" aria-label="主导航">
+      <a href="index.html">首页</a>
+      <a href="highlights.html">亮点</a>
+      <a href="features.html">特性</a>
+      <a href="scenarios.html">场景</a>
+      <a href="about.html">关于</a>
     </nav>
-    <div class="nav__actions">
-      <button class="icon-btn" data-theme-toggle aria-label="切换到深色">
-        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      </button>
-      <a class="btn btn--sm" href="index.html#download" data-magnetic="0.2">下载</a>
-      <button class="icon-btn nav__burger" data-burger aria-label="打开菜单" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    </div>
-  </div>
-  <span class="nav__progress" aria-hidden="true"></span>`
+    <a class="a-nav__cta" href="index.html#download">下载</a>
+  </div>`
 
-const agentFooter = `  <div class="container">
-    <div class="footer__grid">
-      <div class="footer__col">
-        <a class="brand" href="index.html" style="color:var(--c-on-dark)">${AGENT_BRAND}巨天agent</a>
-        <p class="t-sm" style="margin-top:var(--sp-4);max-width:280px;color:var(--c-on-dark-3)">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
+const agentFooter = `  <div class="a-footer__grid">
+      <div>
+        <a class="a-footer__brand" href="index.html">${AGENT_BRAND}巨天agent</a>
+        <p style="line-height:1.6;max-width:260px">桌面 AI 工作台。对话、代码、终端，和一支数字员工团队。</p>
       </div>
-      <div class="footer__col"><h4>产品</h4><ul>
+      <div><h4>产品</h4><ul>
         <li><a href="highlights.html">核心亮点</a></li>
         <li><a href="features.html">特性与参数</a></li>
         <li><a href="scenarios.html">使用场景</a></li>
         <li><a href="index.html#download">下载</a></li>
       </ul></div>
-      <div class="footer__col"><h4>资源</h4><ul>
-        <li><a href="features.html#specs">系统要求</a></li>
+      <div><h4>资源</h4><ul>
+        <li><a href="features.html">系统要求</a></li>
         <li><a href="about.html">关于我们</a></li>
         <li><a href="legal.html">用户协议与隐私政策</a></li>
       </ul></div>
-      <div class="footer__col"><h4>工作室</h4><ul>
+      <div><h4>工作室</h4><ul>
         <li><a href="about.html">巨天工作室</a></li>
         <li><a href="https://deepseekv5.github.io/ly-ai-hub/" target="_blank" rel="noopener">LY AI HUB ↗</a></li>
         <li><a href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub ↗</a></li>
       </ul></div>
     </div>
-    <div class="footer__bottom">
-      <span>© 2026 巨天工作室 (Jutian Studio)</span>
+    <div class="a-footer__bottom">
+      <span>© 2026 巨天工作室</span>
       <span>本地优先 · 数据归你</span>
-    </div>
-  </div>`
+    </div>`
 
 const agentLegalStyle = `
-/* legal.html —— 由 scripts/gen-legal-site.mjs 从 src/shared/legal.ts 生成，勿手改 */
+/* legal.html —— 由 scripts/gen-legal-site.mjs 从 src/shared/legal.ts 生成，勿手改。
+   v16.6 Apple 底：与全站 .a-* 体系一致（引用 assets/css/apple.css 提供基础样式）。 */
 .legal-wrap{max-width:820px;margin:0 auto;padding-block:clamp(48px,8vw,96px)}
-.legal-head{margin-bottom:var(--sp-8)}
-.legal-head h1{font-size:var(--fs-h2);line-height:var(--lh-snug);font-weight:var(--w-semibold);letter-spacing:var(--track-tight)}
-.legal-meta{color:var(--c-ink-3);font-family:var(--font-mono);font-size:var(--fs-xs);margin-top:var(--sp-4);line-height:1.7}
-.legal-toc{display:flex;gap:var(--sp-3);flex-wrap:wrap;margin-top:var(--sp-6);padding-top:var(--sp-6);border-top:1px solid var(--c-line)}
-.legal-toc a{font-size:var(--fs-sm);color:var(--c-ink-2);border:1px solid var(--c-line);border-radius:999px;padding:6px 16px;transition:.2s}
-.legal-toc a:hover{color:var(--c-ink);border-color:var(--c-line-strong)}
-.legal-doc{padding-top:var(--sp-12);scroll-margin-top:96px}
-.legal-doc+.legal-doc{margin-top:var(--sp-8);border-top:1px solid var(--c-line)}
-.legal-doc__title{font-size:var(--fs-h3);font-weight:var(--w-semibold);margin-bottom:var(--sp-4)}
-.legal-doc__intro{color:var(--c-ink-2);line-height:var(--lh-body);background:var(--c-bg-sunken);border-radius:var(--radius-md);padding:var(--sp-5) var(--sp-6);margin-bottom:var(--sp-8);font-size:var(--fs-sm)}
-.legal-doc h3{font-size:1.05rem;font-weight:var(--w-semibold);margin:var(--sp-8) 0 var(--sp-3)}
-.legal-doc ul{padding-left:1.15em;margin:0}
-.legal-doc li{color:var(--c-ink-2);line-height:var(--lh-body);margin:var(--sp-3) 0;font-size:var(--fs-body)}
-.legal-doc li::marker{color:var(--c-accent)}
-@media (prefers-reduced-motion:no-preference){.legal-doc{opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease-out-expo),transform .7s var(--ease-out-expo)}.legal-doc.in{opacity:1;transform:none}}
+.legal-head{margin-bottom:56px}
+.legal-head h1{font-size:clamp(40px,6vw,64px);font-weight:700;letter-spacing:-.02em;line-height:1.08;color:#f5f5f7}
+.legal-meta{color:#86868b;font-size:14px;margin-top:20px;line-height:1.8}
+.legal-toc{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+.legal-toc a{font-size:13.5px;color:#2997ff;border:1px solid rgba(41,151,255,.35);border-radius:999px;padding:7px 18px;transition:.2s}
+.legal-toc a:hover{background:rgba(41,151,255,.12)}
+.legal-doc{padding-top:64px;scroll-margin-top:80px}
+.legal-doc+.legal-doc{margin-top:48px;border-top:1px solid rgba(255,255,255,.1)}
+.legal-doc__title{font-size:clamp(26px,3.4vw,34px);font-weight:700;letter-spacing:-.015em;margin-bottom:18px;color:#f5f5f7}
+.legal-doc__intro{color:#c9c9ce;line-height:1.75;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px 24px;margin-bottom:36px;font-size:14.5px}
+.legal-doc h3{font-size:17px;font-weight:700;color:#f5f5f7;margin:34px 0 12px}
+.legal-doc ul{padding-left:1.2em;margin:0}
+.legal-doc li{color:#a1a1a6;line-height:1.75;margin:11px 0;font-size:14.5px}
+.legal-doc li::marker{color:#30d158}
+.legal-foot{max-width:820px;margin:64px auto 0;padding-top:26px;border-top:1px solid rgba(255,255,255,.1);color:#6e6e73;font-size:12.5px;line-height:1.8}
+.legal-foot a{color:#2997ff}
+@media (prefers-reduced-motion:no-preference){.legal-doc{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}.legal-doc.in{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.legal-doc{opacity:1;transform:none}}`
 
 const agentHtml = `<!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>用户协议与隐私政策 — 巨天agent</title>
 <meta name="description" content="巨天agent 用户协议与隐私政策（应用级，覆盖全部功能）。本地优先，数据不出本机。">
-<meta name="theme-color" content="#0a0a0b">
+<meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
-<link rel="stylesheet" href="assets/css/tokens.css">
-<link rel="stylesheet" href="assets/css/base.css">
-<link rel="stylesheet" href="assets/css/layout.css">
-<link rel="stylesheet" href="assets/css/components.css">
-<link rel="stylesheet" href="assets/css/motion.css">
-<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/apple.css">
 <style>${agentLegalStyle}</style>
 </head>
 <body>
-<a class="skip-link" href="#main">跳到主内容</a>
-<header class="nav">
+<header class="a-nav">
 ${agentNav}
 </header>
 <main id="main">
-  <div class="container">
+  <div class="a-wrap">
     <div class="legal-wrap">
       <div class="legal-head">
         <h1>用户协议与隐私政策</h1>
-        <p class="legal-meta">适用于巨天agent 全部功能 · 版本 ${esc(legal.LEGAL_VERSION)}<br>本页与软件内「设置 → 关于 → 用户协议与隐私政策」为同一文本，由同一数据源生成。</p>
+        <p class="legal-meta">适用于巨天agent 全部功能（macOS / Windows / Linux / Android）· 版本 ${esc(legal.LEGAL_VERSION)}<br>本页与软件内「设置 → 关于 → 用户协议与隐私政策」为同一文本，由同一数据源生成。</p>
         <nav class="legal-toc" aria-label="文档导航">
           <a href="#agreement">用户协议</a>
           <a href="#privacy">隐私政策</a>
@@ -146,16 +133,26 @@ ${agentNav}
       </div>
 ${docSection(legal.USER_AGREEMENT, 'agreement')}
 ${docSection(legal.PRIVACY_POLICY, 'privacy')}
+      <div class="legal-foot">
+        本页由 ${esc(legal.LEGAL_VERSION)} 版本文本生成，与软件内展示保持一致；历史版本随软件仓库保留。
+        对本协议或隐私政策有任何疑问，欢迎在 <a href="https://github.com/deepseekv5/jutian-agent/issues" target="_blank" rel="noopener">GitHub Issues</a> 或 <a href="https://gitee.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">Gitee 镜像</a> 提出。
+      </div>
     </div>
   </div>
 </main>
-<footer class="footer dark">
+<footer class="a-footer">
 ${agentFooter}
 </footer>
-<div class="transition-veil" aria-hidden="true"></div>
-<script src="assets/js/scroll.js" defer></script>
-<script src="assets/js/interactions.js" defer></script>
-<script src="assets/js/app.js" defer></script>
+<script>
+(function () {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+    })
+  }, { threshold: .06 })
+  document.querySelectorAll('.legal-doc').forEach(function (el) { io.observe(el) })
+})()
+</script>
 </body>
 </html>
 `
