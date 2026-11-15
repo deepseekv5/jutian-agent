@@ -29,7 +29,7 @@
 html { scroll-behavior: smooth; }
 body { background: var(--a-black); color: var(--a-white); font-family: var(--a-font); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden; }
 ::selection { background: rgba(41,151,255,.35); }
-@media (prefers-reduced-motion: reduce) { .a-reveal { opacity: 1 !important; transform: none !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .a-reveal { opacity: 1 !important; transform: none !important; transition: none !important; } .a-lines .line > span { transform: none !important; transition: none !important; } .a-stagger > * { opacity: 1 !important; transform: none !important; transition: none !important; } }
 a { color: inherit; text-decoration: none; }
 img, svg { display: block; }
 
@@ -178,7 +178,51 @@ img, svg { display: block; }
 @keyframes a-orbit { from { transform: rotate(0) } to { transform: rotate(360deg) } }
 @media (prefers-reduced-motion: reduce) { .a-engine__ring--1 { animation: none } }
 
-/* ─── 细节行 ─── */
+/* ─── v3 世界级动效体系 ─── */
+
+/* 文字逐行升起（hero 大标题每行 clip 展开） */
+.a-lines .line { display: block; overflow: hidden; }
+.a-lines .line > span { display: inline-block; transform: translateY(112%); transition: transform 1.1s cubic-bezier(.19,1,.22,1); }
+.a-lines.is-in .line > span { transform: none; }
+.a-lines .line:nth-child(2) > span { transition-delay: .12s; }
+.a-lines .line:nth-child(3) > span { transition-delay: .24s; }
+
+/* stagger 编排：同组元素依次进场 */
+.a-stagger > * { opacity: 0; transform: translateY(26px); transition: opacity .8s cubic-bezier(.22,.61,.36,1), transform .8s cubic-bezier(.22,.61,.36,1); }
+.a-stagger.is-in > * { opacity: 1; transform: none; }
+.a-stagger.is-in > :nth-child(1) { transition-delay: .02s } .a-stagger.is-in > :nth-child(2) { transition-delay: .08s }
+.a-stagger.is-in > :nth-child(3) { transition-delay: .14s } .a-stagger.is-in > :nth-child(4) { transition-delay: .2s }
+.a-stagger.is-in > :nth-child(5) { transition-delay: .26s } .a-stagger.is-in > :nth-child(6) { transition-delay: .32s }
+
+/* 卡片 3D tilt（JS 驱动 CSS 变量） */
+.a-card { transform-style: preserve-3d; will-change: transform; }
+.a-card.tilt-on { transition: box-shadow .4s; }
+
+/* 工具名跑马灯 */
+.a-marquee { overflow: hidden; padding: 34px 0; border-block: 1px solid rgba(255,255,255,.08); -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.a-marquee__track { display: flex; gap: 64px; width: max-content; animation: a-marq 38s linear infinite; }
+.a-marquee:hover .a-marquee__track { animation-play-state: paused; }
+.a-marquee__track span { color: var(--a-gray2); font-size: 15px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 12px; }
+.a-marquee__track span i { width: 5px; height: 5px; border-radius: 50%; background: var(--a-green); opacity: .55; }
+@keyframes a-marq { from { transform: translateX(0) } to { transform: translateX(-50%) } }
+@media (prefers-reduced-motion: reduce) { .a-marquee__track { animation: none } }
+
+/* 极光漂移（CTA 背景生命感） */
+.a-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.a-aurora::before, .a-aurora::after { content: ''; position: absolute; width: 60vw; height: 60vw; border-radius: 50%; filter: blur(90px); opacity: .16; }
+.a-aurora::before { background: radial-gradient(circle, #30d158, transparent 62%); top: -30%; left: -14%; animation: a-drift 17s ease-in-out infinite alternate; }
+.a-aurora::after { background: radial-gradient(circle, #2997ff, transparent 62%); bottom: -36%; right: -14%; animation: a-drift 21s ease-in-out infinite alternate-reverse; }
+@keyframes a-drift { from { transform: translate(0, 0) scale(1) } to { transform: translate(9vw, 6vh) scale(1.18) } }
+@media (prefers-reduced-motion: reduce) { .a-aurora::before, .a-aurora::after { animation: none } }
+
+/* hero 光标光斑 */
+.a-hero__glow { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0; transition: opacity .6s; }
+.a-hero__glow::before { content: ''; position: absolute; width: 640px; height: 640px; border-radius: 50%; transform: translate(-50%, -50%); left: var(--gx, 50%); top: var(--gy, 30%); background: radial-gradient(circle, rgba(48,209,88,.075), transparent 62%); }
+
+/* 磁吸按钮 */
+.a-btn { will-change: transform; }
+
+/* 细节行 ─── */
 .a-rows { max-width: 860px; margin: 0 auto; }
 .a-row { display: grid; grid-template-columns: 60px 1fr 120px; gap: 22px; padding: 30px 0; border-bottom: 1px solid rgba(255,255,255,.1); align-items: baseline; }
 .a-row:last-child { border-bottom: none; }
@@ -232,14 +276,15 @@ img, svg { display: block; }
 
   <!-- ═══ Hero ═══ -->
   <section class="a-hero">
+    <div class="a-hero__glow" data-glow aria-hidden="true"></div>
     <div class="a-wrap">
       <p class="a-hero__badge a-reveal">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
         巨天agent 16
       </p>
-      <h1 class="a-h1 a-reveal">一句话，<br>它把活干完。</h1>
-      <p class="a-hero__lead a-lead a-reveal">对话、代码、终端，和一支数字员工团队——收进同一个窗口。<br>不经过别人的服务器，数据留在这台电脑。</p>
-      <div class="a-hero__links a-reveal">
+      <h1 class="a-h1 a-lines">一句话，<br>它把活干完。</h1>
+      <p class="a-hero__lead a-lead a-reveal" style="transition-delay:.35s">对话、代码、终端，和一支数字员工团队——收进同一个窗口。<br>不经过别人的服务器，数据留在这台电脑。</p>
+      <div class="a-hero__links a-reveal" style="transition-delay:.48s">
         <a class="a-link" href="#download">下载最新版
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
         </a>
@@ -247,9 +292,9 @@ img, svg { display: block; }
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
         </a>
       </div>
-      <p class="a-hero__meta a-reveal">macOS 13+ / Windows 10+ &nbsp;·&nbsp; MIT 开源 &nbsp;·&nbsp; 免费模型开箱即聊</p>
+      <p class="a-hero__meta a-reveal" style="transition-delay:.56s">macOS 13+ / Windows 10+ &nbsp;·&nbsp; MIT 开源 &nbsp;·&nbsp; 免费模型开箱即聊</p>
     </div>
-    <div class="a-hero__stage a-reveal">
+    <div class="a-hero__stage" data-parallax>
       <div class="a-app" role="img" aria-label="巨天agent 界面示意">
         <div class="a-app__bar" aria-hidden="true">
           <span class="a-app__dot" style="background:#ff5f57"></span>
@@ -305,7 +350,7 @@ img, svg { display: block; }
           </div>
         </div>
       </div>
-      <div class="a-feats" style="margin-top:clamp(60px,7vw,100px)">
+      <div class="a-feats a-stagger" style="margin-top:clamp(60px,7vw,100px)">
         <div class="a-feat a-reveal">
           <span class="a-feat__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></span>
           <div class="a-feat__title">43 个内置工具</div>
@@ -358,6 +403,14 @@ img, svg { display: block; }
     </div>
   </section>
   <div class="a-hairline" aria-hidden="true"></div>
+
+  <!-- ═══ 工具跑马灯（43 个内置工具的名字流） ═══ -->
+  <div class="a-marquee" aria-hidden="true">
+    <div class="a-marquee__track">
+      <span>shell<i></i></span><span>read_file<i></i></span><span>write_file<i></i></span><span>edit_file<i></i></span><span>search_code<i></i></span><span>search_files<i></i></span><span>list_dir<i></i></span><span>web_search<i></i></span><span>web_fetch<i></i></span><span>git_status<i></i></span><span>git_commit<i></i></span><span>screenshot<i></i></span><span>deep_research<i></i></span><span>generate_image<i></i></span><span>consult_guidance<i></i></span><span>mcp_call<i></i></span><span>cron_create<i></i></span><span>skill_invoke<i></i></span>
+      <span>shell<i></i></span><span>read_file<i></i></span><span>write_file<i></i></span><span>edit_file<i></i></span><span>search_code<i></i></span><span>search_files<i></i></span><span>list_dir<i></i></span><span>web_search<i></i></span><span>web_fetch<i></i></span><span>git_status<i></i></span><span>git_commit<i></i></span><span>screenshot<i></i></span><span>deep_research<i></i></span><span>generate_image<i></i></span><span>consult_guidance<i></i></span><span>mcp_call<i></i></span><span>cron_create<i></i></span><span>skill_invoke<i></i></span>
+    </div>
+  </div>
 
   <!-- ═══ 设计（仿「一体成型的杰作」：左胶囊要点+右大图） ═══ -->
   <section class="a-section" style="padding-top:0">
@@ -418,7 +471,7 @@ img, svg { display: block; }
         </div>
         <p class="a-reveal" style="color:var(--a-gray2);font-size:13.5px;max-width:280px">全功能开源（MIT），Windows / macOS / Linux / Android 四端同发，手机可独立运行。</p>
       </div>
-      <div class="a-cards">
+      <div class="a-cards a-stagger">
         <div class="a-card a-reveal">
           <p class="a-card__kicker">43 个工具<br>直连终端与文件</p>
           <p class="a-card__big">不是建议<br>是执行</p>
@@ -495,14 +548,15 @@ img, svg { display: block; }
     </div>
   </section>
 
-  <!-- ═══ 下载 CTA ═══ -->
+  <!-- ═══ 下载 CTA（极光漂移背景 + 磁吸按钮） ═══ -->
   <section class="a-cta" id="download">
-    <div class="a-wrap a-reveal">
+    <div class="a-aurora" aria-hidden="true"></div>
+    <div class="a-wrap a-reveal" style="position:relative">
       <h2 class="a-h2">今天，少抄一段路。</h2>
       <p class="a-lead" style="margin-top:16px">装上它，把重复的活交出去。</p>
       <div class="a-cta__row">
-        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
-        <a class="a-btn a-btn--ghost" href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener">GitHub 开源仓库</a>
+        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener" data-magnetic>下载最新版</a>
+        <a class="a-btn a-btn--ghost" href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener" data-magnetic>GitHub 开源仓库</a>
       </div>
       <p style="margin-top:26px;color:var(--a-gray2);font-size:12.5px">macOS 13+ / Windows 10+ / Linux / Android &nbsp;·&nbsp; MIT 开源</p>
     </div>
@@ -552,16 +606,39 @@ img, svg { display: block; }
 </footer>
 
 <script>
-// Apple 式入场：IntersectionObserver 一次性 reveal
+// ═══ v3 世界级动效引擎（vanilla，无依赖）═══
+// 全部动画尊重 prefers-reduced-motion；桌面端才启用指针类效果
 (function () {
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  var finePointer = window.matchMedia('(pointer: fine)').matches
+
+  /* 1. hero 大标题拆行 → 逐行升起（a-lines CSS 驱动） */
+  document.querySelectorAll('.a-lines').forEach(function (h) {
+    var nodes = Array.prototype.slice.call(h.childNodes)
+    var lines = [[]]
+    nodes.forEach(function (n) {
+      if (n.nodeType === 1 && n.tagName === 'BR') lines.push([])
+      else lines[lines.length - 1].push(n)
+    })
+    h.textContent = ''
+    lines.filter(function (l) { return l.length }).forEach(function (parts) {
+      var wrap = document.createElement('span'); wrap.className = 'line'
+      var inner = document.createElement('span')
+      parts.forEach(function (p) { inner.appendChild(p) })
+      wrap.appendChild(inner); h.appendChild(wrap)
+    })
+    requestAnimationFrame(function () { requestAnimationFrame(function () { h.classList.add('is-in') }) })
+  })
+
+  /* 2. 入场 reveal（一次性） */
   var io = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target) }
     })
   }, { threshold: .12, rootMargin: '0px 0px -8% 0px' })
-  document.querySelectorAll('.a-reveal').forEach(function (el) { io.observe(el) })
-  // 大数字滚动计数（Apple spec 风格）：进入视口后 0 → 目标值，ease-out
-  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  document.querySelectorAll('.a-reveal, .a-stagger').forEach(function (el) { io.observe(el) })
+
+  /* 3. 大数字滚动计数 */
   var cio = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (!e.isIntersecting) return
@@ -579,7 +656,81 @@ img, svg { display: block; }
     })
   }, { threshold: .4 })
   document.querySelectorAll('[data-count]').forEach(function (el) { cio.observe(el) })
-  // 设计区胶囊：点击展开/收起（同一时间只开一个）
+
+  /* 4. 惯性平滑滚动（Lenis 式，桌面端 + 不降级无障碍） */
+  if (!reduce && finePointer) {
+    var target = window.scrollY, current = target, ticking = false
+    var max = function () { return document.documentElement.scrollHeight - innerHeight }
+    var lerp = function () {
+      current += (target - current) * .1
+      if (Math.abs(target - current) < .6) { current = target; ticking = false }
+      window.scrollTo(0, current)
+      if (ticking) requestAnimationFrame(lerp)
+    }
+    window.addEventListener('wheel', function (e) {
+      if (e.ctrlKey) return
+      e.preventDefault()
+      target = Math.max(0, Math.min(max(), target + e.deltaY))
+      if (!ticking) { ticking = true; requestAnimationFrame(lerp) }
+    }, { passive: false })
+    // 键盘/锚点跳转保持原生：同步 target
+    var sync = function () { target = current = window.scrollY }
+    window.addEventListener('keydown', function (e) { if (['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key)) setTimeout(sync, 60) })
+    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      a.addEventListener('click', function () { setTimeout(sync, 900) })
+    })
+  }
+
+  /* 5. hero 窗口滚动视差（轻微下沉+缩放，scroll-linked） */
+  var stage = document.querySelector('[data-parallax]')
+  if (stage && !reduce) {
+    var onScroll = function () {
+      var r = stage.getBoundingClientRect()
+      var p = Math.max(0, Math.min(1, (innerHeight - r.top) / (innerHeight + r.height)))
+      stage.style.transform = 'translateY(' + (p * 34) + 'px) scale(' + (1 - p * .05) + ')'
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+  }
+
+  /* 6. 卡片 3D tilt（指针跟随，≤±5deg） */
+  if (finePointer && !reduce) {
+    document.querySelectorAll('.a-card').forEach(function (card) {
+      card.addEventListener('pointermove', function (e) {
+        var r = card.getBoundingClientRect()
+        var x = (e.clientX - r.left) / r.width - .5
+        var y = (e.clientY - r.top) / r.height - .5
+        card.style.transform = 'translateY(-6px) perspective(900px) rotateY(' + (x * 9) + 'deg) rotateX(' + (-y * 9) + 'deg)'
+      })
+      card.addEventListener('pointerleave', function () { card.style.transform = '' })
+    })
+  }
+
+  /* 7. 磁吸按钮 */
+  if (finePointer && !reduce) {
+    document.querySelectorAll('[data-magnetic]').forEach(function (btn) {
+      btn.addEventListener('pointermove', function (e) {
+        var r = btn.getBoundingClientRect()
+        btn.style.transform = 'translate(' + ((e.clientX - r.left - r.width / 2) * .18) + 'px,' + ((e.clientY - r.top - r.height / 2) * .28) + 'px)'
+      })
+      btn.addEventListener('pointerleave', function () { btn.style.transform = '' })
+    })
+  }
+
+  /* 8. hero 光标光斑（跟随缓动） */
+  var glow = document.querySelector('[data-glow]')
+  if (glow && finePointer && !reduce) {
+    var gx = innerWidth / 2, gy = innerHeight * .3, cx = gx, cy = gy
+    window.addEventListener('pointermove', function (e) { gx = e.clientX; gy = e.clientY; glow.style.opacity = '1' })
+    var gloop = function () {
+      cx += (gx - cx) * .08; cy += (gy - cy) * .08
+      glow.style.setProperty('--gx', cx + 'px'); glow.style.setProperty('--gy', cy + 'px')
+      requestAnimationFrame(gloop)
+    }
+    gloop()
+  }
+
+  /* 9. 设计区胶囊：点击展开/收起（同一时间只开一个） */
   document.querySelectorAll('.a-chip').forEach(function (chip) {
     chip.addEventListener('click', function () {
       var open = chip.classList.contains('is-open')
