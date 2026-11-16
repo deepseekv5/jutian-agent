@@ -39,13 +39,6 @@ base.mac = { ...(base.mac || {}), artifactName: 'jutian-agent-${version}-${arch}
  */
 const RESOURCE_SPECS = [
   {
-    // v16.8.1 Grok 内核预装（xai-org/grok-build 官方二进制，Apache-2.0）：
-    // CI 工作流在构建前把各平台二进制下载到 grok/ 目录；本地开发目录不存在则跳过
-    from: process.env.GROK_DIR || 'grok',
-    to: 'grok',
-    filter: ['**'],
-  },
-  {
     // mac 上预置的独立 Python 运行时（含 faster-whisper 等本地推理依赖）
     from: process.env.PYTHON_RUNTIME_DIR || 'python-runtime',
     to: 'python-runtime',

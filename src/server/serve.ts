@@ -289,8 +289,6 @@ var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } 
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 var ULTRA_TOOLS = (() => { try { return require("./src/shared/ultraTools.cjs"); } catch (e) { return null; } })();
 var ULTRA_PROMPTS = (() => { try { return require("./src/shared/ultraPrompts.cjs"); } catch (e) { return null; } })();
-// Grok 内核桥（v16.8.0）：接入 xai-org/grok-build（Apache-2.0）官方二进制的 headless 流式协议
-var GROK_BRIDGE = (() => { try { return require("./src/shared/grokBridge.cjs"); } catch (e) { console.error("grokBridge.cjs load failed:", e.message); return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
 // 联网搜索域（Bing/DDG/SearXNG/Electron 多引擎聚合 + 缓存）
 var SEARCH_MOD = (() => { try { return require("./src/shared/websearch.cjs"); } catch (e) { console.error("websearch.cjs load failed:", e.message); return null; } })();
@@ -741,7 +739,7 @@ function shell_output(a) {
   return {
     success: true,
     output: JSON.stringify({
-      status, id: s.id, command: s.command.slice(0, 120),
+      status, id: s.id, command: s.command.slice(0, 120), cwd: s.cwd,
       running_ms: (s.exited ? s.exitedAt : Date.now()) - s.startedAt,
       total_chars: text.length, next_from: text.length,
       output: tail.slice(0, MAX_OUT),
@@ -809,7 +807,11 @@ async function shell(a) {
     }
     const outStr = String(r.stdout ?? "");
     const errStr = String(r.stderr ?? "");
-    return { success: true, output: outStr.trim() + (errStr.trim() ? `\n[stderr]\n${errStr.trim()}` : "") };
+    // v16.9.1：工具卡里显示工作目录——模型执行 shell 时的 cwd 是核对操作现场的关键上下文
+    return {
+      success: true,
+      output: `[cwd] ${cwd}\n` + outStr.trim() + (errStr.trim() ? `\n[stderr]\n${errStr.trim()}` : ""),
+    };
   } catch (e) {
     // execFile 的 e.stdout / e.stderr 可能是 Buffer（execAsync 的 encoding
     // 选项在部分平台不生效），直接塞进 JSON 会变成乱码或 {type:'Buffer'}。
@@ -824,7 +826,7 @@ async function shell(a) {
       return {
         success: false,
         output: out,
-        error: `命令超时（${timeoutSec} 秒）已被中断。若任务确实需要更久，请拆分执行；`
+        error: `命令超时（${timeoutSec} 秒）已被中断（cwd: ${cwd}）。若任务确实需要更久，请拆分执行；`
           + `若是长驻进程（如 dev server），请改用后台方式启动。`,
       };
     }
@@ -833,7 +835,7 @@ async function shell(a) {
     // 真实报错，就会声称「我无法调用工具」然后换一种方式再试——
     // 这是 Windows 上观感极差的直接原因之一。
     const detail = err.trim() || String(e.message || e);
-    return { success: false, output: out, error: `命令执行失败：\n${detail.slice(0, 4000)}` };
+    return { success: false, output: out, error: `命令执行失败（cwd: ${cwd}）：\n${detail.slice(0, 4000)}` };
   }
 }
 // FileContextTracker（v13.10，抄 Cline）：跟踪模型读过的文件 mtime。
@@ -3761,12 +3763,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       let cur = "vercel";
       try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
       return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP,
-        grokAvailable: !!(GROK_BRIDGE && GROK_BRIDGE.grokStatus().available), grokPath: GROK_BRIDGE ? GROK_BRIDGE.grokStatus().path : null,
-        engines: ["vercel", "server", "client", "ultra", "harness", "grok"] });
+        engines: ["vercel", "server", "client", "ultra", "harness"] });
     }
     if (url.pathname === "/api/agent/engine" && req.method === "POST") {
       const d = await body(req);
-      const v = ["vercel", "server", "client", "ultra", "harness", "grok"].includes(String(d.engine)) ? String(d.engine) : "vercel";
+      const v = ["vercel", "server", "client", "ultra", "harness"].includes(String(d.engine)) ? String(d.engine) : "vercel";
       try { db.setSetting("agentEngine", v); invalidateSettingsCache(); } catch {}
       return json(res, { ok: true, engine: v });
     }
@@ -3804,62 +3805,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
 
       try {
-        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；engine=grok → xAI Grok 内核桥（官方二进制）；其余一律 JT Core Pro+（原逻辑零改动）
+        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；其余一律 JT Core Pro+（原逻辑零改动）
         const __engine = String(payload.engine || '');
-        // Grok 桥（v16.8.0）：完全使用 xai-org/grok-build 官方二进制的 headless 流式协议，巨天只做事件映射。
-        // 会话连续性：grok --session-id 与巨天 session 一一映射，历史由 grok 侧管理；本轮把新消息拼进 prompt。
-        if (__engine === 'grok' && GROK_BRIDGE) {
-          const st0 = GROK_BRIDGE.grokStatus();
-          if (!st0.available) {
-            send({ type: 'error', error: '未找到 grok 内核（官方安装：curl -fsSL https://x.ai/cli/install.sh | bash，或把二进制放到 ~/.lyclaw/grok/bin/）' });
-            clearInterval(heartbeat);
-            try { res.end() } catch {}
-            return;
-          }
-          const __gUser = [...messages].reverse().find((m: any) => m.role === 'user');
-          const __gPrompt = String(__gUser?.content || '').slice(0, 60000) || '继续';
-          // grok 要求 --session-id 为合法 UUID：把巨天 sessionId 确定性映射为 UUID v4 形态
-          // （sha256 → 32 hex → 8-4-4-4-12；同会话每次得到同一 UUID，grok 侧历史得以延续）
-          const __gUuid = (() => {
-            const h = crypto.createHash("sha256").update("grok-session:" + String(payload.sessionId || payload.resume || "default")).digest("hex");
-            return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
-          })();
-          // v16.8.1 模型自动接入取真值：db.getSetting 单键对 apiKey 有掩码处理（GET 出口
-          // 语义），与 llm-proxy 取真钥匙同款走 allSettings() 遍历（存储层真值）
-          const dbGet = (k: string) => {
-            try { for (const __r of allSettings()) if (__r.key === k && __r.value) return String(__r.value) } catch {}
-            try { const __st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8")); if (__st[k]) return String(__st[k]) } catch {}
-            return '';
-          };
-          const __gKey = dbGet('xaiApiKey');
-          const __gModel = model || dbGet('model');
-          const __gCw = Number(payload.contextWindow) || Number(dbGet('contextWindow')) || 0;
-          // v16.8.2：grok 的模型请求走巨天本机 OpenAI 兼容端点（/v1/chat/completions → llm-proxy）——
-          // 免费源特判与模型路由全由 llm-proxy 承担，不再直连第三方（直连遇 free 哨兵必 401）
-          const __gBase = `http://127.0.0.1:${PORT}/v1`;
-          const g = await GROK_BRIDGE.runGrokTurn({
-            prompt: __gPrompt,
-            workDir: String(payload.workDir || st.workDir || process.cwd()),
-            sessionId: __gUuid,
-            model: __gModel,
-            modelBase: __gBase,
-            modelKey: __gKey || APP_UI_TOKEN || '',
-            contextWindow: __gCw,
-            permissionLevel: String(payload.permissionLevel || '标准'),
-            xaiApiKey: __gKey,
-            signal: abort.signal,
-          }, {
-            onDelta: (t) => send({ type: 'delta', text: t }),
-            onThinking: (t) => send({ type: 'thinking', text: t }),
-            onTool: (tc) => send({ type: 'tool', call: { id: tc.id, name: tc.name, arguments: tc.arguments } }),
-            onToolEnd: (tc) => send({ type: 'tool_end', call: { id: tc.id, name: tc.name, ok: tc.ok, result: tc.result } }),
-            onNetStatus: (phase, info) => send({ type: 'net', phase, info }),
-          });
-          clearInterval(heartbeat);
-          send({ type: 'done', text: g.text, stopped: g.stopped, error: g.error, usage: g.usage });
-          try { __restoreWorkDir() } catch {}
-          return;
-        }
         const __ultra = __engine === 'ultra' && ULTRA_LOOP;
         const __loop = __ultra ? ULTRA_LOOP : AGENT_LOOP;
         const __runner = __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
@@ -4372,48 +4319,6 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     // ─── 内置免费 API 车道已于 v4.1 下线（外部工具请使用自己的提供商 Key）───
     if (url.pathname === "/api/free/models" || url.pathname === "/v1/models") {
       return json(res, { error: { message: "内置免费 API 服务已下线" } }, 410);
-    }
-    // ─── v16.8.2 OpenAI 兼容端点（Grok 内核桥）：grok 子进程直连本机此端点，
-    // 内部转发到 /api/llm-proxy——模型路由/免费源特判全部复用 llm-proxy 的能力。
-    // 仅本机放行（grok 由本进程 spawn，host 必为 127.0.0.1），不对外暴露。 ───
-    if (url.pathname === "/v1/chat/completions" && req.method === "POST") {
-      try {
-        const rawChunks = [];
-        for await (const c of req) rawChunks.push(c);
-        const bodyData = JSON.parse(Buffer.concat(rawChunks).toString());
-        // 取真值配置（llm-proxy 同款：遍历 allSettings + settings.json 兜底）
-        let dbKey = "", dbBase = "";
-        try {
-          for (const r of allSettings()) {
-            if (r.key === "apiKey" && r.value) dbKey = String(r.value);
-            if (r.key === "apiBaseUrl" && r.value) dbBase = String(r.value);
-          }
-        } catch {}
-        if (!dbKey || !dbBase) {
-          try {
-            const st = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "settings.json"), "utf-8"));
-            if (!dbBase && st.apiBaseUrl) dbBase = String(st.apiBaseUrl);
-            if (!dbKey && st.apiKey) dbKey = String(st.apiKey);
-          } catch {}
-        }
-        const upstream = await fetch(`http://127.0.0.1:${PORT}/api/llm-proxy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Target-Base": dbBase, "X-Api-Key": dbKey },
-          body: JSON.stringify(bodyData),
-          signal: AbortSignal.timeout(90000),
-        });
-        const text = await upstream.text();
-        const status = upstream.status;
-        try {
-          const parsed = JSON.parse(text);
-          return jsonOut(parsed, status);
-        } catch {
-          res.writeHead(status, { "Content-Type": "application/json" });
-          res.end(text);
-        }
-      } catch (e) {
-        return json(res, { error: { message: String((e as Error).message || e), type: "invalid_request_error" } }, 400);
-      }
     }
     if (url.pathname === "/api/llm-proxy" && req.method === "POST") {
       try {

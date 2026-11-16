@@ -171,7 +171,7 @@ export function clampToolResult(text: string, toolName?: string): string {
   const tail = MAX - head
   if (toolName && TAIL_KEEP_TOOLS.has(toolName)) {
     return text.slice(0, head)
-      + '\n\n…[中间 ' + (text.length - MAX) + ' 字符已省略；下方保留末尾 ' + tail + ' 字符（错误堆栈通常在结尾）]…\n\n'
+      + '\n\n…[中间 ' + (text.length - MAX) + ' 字符已省略；下方保留末尾 ' + tail + ' 字符（错误堆栈通常在结尾）。如需查看被省略的部分，可缩小范围重跑命令（如加 head/tail/grep 限定）或改用分段读取。]…\n\n'
       + text.slice(-tail)
   }
   return text.slice(0, MAX) + '\n\n[输出过长已截断：原始 ' + text.length + ' 字符，仅保留前 ' + MAX + '。如需完整内容，请用范围参数分段读取。]'

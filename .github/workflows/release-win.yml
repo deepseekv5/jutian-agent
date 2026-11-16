@@ -40,19 +40,6 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      # v16.9 Grok 内核预装：源码编译（xai-org/grok-build Apache-2.0 + Jutian 兼容补丁）
-      - name: 预装 Grok 内核（源码编译）
-        shell: bash
-        run: |
-          git clone --depth 1 https://github.com/xai-org/grok-build.git /tmp/grok-src
-          cd /tmp/grok-src
-          git apply "$GITHUB_WORKSPACE/third_party/grok-build/patches/jutian-compat.patch"
-          choco install protoc -y --no-progress
-          cargo build --release -p xai-grok-pager-bin
-          mkdir -p "$GITHUB_WORKSPACE/grok"
-          cp target/release/xai-grok-pager.exe "$GITHUB_WORKSPACE/grok/grok.exe"
-          "$GITHUB_WORKSPACE/grok/grok.exe" --version || true
-
       # 依赖漏洞门禁：只拦 high/critical。registry 不支持 audit 端点时
       # 只警告不拦，避免基建波动堵住发版。
       # shell: bash 必须显式指定——Windows runner 默认 PowerShell，
