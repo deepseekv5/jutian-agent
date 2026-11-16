@@ -3762,6 +3762,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     if (url.pathname === "/api/agent/engine" && req.method === "GET") {
       let cur = "vercel";
       try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
+      // v16.9.1：Grok 移除后，db 里的 'grok' 是孤儿值——归一到 vercel 并落库
+      if (!["vercel", "server", "client", "ultra", "harness"].includes(cur)) {
+        cur = "vercel";
+        try { db.setSetting("agentEngine", cur); invalidateSettingsCache(); } catch {}
+      }
       return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP,
         engines: ["vercel", "server", "client", "ultra", "harness"] });
     }
