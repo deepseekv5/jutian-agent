@@ -539,222 +539,350 @@ function sleepAbortable(ms, signal) {
     }, { once: true });
   });
 }
-async function runAgentLoop(messages, deps) {
+function buildLoopContext(deps) {
+  return {
+    toolRound: 0,
+    wrapUp: false,
+    clearableIds: /* @__PURE__ */ new Set(),
+    overflowRetried: false,
+    callSignatures: /* @__PURE__ */ new Map(),
+    toolUseCounts: /* @__PURE__ */ new Map(),
+    failCounter: { n: 0 },
+    fullThinking: deps.resume?.thinking || "",
+    fullContent: deps.resume?.content || "",
+    allToolCalls: [...deps.resume?.toolCalls || []]
+  };
+}
+async function resumePendingTool(ctx, deps, messages, perf) {
   const { events, signal } = deps;
-  const perf = createAgentPerf();
-  perf.setModel(deps.model);
-  let toolRound = 0;
-  let wrapUp = false;
-  const clearableIds = /* @__PURE__ */ new Set();
-  let overflowRetried = false;
-  const callSignatures = /* @__PURE__ */ new Map();
-  const toolUseCounts = /* @__PURE__ */ new Map();
-  const failCounter = { n: 0 };
-  let fullThinking = deps.resume?.thinking || "";
-  let fullContent = deps.resume?.content || "";
-  const allToolCalls = [...deps.resume?.toolCalls || []];
-  const maxTokens = deps.maxTokens ?? (Number(deps.contextWindow) >= 8e3 ? 16384 : 8192);
-  if (deps.pendingTool) {
-    const { toolCall, decision } = deps.pendingTool;
-    const obj = { ...toolCall, status: "running", started_at: (/* @__PURE__ */ new Date()).toISOString() };
+  if (!deps.pendingTool) return;
+  const { toolCall, decision } = deps.pendingTool;
+  const obj = { ...toolCall, status: "running", started_at: (/* @__PURE__ */ new Date()).toISOString() };
+  events.onToolStart?.(obj);
+  if (decision) {
+    obj.status = "error";
+    obj.result = String(decision);
+    obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
+    events.onToolEnd?.(obj);
+    ctx.allToolCalls.push(obj);
+    messages.push({ role: "tool", tool_call_id: obj.id, content: String(decision) });
+    return;
+  }
+  let parsedArgs = {};
+  try {
+    parsedArgs = JSON.parse(toolCall.arguments || "{}");
+  } catch {
+    parsedArgs = {};
+  }
+  const t0 = Date.now();
+  try {
+    const result = await withTimeout(
+      deps.runTool(toolCall.name, parsedArgs, signal),
+      TOOL_TIMEOUT_MS,
+      "\u5DE5\u5177 " + toolCall.name + " \u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09\uFF0C\u5DF2\u4E2D\u6B62\u7B49\u5F85\u3002"
+    );
+    let outText = result.success ? result.output || "" : "";
+    if (outText.length > 5e4 && result.success && deps.saveLargeOutput) {
+      try {
+        const fname = await deps.saveLargeOutput(toolCall.name, outText);
+        if (fname) outText = clampToolResult(outText, toolCall.name) + "\n[\u5B8C\u6574\u8F93\u51FA\u5DF2\u4FDD\u5B58\u5230\u5DE5\u4F5C\u533A: " + fname + "]";
+      } catch {
+      }
+    }
+    obj.status = result.success ? "done" : "error";
+    obj.result = result.success ? clampToolResult(outText, toolCall.name) : "\u274C \u9519\u8BEF: " + result.error;
+    if (result.changeId) obj.changeId = result.changeId;
+    messages.push({ role: "tool", tool_call_id: obj.id, content: obj.result });
+  } catch (te) {
+    obj.status = "error";
+    obj.result = "\u274C \u9519\u8BEF: " + (te instanceof Error ? te.message : String(te));
+    messages.push({ role: "tool", tool_call_id: obj.id, content: obj.result });
+  }
+  obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
+  events.onToolEnd?.(obj);
+  ctx.allToolCalls.push(obj);
+  perf.addTool(1, toolCall.name, Date.now() - t0, obj.status !== "error");
+}
+function prepareRoundMessages(ctx, messages, deps) {
+  const disabled = new Set(deps.disabledTools || []);
+  const tools = deps.tools.filter((t) => !disabled.has(t.name));
+  const hermesEnabled = tools.length > 0 && shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode);
+  const wireMessages = (() => {
+    if (!hermesEnabled) return messages;
+    const block = buildToolsBlock(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
+    if (!block) return messages;
+    const copy = [...messages];
+    if (copy[0] && copy[0].role === "system") {
+      copy[0] = { ...copy[0], content: String(copy[0].content ?? "") + block };
+    } else {
+      copy.unshift({ role: "system", content: block });
+    }
+    return copy;
+  })();
+  const budget = deps.contextBudget || Math.floor((Number(deps.contextWindow) || 0) * 0.8) || 0;
+  let sendMessages = wireMessages;
+  if (budget > 0) {
+    const used = totalTokens(sendMessages);
+    if (used > budget * 0.8 && deps.microcompact !== false) {
+      const mc = microcompact(sendMessages, { clearableIds: ctx.clearableIds });
+      if (mc.cleared > 0) sendMessages = mc.messages;
+    }
+    if (totalTokens(sendMessages) > budget) {
+      sendMessages = truncateForBudget(sendMessages, budget).messages;
+    }
+  }
+  if (ctx.wrapUp) {
+    sendMessages = [...sendMessages, {
+      role: "user",
+      content: "\u3010\u7CFB\u7EDF\u3011\u5DE5\u5177\u8C03\u7528\u8F6E\u6B21\u5DF2\u7528\u5C3D\u3002\u8BF7\u7ACB\u523B\u57FA\u4E8E\u5DF2\u6709\u4FE1\u606F\u7528\u6587\u5B57\u7ED9\u51FA\u6700\u7EC8\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u4EFB\u4F55\u5DE5\u5177\u3002"
+    }];
+  }
+  return sendMessages;
+}
+async function requestRound(deps, ctx, sendMessages, maxTokens, signal, perf) {
+  const { events } = deps;
+  const makeBody = () => JSON.stringify({
+    model: deps.model,
+    messages: sendMessages,
+    tools: ctx.wrapUp ? [] : deps.tools.map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.parameters }
+    })),
+    tool_choice: ctx.wrapUp ? "none" : "auto",
+    stream: true,
+    max_tokens: maxTokens
+  });
+  let res = null;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    events.onNetStatus?.(attempt === 1 ? "connecting" : "retrying", attempt > 1 ? { attempt } : void 0);
+    perf.llmRequestStart();
+    let netErr = null;
+    try {
+      res = await deps.callLLM(makeBody(), signal);
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      netErr = e instanceof Error ? e : new Error(String(e));
+    }
+    if (netErr) {
+      lastErr = netErr;
+      if (attempt >= MAX_ATTEMPTS) throw netErr;
+      await sleepAbortable(backoffMs(attempt), signal);
+      continue;
+    }
+    if (res && res.ok) break;
+    const errText = await res.text().catch(() => "");
+    if (isContextOverflowError(errText) && !ctx.overflowRetried) {
+      ctx.overflowRetried = true;
+      const cur = deps.contextBudget || totalTokens(sendMessages);
+      const tighter = Math.max(2e3, Math.floor(cur * 0.5));
+      sendMessages.splice(0, sendMessages.length, ...truncateForBudget(sendMessages, tighter).messages);
+      attempt--;
+      continue;
+    }
+    const msg = buildUpstreamError(res.status, errText);
+    const decision = shouldRetryHttp(res.status, attempt, res.headers.get("retry-after"));
+    if (!decision.retry) throw new Error(msg);
+    lastErr = new Error(msg);
+    res = null;
+    await sleepAbortable(decision.delayMs, signal);
+  }
+  if (!res) {
+    throw lastErr ? new Error(`${lastErr.message}\uFF08\u5DF2\u81EA\u52A8\u91CD\u8BD5 ${MAX_ATTEMPTS} \u6B21\u4ECD\u5931\u8D25\u2014\u2014\u514D\u8D39\u7EBF\u8DEF\u9AD8\u5CF0\u671F\u5BB9\u6613\u6301\u7EED\u6392\u961F\uFF0C\u7A0D\u540E\u518D\u8BD5\u6216\u5230\u8BBE\u7F6E\u6362\u4E00\u6761\u7EBF\u8DEF\uFF09`) : new Error("\u8BF7\u6C42\u5931\u8D25\uFF1A\u672A\u77E5\u539F\u56E0");
+  }
+  if (!res.body) throw new Error("No response body");
+  return res;
+}
+async function streamRound(res, ctx, deps, perf) {
+  const { events, signal } = deps;
+  let roundContent = "";
+  const toolCallMap = /* @__PURE__ */ new Map();
+  let draftAnnounced = false;
+  for await (const data of ssePayloads(res.body)) {
+    if (data === "[DONE]") break;
+    if (signal?.aborted) return { toolCalls: [], roundContent };
+    try {
+      const parsed = JSON.parse(data);
+      const choice = parsed.choices?.[0];
+      if (!choice) continue;
+      const delta = choice.delta;
+      const think = extractReasoning(delta);
+      if (think) {
+        perf.firstToken();
+        ctx.fullThinking += think;
+        events.onThinking?.(think);
+      }
+      if (delta?.content) {
+        perf.firstToken();
+        roundContent += delta.content;
+        ctx.fullContent += delta.content;
+        events.onChunk?.(delta.content);
+      }
+      const parsedTcs = parseToolCallsFromDelta(delta);
+      if (parsedTcs) {
+        for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc);
+        if (!draftAnnounced) {
+          draftAnnounced = true;
+          events.onToolDraft?.(parsedTcs[0]?.function?.name || "\u2026");
+        }
+      }
+      if (choice.finish_reason === "tool_calls") {
+        adoptNonStreamToolCalls(toolCallMap, choice.message?.tool_calls);
+      }
+    } catch {
+    }
+  }
+  let toolCalls = toolCallsToArray(toolCallMap);
+  if (toolCalls.length === 0 && roundContent.includes("<tool_call>")) {
+    const hermes = parseHermesToolCalls(roundContent);
+    if (hermes.length > 0) {
+      toolCalls = hermes.map((h, i) => ({ id: "hermes_" + i + "_" + Date.now(), name: h.name, arguments: h.arguments }));
+      roundContent = stripToolCallBlocks(roundContent);
+      ctx.fullContent = stripToolCallBlocks(ctx.fullContent);
+    }
+  }
+  perf.llmStreamEnd();
+  return { toolCalls, roundContent };
+}
+async function gateToolCalls(ctx, deps, messages, toolCalls) {
+  const { events, signal } = deps;
+  const plans = [];
+  for (const tc of toolCalls) {
+    if (signal?.aborted) return [];
+    const repeat = checkRepeatCall(ctx.callSignatures, callSignature(tc.name, tc.arguments));
+    if (repeat.blocked) {
+      messages.push({ role: "tool", tool_call_id: tc.id, content: repeat.message });
+      continue;
+    }
+    const obj = {
+      id: tc.id,
+      name: tc.name,
+      arguments: tc.arguments,
+      status: "running",
+      started_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
     events.onToolStart?.(obj);
-    if (decision) {
+    const need = deps.needsClient?.(obj);
+    if (need) {
+      throw new NeedsClientError(need, obj, messages, { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls }, deps.scopeKeyOf?.(obj));
+    }
+    const denial = await deps.confirmTool?.(obj);
+    if (denial) {
       obj.status = "error";
-      obj.result = String(decision);
+      obj.result = denial;
       obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
       events.onToolEnd?.(obj);
-      allToolCalls.push(obj);
-      messages.push({ role: "tool", tool_call_id: obj.id, content: String(decision) });
+      ctx.allToolCalls.push(obj);
+      messages.push({ role: "tool", tool_call_id: tc.id, content: denial });
+      continue;
+    }
+    plans.push({ tc, obj });
+  }
+  return plans;
+}
+async function executePlans(ctx, deps, messages, plans, perf) {
+  const { events, signal } = deps;
+  const execOne = async (pl) => {
+    const t0 = Date.now();
+    let toolResult;
+    if (deps.isClientTool(pl.tc.name)) {
+      toolResult = await deps.runClientTool?.(pl.obj) || '{"ok":true}';
+      pl.obj.status = "done";
     } else {
       let parsedArgs = {};
       try {
-        parsedArgs = JSON.parse(toolCall.arguments || "{}");
+        parsedArgs = JSON.parse(pl.tc.arguments || "{}");
       } catch {
         parsedArgs = {};
       }
-      const t0 = Date.now();
       try {
         const result = await withTimeout(
-          deps.runTool(toolCall.name, parsedArgs, signal),
+          deps.runTool(pl.tc.name, parsedArgs, signal),
           TOOL_TIMEOUT_MS,
-          "\u5DE5\u5177 " + toolCall.name + " \u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09\uFF0C\u5DF2\u4E2D\u6B62\u7B49\u5F85\u3002"
+          "\u5DE5\u5177 " + pl.tc.name + " \u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09\uFF0C\u5DF2\u4E2D\u6B62\u7B49\u5F85\u3002\u5982\u786E\u9700\u7EE7\u7EED\u8BF7\u62C6\u5C0F\u4EFB\u52A1\u3002"
         );
         let outText = result.success ? result.output || "" : "";
         if (outText.length > 5e4 && result.success && deps.saveLargeOutput) {
           try {
-            const fname = await deps.saveLargeOutput(toolCall.name, outText);
-            if (fname) outText = clampToolResult(outText, toolCall.name) + "\n[\u5B8C\u6574\u8F93\u51FA\u5DF2\u4FDD\u5B58\u5230\u5DE5\u4F5C\u533A: " + fname + "]";
+            const fname = await deps.saveLargeOutput(pl.tc.name, outText);
+            if (fname) outText = clampToolResult(outText, pl.tc.name) + "\n[\u5B8C\u6574\u8F93\u51FA\u5DF2\u4FDD\u5B58\u5230\u5DE5\u4F5C\u533A: " + fname + "]";
           } catch {
           }
         }
-        obj.status = result.success ? "done" : "error";
-        obj.result = result.success ? clampToolResult(outText, toolCall.name) : "\u274C \u9519\u8BEF: " + result.error;
-        if (result.changeId) obj.changeId = result.changeId;
-        messages.push({ role: "tool", tool_call_id: obj.id, content: obj.result });
+        toolResult = result.success ? clampToolResult(outText, pl.tc.name) : "\u274C \u9519\u8BEF: " + result.error;
+        pl.obj.status = result.success ? "done" : "error";
+        if (result.changeId) pl.obj.changeId = result.changeId;
       } catch (te) {
-        obj.status = "error";
-        obj.result = "\u274C \u9519\u8BEF: " + (te instanceof Error ? te.message : String(te));
-        messages.push({ role: "tool", tool_call_id: obj.id, content: obj.result });
+        toolResult = "\u274C \u9519\u8BEF: " + (te instanceof Error ? te.message : String(te));
+        pl.obj.status = "error";
       }
-      obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
-      events.onToolEnd?.(obj);
-      allToolCalls.push(obj);
-      perf.addTool(1, toolCall.name, Date.now() - t0, obj.status !== "error");
+    }
+    const ms = Date.now() - t0;
+    pl.obj.result = toolResult;
+    pl.obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
+    events.onToolEnd?.(pl.obj);
+    ctx.allToolCalls.push(pl.obj);
+    perf.addTool(ctx.toolRound, pl.tc.name, ms, pl.obj.status !== "error");
+    const base = pl.obj.result && String(pl.obj.result).trim() ? String(pl.obj.result) : pl.obj.status === "error" ? "\u5DE5\u5177 " + pl.tc.name + " \u6267\u884C\u5931\u8D25\uFF08\u672A\u8FD4\u56DE\u5177\u4F53\u9519\u8BEF\u4FE1\u606F\uFF09\u3002" : "\u5DE5\u5177 " + pl.tc.name + " \u5DF2\u6267\u884C\uFF0C\u4F46\u8FD4\u56DE\u7A7A\u7ED3\u679C\u3002";
+    if (CLEARABLE_TOOLS.has(pl.tc.name)) ctx.clearableIds.add(pl.tc.id);
+    const useN = bumpToolUse(ctx.toolUseCounts, pl.tc.name);
+    const failN = bumpToolFail(ctx.failCounter, pl.obj.status === "error");
+    return base + toolUseHint(ctx.toolUseCounts, pl.tc.name) + toolFailHint(failN, pl.tc.name);
+  };
+  let i = 0;
+  while (i < plans.length) {
+    const group = [];
+    while (i < plans.length && READONLY_TOOLS.has(plans[i].tc.name)) {
+      group.push(plans[i]);
+      i++;
+    }
+    if (group.length === 0) {
+      group.push(plans[i]);
+      i++;
+    }
+    const results = group.length === 1 ? [await execOne(group[0])] : await Promise.all(group.map(execOne));
+    for (let k = 0; k < group.length; k++) {
+      messages.push({ role: "tool", tool_call_id: group[k].tc.id, content: results[k] });
     }
   }
+}
+async function runAgentLoop(messages, deps) {
+  const { events, signal } = deps;
+  const perf = createAgentPerf();
+  perf.setModel(deps.model);
+  const ctx = buildLoopContext(deps);
+  const maxTokens = deps.maxTokens ?? (Number(deps.contextWindow) >= 8e3 ? 16384 : 8192);
+  await resumePendingTool(ctx, deps, messages, perf);
   while (true) {
     if (signal?.aborted) {
-      return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
+      return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
     }
-    toolRound++;
-    perf.roundStart(toolRound);
-    const roundCheck = checkRoundLimit(toolRound);
+    ctx.toolRound++;
+    perf.roundStart(ctx.toolRound);
+    const roundCheck = checkRoundLimit(ctx.toolRound);
     if (roundCheck.exceeded) {
-      if (!wrapUp) {
-        wrapUp = true;
+      if (!ctx.wrapUp) {
+        ctx.wrapUp = true;
       } else {
         events.onPerf?.(perf.finish());
-        return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "round-limit", error: roundCheck.message };
+        return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "round-limit", error: roundCheck.message };
       }
     }
-    const disabled = new Set(deps.disabledTools || []);
-    const tools = deps.tools.filter((t) => !disabled.has(t.name));
-    const hermesEnabled = tools.length > 0 && shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode);
-    const wireMessages = (() => {
-      if (!hermesEnabled) return messages;
-      const block = buildToolsBlock(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
-      if (!block) return messages;
-      const copy = [...messages];
-      if (copy[0] && copy[0].role === "system") {
-        copy[0] = { ...copy[0], content: String(copy[0].content ?? "") + block };
-      } else {
-        copy.unshift({ role: "system", content: block });
-      }
-      return copy;
-    })();
-    const budget = deps.contextBudget || Math.floor((Number(deps.contextWindow) || 0) * 0.8) || 0;
-    let sendMessages = wireMessages;
-    if (budget > 0) {
-      const used = totalTokens(sendMessages);
-      if (used > budget * 0.8 && deps.microcompact !== false) {
-        const mc = microcompact(sendMessages, { clearableIds });
-        if (mc.cleared > 0) sendMessages = mc.messages;
-      }
-      if (totalTokens(sendMessages) > budget) {
-        sendMessages = truncateForBudget(sendMessages, budget).messages;
-      }
+    let sendMessages = prepareRoundMessages(ctx, messages, deps);
+    const res = await requestRound(deps, ctx, sendMessages, maxTokens, signal, perf);
+    const streamed = await streamRound(res, ctx, deps, perf);
+    const toolCalls = streamed.toolCalls;
+    if (signal?.aborted) {
+      return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
     }
-    if (wrapUp) {
-      sendMessages = [...sendMessages, {
-        role: "user",
-        content: "\u3010\u7CFB\u7EDF\u3011\u5DE5\u5177\u8C03\u7528\u8F6E\u6B21\u5DF2\u7528\u5C3D\u3002\u8BF7\u7ACB\u523B\u57FA\u4E8E\u5DF2\u6709\u4FE1\u606F\u7528\u6587\u5B57\u7ED9\u51FA\u6700\u7EC8\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u4EFB\u4F55\u5DE5\u5177\u3002"
-      }];
-    }
-    const makeBody = () => JSON.stringify({
-      model: deps.model,
-      messages: sendMessages,
-      tools: wrapUp ? [] : tools.map((t) => ({
-        type: "function",
-        function: { name: t.name, description: t.description, parameters: t.parameters }
-      })),
-      tool_choice: wrapUp ? "none" : "auto",
-      stream: true,
-      max_tokens: maxTokens
-    });
-    let res = null;
-    let lastErr = null;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      events.onNetStatus?.(attempt === 1 ? "connecting" : "retrying", attempt > 1 ? { attempt } : void 0);
-      perf.llmRequestStart();
-      let netErr = null;
-      try {
-        res = await deps.callLLM(makeBody(), signal);
-      } catch (e) {
-        if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-        netErr = e instanceof Error ? e : new Error(String(e));
-      }
-      if (netErr) {
-        lastErr = netErr;
-        if (attempt >= MAX_ATTEMPTS) throw netErr;
-        await sleepAbortable(backoffMs(attempt), signal);
-        continue;
-      }
-      if (res && res.ok) break;
-      const errText = await res.text().catch(() => "");
-      if (isContextOverflowError(errText) && !overflowRetried) {
-        overflowRetried = true;
-        const cur = budget || totalTokens(sendMessages);
-        const tighter = Math.max(2e3, Math.floor(cur * 0.5));
-        sendMessages = truncateForBudget(sendMessages, tighter).messages;
-        attempt--;
-        continue;
-      }
-      const msg = buildUpstreamError(res.status, errText);
-      const decision = shouldRetryHttp(res.status, attempt, res.headers.get("retry-after"));
-      if (!decision.retry) throw new Error(msg);
-      lastErr = new Error(msg);
-      res = null;
-      await sleepAbortable(decision.delayMs, signal);
-    }
-    if (!res) {
-      throw lastErr ? new Error(`${lastErr.message}\uFF08\u5DF2\u81EA\u52A8\u91CD\u8BD5 ${MAX_ATTEMPTS} \u6B21\u4ECD\u5931\u8D25\u2014\u2014\u514D\u8D39\u7EBF\u8DEF\u9AD8\u5CF0\u671F\u5BB9\u6613\u6301\u7EED\u6392\u961F\uFF0C\u7A0D\u540E\u518D\u8BD5\u6216\u5230\u8BBE\u7F6E\u6362\u4E00\u6761\u7EBF\u8DEF\uFF09`) : new Error("\u8BF7\u6C42\u5931\u8D25\uFF1A\u672A\u77E5\u539F\u56E0");
-    }
-    if (!res.body) throw new Error("No response body");
-    let roundContent = "";
-    const toolCallMap = /* @__PURE__ */ new Map();
-    let draftAnnounced = false;
-    for await (const data of ssePayloads(res.body)) {
-      if (data === "[DONE]") break;
-      if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-      try {
-        const parsed = JSON.parse(data);
-        const choice = parsed.choices?.[0];
-        if (!choice) continue;
-        const delta = choice.delta;
-        const think = extractReasoning(delta);
-        if (think) {
-          perf.firstToken();
-          fullThinking += think;
-          events.onThinking?.(think);
-        }
-        if (delta?.content) {
-          perf.firstToken();
-          roundContent += delta.content;
-          fullContent += delta.content;
-          events.onChunk?.(delta.content);
-        }
-        const parsedTcs = parseToolCallsFromDelta(delta);
-        if (parsedTcs) {
-          for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc);
-          if (!draftAnnounced) {
-            draftAnnounced = true;
-            events.onToolDraft?.(parsedTcs[0]?.function?.name || "\u2026");
-          }
-        }
-        if (choice.finish_reason === "tool_calls") {
-          adoptNonStreamToolCalls(toolCallMap, choice.message?.tool_calls);
-        }
-      } catch {
-      }
-    }
-    let toolCalls = toolCallsToArray(toolCallMap);
-    if (toolCalls.length === 0 && roundContent.includes("<tool_call>")) {
-      const hermes = parseHermesToolCalls(roundContent);
-      if (hermes.length > 0) {
-        toolCalls = hermes.map((h, i2) => ({ id: "hermes_" + i2 + "_" + Date.now(), name: h.name, arguments: h.arguments }));
-        roundContent = stripToolCallBlocks(roundContent);
-        fullContent = stripToolCallBlocks(fullContent);
-      }
-    }
-    perf.llmStreamEnd();
     if (toolCalls.length === 0) {
-      const content = stripToolCallBlocks(fullContent);
+      const content = stripToolCallBlocks(ctx.fullContent);
       events.onPerf?.(perf.finish());
-      return { content, thinking: fullThinking, toolCalls: allToolCalls };
+      return { content, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls };
     }
     messages.push({
       role: "assistant",
-      content: roundContent || void 0,
+      content: streamed.roundContent || void 0,
       tool_calls: toolCalls.map((tc, idx) => ({
         id: tc.id,
         type: "function",
@@ -762,101 +890,11 @@ async function runAgentLoop(messages, deps) {
         index: idx
       }))
     });
-    const plans = [];
-    for (const tc of toolCalls) {
-      if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-      const repeat = checkRepeatCall(callSignatures, callSignature(tc.name, tc.arguments));
-      if (repeat.blocked) {
-        messages.push({ role: "tool", tool_call_id: tc.id, content: repeat.message });
-        continue;
-      }
-      const obj = {
-        id: tc.id,
-        name: tc.name,
-        arguments: tc.arguments,
-        status: "running",
-        started_at: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      events.onToolStart?.(obj);
-      const need = deps.needsClient?.(obj);
-      if (need) {
-        throw new NeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls }, deps.scopeKeyOf?.(obj));
-      }
-      const denial = await deps.confirmTool?.(obj);
-      if (denial) {
-        obj.status = "error";
-        obj.result = denial;
-        obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
-        events.onToolEnd?.(obj);
-        allToolCalls.push(obj);
-        messages.push({ role: "tool", tool_call_id: tc.id, content: denial });
-        continue;
-      }
-      plans.push({ tc, obj });
+    const plans = await gateToolCalls(ctx, deps, messages, toolCalls);
+    if (signal?.aborted) {
+      return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
     }
-    const execOne = async (pl) => {
-      const t0 = Date.now();
-      let toolResult;
-      if (deps.isClientTool(pl.tc.name)) {
-        toolResult = await deps.runClientTool?.(pl.obj) || '{"ok":true}';
-        pl.obj.status = "done";
-      } else {
-        let parsedArgs = {};
-        try {
-          parsedArgs = JSON.parse(pl.tc.arguments || "{}");
-        } catch {
-          parsedArgs = {};
-        }
-        try {
-          const result = await withTimeout(
-            deps.runTool(pl.tc.name, parsedArgs, signal),
-            TOOL_TIMEOUT_MS,
-            "\u5DE5\u5177 " + pl.tc.name + " \u6267\u884C\u8D85\u65F6\uFF08180 \u79D2\uFF09\uFF0C\u5DF2\u4E2D\u6B62\u7B49\u5F85\u3002\u5982\u786E\u9700\u7EE7\u7EED\u8BF7\u62C6\u5C0F\u4EFB\u52A1\u3002"
-          );
-          let outText = result.success ? result.output || "" : "";
-          if (outText.length > 5e4 && result.success && deps.saveLargeOutput) {
-            try {
-              const fname = await deps.saveLargeOutput(pl.tc.name, outText);
-              if (fname) outText = clampToolResult(outText, pl.tc.name) + "\n[\u5B8C\u6574\u8F93\u51FA\u5DF2\u4FDD\u5B58\u5230\u5DE5\u4F5C\u533A: " + fname + "]";
-            } catch {
-            }
-          }
-          toolResult = result.success ? clampToolResult(outText, pl.tc.name) : "\u274C \u9519\u8BEF: " + result.error;
-          pl.obj.status = result.success ? "done" : "error";
-          if (result.changeId) pl.obj.changeId = result.changeId;
-        } catch (te) {
-          toolResult = "\u274C \u9519\u8BEF: " + (te instanceof Error ? te.message : String(te));
-          pl.obj.status = "error";
-        }
-      }
-      const ms = Date.now() - t0;
-      pl.obj.result = toolResult;
-      pl.obj.finished_at = (/* @__PURE__ */ new Date()).toISOString();
-      events.onToolEnd?.(pl.obj);
-      allToolCalls.push(pl.obj);
-      perf.addTool(toolRound, pl.tc.name, ms, pl.obj.status !== "error");
-      const base = pl.obj.result && String(pl.obj.result).trim() ? String(pl.obj.result) : pl.obj.status === "error" ? "\u5DE5\u5177 " + pl.tc.name + " \u6267\u884C\u5931\u8D25\uFF08\u672A\u8FD4\u56DE\u5177\u4F53\u9519\u8BEF\u4FE1\u606F\uFF09\u3002" : "\u5DE5\u5177 " + pl.tc.name + " \u5DF2\u6267\u884C\uFF0C\u4F46\u8FD4\u56DE\u7A7A\u7ED3\u679C\u3002";
-      const useN = bumpToolUse(toolUseCounts, pl.tc.name);
-      if (CLEARABLE_TOOLS.has(pl.tc.name)) clearableIds.add(pl.tc.id);
-      const failN = bumpToolFail(failCounter, pl.obj.status === "error");
-      return base + toolUseHint(toolUseCounts, pl.tc.name) + toolFailHint(failN, pl.tc.name);
-    };
-    let i = 0;
-    while (i < plans.length) {
-      const group = [];
-      while (i < plans.length && READONLY_TOOLS.has(plans[i].tc.name)) {
-        group.push(plans[i]);
-        i++;
-      }
-      if (group.length === 0) {
-        group.push(plans[i]);
-        i++;
-      }
-      const results = group.length === 1 ? [await execOne(group[0])] : await Promise.all(group.map(execOne));
-      for (let k = 0; k < group.length; k++) {
-        messages.push({ role: "tool", tool_call_id: group[k].tc.id, content: results[k] });
-      }
-    }
+    await executePlans(ctx, deps, messages, plans, perf);
   }
 }
 function buildUpstreamError(status, errText) {
