@@ -842,11 +842,18 @@ async function shell(a) {
 // write_file 时如果文件在模型读取后被外部修改，在结果里警告模型——
 // 防止用读到的旧内容覆盖用户的修改。
 const FILE_CONTEXT = new Map<string, number>();
+/** v17.0.2 内存治理：FILE_CONTEXT 上限（长会话读几千文件会无界增长） */
+const FILE_CONTEXT_MAX = 2000;
 function noteFileRead(p: string): boolean {
   try {
     const mt = fs.statSync(p).mtimeMs;
     const prev = FILE_CONTEXT.get(p);
-    FILE_CONTEXT.set(p, mt);
+    FILE_CONTEXT.delete(p);
+    FILE_CONTEXT.set(p, mt); // LRU：命中后移到尾部
+    if (FILE_CONTEXT.size > FILE_CONTEXT_MAX) {
+      const oldest = FILE_CONTEXT.keys().next().value;
+      if (oldest != null) FILE_CONTEXT.delete(oldest);
+    }
     return prev != null && Math.abs(mt - prev) <= 1;
   } catch { return false }
 }

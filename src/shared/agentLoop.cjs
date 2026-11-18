@@ -23,9 +23,15 @@ __export(agentLoop_exports, {
   NeedsClientError: () => NeedsClientError,
   READONLY_TOOLS: () => READONLY_TOOLS,
   TOOL_TIMEOUT_MS: () => TOOL_TIMEOUT_MS,
+  buildLoopContext: () => buildLoopContext,
   buildUpstreamError: () => buildUpstreamError,
   clampToolResult: () => clampToolResult,
+  executePlans: () => executePlans,
+  gateToolCalls: () => gateToolCalls,
+  prepareRoundMessages: () => prepareRoundMessages,
+  requestRound: () => requestRound,
   runAgentLoop: () => runAgentLoop,
+  streamRound: () => streamRound,
   toolContentWithImage: () => toolContentWithImage
 });
 module.exports = __toCommonJS(agentLoop_exports);
@@ -918,8 +924,14 @@ function toolContentWithImage(text, image) {
   NeedsClientError,
   READONLY_TOOLS,
   TOOL_TIMEOUT_MS,
+  buildLoopContext,
   buildUpstreamError,
   clampToolResult,
+  executePlans,
+  gateToolCalls,
+  prepareRoundMessages,
+  requestRound,
   runAgentLoop,
+  streamRound,
   toolContentWithImage
 });

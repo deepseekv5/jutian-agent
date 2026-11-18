@@ -193,6 +193,12 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
           style={{ background: c.accent || 'var(--brand, #10a37f)' }}>
           {copied ? '已复制' : '复制报告'}
         </button>
+        <button onClick={() => {
+          const md = reportToMarkdown(report)
+          const body = encodeURIComponent(`## 诊断报告（自动导出）\n\n${md.slice(0, 6000)}`)
+          window.open(`https://github.com/deepseekv5/jutian-agent/issues/new?title=${encodeURIComponent('[诊断] 问题反馈')}&body=${body}`, '_blank')
+        }} className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: 'var(--jt-ink, #1d1d1f)' }}>反馈</button>
         <button onClick={onClose} className="px-2.5 py-1 rounded-lg text-[11.5px]" style={{ color: c.textTertiary }}>关闭</button>
       </div>
 

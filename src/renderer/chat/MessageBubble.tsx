@@ -33,6 +33,10 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
   const runningSec = isRunning && tool.started_at
     ? Math.max(0, Math.round((Date.now() - new Date(tool.started_at).getTime()) / 1000))
     : null
+  // v17.0.2：完成后显示总耗时（毫秒级，<1s 也可见）
+  const doneMs = !isRunning && tool.started_at && tool.finished_at
+    ? Math.max(0, new Date(tool.finished_at).getTime() - new Date(tool.started_at).getTime())
+    : null
   const isError = tool.status === 'error'
   const isDone = tool.status === 'done'
 
@@ -111,7 +115,7 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
           </svg>
         )}
         <span className="text-[12.5px] font-medium shrink-0" style={{ color: c.textSecondary }}>
-          {displayName}{tool.status === 'pending' ? ' · 参数生成中' : isRunning ? '…' : ''}{runningSec !== null ? ` · ${runningSec}s` : ''}
+          {displayName}{tool.status === 'pending' ? ' · 参数生成中' : isRunning ? '…' : ''}{runningSec !== null ? ` · ${runningSec}s` : ''}{doneMs !== null ? ` · ${doneMs < 1000 ? doneMs + 'ms' : (doneMs / 1000).toFixed(1) + 's'}` : ''}
         </span>
         {summary && <span className="text-[11.5px] truncate flex-1 min-w-0 font-mono" style={{ color: c.textTertiary }} title={summary}>{summary}</span>}
         {diffPath && (
@@ -135,13 +139,18 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
           {tool.result && (
             <pre className="whitespace-pre-wrap leading-relaxed mt-2" style={{ color: c.textSecondary, fontFamily: 'var(--font-mono)' }}>
-              {tool.result.length > 3000 ? tool.result.slice(0, 3000) + '\n…[已截断]' : tool.result}
+              {truncateForDisplay(tool.result)}
             </pre>
           )}
         </div>
       )}
     </div>
   )
+}
+
+/** 工具结果展示截断（v17.0.2，与原内联表达式等价） */
+function truncateForDisplay(result: string): string {
+  return result.length > 3000 ? result.slice(0, 3000) + '\n…[已截断]' : result
 }
 
 /** 读取消息的「首字耗时」侧车（useChat 在流式增量到达时写入）
