@@ -874,7 +874,7 @@ async function runAgentLoop(messages, deps) {
         return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "round-limit", error: roundCheck.message };
       }
     }
-    let sendMessages = prepareRoundMessages(ctx, messages, deps);
+    const sendMessages = prepareRoundMessages(ctx, messages, deps);
     const res = await requestRound(deps, ctx, sendMessages, maxTokens, signal, perf);
     const streamed = await streamRound(res, ctx, deps, perf);
     const toolCalls = streamed.toolCalls;

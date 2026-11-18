@@ -594,7 +594,8 @@ export async function runAgentLoop(messages: LoopMessage[], deps: AgentLoopDeps)
     }
 
     // 阶段一：准备本轮请求消息（Hermes 注入 / 预算裁剪 / 收尾提示）
-    let sendMessages = prepareRoundMessages(ctx, messages, deps)
+    // 裁剪细节在 prepareRoundMessages 内完成；requestRound 的溢出重放用 splice 就地改
+    const sendMessages = prepareRoundMessages(ctx, messages, deps)
 
     // 阶段二：带重试的 LLM 请求（网络退避 / 上下文溢出裁剪重放）
     const res = await requestRound(deps, ctx, sendMessages, maxTokens, signal, perf)
