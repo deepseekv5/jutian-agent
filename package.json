@@ -1,6 +1,6 @@
 {
   "name": "jutian-agent",
-  "version": "17.0.4",
+  "version": "17.0.5",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
@@ -48,7 +48,7 @@
     "gen:legal-site": "node scripts/gen-legal-site.mjs",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "vitest run",
+    "test": "node scripts/kill-test-serves.mjs && vitest run",
     "test:watch": "vitest",
     "build:tui": "esbuild tui/App.jsx --bundle --platform=node --format=esm --jsx=automatic --outfile=tui/App.mjs --external:react-devtools-core --external:ink --external:react --external:react-reconciler --external:marked --external:marked-terminal --external:ink-spinner --external:yoga-layout",
     "tui": "npm run -s build:tui && node tui/index.mjs"
