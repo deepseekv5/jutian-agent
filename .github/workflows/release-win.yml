@@ -58,8 +58,21 @@ jobs:
           fi
           echo "::warning::npm audit 未完成(registry 不支持 audit 端点或网络问题)，本次跳过漏洞门禁"
 
+      # v17.0.3：ESLint 失败时上传完整日志——v17.0.1/.2 两次 win 构建失败均无日志
+      # 可查（API 需认证），诊断闭环缺失；NODE_OPTIONS 防 OOM。
+      # pipefail 保退出码：tee 会吞 npm run lint 的非零退出。
       - name: ESLint（零 error）
-        run: npm run lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee eslint-win.log
+      - name: 上传 ESLint 日志（失败时诊断）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-win-log
+          path: eslint-win.log
+          if-no-files-found: ignore
 
       - name: TypeScript 类型门禁（零 error）
         run: npm run check
