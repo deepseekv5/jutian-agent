@@ -214,7 +214,7 @@ interface LoopContext {
   allToolCalls: LoopToolCall[]
 }
 
-function buildLoopContext(deps: AgentLoopDeps): LoopContext {
+export function buildLoopContext(deps: AgentLoopDeps): LoopContext {
   return {
     toolRound: 0,
     wrapUp: false,
@@ -274,7 +274,7 @@ async function resumePendingTool(
 
 /** 单轮请求消息准备：Hermes 文本协议注入 / 上下文预算裁剪 / 收尾提示。
  *  切点修复由 truncateForBudget 负责（不以 tool 开头、不留悬空 tool_calls）。 */
-function prepareRoundMessages(
+export function prepareRoundMessages(
   ctx: LoopContext, messages: LoopMessage[], deps: AgentLoopDeps,
 ): BudgetMessage[] {
   const disabled = new Set(deps.disabledTools || [])
@@ -322,7 +322,7 @@ function prepareRoundMessages(
 
 /** 带重试的 LLM 请求：网络异常与 429/5xx 退避重试；只在「头到手、未读流」阶段重试。
  *  上游 400 上下文溢出时裁剪后重放一次（重试无用，裁剪才有用）。 */
-async function requestRound(
+export async function requestRound(
   deps: AgentLoopDeps, ctx: LoopContext, sendMessages: BudgetMessage[],
   maxTokens: number, signal: AbortSignal | undefined, perf: AgentPerfCollector,
 ): Promise<Response> {
@@ -387,7 +387,7 @@ async function requestRound(
 
 /** 单轮流式读取：思考/正文/工具调用累积（快照型 delta 去重见 accumulateToolCallDelta），
  *  Hermes 文本协议回退（`<tool_call>` 块）在此收口。 */
-async function streamRound(
+export async function streamRound(
   res: Response, ctx: LoopContext, deps: AgentLoopDeps, perf: AgentPerfCollector,
 ): Promise<{ toolCalls: LoopToolCall[]; roundContent: string }> {
   const { events, signal } = deps
@@ -448,7 +448,7 @@ async function streamRound(
 
 /** 工具闸门（第一遍串行）：重复调用拦截 / 客户端工具抛出 / 确认拒绝。
  *  确认弹窗必须一次一个——并发询问会让用户面对多个弹窗无从选择。 */
-async function gateToolCalls(
+export async function gateToolCalls(
   ctx: LoopContext, deps: AgentLoopDeps, messages: LoopMessage[],
   toolCalls: LoopToolCall[],
 ): Promise<Array<{ tc: LoopToolCall; obj: LoopToolCall }>> {
@@ -497,7 +497,7 @@ async function gateToolCalls(
 
 /** 计划执行：只读工具连续出现时并行，有副作用的工具单发串行。
  *  结果统一走 clampToolResult + 使用/失败计数 hint，再按调用序写回 messages。 */
-async function executePlans(
+export async function executePlans(
   ctx: LoopContext, deps: AgentLoopDeps, messages: LoopMessage[],
   plans: Array<{ tc: LoopToolCall; obj: LoopToolCall }>, perf: AgentPerfCollector,
 ): Promise<void> {
