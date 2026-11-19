@@ -1287,7 +1287,7 @@ ${priorOutputs ? `前面 agent 已完成的工作（可基于它们继续）：$
       // 内核选择（v15.0.0）：JT Core Pro+ 三档 + Ultra（服务端同端点按 engine 字段分发）；
       // 设置里可切回渲染层循环作为对照/兜底
       const engine = settings.agentEngine === 'client' ? 'client'
-        : settings.agentEngine === 'server' || settings.agentEngine === 'ultra' || settings.agentEngine === 'harness' ? 'server'
+        : settings.agentEngine === 'server' || settings.agentEngine === 'ultra' || settings.agentEngine === 'harness' || settings.agentEngine === 'auto' ? 'server'
         : 'vercel'
       const callArgs = [{ ...callbacks, onNetStatus: netStatus, onToolDraft: toolDraft, onPerf }, controller.signal, extraTools] as const
       if (engine === 'vercel') {

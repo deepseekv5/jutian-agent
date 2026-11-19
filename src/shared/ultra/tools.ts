@@ -106,6 +106,15 @@ export const GEMINI_TOOL_DEFS: ToolDef[] = [
     }, required: ['file_path', 'content'] },
   },
   {
+    name: 'append_file',
+    description: 'Incrementally writes a LARGE file in chunks: write one segment at a time so each output stays short and never gets truncated. Use mode=start to create and write the first segment, then mode=append for each following segment until the file is complete. Prefer this over write_file for big files.',
+    parameters: { type: 'object', properties: {
+      file_path: { description: 'Path to the file.', type: 'string' },
+      content: { description: 'This segment only (not the whole file).', type: 'string' },
+      mode: { description: 'start = create/reset and write first segment; append = add to end (default).', type: 'string', enum: ['start', 'append'] },
+    }, required: ['file_path', 'content'] },
+  },
+  {
     name: 'replace',
     description: 'Replaces text within a file. Expects exactly ONE occurrence of old_string unless allow_multiple=true. Requires significant context (≥3 lines before & after) to target precisely. Always read the file first. old_string/new_string must be exact literal text (never escaped), must differ, and instruction must be specific.',
     parameters: { type: 'object', properties: {
@@ -222,6 +231,7 @@ export function getToolSet(model?: string): ToolDef[] {
 export const TOOL_ALIASES: Record<string, string> = {
   glob: 'glob', grep_search: 'grep_search', read_file: 'read_file',
   read_many_files: 'read_many_files', list_directory: 'list_dir', write_file: 'write_file',
+  append_file: 'append_file',
   replace: 'edit_file', run_shell_command: 'shell', google_web_search: 'web_search',
   web_fetch: 'web_fetch', write_todos: 'todo_write', ask_user: 'ask_user',
   enter_plan_mode: 'update_plan', exit_plan_mode: 'update_plan', activate_skill: 'load_skill',

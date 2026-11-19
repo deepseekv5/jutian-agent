@@ -341,14 +341,15 @@ describe('prompts / 系统提示词全量移植（gemini-cli prompts/）', () =>
 })
 
 describe('tools / gemini-cli 工具集移植', () => {
-  it('21 个工具定义 + 别名 + 参数归一化', async () => {
+  it('22 个工具定义 + 别名 + 参数归一化', async () => {
     const T = await import('../src/shared/ultra/tools')
-    expect(T.GEMINI_TOOL_DEFS.length).toBe(21)
+    expect(T.GEMINI_TOOL_DEFS.length).toBe(22)
     expect(T.GEMINI_TOOL_DEFS.find(t => t.name === 'replace')).toBeTruthy()
+    expect(T.GEMINI_TOOL_DEFS.find(t => t.name === 'append_file')).toBeTruthy()
     expect(T.GEMINI_TOOL_DEFS.find(t => t.name === 'run_shell_command')).toBeTruthy()
-    expect(Object.keys(T.TOOL_ALIASES).length).toBe(21)
-    expect(T.getToolSet('gemini-3').length).toBe(21)
-    expect(T.ultraToolsForModel().length).toBe(21)
+    expect(Object.keys(T.TOOL_ALIASES).length).toBe(22)
+    expect(T.getToolSet('gemini-3').length).toBe(22)
+    expect(T.ultraToolsForModel().length).toBe(22)
     expect(T.normalizeArgs('replace', { file_path: 'a.ts', old_string: 'x', new_string: 'y', allow_multiple: true }))
       .toMatchObject({ path: 'a.ts', oldText: 'x', newText: 'y', replaceAll: true })
     expect(T.normalizeArgs('read_file', { file_path: 'a', start_line: 3, end_line: 7 }))

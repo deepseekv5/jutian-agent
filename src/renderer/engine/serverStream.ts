@@ -80,7 +80,7 @@ export async function streamChatViaServer(
           pendingTool,
           confirmations,
           approvedScopes,
-          engine: settings.agentEngine === 'ultra' ? 'ultra' : undefined,
+          engine: (settings.agentEngine === 'ultra' || settings.agentEngine === 'auto') ? settings.agentEngine : undefined,
         }),
         signal,
       })

@@ -20,7 +20,7 @@ import { LOCAL_CAPABILITIES } from '../localCapabilities'
 /* ── tool name table（对应 base-declarations.ts 常量，渲染时注入反引号） ── */
 export const TOOL_NAMES = {
   GLOB: 'glob', GREP: 'grep_search', READ_FILE: 'read_file', READ_MANY: 'read_many_files',
-  LS: 'list_directory', WRITE_FILE: 'write_file', EDIT: 'replace', SHELL: 'run_shell_command',
+  LS: 'list_directory', WRITE_FILE: 'write_file', APPEND_FILE: 'append_file', EDIT: 'replace', SHELL: 'run_shell_command',
   WEB_SEARCH: 'google_web_search', WEB_FETCH: 'web_fetch', WRITE_TODOS: 'write_todos',
   ASK_USER: 'ask_user', ENTER_PLAN: 'enter_plan_mode', EXIT_PLAN: 'exit_plan_mode',
   ACTIVATE_SKILL: 'activate_skill', UPDATE_TOPIC: 'update_topic', COMPLETE_TASK: 'complete_task',
@@ -31,7 +31,7 @@ export const TOOL_NAMES = {
   TRACKER_DEP: 'tracker_add_dependency', TRACKER_VISUALIZE: 'tracker_visualize',
 } as const
 export const ALL_BUILTIN_TOOL_NAMES: string[] = [
-  TOOL_NAMES.GLOB, TOOL_NAMES.WRITE_TODOS, TOOL_NAMES.WRITE_FILE, TOOL_NAMES.WEB_SEARCH,
+  TOOL_NAMES.GLOB, TOOL_NAMES.WRITE_TODOS, TOOL_NAMES.WRITE_FILE, TOOL_NAMES.APPEND_FILE, TOOL_NAMES.WEB_SEARCH,
   TOOL_NAMES.WEB_FETCH, TOOL_NAMES.EDIT, TOOL_NAMES.SHELL, TOOL_NAMES.GREP,
   TOOL_NAMES.READ_MANY, TOOL_NAMES.READ_FILE, TOOL_NAMES.LS, TOOL_NAMES.ACTIVATE_SKILL,
   TOOL_NAMES.ASK_USER, TOOL_NAMES.TRACKER_CREATE, TOOL_NAMES.TRACKER_UPDATE,
@@ -138,7 +138,7 @@ export function renderOperationalGuidelines(o: MandateOptions = {}): string {
 - **工具结果响应规则**：收到 functionResponse 后，必须二选一：a) 继续调用工具推进任务；b) 给用户文本回应（解释输出、分析与下一步）。**绝不允许空回复（无文本且无工具调用）**。
 - **编辑后响应规则**：${formatToolName(T.EDIT)} / ${formatToolName(T.WRITE_FILE)} 执行后，必须给用户文本总结：改了什么、如何验证/下一步。
 - **并行与顺序**：工具默认并行执行；无依赖的搜索/读取/不同文件的编辑应并行。若依赖同轮前一步的输出或副作用，必须设置 wait_for_previous=true 保证串行。
-- **同文件编辑冲突**：同一轮内不得对同一文件多次调用 ${formatToolName(T.EDIT)}；多次编辑必须跨轮依次进行。
+- **同文件编辑冲突**：同一轮内不得对同一文件多次调用 ${formatToolName(T.EDIT)}（replace）；多次替换须跨轮依次进行。**例外**：${formatToolName(T.APPEND_FILE)} 增量写入本就是同一文件多次调用（mode=start 一次 + mode=append 多次），不受此限——每段短输出避免长文件被截断。
 - **命令执行**：用 ${formatToolName(T.SHELL)}；优先非交互命令（CI flag、--no-pager、PAGER=cat），需要后台就设 is_background=true，不用 & 或 PowerShell 后台构造。
 - **确认协议**：工具调用被拒绝/取消后立即尊重决定，不得重试同一调用或"协商"，除非用户明确指示；可提供替代技术路径。`))
   sec.push(on(o, 'memory', `## 指令与记忆文件（无 save_memory 工具）
@@ -151,7 +151,7 @@ export function renderOperationalGuidelines(o: MandateOptions = {}): string {
   sec.push(on(o, 'paths', `## 文件路径规则
 - ${formatToolName(T.GREP)} / ${formatToolName(T.READ_FILE)} 的 dir_path 相对路径按当前工作目录解析；${formatToolName(T.GLOB)} 用绝对路径。
 - read_file 的 start_line/end_line 是 1-based、含端点；先查再改，不猜路径。
-- ${formatToolName(T.WRITE_FILE)} 的 content 必须完整字面内容，不许出现 "…(其余不变)" 之类省略占位。`))
+- ${formatToolName(T.WRITE_FILE)} 的 content 必须完整字面内容，不许出现 "…(其余不变)" 之类省略占位。**但写大文件时改用 ${formatToolName(T.APPEND_FILE)} 分段写**（start + 多次 append），每段只需给该段内容，这是唯一允许"非整份"的写入方式。`))
   return sec.filter(Boolean).join('\n\n')
 }
 

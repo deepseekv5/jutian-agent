@@ -287,6 +287,10 @@ var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
 // JT Core Ultra（v15.0.0）：移植 gemini-cli/OpenHands 护栏的高端内核，与 JT Core Pro+ 并存
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
+// JT Core Auto（v17.1.0）：叠加自主目标闭环的内核（评估器 + 停滞检测 + 自动续跑）
+var AUTO_LOOP = (() => { try { return require("./src/shared/autoCore.cjs"); } catch (e) { console.error("autoCore.cjs load failed:", e.message); return null; } })();
+// 内核引擎白名单（单一来源，GET/POST/run 共用；v17.1.0 加入 auto）
+var ENGINE_WHITELIST = ["vercel", "server", "client", "ultra", "harness", "auto"];
 var ULTRA_TOOLS = (() => { try { return require("./src/shared/ultraTools.cjs"); } catch (e) { return null; } })();
 var ULTRA_PROMPTS = (() => { try { return require("./src/shared/ultraPrompts.cjs"); } catch (e) { return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
@@ -1091,6 +1095,54 @@ function fuzzyLineMatch(fileContent: string, oldText: string): { real: string; s
     return { real: fileLines.slice(i, i + oldLines.length).join("\n"), start: i, end: i + oldLines.length };
   }
   return null;
+}
+
+/**
+ * append_file（v17.1.0）——增量写入：写一行落一行的动态写入工具。
+ *
+ * 动机：write_file 要求一次性给完整 content，模型写大文件时长输出必被 max_tokens
+ * 截断 → 文件烂尾。append_file 让模型分段交付：mode=start 建文件写首段，
+ * 之后 mode=append 逐段追加。每段都是一次独立工具调用，输出短、不会截断。
+ *
+ * mode:
+ *   'start'  —— 新建或重置文件，写入 content（覆盖旧内容，记一条 change）
+ *   'append' —— 把 content 追加到文件尾部（文件不存在则报错，提示先 start）
+ * 分隔符：默认 '\n'（每段自成一行）；传 separator:'none' 则无分隔（拼接连续片段）。
+ */
+async function append_file(a) {
+  const p = resolveWork(a.path);
+  if (!ok(p)) return { success: false, error: "\u8DEF\u5F84\u4E0D\u5141\u8BB8" };
+  const mode = String(a.mode || 'append');
+  if (mode !== 'start' && mode !== 'append') return { success: false, error: 'mode 只能是 start 或 append。' };
+  if (typeof a.content !== 'string') return { success: false, error: '缺少 content（字符串）。' };
+  const sep = a.separator === 'none' ? '' : '\n';
+  try {
+    await fsp.mkdir(path.dirname(p), { recursive: true });
+    let prev = '';
+    if (mode === 'append') {
+      try { prev = await fsp.readFile(p, 'utf-8'); }
+      catch { return { success: false, error: `文件不存在：${p}。请先用 mode=start 创建并写入第一段。` }; }
+    } else {
+      try { prev = await fsp.readFile(p, 'utf-8'); } catch {}
+    }
+    // 追加时若旧内容未以换行结尾，先补一个换行再接新段；separator:'none' 则直接拼接。
+    const needSep = prev && !prev.endsWith('\n') ? sep : '';
+    const finalContent = mode === 'start'
+      ? a.content
+      : prev + needSep + a.content;
+    await writeFileAtomic(p, finalContent);
+    FILE_CONTEXT.delete(p);
+    toolCacheInvalidate(p);
+    const chg = recordChange(p, prev, finalContent);
+    const lines = String(finalContent).split('\n').length;
+    return {
+      success: true,
+      output: `✅ 已${mode === 'start' ? '创建' : '追加'}: ${p}（当前共 ${lines} 行，${finalContent.length} 字符）。${mode === 'append' ? '继续用 mode=append 写下一段，直到文件完整。' : ''}`,
+      changeId: chg,
+    };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 async function edit_file(a) {
@@ -2750,7 +2802,7 @@ async function ultra_read_many(a) {
 // 统一委托 todo_write：同一份 todos.json、三态映射、五态 description 兼容，面板实时可见。
 
 var TOOLS = {
-  read_file, write_file, edit_file, list_dir, search_files, search_content,
+  read_file, write_file, append_file, edit_file, list_dir, search_files, search_content,
   get_file_info, move_file, delete_file,
   shell, shell_output, shell_kill, shell_list, system_info, process_list, port_check,
   code_analysis, npm_run, git_operation,
@@ -3770,16 +3822,16 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       let cur = "vercel";
       try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
       // v16.9.1：Grok 移除后，db 里的 'grok' 是孤儿值——归一到 vercel 并落库
-      if (!["vercel", "server", "client", "ultra", "harness"].includes(cur)) {
+      if (!ENGINE_WHITELIST.includes(cur)) {
         cur = "vercel";
         try { db.setSetting("agentEngine", cur); invalidateSettingsCache(); } catch {}
       }
-      return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP,
-        engines: ["vercel", "server", "client", "ultra", "harness"] });
+      return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP, autoAvailable: !!AUTO_LOOP,
+        engines: ENGINE_WHITELIST });
     }
     if (url.pathname === "/api/agent/engine" && req.method === "POST") {
       const d = await body(req);
-      const v = ["vercel", "server", "client", "ultra", "harness"].includes(String(d.engine)) ? String(d.engine) : "vercel";
+      const v = ENGINE_WHITELIST.includes(String(d.engine)) ? String(d.engine) : "vercel";
       try { db.setSetting("agentEngine", v); invalidateSettingsCache(); } catch {}
       return json(res, { ok: true, engine: v });
     }
@@ -3817,14 +3869,19 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
 
       try {
-        // 内核分发（v15.0.0）：engine=ultra → JT Core Ultra；其余一律 JT Core Pro+（原逻辑零改动）
+        // 内核分发（v15.0.0 / v17.1.0）：
+        //   engine=auto  → JT Core Auto（自主目标闭环，最高端）
+        //   engine=ultra → JT Core Ultra（gemini-cli 护栏）
+        //   其余         → JT Core Pro+（原逻辑零改动）
         const __engine = String(payload.engine || '');
+        const __auto = __engine === 'auto' && AUTO_LOOP;
         const __ultra = __engine === 'ultra' && ULTRA_LOOP;
-        const __loop = __ultra ? ULTRA_LOOP : AGENT_LOOP;
-        const __runner = __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
-        // Ultra 后端全量接线（v15.1.0）：提示词 / 工具集 / 回落模型 / 语义检测 / IDE 上下文 / maxTokens
-        const __ultraTools = __ultra && ULTRA_TOOLS ? ULTRA_TOOLS.ultraToolsForModel(model) : tools;
-        const __ultraMsgs = __ultra && ULTRA_PROMPTS
+        const __loop = __auto ? AUTO_LOOP : __ultra ? ULTRA_LOOP : AGENT_LOOP;
+        const __runner = __auto ? AUTO_LOOP.runAutoLoop : __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
+        // Ultra/Auto 共享高端接线：提示词 / 工具集 / 回落模型 / 语义检测 / IDE 上下文 / maxTokens
+        const __highEnd = __auto || __ultra;
+        const __ultraTools = __highEnd && ULTRA_TOOLS ? ULTRA_TOOLS.ultraToolsForModel(model) : tools;
+        const __ultraMsgs = __highEnd && ULTRA_PROMPTS
           ? (() => {
               const sys = ULTRA_PROMPTS.buildUltraSystemPrompt({
                 model, workDir: String(payload.workDir || st.workDir || ''),
@@ -3839,7 +3896,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           : messages;
         let __fallbackModels = [];
         try { const mm = JSON.parse(st.models || '[]'); if (Array.isArray(mm)) __fallbackModels = mm.filter(x => x && x !== model).slice(0, 2); } catch {}
-        const __ideContext = __ultra ? {
+        const __ideContext = __highEnd ? {
           toPromptBlock: () => String(payload.ideContext || '').slice(0, 2000),
         } : null;
         const result = await __runner(__ultraMsgs, {
@@ -3857,7 +3914,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
           // Ultra 专属：模型回落 / 语义循环检测 / IDE 上下文 / maxTokens / 客户端工具
           fallbackModels: __fallbackModels,
           maxTokens: Number(payload.maxTokens) || undefined,
-          semanticLoopCheck: __ultra ? async (recent) => {
+          semanticLoopCheck: __highEnd ? async (recent) => {
             // 语义循环检测走 llm-proxy 的结构化 JSON（双模型复核的简化：置信度 ≥0.9 判定）
             try {
               const r = await fetch("http://127.0.0.1:" + PORT + "/api/llm-proxy", {
@@ -3928,9 +3985,9 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             return v === undefined || v === null || v === true ? null : String(v);
           },
           runTool: async (name, rawArgs) => {
-            // Ultra 工具别名回落（gemini 名 → 巨天 53 工具）+ 参数归一化
-            const name2 = __ultra && ULTRA_TOOLS ? (ULTRA_TOOLS.TOOL_ALIASES[name] || name) : name;
-            const args = __ultra && ULTRA_TOOLS ? ULTRA_TOOLS.normalizeArgs(name, rawArgs || {}) : (rawArgs || {});
+            // Ultra/Auto 工具别名回落（gemini 名 → 巨天 53 工具）+ 参数归一化
+            const name2 = __highEnd && ULTRA_TOOLS ? (ULTRA_TOOLS.TOOL_ALIASES[name] || name) : name;
+            const args = __highEnd && ULTRA_TOOLS ? ULTRA_TOOLS.normalizeArgs(name, rawArgs || {}) : (rawArgs || {});
             // 与 /api/tools/execute 同一套门禁
             const sec = securityConfig();
             const secError = checkSecurity(name2, args, sec);
@@ -7630,7 +7687,7 @@ async function getAnnouncement(forceFresh) {
 /** 定时任务可用的工具白名单（v14）：任务由用户创建，但仍限制在可审计集合内——
  *  不开 screenshot / 剪贴板这类桌面交互工具（无人值守时点错窗口代价太大）。 */
 const TASK_TOOL_ALLOW = [
-  "read_file", "write_file", "edit_file", "list_dir", "search_content", "search_files",
+  "read_file", "write_file", "append_file", "edit_file", "list_dir", "search_content", "search_files",
   "shell", "web_search", "web_fetch", "http_request", "json_process", "text_tools",
   "recall", "save_knowledge",
 ];

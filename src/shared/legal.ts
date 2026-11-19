@@ -14,7 +14,7 @@
  * 不作超出法定义务的承诺，也不免除任何法定责任。
  */
 
-export const LEGAL_VERSION = '2026-11-15'
+export const LEGAL_VERSION = '2026-11-19'
 
 export interface LegalSection { heading: string; items: string[] }
 export interface LegalDoc { title: string; updated: string; intro: string; sections: LegalSection[] }
@@ -36,7 +36,7 @@ export const USER_AGREEMENT: LegalDoc = {
     {
       heading: '二、功能范围',
       items: [
-        '对话与工具执行：内置 43 个工具，涵盖命令行执行、文件读写与检索、网页抓取与搜索、进程与端口检查、图像生成、文本与数据处理等。你下达任务，软件拆解步骤、调用工具、验证并给出结果；工具调用的参数与输出全程可见、可展开核对、可随时打断。',
+        '对话与工具执行：内置 58 个工具，涵盖命令行执行、文件读写与增量写入、检索、网页抓取与搜索、进程与端口检查、图像生成、文本与数据处理等。你下达任务，软件拆解步骤、调用工具、验证并给出结果；工具调用的参数与输出全程可见、可展开核对、可随时打断。',
         '代码工作台：项目文件树、多标签编辑（语法高亮、代码折叠、括号匹配、自动补全、查找替换、跳转行、缩进参考线、代码大纲、分屏编辑）、内置终端、Git 检查点与 diff 审查、Markdown 预览、AI 辅助补全。',
         '深度调研：多路检索、来源抓取、交叉验证，产出带引用来源的报告，支持进度查看与历史归档。',
         '知识库与记忆：将文件夹与笔记导入知识库并建立索引与关联；跨会话长期记忆的管理（查看、修改、删除）。',

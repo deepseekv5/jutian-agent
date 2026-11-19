@@ -119,6 +119,37 @@
   }
  },
  {
+  "name": "append_file",
+  "description": "增量写入大文件：写一行落一行。先 mode=start 新建并写首段，再 mode=append 逐段追加（每段一次调用、输出短不会被截断）。写大型代码/文档时优先用本工具而非 write_file 一次性输出整份内容。",
+  "parameters": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "目标文件路径"
+    },
+    "content": {
+     "type": "string",
+     "description": "本段要写入的内容（一段即可，不必是整份文件）"
+    },
+    "mode": {
+     "type": "string",
+     "description": "start=新建/重置并写首段；append=追加到文件尾部（默认 append）",
+     "enum": ["start", "append"]
+    },
+    "separator": {
+     "type": "string",
+     "description": "追加时段间分隔：默认换行；传 none 则直接拼接",
+     "enum": ["newline", "none"]
+    }
+   },
+   "required": [
+    "path",
+    "content"
+   ]
+  }
+ },
+ {
   "name": "edit_file",
   "description": "编辑文件：oldText→newText 精确替换（失败时自动尝试 CRLF 归一化与缩进/空白模糊匹配）；也可传 start_line/end_line 按行号范围替换（无需 oldText，模型对行号更可靠）。",
   "parameters": {

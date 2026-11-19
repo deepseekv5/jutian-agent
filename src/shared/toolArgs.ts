@@ -98,6 +98,12 @@ export const TOOL_SPECS: Record<string, FieldSpec[]> = {
     // content 必须给：缺失时若放行，会把文件写成 "undefined"
     { name: 'content', type: 'string', required: true, allowEmpty: true },
   ],
+  append_file: [
+    { name: 'path', type: 'string', required: true },
+    { name: 'content', type: 'string', required: true, allowEmpty: true },
+    { name: 'mode', type: 'string' },
+    { name: 'separator', type: 'string' },
+  ],
   edit_file: [
     { name: 'path', type: 'string', required: true },
     // v16.1.0：oldText 不再必填——行号模式（start_line/end_line）不需要它；
