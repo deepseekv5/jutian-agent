@@ -295,5 +295,29 @@ try {
   else bad('工具描述未讲清 URL/应用打开能力')
 } catch (e) { bad(`读取失败: ${e.message}`) }
 
+// ─── 构建产物新鲜度（v17.0.5）：防「改了 .ts 忘了 build:server」——
+// grokBridge 实测踩过：esbuild 链中途失败/忘记重编，serve 加载旧 .cjs 行为错乱。
+// 检查 serve.cjs 与全部 shared 旁加载产物的 mtime 是否晚于其 .ts 源文件。
+section('构建产物新鲜度(serve.cjs / shared *.cjs)')
+try {
+  const pairs = [
+    ['src/server/serve.ts', 'serve.cjs'],
+  ]
+  const sharedDir = path.join(ROOT, 'src/shared')
+  for (const f of fs.readdirSync(sharedDir)) {
+    if (f.endsWith('.cjs')) pairs.push(['src/shared/' + f.replace(/\.cjs$/, '.ts'), 'src/shared/' + f])
+  }
+  for (const [tsFile, cjsFile] of pairs) {
+    const tsPath = path.join(ROOT, tsFile)
+    const cjsPath = path.join(ROOT, cjsFile)
+    if (!fs.existsSync(tsPath)) continue // .cjs 无同名 .ts（如 builtin-tools.json 生成物）跳过
+    if (!fs.existsSync(cjsPath)) { bad(`${cjsFile} 缺失——请运行 npm run build:server`); continue }
+    const tsM = fs.statSync(tsPath).mtimeMs
+    const cjsM = fs.statSync(cjsPath).mtimeMs
+    if (cjsM + 1000 < tsM) bad(`${cjsFile} 落后于 ${tsFile} —— 请运行 npm run build:server`)
+    else ok(`${cjsFile} 新鲜`)
+  }
+} catch (e) { bad(`新鲜度检查失败: ${e.message}`) }
+
 console.log(failed === 0 ? '\n全部通过 ✓' : `\n${failed} 项失败 ✗`)
 process.exit(failed === 0 ? 0 : 1)
