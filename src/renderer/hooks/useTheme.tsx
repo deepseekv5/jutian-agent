@@ -338,7 +338,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (t === 'dark' || t === 'light' || t === 'auto') setThemePref(t)
     fetchCompat('/api/settings').then(r => r.json()).then((server: any) => {
       const st = server.theme === 'party' ? 'light' : server.theme
-      if (st === 'dark' || st === 'light' || st === 'auto') setThemePref(st)
+      if (st === 'dark' || st === 'light' || st === 'auto') {
+        setThemePref(st)
+        // v17.0.7：服务端回源翻转主题时同步直写 data-theme——启动期 theme 可经历
+        // 初始(本地)→本地库→服务端多次翻转，纯靠 React effect flush 曾出现
+        // 「内联 token 一套主题 + data-theme 另一套」的撕裂混合态（无报错难排查）
+        try {
+          const resolved = st === 'auto'
+            ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : st
+          document.documentElement.setAttribute('data-theme', resolved)
+        } catch { /* 非浏览器环境 */ }
+      }
       if (server.theme === 'party') {
         // 一次性自愈：把历史党政红偏好改成 Codex 纯白，避免每次启动又被覆盖
         try { localStorage.setItem(THEME_KEY, 'light') } catch {}
