@@ -914,7 +914,7 @@ function extractGoal(messages) {
     if (m.role !== "user") continue;
     const text = typeof m.content === "string" ? m.content : Array.isArray(m.content) ? m.content.filter((p) => p && p.type === "text").map((p) => p.text || "").join("\n") : "";
     const raw = String(text || "");
-    if (/^\[Auto 自主内核[\s\S]*?\]/.test(raw.trim())) continue;
+    if (/^<system-reminder>[\s\S]*?<\/system-reminder>$/.test(raw.trim())) continue;
     const clean = raw.trim();
     if (clean) return clean;
   }
@@ -983,7 +983,6 @@ async function runAutoLoop(messages, deps) {
     if (round >= maxRounds) break;
     const sig = trajectorySignature(result.toolCalls);
     if (sig && signatures.length && signatures[signatures.length - 1] === sig) {
-      events.onChunk?.("\n\n[Auto \u81EA\u4E3B\u5185\u6838] \u68C0\u6D4B\u5230\u91CD\u590D\u7A7A\u8F6C\uFF0C\u5DF2\u81EA\u52A8\u505C\u6B62\u3002\n");
       return {
         content: totalContent,
         thinking: totalThinking,
@@ -993,16 +992,12 @@ async function runAutoLoop(messages, deps) {
       };
     }
     signatures.push(sig);
-    events.onChunk?.(`
-
-[Auto \u81EA\u4E3B\u5185\u6838 \xB7 \u7B2C ${round}/${maxRounds} \u8F6E\u5B8C\u6210\uFF0C\u6B63\u5728\u8BC4\u4F30\u76EE\u6807\u2026]
-`);
     const ev = await evaluateGoalAuto(deps, goal, result.content, signal);
     if (!ev.ok) break;
     if (ev.done) break;
     working.push({
       role: "user",
-      content: `[Auto \u81EA\u4E3B\u5185\u6838 \xB7 \u81EA\u52A8\u7EED\u8DD1 ${round + 1}/${maxRounds}] \u76EE\u6807\u5C1A\u672A\u5B8C\u6210\uFF1A${ev.note || "\u8BF7\u7EE7\u7EED\u63A8\u8FDB"}\u3002\u8BF7\u76F4\u63A5\u52A8\u624B\u8865\u9F50\u7F3A\u53E3\uFF0C\u4E0D\u8981\u91CD\u590D\u5DF2\u5B8C\u6210\u7684\u6B65\u9AA4\u3002`
+      content: `<system-reminder>\u76EE\u6807\u5C1A\u672A\u5B8C\u6210\uFF1A${ev.note || "\u8BF7\u7EE7\u7EED\u63A8\u8FDB"}\u3002\u8BF7\u76F4\u63A5\u52A8\u624B\u8865\u9F50\u7F3A\u53E3\uFF0C\u4E0D\u8981\u91CD\u590D\u5DF2\u5B8C\u6210\u7684\u6B65\u9AA4\uFF0C\u4E5F\u4E0D\u8981\u5411\u7528\u6237\u63D0\u53CA\u8FD9\u6761\u63D0\u9192\u3002</system-reminder>`
     });
   }
   return { content: totalContent, thinking: totalThinking, toolCalls: allToolCalls };

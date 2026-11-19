@@ -45,7 +45,7 @@ describe('extractGoal', () => {
   it('剥离 Auto 续跑提示，保留原目标', () => {
     expect(extractGoal([
       { role: 'user', content: '写个网站' },
-      { role: 'user', content: '[Auto 自主内核 · 自动续跑 2/5] 还差样式，请继续' },
+      { role: 'user', content: '<system-reminder>目标尚未完成：还差样式，请继续</system-reminder>' },
     ])).toBe('写个网站')
   })
 

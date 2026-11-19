@@ -44,9 +44,9 @@ export function extractGoal(messages: LoopMessage[]): string {
         ? (m.content as Array<{ type?: string; text?: string }>).filter(p => p && p.type === 'text').map(p => p.text || '').join('\n')
         : ''
     const raw = String(text || '')
-    // 整条消息都是续跑提示（剥掉标记后只剩提示文案）→ 跳过，继续往前找真正的初始目标。
-    // 用提示标记判定而非「剥完是否为空」——续跑提示里含「还差样式」等描述，剥标记后仍非空。
-    if (/^\[Auto 自主内核[\s\S]*?\]/.test(raw.trim())) continue
+    // 整条消息都是续跑提醒（<system-reminder> 通道）→ 跳过，继续往前找真正的初始目标。
+    // 用标记判定而非「剥完是否为空」——提醒里含「还差样式」等描述，剥标记后仍非空。
+    if (/^<system-reminder>[\s\S]*?<\/system-reminder>$/.test(raw.trim())) continue
     const clean = raw.trim()
     if (clean) return clean
   }
@@ -139,7 +139,6 @@ export async function runAutoLoop(messages: LoopMessage[], deps: AutoDeps): Prom
     // 停滞检测：连续两轮轨迹签名相同且本轮无工具调用 → 空转，立即停
     const sig = trajectorySignature(result.toolCalls)
     if (sig && signatures.length && signatures[signatures.length - 1] === sig) {
-      events.onChunk?.('\n\n[Auto 自主内核] 检测到重复空转，已自动停止。\n')
       return {
         content: totalContent, thinking: totalThinking, toolCalls: allToolCalls,
         stopped: 'round-limit', error: '自主内核检测到连续两轮执行相同操作、无实质进展，已停止以避免空转。',
@@ -147,17 +146,18 @@ export async function runAutoLoop(messages: LoopMessage[], deps: AutoDeps): Prom
     }
     signatures.push(sig)
 
-    // 目标评估（三态）：评估器不可用 → 停，绝不拿"评估失败"当"未完成"续跑
-    events.onChunk?.(`\n\n[Auto 自主内核 · 第 ${round}/${maxRounds} 轮完成，正在评估目标…]\n`)
+    // 目标评估（三态）：评估器不可用 → 停，绝不拿"评估失败"当"未完成"续跑。
+    // 评估过程静默进行——不往正文塞进度方块，让自主闭环安静把活干完。
     const ev = await evaluateGoalAuto(deps, goal, result.content, signal)
     if (!ev.ok) break
     if (ev.done) break
 
     // 未达成 → 注入增量提示续跑。提示进 working 尾部的 user 消息，
-    // 评估器注释里已把它从目标抽取中剥离，不会污染后续目标判断。
+    // 走 <system-reminder> 通道（与产品其它内部指令一致）：模型不会把它当正文复述，
+    // extractGoal 也按该标记跳过、不会污染后续目标判断。
     working.push({
       role: 'user',
-      content: `[Auto 自主内核 · 自动续跑 ${round + 1}/${maxRounds}] 目标尚未完成：${ev.note || '请继续推进'}。请直接动手补齐缺口，不要重复已完成的步骤。`,
+      content: `<system-reminder>目标尚未完成：${ev.note || '请继续推进'}。请直接动手补齐缺口，不要重复已完成的步骤，也不要向用户提及这条提醒。</system-reminder>`,
     })
   }
 
