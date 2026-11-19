@@ -289,8 +289,10 @@ var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } 
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 // JT Core Auto（v17.1.0）：叠加自主目标闭环的内核（评估器 + 停滞检测 + 自动续跑）
 var AUTO_LOOP = (() => { try { return require("./src/shared/autoCore.cjs"); } catch (e) { console.error("autoCore.cjs load failed:", e.message); return null; } })();
-// 内核引擎白名单（单一来源，GET/POST/run 共用；v17.1.0 加入 auto）
-var ENGINE_WHITELIST = ["vercel", "server", "client", "ultra", "harness", "auto"];
+// JT Core Super（v18.0.0）：超级内核——全自动分析/规划/路由/选模/护栏/自适应
+var SUPER_LOOP = (() => { try { return require("./src/shared/superCore.cjs"); } catch (e) { console.error("superCore.cjs load failed:", e.message); return null; } })();
+// 内核引擎白名单（单一来源，GET/POST/run 共用；v18.0.0 加入 super）
+var ENGINE_WHITELIST = ["vercel", "server", "client", "ultra", "harness", "auto", "super"];
 var ULTRA_TOOLS = (() => { try { return require("./src/shared/ultraTools.cjs"); } catch (e) { return null; } })();
 var ULTRA_PROMPTS = (() => { try { return require("./src/shared/ultraPrompts.cjs"); } catch (e) { return null; } })();
 var WORKFLOW_MOD = (() => { try { return require("./src/shared/workflow.cjs"); } catch (e) { console.error("workflow.cjs load failed:", e.message); return null; } })();
@@ -3826,7 +3828,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         cur = "vercel";
         try { db.setSetting("agentEngine", cur); invalidateSettingsCache(); } catch {}
       }
-      return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP, autoAvailable: !!AUTO_LOOP,
+      return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP, autoAvailable: !!AUTO_LOOP, superAvailable: !!SUPER_LOOP,
         engines: ENGINE_WHITELIST });
     }
     if (url.pathname === "/api/agent/engine" && req.method === "POST") {
@@ -3869,17 +3871,19 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       const confirmed = payload.confirmations && typeof payload.confirmations === "object" ? payload.confirmations : {};
 
       try {
-        // 内核分发（v15.0.0 / v17.1.0）：
-        //   engine=auto  → JT Core Auto（自主目标闭环，最高端）
+        // 内核分发（v15.0.0 / v17.1.0 / v18.0.0）：
+        //   engine=super → JT Core Super（超级内核，全自动路由，把下列内核当执行器）
+        //   engine=auto  → JT Core Auto（自主目标闭环）
         //   engine=ultra → JT Core Ultra（gemini-cli 护栏）
         //   其余         → JT Core Pro+（原逻辑零改动）
         const __engine = String(payload.engine || '');
+        const __super = __engine === 'super' && SUPER_LOOP;
         const __auto = __engine === 'auto' && AUTO_LOOP;
         const __ultra = __engine === 'ultra' && ULTRA_LOOP;
-        const __loop = __auto ? AUTO_LOOP : __ultra ? ULTRA_LOOP : AGENT_LOOP;
-        const __runner = __auto ? AUTO_LOOP.runAutoLoop : __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
-        // Ultra/Auto 共享高端接线：提示词 / 工具集 / 回落模型 / 语义检测 / IDE 上下文 / maxTokens
-        const __highEnd = __auto || __ultra;
+        const __loop = __super ? SUPER_LOOP : __auto ? AUTO_LOOP : __ultra ? ULTRA_LOOP : AGENT_LOOP;
+        const __runner = __super ? SUPER_LOOP.runSuperLoop : __auto ? AUTO_LOOP.runAutoLoop : __ultra ? ULTRA_LOOP.runUltraLoop : AGENT_LOOP.runAgentLoop;
+        // Super/Ultra/Auto 共享高端接线：提示词 / 工具集 / 回落模型 / 语义检测 / IDE 上下文 / maxTokens
+        const __highEnd = __super || __auto || __ultra;
         const __ultraTools = __highEnd && ULTRA_TOOLS ? ULTRA_TOOLS.ultraToolsForModel(model) : tools;
         const __ultraMsgs = __highEnd && ULTRA_PROMPTS
           ? (() => {
@@ -3899,7 +3903,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         const __ideContext = __highEnd ? {
           toPromptBlock: () => String(payload.ideContext || '').slice(0, 2000),
         } : null;
-        const result = await __runner(__ultraMsgs, {
+        const __coreDeps = {
           tools: __ultraTools,
           model,
           apiBase,
@@ -4010,7 +4014,36 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             onNetStatus: (phase, info) => send({ type: "net", phase, info }),
             onPerf: (r) => { send({ type: "perf", report: r }); try { const store = loadJson("perf_log.json"); store.items = store.items || []; store.items.unshift({ ...r, ts: Date.now() }); if (store.items.length > 100) store.items.length = 100; saveJson("perf_log.json", store); } catch {} },
           },
-        });
+        };
+        let result;
+        if (__super) {
+          // 超级内核：注入三套底层执行器 + 共享 deps + 可用模型 + 事件汇（诊断面板可读 trace）
+          const __models = (() => { try { const mm = JSON.parse(st.models || '[]'); return Array.isArray(mm) ? mm : [] } catch { return [] } })().map((m) => {
+            const mm = (m && typeof m === 'object' ? m : {}) ;
+            return {
+              id: String(mm.id || mm.model || ''), name: String(mm.name || mm.model || ''),
+              contextWindow: Number(mm.contextWindow) || 128000, strength: Array.isArray(mm.strength) ? mm.strength : [],
+              costTier: Number(mm.costTier) || 0, speedTier: Number(mm.speedTier) || 0,
+              reasoning: !!mm.reasoning, supportsTools: mm.supportsTools !== false, supportsVision: !!mm.supportsVision,
+            };
+          });
+          result = await SUPER_LOOP.runSuperLoop(__ultraMsgs, {
+            runPro: (m, d) => AGENT_LOOP.runAgentLoop(m, d),
+            runUltra: (m, d) => ULTRA_LOOP ? ULTRA_LOOP.runUltraLoop(m, d) : AGENT_LOOP.runAgentLoop(m, d),
+            runAuto: (m, d) => AUTO_LOOP ? AUTO_LOOP.runAutoLoop(m, d) : AGENT_LOOP.runAgentLoop(m, d),
+            baseDeps: __coreDeps,
+            models: __models,
+            preference: String(payload.preference || 'quality'),
+            signal: abort.signal,
+            sink: { emit: (ev) => { if (ev.type === 'route') send({ type: 'super_trace', decision: ev.decision }); if (ev.type === 'metric') send({ type: 'super_metric', name: ev.name, value: ev.value }); } },
+          });
+        } else {
+          result = await __runner(__ultraMsgs, __coreDeps);
+        }
+        // 超级内核返回带 trace，用它生成可解释路由报告（诊断用，不进正文）
+        if (__super && result && result.trace) {
+          try { send({ type: 'super_trace_full', trace: result.trace }); } catch {}
+        }
         send({ type: "done", content: result.content, thinking: result.thinking, toolCalls: result.toolCalls, stopped: result.stopped, error: result.error });
       } catch (e) {
         if (e && e.name === "NeedsClientError") {

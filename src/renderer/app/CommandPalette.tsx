@@ -96,6 +96,16 @@ export default function CommandPalette({ open, onClose, onOpenTab, sessions, onS
         } catch {}
         onClose();
       } },
+      { id: 'engine-super', label: '切换到 Super 超级内核', labelEn: 'Switch to Super kernel', hint: '超级内核 / 全自动路由', hintEn: 'Super core / full auto-router', icon: 'M13 10V3L4 14h7v7l9-11h-7z', run: async () => {
+        try {
+          const { getSettingsSync, saveSettings } = await import('../store/storage');
+          const next = { ...getSettingsSync(), agentEngine: 'super' as const };
+          saveSettings(next);
+          fetch('/api/agent/engine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: 'super' }) }).catch(() => {});
+          window.dispatchEvent(new CustomEvent('settings-updated', { detail: next }));
+        } catch {}
+        onClose();
+      } },
       { id: 'focus', label: '焦点模式', labelEn: "Focus mode", hint: '隐藏界面只留对话 · Ctrl+Shift+F 或 Esc 退出', hintEn: "Hide chrome, chat only · Ctrl+Shift+F", icon: 'M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2m-8 0H6a2 2 0 01-2-2v-2', run: () => { window.dispatchEvent(new CustomEvent('jutian-immersive')); onClose() } },
       { id: 'docs', label: '使用文档', labelEn: "Documentation", hint: '内置 8 篇离线指南与 FAQ', hintEn: "8 built-in offline guides & FAQ", icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', run: () => { onOpenTab('docs'); onClose() } },
       { id: 'usage', label: '用量与成本', labelEn: "Usage & cost", hint: 'Token 趋势 / 按模型花费', hintEn: "Token trend / spend per model", icon: 'M3 3v18h18M7 14l4-4 3 3 4-6', run: () => { onOpenTab('usage'); onClose() } },

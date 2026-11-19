@@ -961,7 +961,7 @@ function withAutoPrompt(messages) {
   return first && first.role === "system" ? [{ ...first, content: String(first.content || "") + "\n\n" + AUTO_SYSTEM_PROMPT }, ...messages.slice(1)] : [{ role: "system", content: AUTO_SYSTEM_PROMPT }, ...messages];
 }
 async function runAutoLoop(messages, deps) {
-  const { events, signal } = deps;
+  const { signal } = deps;
   const working = withAutoPrompt(messages);
   const goal = extractGoal(messages);
   const maxRounds = Math.max(1, Math.min(12, deps.maxAutonomousRounds ?? 5));

@@ -108,7 +108,7 @@ export function withAutoPrompt(messages: LoopMessage[]): LoopMessage[] {
  * 返回形状与 runAgentLoop 完全一致（AgentLoopResult），serve.ts 无缝切换。
  */
 export async function runAutoLoop(messages: LoopMessage[], deps: AutoDeps): Promise<AgentLoopResult> {
-  const { events, signal } = deps
+  const { signal } = deps
   const working = withAutoPrompt(messages)
   const goal = extractGoal(messages)
   const maxRounds = Math.max(1, Math.min(12, deps.maxAutonomousRounds ?? 5))

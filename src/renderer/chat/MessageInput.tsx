@@ -148,9 +148,9 @@ function ComposerStatusBar({ chatMode, modelLabel, workDir, disabled, engine, on
       </span>
       <button type="button" onClick={onSwitchEngine} title="点击切换 JT Core 内核"
         className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded transition-colors"
-        style={{ background: engine === 'ultra' ? '#c7000b18' : `${c.accent}12`, color: engine === 'ultra' ? '#c7000b' : c.accent }}>
+        style={{ background: (engine === 'ultra' || engine === 'super') ? '#c7000b18' : `${c.accent}12`, color: (engine === 'ultra' || engine === 'super') ? '#c7000b' : c.accent }}>
         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M10.5 18h3M6 10.5v3M18 10.5v3M8 8h8v8H8z" /></svg>
-        {engine === 'auto' ? 'Auto' : engine === 'ultra' ? 'Ultra' : engine === 'harness' ? 'Harness' : 'Pro+'}
+        {engine === 'super' ? 'Super' : engine === 'auto' ? 'Auto' : engine === 'ultra' ? 'Ultra' : engine === 'harness' ? 'Harness' : 'Pro+'}
       </button>
       <span className="font-mono truncate max-w-[180px] composer-status-secondary" title={modelLabel}>{modelLabel || '未配置模型'}</span>
       {base && (
@@ -1974,7 +1974,7 @@ export default function MessageInput({ onSend, onOpenResearch, planMode, onToggl
         {/* composer 状态条：模式 · 模型 · 工作目录 · git 分支 */}
         <ComposerStatusBar chatMode={chatMode} modelLabel={currentModel || settings?.model || ''} workDir={settings?.workDir || ''} disabled={disabled}
           engine={settings?.agentEngine} onSwitchEngine={() => {
-            const all = ['vercel', 'server', 'client', 'ultra', 'harness', 'auto'];
+            const all = ['vercel', 'server', 'client', 'ultra', 'harness', 'auto', 'super'];
             const cur = String(settings?.agentEngine || 'vercel');
             const next = all[(all.indexOf(cur) + 1) % all.length];
             try { const raw = localStorage.getItem('lyclaw_settings'); const st = raw ? JSON.parse(raw) : {}; st.agentEngine = next; localStorage.setItem('lyclaw_settings', JSON.stringify(st)); } catch {}

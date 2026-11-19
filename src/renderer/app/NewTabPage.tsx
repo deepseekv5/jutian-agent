@@ -218,7 +218,7 @@ export default function NewTabPage({ onPick, sessions = [] }: { onPick: (t: Page
           }} className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
             style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
             <span className="text-[12.5px] shrink-0">{t('切换内核', 'Switch kernel')}</span>
-            <span className="text-[10.5px] truncate" style={muted}>{t('JT Core Pro+ / Ultra / Auto（composer 状态条、命令面板也可切换）', 'JT Core Pro+ / Ultra / Auto')}</span>
+            <span className="text-[10.5px] truncate" style={muted}>{t('JT Core Pro+ / Ultra / Auto / Super（composer 状态条、命令面板也可切换）', 'JT Core Pro+ / Ultra / Auto / Super')}</span>
           </button>
           <button onClick={() => onPick('plugins')} className="w-full flex items-baseline gap-3 py-1 text-left jt-text-row"
             style={{ color: c.textSecondary, background: 'transparent', border: 'none' }}>
