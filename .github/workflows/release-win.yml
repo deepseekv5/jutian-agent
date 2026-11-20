@@ -88,6 +88,10 @@ jobs:
 
       - name: 测试
         run: npm test
+        env:
+          # v18.1.0 win-arm64 测试 step 失败疑似弱 runner OOM（+164 测试后；
+          # mac/linux/android x64 全绿本地 1556 绿）——对齐构建 step 的 4G 配置
+          NODE_OPTIONS: --max-old-space-size=4096
 
       # better-sqlite3 原生模块：换成 Electron 对应 ABI（v130）。
       # x64 有官方预编译；arm64 无预编译，@electron/rebuild 退回源码编译
