@@ -106,7 +106,9 @@ async function checkLatest() {
   // 镜像站是第三方代理，可返回"格式合法但被篡改"的 asar，
   // 之前只查 {"files" 头，等于给供应链攻击开门（应用有本机全权限）。
   const asarDigest = asar && asar.digest ? String(asar.digest).replace(/^sha256:/, '') : ''
-  const installer = (rel.assets || []).find(a => /\.(dmg|exe)$/i.test(a.name))
+  // v18.1.1：installer 兜底正则补 Linux/安卓包类型——之前只认 dmg/exe，
+  // Linux 的 AppImage/deb/tar.gz 全不匹配 → 连"下载安装包"链接都没有。
+  const installer = (rel.assets || []).find(a => /\.(dmg|exe|AppImage|deb|tar\.gz|apk)$/i.test(a.name))
   return {
     available,
     current,
@@ -163,6 +165,15 @@ async function applyUpdate(asarUrl, expectedSha256, expectedSize) {
     // 原子替换三连:.new 落盘 → 旧包备份 → rename 换名
     const tmp = target + '.new'
     const bak = target + '.bak'
+    // v18.1.1：Linux 可写性预检——AppImage 的 squashfs 挂载点(/tmp/.mount_*)与
+    // deb 的 /opt 安装目录通常是只读的，直接写 .new 会抛 EROFS/EACCES 被上层
+    // 吞成模糊报错。提前检测并给出可操作提示：下载完整安装包手动更新。
+    if (process.platform === 'linux') {
+      try { fs.accessSync(require('path').dirname(target), fs.constants.W_OK) }
+      catch {
+        throw new Error('当前 Linux 安装目录不可写（AppImage/deb 常见），asar 热更新不可用。请到 设置 → 关于 下载完整安装包手动更新。')
+      }
+    }
     sendProgress({ stage: 'apply' })
     fs.writeFileSync(tmp, buf)
     if (process.platform === 'win32') {
@@ -248,7 +259,8 @@ function register() {
   setTimeout(async () => {
     try {
       const info = await checkLatest()
-      if (info.available && info.asarUrl) applyUpdate(info.asarUrl).catch(() => {})
+      // v18.1.1：补传 SHA/size——之前静默更新不传，applyUpdate 里的校验整段被跳过
+      if (info.available && info.asarUrl) applyUpdate(info.asarUrl, info.asarSha256, info.asarSize).catch(() => {})
     } catch { /* 离线/限流,静默 */ }
   }, 12000)
 
@@ -257,7 +269,8 @@ function register() {
   setInterval(async () => {
     try {
       const info = await checkLatest()
-      if (info.available && info.asarUrl) applyUpdate(info.asarUrl).catch(() => {})
+      // v18.1.1：同上，周期性静默更新也要校验 SHA
+      if (info.available && info.asarUrl) applyUpdate(info.asarUrl, info.asarSha256, info.asarSize).catch(() => {})
     } catch { /* 离线/限流,静默 */ }
   }, PERIODIC_MS)
 }

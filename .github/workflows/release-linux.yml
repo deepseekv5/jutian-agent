@@ -65,7 +65,19 @@ jobs:
 
       - name: 整理产物名
         run: |
+          VER="${GITHUB_REF_NAME#v}"
           mkdir -p dist-out
+          # v18.1.1：补 asar 更新包（mac/win 早有，Linux 之前漏了——导致更新器
+          # 找不到 -app.asar 资产、Linux "一键更新"永远显示"无更新包"）。
+          # asar 是纯 JS 跨平台通用，只在 x64 传一份，避免 x64/arm64 双矩阵同名冲突。
+          if [ "${{ matrix.arch }}" = "x64" ]; then
+            ASAR_SRC=$(find release -path "*linux-unpacked/resources/app.asar" | head -1)
+            if [ -n "$ASAR_SRC" ]; then
+              cp "$ASAR_SRC" "dist-out/jutian-agent-$VER-app.asar"
+            else
+              echo "WARN: linux app.asar not found — asar 更新包缺失"
+            fi
+          fi
           cp release/*.AppImage dist-out/ 2>/dev/null || true
           cp release/*.deb dist-out/ 2>/dev/null || true
           cp release/*.tar.gz dist-out/ 2>/dev/null || true

@@ -7,7 +7,7 @@ import { useLanguage } from '../hooks/useLanguage'
 import { getAllMemories } from '../store/storage'
 import { hhmm } from '../utils/datetime'
 import { fetchCompat } from '../api'
-import { downloadFile } from '../utils/nativeSave'
+import { downloadFile, isNativeUpdateAvailable, fetchNativeBundle, restartNativeApp } from '../utils/nativeSave'
 
 /**
  * AboutContent — 关于页内容(单一来源,设置弹窗与独立关于页共用)
@@ -22,6 +22,10 @@ interface UpdateInfo {
   latest?: string
   notes?: string
   asarUrl?: string | null
+  /** 安卓应用内更新：手机独立包 jutian-mobile-<ver>.zip 下载地址 */
+  bundleUrl?: string | null
+  /** 该 zip 的官方 SHA-256（GitHub 资产 digest），下载后校验完整性 */
+  bundleSha256?: string | null
   publishedAt?: string
   error?: string
 }
@@ -61,12 +65,16 @@ export default function AboutContent() {
         const latest = String(rel?.tag_name || '').replace(/^v/, '')
         const apk = (rel?.assets || []).find((x: any) => /-app\.asar$/.test(x.name || ''))
         const localApk = (rel?.assets || []).find((x: any) => /jutian-local-/.test(x.name || ''))
+        // 安卓应用内更新包：与本地版 APK 内置的是同一份 jutian-mobile-<ver>.zip
+        const mobileZip = (rel?.assets || []).find((x: any) => /jutian-mobile-.*\.zip$/.test(x.name || ''))
         setUpd({
           ok: true, current: APP_VERSION, latest,
           available: !!latest && latest !== APP_VERSION,
           notes: String(rel?.body || '').slice(0, 4000),
           asarUrl: apk?.browser_download_url || null,
           installerUrl: localApk?.browser_download_url || null,
+          bundleUrl: mobileZip?.browser_download_url || null,
+          bundleSha256: mobileZip?.digest ? String(mobileZip.digest).replace(/^sha256:/, '') : null,
           publishedAt: rel?.published_at || '',
         } as any)
         setLastCheck(hhmm())
@@ -93,7 +101,18 @@ export default function AboutContent() {
 
   const apply = () => {
     const a = api()
-    // v16.3.4：安卓无 updateApply，点了不崩（引导去下载安装包）
+    // 安卓：无 electronAPI，但 JutianNative.fetchBundle 存在 → 走应用内 bundle 更新
+    // （下载/校验/解压/原子替换都在 Java 桥里完成，完成回调 window.__jutianUpdateDone）
+    if (!a?.updateApply && isNativeUpdateAvailable() && upd?.bundleUrl) {
+      setProg({ stage: 'download', got: 0, total: 0, pct: 0 })
+      fetchNativeBundle(upd.bundleUrl, upd.bundleSha256 || '', (ok, msg) => {
+        setProg(ok
+          ? { stage: 'done', error: msg }
+          : { stage: 'error', error: msg || '更新失败' })
+      })
+      return
+    }
+    // v16.3.4：安卓无 updateApply 且无 bundle 包时，点了不崩（引导去下载安装包）
     if (!upd?.asarUrl || !a?.updateApply) return
     setProg({ stage: 'download', got: 0, total: 0, pct: 0 })
     a.updateApply(upd.asarUrl).then((r: any) => {
@@ -136,10 +155,16 @@ export default function AboutContent() {
 
   const version = upd?.current || '—'
   const hasUpdate = !!upd?.available
+  // 安卓应用内更新可用：原生桥 + Release 里有 mobile.zip
+  const nativeUpdate = isNativeUpdateAvailable() && !!upd?.bundleUrl
   const updating = prog && ['download', 'verify', 'apply', 'restarting'].includes(prog.stage)
   const pct = prog?.stage === 'download' ? (prog.pct ?? null) : (updating ? null : 0)
-  // v11.0.4 自动更新:下载替换完成后主进程推 update-ready,此处展示「重启即用」
-  const restartNow = () => { api()?.updateRestart?.() }
+  // 桌面走主进程 updateRestart；安卓走桥杀进程并重新拉起 Activity（Node 必须重启才加载新 serve.cjs）
+  const restartNow = () => {
+    const a = api()
+    if (a?.updateRestart) a.updateRestart()
+    else restartNativeApp()
+  }
 
   return (
     <>
@@ -174,7 +199,13 @@ export default function AboutContent() {
             {lang === 'en' ? `Update to v${upd?.latest} available` : `可更新至 v${upd?.latest}`}
           </span>
           <span className="flex-1" />
-          {api()?.updateApply && upd.asarUrl ? (
+          {nativeUpdate ? (
+            <button onClick={apply} disabled={!!updating}
+              className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
+              style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
+              {lang === 'en' ? 'Update in app' : '应用内更新'}
+            </button>
+          ) : api()?.updateApply && upd.asarUrl ? (
             <button onClick={apply} disabled={!!updating}
               className="px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
               style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>
@@ -195,7 +226,19 @@ export default function AboutContent() {
             <div className="text-[12px] leading-relaxed max-h-40 overflow-auto markdown-body" style={{ color: c.textSecondary }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{upd.notes}</ReactMarkdown>
             </div>
-            {!api()?.updateApply && upd.installerUrl ? (
+            {nativeUpdate ? (
+              <>
+                <button onClick={apply} disabled={!!updating}
+                  className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
+                  style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Update in app' : '应用内更新'}</button>
+                {upd.installerUrl && (
+                  <a href={upd.installerUrl} target="_blank" rel="noreferrer"
+                    className="ml-2 text-[11px] underline" style={{ color: c.textMuted }}>
+                    {lang === 'en' ? 'or download full APK' : '或下载完整安装包'}
+                  </a>
+                )}
+              </>
+            ) : !api()?.updateApply && upd.installerUrl ? (
               <a href={upd.installerUrl} target="_blank" rel="noreferrer"
                 className="mt-2.5 inline-block px-4 h-8 leading-8 rounded-full text-[12px] font-semibold"
                 style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Download update' : '下载更新'}</a>
@@ -204,10 +247,20 @@ export default function AboutContent() {
                 className="mt-2.5 px-4 h-8 rounded-full text-[12px] font-semibold disabled:opacity-40"
                 style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>{lang === 'en' ? 'Update & restart' : '一键更新并重启'}</button>
             )}
-            {!upd.asarUrl && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>{lang === 'en' ? '(installer only for this version)' : '(该版本仅有完整安装包)'}</span>}
+            {!upd.asarUrl && !nativeUpdate && <span className="ml-2 text-[10.5px]" style={{ color: c.textMuted }}>{lang === 'en' ? '(installer only for this version)' : '(该版本仅有完整安装包)'}</span>}
           </div>
         )}
       </div>
+
+      {/* 更新失败提示：桌面/安卓共用的错误出口（此前 stage=error 时覆盖层直接消失、无任何反馈） */}
+      {prog?.stage === 'error' && (
+        <div className="py-1">
+          <div className="px-3 py-2.5 rounded-xl text-[12px] leading-relaxed whitespace-pre-wrap"
+            style={{ background: 'rgba(204,0,0,.07)', color: '#c7000b' }}>
+            {prog.error || (lang === 'en' ? 'Update failed' : '更新失败')}
+          </div>
+        </div>
+      )}
 
       {/* v11.0.4:更新就绪卡(下载完成,重启即用) */}
       {prog?.stage === 'done' && (
@@ -221,7 +274,9 @@ export default function AboutContent() {
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-semibold" style={{ color: c.textHead }}>新版本已就绪</div>
-                <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>更新已下载并校验完成 — 重启应用后生效</div>
+                <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>
+                  {prog.error || '更新已下载并校验完成 — 重启应用后生效'}
+                </div>
               </div>
               <button onClick={restartNow} className="shrink-0 h-8 px-4 rounded-full text-[12px] font-semibold"
                 style={{ background: 'var(--brand, #10a37f)', color: '#fff' }}>重启即用</button>
@@ -343,7 +398,7 @@ export default function AboutContent() {
                 ? `${fmtBytes(prog.got || 0)} / ${fmtBytes(prog.total || 0)}`
                 : prog.stage === 'restarting' ? '倒计时中…' : '更新期间请勿关闭应用'}
             </div>
-            {prog.stage === 'download' && (
+            {prog.stage === 'download' && !isNativeUpdateAvailable() && (
               <button onClick={cancel} className="mt-6 px-4 h-8 rounded-full text-[12px] font-medium"
                 style={{ background: c.bgInput, color: c.textSecondary }}>取消更新</button>
             )}

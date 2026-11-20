@@ -292,34 +292,76 @@ public class MainActivity extends Activity {
         return n;
     }
 
-    /** 内置运行时是否已解压且版本匹配（升级 APK 后自动重新解压） */
+    /**
+     * 内置运行时是否已解压且可用。
+     *
+     * 版本戳设计（应用内更新必须绕过此处，否则重启会被 APK 内置旧包覆盖）：
+     *  - .bundle-version    ：当前生效 bundle 的版本（仅作信息/旧版兼容，不再作为新判定的唯一依据）
+     *  - .bundle-base-version：该 bundle 所依赖的 APK 版本（APK 真实升级时才会变）
+     * 判定：serve.cjs 存在为前提；有 base 戳时「base 戳 == 当前 APK 版本」即就绪
+     *       （应用内更新只换 bundle、不动 APK，base 戳不变 → 重启不被覆盖）；
+     *       无 base 戳（旧安装）时沿用旧规则「.bundle-version == 当前 APK 版本」。
+     */
     private boolean bundleReady() {
         java.io.File dir = new java.io.File(getFilesDir(), "app");
         java.io.File stamp = new java.io.File(dir, ".bundle-version");
         if (!new java.io.File(dir, "serve.cjs").isFile() || !stamp.isFile()) return false;
         try {
-            byte[] buf = new byte[(int) stamp.length()];
-            try (java.io.FileInputStream in = new java.io.FileInputStream(stamp)) { in.read(buf); }
-            return versionName().equals(new String(buf, "UTF-8").trim());
+            java.io.File base = new java.io.File(dir, ".bundle-base-version");
+            if (base.isFile()) return versionName().equals(readStamp(base));
+            // 兼容老版本 APK 解压出来的目录：只有 .bundle-version
+            return versionName().equals(readStamp(stamp));
         } catch (Exception e) {
             return false;
         }
     }
 
+    /** 读取一个版本戳文件（UTF-8、去首尾空白），读不全也不抛异常 */
+    private static String readStamp(java.io.File f) throws Exception {
+        byte[] buf = new byte[256];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
+        return new String(out.toByteArray(), "UTF-8").trim();
+    }
+
+    /** 在指定 bundle 目录写入一个版本戳文件 */
+    private static void writeStamp(java.io.File dir, String name, String value) throws Exception {
+        try (java.io.FileOutputStream fos =
+                     new java.io.FileOutputStream(new java.io.File(dir, name))) {
+            fos.write((value == null ? "" : value).getBytes("UTF-8"));
+        }
+    }
+
     interface ExtractProgress { void onProgress(int filesDone); }
 
-    /** 解压 assets/mobile.zip 到 filesDir/app（含路径穿越防护与逐文件进度） */
+    /** 解压 assets/mobile.zip 到 filesDir/app，并写入 APK 内置包的版本戳 */
     private void extractBundle(ExtractProgress progress) throws Exception {
         java.io.File dir = new java.io.File(getFilesDir(), "app");
         dir.mkdirs();
-        String base = dir.getCanonicalPath();
+        try (java.io.InputStream in = getAssets().open("mobile.zip")) {
+            unzipBundle(in, dir, progress);
+        }
+        // APK 内置包：两个戳都写当前 APK 版本（bundle 版本信息对旧逻辑保持兼容）
+        writeStamp(dir, ".bundle-version", versionName());
+        writeStamp(dir, ".bundle-base-version", versionName());
+    }
+
+    /**
+     * 把任意来源（assets / 下载临时文件）的 zip 流解压到目标目录。
+     * 含路径穿越防护与逐文件进度；不写版本戳，由调用方决定写什么。
+     * 应用内更新复用此方法把新包解到 filesDir/app-new，成功后再原子换名。
+     */
+    private void unzipBundle(java.io.InputStream source, java.io.File destDir, ExtractProgress progress) throws Exception {
+        String base = destDir.getCanonicalPath();
         byte[] buf = new byte[64 * 1024];
-        try (java.util.zip.ZipInputStream zin =
-                     new java.util.zip.ZipInputStream(getAssets().open("mobile.zip"))) {
+        try (java.util.zip.ZipInputStream zin = new java.util.zip.ZipInputStream(source)) {
             java.util.zip.ZipEntry e;
             int done = 0;
             while ((e = zin.getNextEntry()) != null) {
-                java.io.File out = new java.io.File(dir, e.getName());
+                java.io.File out = new java.io.File(destDir, e.getName());
                 if (!out.getCanonicalPath().startsWith(base + java.io.File.separator)) continue;
                 if (e.isDirectory()) { out.mkdirs(); continue; }
                 java.io.File parent = out.getParentFile();
@@ -332,10 +374,6 @@ public class MainActivity extends Activity {
                 if (progress != null && done % 5 == 0) progress.onProgress(done);
             }
             if (progress != null) progress.onProgress(done);
-        }
-        try (java.io.FileOutputStream fos =
-                     new java.io.FileOutputStream(new java.io.File(dir, ".bundle-version"))) {
-            fos.write(versionName().getBytes("UTF-8"));
         }
     }
 
@@ -549,7 +587,15 @@ public class MainActivity extends Activity {
     private String pendingSaveB64 = null;
     private String pendingSaveId = null;
 
-    /** 前端桥：window.JutianNative.saveBlob(name, mime, base64) → 系统保存对话框 */
+    /**
+     * 前端桥：注册为 window.JutianNative（一个 JS 对象名只能注册一个对象，
+     * 故文件保存 / bundle 更新 / 重启都放进同一个类）。
+     *  - saveBlob(name, mime, base64)       → 系统保存对话框（SAF）
+     *  - fetchBundle(url, sha256)           → 后台下载 Release 的 jutian-mobile-<ver>.zip，
+     *                                          SHA-256 校验后解压覆盖 filesDir/app；
+     *                                          完成回调 window.__jutianUpdateDone(ok, msg)
+     *  - restartApp()                       → 杀进程并重新拉起 Activity，使新 serve.cjs 生效
+     */
     private class FileSaverBridge {
         @JavascriptInterface
         public String saveBlob(String name, String mime, String base64) {
@@ -570,6 +616,152 @@ public class MainActivity extends Activity {
             });
             return id;
         }
+
+        /** 应用内 bundle 更新：下载 → 校验 → 解到临时目录 → 原子替换，失败保留原 bundle */
+        @JavascriptInterface
+        public String fetchBundle(String url, String sha256) {
+            final String u = url == null ? "" : url.trim();
+            if (!u.toLowerCase(java.util.Locale.ROOT).endsWith(".zip")) {
+                notifyUpdateDone(false, "更新包地址无效");
+                return "invalid";
+            }
+            new Thread(() -> {
+                final java.io.File appDir = new java.io.File(getFilesDir(), "app");
+                final java.io.File newDir = new java.io.File(getFilesDir(), "app-new");
+                final java.io.File oldDir = new java.io.File(getFilesDir(), "app-old");
+                java.io.File download = null;
+                boolean ok = false;
+                String resultMsg = "";
+                try {
+                    // 1) 下载到缓存临时文件（不动现有 bundle）
+                    download = new java.io.File(getCacheDir(), "bundle-" + System.currentTimeMillis() + ".zip");
+                    java.net.HttpURLConnection conn =
+                            (java.net.HttpURLConnection) new java.net.URL(u).openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setRequestProperty("User-Agent", "jutian-android");
+                    int code = conn.getResponseCode();
+                    if (code < 200 || code >= 300) throw new Exception("下载失败 HTTP " + code);
+                    byte[] buf = new byte[64 * 1024];
+                    try (java.io.InputStream in = conn.getInputStream();
+                         java.io.FileOutputStream fos = new java.io.FileOutputStream(download)) {
+                        int n;
+                        while ((n = in.read(buf)) > 0) fos.write(buf, 0, n);
+                    }
+                    conn.disconnect();
+
+                    // 2) SHA-256 校验（官方值来自 GitHub 资产 digest；为空则跳过，靠结构校验兜底）
+                    String want = sha256 == null ? "" : sha256.trim()
+                            .replace("sha256:", "").toLowerCase(java.util.Locale.ROOT);
+                    if (!want.isEmpty()) {
+                        String got = sha256File(download);
+                        if (!want.equals(got)) throw new Exception("更新包校验失败（SHA-256 不匹配），已保留原版本");
+                    }
+
+                    // 3) 解压到 app-new —— 此步失败完全不触碰现有 app
+                    deleteRecursive(newDir);
+                    if (!newDir.exists() && !newDir.mkdirs()) throw new Exception("无法创建更新目录");
+                    try (java.io.FileInputStream fis = new java.io.FileInputStream(download)) {
+                        unzipBundle(fis, newDir, null);
+                    }
+                    if (!new java.io.File(newDir, "serve.cjs").isFile()) {
+                        throw new Exception("更新包内容不完整（缺少 serve.cjs）");
+                    }
+
+                    // 4) 写新版本戳：bundle 版本从文件名解析，base 戳保持为当前 APK 版本
+                    //    （APK 没升级 → base 戳不变 → 重启时 bundleReady() 不会用旧包覆盖）
+                    String bundleVer = parseBundleVersion(u);
+                    writeStamp(newDir, ".bundle-version", bundleVer.isEmpty() ? versionName() : bundleVer);
+                    writeStamp(newDir, ".bundle-base-version", versionName());
+
+                    // 5) 原子换名：app→app-old，app-new→app；任一步失败都回滚，绝不留下半套文件
+                    deleteRecursive(oldDir);
+                    boolean renamedOld = !appDir.exists() || appDir.renameTo(oldDir);
+                    if (!renamedOld) throw new Exception("无法替换旧版本目录（可能被占用）");
+                    if (!newDir.renameTo(appDir)) {
+                        if (oldDir.isDirectory()) oldDir.renameTo(appDir); // 回滚
+                        throw new Exception("无法应用新版本，已回滚");
+                    }
+                    deleteRecursive(oldDir); // 删除旧版本备份
+                    ok = true;
+                    resultMsg = "更新完成，重启应用生效";
+                } catch (Exception e) {
+                    String m = e.getMessage();
+                    resultMsg = m == null || m.isEmpty() ? e.getClass().getSimpleName() : m;
+                    // 兜底回滚：若 app 没了但 old 还在，恢复 old
+                    if (!appDir.isDirectory() && oldDir.isDirectory()) oldDir.renameTo(appDir);
+                } finally {
+                    if (download != null) download.delete();
+                    deleteRecursive(newDir); // 成功时 newDir 已被 rename，不存在；失败时清理残留
+                }
+                final boolean done = ok;
+                final String msg = resultMsg;
+                runOnUiThread(() -> notifyUpdateDone(done, msg));
+            }, "bundle-update").start();
+            return "started";
+        }
+
+        /** 重启应用：Node 与主进程同生命周期，必须整进程重启才能加载新的 serve.cjs */
+        @JavascriptInterface
+        public void restartApp() {
+            runOnUiThread(() -> {
+                try {
+                    Intent it = new Intent(getApplicationContext(), MainActivity.class);
+                    it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    android.app.PendingIntent pi = android.app.PendingIntent.getActivity(
+                            getApplicationContext(), 0, it,
+                            android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE);
+                    android.app.AlarmManager am =
+                            (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                    long when = System.currentTimeMillis() + 600; // 给前端的 restart 回调留响应时间
+                    if (am != null) {
+                        try {
+                            am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC, when, pi);
+                        } catch (Exception ignored) {
+                            am.set(android.app.AlarmManager.RTC, when, pi);
+                        }
+                    }
+                } catch (Exception ignored) { /* 最差情况：只杀进程，用户手动重开 */ }
+                android.os.Process.killProcess(android.os.Process.myPid());
+                System.exit(10);
+            });
+        }
+    }
+
+    /** 从更新包 URL 的文件名解析 bundle 版本：jutian-mobile-<ver>.zip → <ver> */
+    private static String parseBundleVersion(String url) {
+        try {
+            String name = new java.io.File(new java.net.URL(url).getPath()).getName();
+            java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("jutian-mobile-(.+)\\.zip").matcher(name);
+            if (m.find()) return m.group(1).trim();
+        } catch (Exception ignored) { }
+        return "";
+    }
+
+    /** 计算文件 SHA-256（十六进制小写），用于校验下载包完整性 */
+    private static String sha256File(java.io.File f) throws Exception {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        byte[] buf = new byte[64 * 1024];
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format(java.util.Locale.ROOT, "%02x", b & 0xff));
+        return sb.toString();
+    }
+
+    /** 递归删除目录/文件（清理临时目录与旧版本备份），失败静默 */
+    private static void deleteRecursive(java.io.File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            java.io.File[] children = f.listFiles();
+            if (children != null) for (java.io.File c : children) deleteRecursive(c);
+        }
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
     }
 
     /** 用户在系统对话框选完位置（或取消）后写文件 */
@@ -608,6 +800,19 @@ public class MainActivity extends Activity {
     private void notifySaveResult(String id, boolean ok) {
         if (web == null) return;
         final String js = "window.__jutianSaveDone && window.__jutianSaveDone(" + id + "," + (ok ? "true" : "false") + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    /** 通知前端 bundle 更新结果：window.__jutianUpdateDone(ok, msg) */
+    private void notifyUpdateDone(final boolean ok, final String msg) {
+        if (web == null) return;
+        String safe = (msg == null ? "" : msg)
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "");
+        final String js = "window.__jutianUpdateDone && window.__jutianUpdateDone("
+                + (ok ? "true" : "false") + ",'" + safe + "')";
         web.post(() -> web.evaluateJavascript(js, null));
     }
 
