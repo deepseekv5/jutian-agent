@@ -54,6 +54,33 @@ describe('extractGoal', () => {
       { role: 'user', content: [{ type: 'text', text: '看图改代码' }, { type: 'image_url' }] },
     ])).toBe('看图改代码')
   })
+
+  it('中英混合多段目标（帮我…然后…再…）返回完整原文，不做截断或拆段', () => {
+    const goal = '帮我重构这个 auth module，然后用 vitest 补齐 unit tests，再把 README 翻译成英文'
+    expect(extractGoal([
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: goal },
+    ])).toBe(goal)
+  })
+
+  it('中英混合多段目标藏在多模态数组 content 里也返回完整原文', () => {
+    const goal = 'Fix the login bug，然后帮我加上 e2e 测试，再更新 CHANGELOG'
+    expect(extractGoal([
+      { role: 'user', content: [{ type: 'text', text: goal }, { type: 'image_url' }] },
+    ])).toBe(goal)
+  })
+
+  it('纯图片无文本的多模态消息：单条时返回空串，且不遮蔽更早的文本目标', () => {
+    // 只有纯图片消息 → 无文本可用，返回空串。
+    expect(extractGoal([
+      { role: 'user', content: [{ type: 'image_url' }, { type: 'image_url' }] },
+    ])).toBe('')
+    // 纯图片消息在最后 → 跳过它继续向前找真正的文本目标。
+    expect(extractGoal([
+      { role: 'user', content: '先把部署脚本修好' },
+      { role: 'user', content: [{ type: 'image_url' }] },
+    ])).toBe('先把部署脚本修好')
+  })
 })
 
 describe('trajectorySignature', () => {
@@ -110,6 +137,27 @@ describe('evaluateGoalAuto 三态', () => {
 
   it('无目标 → ok=false', async () => {
     expect((await evaluateGoalAuto(makeDeps(), '', 'x')).ok).toBe(false)
+  })
+
+  it('note 超长按 code point 截断，不切断 emoji 代理对', async () => {
+    // 155 个 ASCII + 10 个 emoji（每个占 2 个 UTF-16 码元）：整串 175 码元 / 165 码点。
+    // 旧的按码元 slice(0,160) 会正好切在第 3 个 emoji 的高低代理之间，产生非法孤立代理；
+    // 按码点截断应得到 160 个码点 = 155 个字符 + 5 个完整 emoji。
+    const emoji = '🚀'
+    const rawNote = 'a'.repeat(155) + emoji.repeat(10)
+    const deps = makeDeps({
+      callLLM: async () => jsonResponse({
+        choices: [{ message: { content: `{"done":false,"note":"${rawNote}"}` } }],
+      }),
+    })
+    const ev = await evaluateGoalAuto(deps, '写个网站', '写了一半')
+    expect(ev.ok).toBe(true)
+    // 截断后恰为 160 个 code point。
+    expect(Array.from(ev.note).length).toBe(160)
+    // 结尾是完整的 emoji，而不是被切半的代理对。
+    expect(ev.note.endsWith(emoji)).toBe(true)
+    // 结尾不得是孤立的高代理（码元层面切半的标志）。
+    expect(/[\uD800-\uDBFF]$/.test(ev.note)).toBe(false)
   })
 })
 
@@ -178,5 +226,25 @@ describe('runAutoLoop 闭环', () => {
     const deps = makeDeps({ signal: ac.signal })
     const r = await runAutoLoop([...messages], deps)
     expect(r.stopped).toBe('aborted')
+  })
+
+  it('连续零工具轮（纯文本答复）不触发停滞检测：空签名不参与判定', async () => {
+    // 每轮 runAgentLoop 都只产出纯文本（无任何工具调用），轨迹签名为空串。
+    // 空签名不应被当成「重复操作」判空转：应跑满封顶轮数并正常收尾。
+    const deps = makeDeps({
+      callLLM: async (body: string) => {
+        const parsed = JSON.parse(body)
+        if (parsed.stream === false) {
+          return jsonResponse({ choices: [{ message: { content: '{"done":false,"note":"继续"}' } }] })
+        }
+        return sseResponse(['纯文本进展'])
+      },
+      maxAutonomousRounds: 4,
+    })
+    const r = await runAutoLoop([{ role: 'user', content: '目标' }], deps)
+    expect(r.stopped).toBeUndefined()
+    expect(r.error).toBeUndefined()
+    // 4 轮纯文本答复全部保留（若误判停滞会在第 2 轮提前停并带 error）。
+    expect(r.content.split('纯文本进展').length - 1).toBe(4)
   })
 })

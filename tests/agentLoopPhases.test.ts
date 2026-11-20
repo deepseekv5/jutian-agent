@@ -76,6 +76,27 @@ describe('buildLoopContext', () => {
   })
 })
 
+describe('READONLY_TOOLS 并行判定', () => {
+  it('补齐的只读工具在集合内（并行分组更充分）', () => {
+    // 与 serve.ts 各实现的只读属性逐一核对过的新增项
+    const added = [
+      'get_file_info', 'read_many_files', 'glob', 'grep_search', 'code_analysis',
+      'find_in_files', 'file_stats', 'text_diff', 'shell_list',
+      'list_skills', 'load_skill', 'consult_guidance',
+    ]
+    for (const t of added) expect(READONLY_TOOLS.has(t)).toBe(true)
+  })
+  it('有副作用的工具绝不在集合内（append_file 是写操作）', () => {
+    const effects = [
+      'append_file', 'write_file', 'edit_file', 'delete_file', 'move_file', 'archive',
+      'shell', 'shell_kill', 'shell_output', 'npm_run', 'git_operation', 'http_request',
+      'remember', 'forget', 'save_knowledge', 'install_skill', 'create_skill',
+      'todo_write', 'write_todos', 'update_plan', 'clipboard_read', 'open_path', 'schedule_task',
+    ]
+    for (const t of effects) expect(READONLY_TOOLS.has(t)).toBe(false)
+  })
+})
+
 describe('prepareRoundMessages', () => {
   const deps = makeDeps({ model: 'spark-x2.6', apiBase: 'https://maas.example/v2' }) // free 命中 hermes
   it('wrapUp 追加收尾提示到本次请求', () => {
@@ -116,6 +137,42 @@ describe('prepareRoundMessages', () => {
         }
       }
     }
+  })
+})
+
+describe('prepareRoundMessages 收尾提示（wrapUp）', () => {
+  it('收尾提示列出已完成工具成果（按工具名汇总成功/失败）', () => {
+    const deps = makeDeps()
+    const ctx = buildLoopContext(deps)
+    ctx.wrapUp = true
+    ctx.allToolCalls.push(
+      { id: '1', name: 'read_file', arguments: '{}', status: 'done' },
+      { id: '2', name: 'read_file', arguments: '{}', status: 'done' },
+      { id: '3', name: 'shell', arguments: '{}', status: 'error' },
+    )
+    const out = prepareRoundMessages(ctx, [{ role: 'user', content: 'hi' }], deps)
+    const c = String(out.at(-1)?.content)
+    expect(c).toContain('工具调用轮次已用尽')
+    expect(c).toContain('read_file×2')
+    expect(c).toContain('shell×1（失败 1）')
+    expect(c).toContain('总结性答复')
+  })
+  it('无工具成果时不列清单，仍要求总结性答复', () => {
+    const deps = makeDeps()
+    const ctx = buildLoopContext(deps)
+    ctx.wrapUp = true
+    const out = prepareRoundMessages(ctx, [{ role: 'user', content: 'hi' }], deps)
+    const c = String(out.at(-1)?.content)
+    expect(c).toContain('总结性答复')
+    expect(c).not.toContain('×')
+  })
+  it('收尾提示只进本次请求（原 messages 不被污染）', () => {
+    const deps = makeDeps()
+    const ctx = buildLoopContext(deps)
+    ctx.wrapUp = true
+    const msgs: LoopMessage[] = [{ role: 'user', content: 'hi' }]
+    prepareRoundMessages(ctx, msgs, deps)
+    expect(msgs).toHaveLength(1)
   })
 })
 
@@ -245,6 +302,42 @@ describe('streamRound', () => {
     const tc = await streamRound(sseResponse([chatDelta('x')]), ctx, deps, perf)
     expect(tc.toolCalls).toHaveLength(0)
   })
+  it('多分片正文仍逐片回调（事件回调提升不改变触发顺序）', async () => {
+    const ctx = buildLoopContext(makeDeps())
+    const perf = createAgentPerf()
+    const chunks: string[] = []
+    const deps = makeDeps({ events: { onChunk: (c: string) => chunks.push(c) } })
+    await streamRound(sseResponse([chatDelta('你'), chatDelta('好'), chatDelta('呀')]), ctx, deps, perf)
+    expect(chunks).toEqual(['你', '好', '呀'])
+    expect(ctx.fullContent).toBe('你好呀')
+  })
+  it('混合流：思考/正文/工具草稿按序触发，首字打点只记一次', async () => {
+    const ctx = buildLoopContext(makeDeps())
+    const perf = createAgentPerf()
+    perf.roundStart(1)
+    perf.llmRequestStart()
+    const chunks: string[] = []
+    const thinks: string[] = []
+    let drafts = 0
+    const deps = makeDeps({ events: {
+      onChunk: (c: string) => chunks.push(c),
+      onThinking: (t: string) => thinks.push(t),
+      onToolDraft: () => { drafts++ },
+    } })
+    const r = await streamRound(sseResponse([
+      JSON.stringify({ choices: [{ delta: { reasoning_content: '想一想' } }] }),
+      chatDelta('正文'),
+      toolCallDelta('t9', 'read_file', '{"path"'),
+      toolCallDelta('t9', 'read_file', ':"/tmp/x"}'),
+    ]), ctx, deps, perf)
+    expect(thinks.join('')).toBe('想一想')
+    expect(chunks.join('')).toBe('正文')
+    expect(drafts).toBe(1) // 草稿只报一次，重复分片不重复通知
+    expect(r.toolCalls).toHaveLength(1)
+    expect(r.toolCalls[0].arguments).toBe('{"path":"/tmp/x"}')
+    const report = perf.finish()
+    expect(report.roundsDetail[0]?.firstTokenMs).toBeGreaterThanOrEqual(0)
+  })
 })
 
 describe('gateToolCalls', () => {
@@ -287,6 +380,29 @@ describe('gateToolCalls', () => {
     await expect(gateToolCalls(ctx, gateDeps({
       needsClient: () => 'client_tool',
     }), msgs, [{ id: 'c1', name: 'update_plan', arguments: '{}' }])).rejects.toThrow()
+  })
+  it('硬拦 hint 带上本次是第几次相同调用', async () => {
+    const ctx = buildLoopContext(gateDeps())
+    const msgs: LoopMessage[] = []
+    const tc = { id: 'h1', name: 'read_file', arguments: '{"path":"/tmp/h"}' }
+    let plans: unknown[] = []
+    for (let i = 0; i < 5; i++) {
+      plans = await gateToolCalls(ctx, gateDeps(), msgs, [tc])
+    }
+    expect(plans).toHaveLength(0)
+    const c = String(msgs.at(-1)?.content)
+    expect(c).toContain('重复调用已拦截')
+    expect(c).toContain('第 5 次')
+  })
+  it('硬阈值前放行不拼拦截 hint（不写 tool 消息）', async () => {
+    const ctx = buildLoopContext(gateDeps())
+    const msgs: LoopMessage[] = []
+    const tc = { id: 'h2', name: 'read_file', arguments: '{"path":"/tmp/i"}' }
+    for (let i = 0; i < 4; i++) {
+      const plans = await gateToolCalls(ctx, gateDeps(), msgs, [tc])
+      expect(plans).toHaveLength(1)
+    }
+    expect(msgs).toHaveLength(0)
   })
 })
 
@@ -332,6 +448,55 @@ describe('executePlans', () => {
     await executePlans(ctx, makeDeps({ runTool: async () => ({ success: true, output: 'ok' }) }), msgs, plans, perf)
     expect(ctx.clearableIds.has('cl1')).toBe(true)
   })
+  it('新增只读工具连续出现时同组并行（并发 ≥ 2，结果按调用序）', async () => {
+    const ctx = buildLoopContext(makeDeps())
+    const perf = createAgentPerf()
+    const msgs: LoopMessage[] = []
+    let running = 0
+    let maxRunning = 0
+    const mk = (id: string, name: string) => ({
+      tc: { id, name, arguments: `{"path":"${id}"}` },
+      obj: { id, name, arguments: `{"path":"${id}"}`, status: 'running' as const, started_at: '' },
+    })
+    const plans = [mk('a', 'file_stats'), mk('b', 'find_in_files'), mk('c', 'text_diff')]
+    await executePlans(ctx, makeDeps({
+      runTool: async () => {
+        running++
+        maxRunning = Math.max(maxRunning, running)
+        await new Promise((r) => setTimeout(r, 25))
+        running--
+        return { success: true, output: 'ok' }
+      },
+    }), msgs, plans, perf)
+    expect(maxRunning).toBeGreaterThanOrEqual(2)
+    const toolMsgs = msgs.filter((m) => m.role === 'tool')
+    expect(toolMsgs.map((m) => m.tool_call_id)).toEqual(['a', 'b', 'c'])
+  })
+  it('只读与有副作用混排：append_file 单发串行，绝不与其它调用并行', async () => {
+    const ctx = buildLoopContext(makeDeps())
+    const perf = createAgentPerf()
+    const msgs: LoopMessage[] = []
+    let running = 0
+    let maxRunning = 0
+    const order: string[] = []
+    const mk = (id: string, name: string) => ({
+      tc: { id, name, arguments: '{}' },
+      obj: { id, name, arguments: '{}', status: 'running' as const, started_at: '' },
+    })
+    const plans = [mk('1', 'file_stats'), mk('2', 'append_file'), mk('3', 'read_file')]
+    await executePlans(ctx, makeDeps({
+      runTool: async (name) => {
+        running++
+        maxRunning = Math.max(maxRunning, running)
+        order.push(String(name))
+        await new Promise((r) => setTimeout(r, 20))
+        running--
+        return { success: true, output: 'ok' }
+      },
+    }), msgs, plans, perf)
+    expect(maxRunning).toBe(1)
+    expect(order).toEqual(['file_stats', 'append_file', 'read_file'])
+  })
 })
 
 describe('clampToolResult', () => {
@@ -347,5 +512,20 @@ describe('clampToolResult', () => {
     const out = clampToolResult('y'.repeat(50_000), 'shell')
     expect(out).toContain('缩小范围重跑')
     expect(out.length).toBeLessThan(50_000)
+  })
+  it('普通工具截断提示带续读指引（read_file offset/limit）', () => {
+    const out = clampToolResult('x'.repeat(50_000), 'read_file')
+    expect(out).toContain('续读指引')
+    expect(out).toContain('offset/limit')
+  })
+  it('shell 类保尾提示同样带续读指引', () => {
+    const out = clampToolResult('y'.repeat(50_000), 'shell')
+    expect(out).toContain('缩小范围重跑')
+    expect(out).toContain('offset/limit')
+  })
+  it('未传工具名走默认分支，提示含续读指引且长度受控', () => {
+    const out = clampToolResult('z'.repeat(50_000))
+    expect(out).toContain('续读指引')
+    expect(out.length).toBeLessThan(41_000)
   })
 })

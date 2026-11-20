@@ -232,8 +232,9 @@ const TOOL_RULES: GuardrailRule[] = [
     reason: '破坏数据库结构，几乎不可恢复',
   }),
   makePatternRule({
-    id: 'cmd.format_disk', description: '格式化磁盘', scope: 'tool', severity: 'block', field: 'argsText',
-    patterns: [/mkfs\./, /format\s+[a-z]:/i, /diskpart/i, /格式化磁盘/, /格式化硬盘/],
+    id: 'cmd.format_disk', description: '格式化磁盘/重建文件系统（mkfs）', scope: 'tool', severity: 'block', field: 'argsText',
+    // \bmkfs\b 同时覆盖 mkfs.ext4 与不带点的裸 mkfs（mkfs /dev/sda1）。
+    patterns: [/\bmkfs\b/, /format\s+[a-z]:/i, /diskpart/i, /格式化磁盘/, /格式化硬盘/, /格式化系统盘/],
   }),
   makePatternRule({
     id: 'cmd.dd_disk', description: 'dd 覆盖磁盘', scope: 'tool', severity: 'block', field: 'argsText',
@@ -241,7 +242,7 @@ const TOOL_RULES: GuardrailRule[] = [
   }),
   makePatternRule({
     id: 'cmd.shutdown', description: '关机/重启系统', scope: 'tool', severity: 'block', field: 'argsText',
-    patterns: [/\bshutdown\b/, /\breboot\b/, /\bhalt\b/, /关机/, /重启系统/, /重新启动计算机/],
+    patterns: [/\bshutdown\b/, /\breboot\b/, /\bhalt\b/, /\bpoweroff\b/, /关机/, /重启系统/, /重新启动计算机/, /重启计算机/, /重启电脑/, /关闭计算机/, /立即重启/],
   }),
   makePatternRule({
     id: 'cmd.kill_all', description: '批量杀进程', scope: 'tool', severity: 'block', field: 'argsText',
@@ -367,7 +368,69 @@ const TOOL_RULES: GuardrailRule[] = [
     id: 'net.upload_secret', description: '上传敏感文件到外部', scope: 'tool', severity: 'warn', field: 'argsText',
     patterns: [/curl[^\n]*(@|-F)[^\n]*(\.env|credentials|id_rsa|\.ssh)/i, /upload[^\n]*(\.env|\.ssh|private)/i, /上传密钥/],
   }),
+
+  // ── F 组：本批次新增的高危/可疑命令（护栏链补强）────────────────────────
+  // 分级原则：不可逆的系统级破坏（炸盘/删卷/关机级）= block；
+  // 有外部影响但可补救或属常规运维（发包/递归改属主/强推）= warn。
+  makePatternRule({
+    id: 'cmd.fork_bomb', description: 'Fork 炸弹（函数自我复制耗尽进程）', scope: 'tool', severity: 'block', field: 'argsText',
+    patterns: [
+      /\(\s*\)\s*\{\s*:\s*\|\s*:\s*&?\s*\}\s*;\s*:/,
+      /fork.?bomb/i, /进程炸弹/, /fork炸弹/,
+    ],
+    reason: 'Fork 炸弹会瞬间耗尽系统进程资源导致机器假死，必须人工确认',
+  }),
+  makePatternRule({
+    id: 'cmd.raw_device_write', description: 'shell 重定向直写块设备（如 > /dev/sda）', scope: 'tool', severity: 'block', field: 'argsText',
+    patterns: [/>+\s*\/dev\/(sd[a-z]|hd[a-z]|nvme|vd[a-z]|mmcblk)/, /直写磁盘设备/, /直接写入块设备/],
+    reason: '绕过文件系统直接写块设备会瞬间摧毁整块磁盘数据',
+  }),
+  makePatternRule({
+    id: 'cmd.chown_root', description: '把文件属主改成 root 或对根目录递归 chown', scope: 'tool', severity: 'block', field: 'argsText',
+    patterns: [/chown\s+(-[a-z]+\s+)*[^;|\n]*\broot\b/, /chown\s+(-[a-z]+\s+)+[^;|\n]*\s\/\s*$/, /改属主为root/, /根目录递归改属主/],
+    reason: '改属主为 root 或对根目录递归 chown 会破坏系统权限体系',
+  }),
+  makePatternRule({
+    id: 'cmd.chown_recursive', description: '递归修改文件属主（chown -R）', scope: 'tool', severity: 'warn', field: 'argsText',
+    patterns: [/\bchown\s+(-[a-z]*r[a-z]*\b\s*)+/, /递归修改属主/, /递归改属主/],
+    reason: '递归修改属主影响面大，请确认目标目录正确',
+  }),
+  makePatternRule({
+    id: 'cmd.npm_publish', description: '向公共包仓库发布（npm/yarn/pnpm publish）', scope: 'tool', severity: 'warn', field: 'argsText',
+    patterns: [/npm\s+publish/, /yarn\s+publish/, /pnpm\s+publish/, /发布npm包/, /发布到npm/],
+    reason: '包一旦发布即为公开且难以彻底撤回，请确认版本号与内容',
+  }),
+  makePatternRule({
+    id: 'cmd.docker_prune', description: 'docker 全量清理（system/image/volume prune -a）', scope: 'tool', severity: 'block', field: 'argsText',
+    patterns: [/docker\s+(system|image|volume|container)\s+prune\s+[^\n]*-a/, /清理全部docker/, /删除全部镜像/, /删除全部容器/],
+    reason: 'prune -a 会删除所有未使用的容器/镜像/卷，删除后通常无法恢复',
+  }),
 ]
+
+/**
+ * 判断"密码赋值"的值是否属于占位符 / 掩码 / 环境变量引用。
+ *
+ * 背景：config 模板里常出现 password: '<占位>'、password: '******'、
+ * password = process.env.DB_PASSWORD 这类写法——真实凭据并不在文本里，
+ * 不构成泄露，不应告警。用于降低 secret.password 规则的误报。
+ */
+function isSecretPlaceholderValue(raw: string): boolean {
+  // 去掉包裹用的引号 / 全角括号后取值。
+  const v = raw.trim().replace(/^['"`（(]+/, '').replace(/['"`）)]+$/, '').trim()
+  if (v === '') return true
+  // 环境变量 / 配置对象引用：真实值不在此文本中（如 process.env.DB_PASSWORD）。
+  if (/^(process\.env\.|process\.env\[|os\.environ|env\[)/i.test(v)) return true
+  if (/^getenv\s*\(/i.test(v)) return true
+  if (/^(config|settings|options|params|opts|ctx|env)\./i.test(v)) return true
+  if (v.startsWith('${')) return true
+  // 显式占位符模板：<占位>、<PASSWORD> 这类尖括号写法。
+  if (/^<[^>]*>$/.test(v)) return true
+  // 掩码串：***、xxxxxx、……、---- 等同一占位字符重复 3 次以上。
+  if (/^([*xX.。…•_-])\1{2,}$/.test(v)) return true
+  // 常见字面占位词（整词匹配，避免把真实密码误判为占位符）。
+  if (/^(占位|占位符|占位密码|示例|示例密码|空|无|未设置|your[-_ ]?password|your[-_ ]?secret|changeme|change[-_]?me|placeholder|example|sample|dummy|redacted|not[-_ ]?set|todo|fixme|none|null|undefined)$/i.test(v)) return true
+  return false
+}
 
 /** 输出检查规则：密钥泄露 / 注入 / 超长。 */
 const OUTPUT_RULES: GuardrailRule[] = [
@@ -396,12 +459,31 @@ const OUTPUT_RULES: GuardrailRule[] = [
   }),
   makePatternRule({
     id: 'secret.jwt', description: 'JWT 令牌', scope: 'output', severity: 'warn', field: 'text',
-    patterns: [/\beyj[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\b/i],
+    // 收紧阈值：真实 JWT 的头/载荷是 base64 后的 JSON（一般 20+ 字符），
+    // 每段要求 >=16 字符可避免把 'eyj.xxx.yyy' 形态的普通文本误判为令牌。
+    patterns: [/\beyj[a-z0-9_-]{16,}\.[a-z0-9_-]{16,}\.[a-z0-9_-]{16,}\b/i],
   }),
-  makePatternRule({
-    id: 'secret.password', description: '明文密码', scope: 'output', severity: 'warn', field: 'text',
-    patterns: [/password\s*[:=]\s*['"]?[^\s'"]{6,}/i, /密码\s*[:：]\s*\S{6,}/],
-  }),
+  {
+    id: 'secret.password', description: '明文密码（占位符/掩码/环境变量引用不告警）', scope: 'output', severity: 'warn',
+    test(ctx: RuleContext): RuleHit {
+      const text = ctx.text || ''
+      if (!/password|passwd|pwd|密码|口令/i.test(text)) return { hit: false }
+      // 英文（password/passwd/pwd）与中文（密码/口令）赋值；允许 JSON 风格的
+      // "password": "…"（键与冒号之间可有引号）；值取到空白/引号/分号为止。
+      const re = /(?:password|passwd|pwd|密码|口令)\s*['"]?\s*[:：=]\s*['"]?([^\s'";；]{6,})/gi
+      for (const m of text.matchAll(re)) {
+        const value = m[1] || ''
+        // 占位符 / 掩码 / 环境变量引用：真实凭据不在文本里，不告警（降误报）。
+        if (isSecretPlaceholderValue(value)) continue
+        // 注意：reason 里不得回显命中的值本身，避免告警信息把密码打进日志。
+        return {
+          hit: true,
+          reason: '输出疑似包含明文密码赋值（password/密码 = …），建议脱敏后再展示；占位符与环境变量引用不会触发本规则',
+        }
+      }
+      return { hit: false }
+    },
+  },
   makePatternRule({
     id: 'secret.github_token', description: 'GitHub Token', scope: 'output', severity: 'block', field: 'text',
     patterns: [/\bghp_[a-z0-9]{30,}\b/i, /\bgho_[a-z0-9]{30,}\b/i, /\bghs_[a-z0-9]{30,}\b/i, /\bgithub_pat_[a-z0-9_]{40,}\b/i],
@@ -651,13 +733,19 @@ export class GuardrailChainImpl implements GuardrailChain {
     }
   }
 
-  /** 注册自定义规则。返回 this 便于链式调用。 */
-  addRule(rule: GuardrailRule): this {
-    // id 冲突时后者覆盖前者（便于禁用/替换内置规则）。
+  /**
+   * 注册自定义规则。id 冲突时后者覆盖前者（便于禁用/替换内置规则），
+   * 并返回被替换的那条旧规则；新增（无冲突）时返回 null——调用方可据此感知覆盖行为。
+   */
+  addRule(rule: GuardrailRule): GuardrailRule | null {
     const idx = this.rules.findIndex((r) => r.id === rule.id)
-    if (idx >= 0) this.rules[idx] = rule
-    else this.rules.push(rule)
-    return this
+    if (idx >= 0) {
+      const replaced = this.rules[idx]
+      this.rules[idx] = rule
+      return replaced
+    }
+    this.rules.push(rule)
+    return null
   }
 
   /** 移除规则（按 id）。返回是否移除成功。 */

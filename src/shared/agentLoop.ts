@@ -149,12 +149,23 @@ export interface AgentLoopResult {
 
 /* ─── 常量 ─── */
 
-/** 只读工具：无副作用、相互独立，可并行 */
+/** 只读工具：无副作用、相互独立，可并行。
+ *  补齐说明：逐个核对 serve.ts TOOLS 全集的实现后新增——get_file_info（stat）、
+ *  read_many_files（批量 read_file）、glob（search_files 包装）、grep_search
+ *  （search_content 包装）、code_analysis（只读解析 import）、find_in_files（grep）、
+ *  file_stats（统计遍历）、text_diff（只读比较）、shell_list（后台任务清单）、
+ *  list_skills / load_skill（只读技能目录）、consult_guidance（只读规则库）。
+ *  并行判定按实现而非命名，明确不入集：append_file（写文件，有副作用）、
+ *  shell_output（推进 readAt 增量游标，属有状态读取）、clipboard_read（外部状态，走确认）、
+ *  http_request（可发 POST）、git_operation（可提交/回滚）。 */
 export const READONLY_TOOLS = new Set([
   'read_file', 'list_dir', 'search_files', 'search_content', 'web_search', 'web_fetch',
   'system_info', 'process_list', 'port_check', 'recall',
   'text_tools', 'json_process', 'timestamp_tools', 'uuid_generate', 'random_tools',
   'color_tools', 'hash_tools', 'base64_tools', 'url_tools',
+  'get_file_info', 'read_many_files', 'glob', 'grep_search', 'code_analysis',
+  'find_in_files', 'file_stats', 'text_diff', 'shell_list',
+  'list_skills', 'load_skill', 'consult_guidance',
 ])
 
 /** 单工具硬超时 */
@@ -163,7 +174,9 @@ export const TOOL_TIMEOUT_MS = 180_000
 /** 命令/日志类输出保尾（错误堆栈在结尾） */
 const TAIL_KEEP_TOOLS = new Set(['shell', 'npm_run', 'git_operation', 'run_tests', 'web_fetch'])
 
-/** 工具结果截断：40K 对模型足够判断下一步；超限按工具类型决定保头还是保尾 */
+/** 工具结果截断：40K 对模型足够判断下一步；超限按工具类型决定保头还是保尾。
+ *  两种截断提示都带「续读指引」：read_file 支持 offset/limit 行级分段，
+ *  明确告诉模型怎么拿回被省略的部分，而不是盯着残缺结果猜。 */
 export function clampToolResult(text: string, toolName?: string): string {
   const MAX = 40_000
   if (!text || text.length <= MAX) return text
@@ -171,10 +184,10 @@ export function clampToolResult(text: string, toolName?: string): string {
   const tail = MAX - head
   if (toolName && TAIL_KEEP_TOOLS.has(toolName)) {
     return text.slice(0, head)
-      + '\n\n…[中间 ' + (text.length - MAX) + ' 字符已省略；下方保留末尾 ' + tail + ' 字符（错误堆栈通常在结尾）。如需查看被省略的部分，可缩小范围重跑命令（如加 head/tail/grep 限定）或改用分段读取。]…\n\n'
+      + '\n\n…[中间 ' + (text.length - MAX) + ' 字符已省略；下方保留末尾 ' + tail + ' 字符（错误堆栈通常在结尾）。如需查看被省略的部分，可缩小范围重跑命令（如加 head/tail/grep 限定），或把完整输出重定向到文件后用 read_file 的 offset/limit 参数分段读取。]…\n\n'
       + text.slice(-tail)
   }
-  return text.slice(0, MAX) + '\n\n[输出过长已截断：原始 ' + text.length + ' 字符，仅保留前 ' + MAX + '。如需完整内容，请用范围参数分段读取。]'
+  return text.slice(0, MAX) + '\n\n[输出过长已截断：原始 ' + text.length + ' 字符，仅保留前 ' + MAX + '。续读指引：若内容来自文件，请用 read_file 的 offset/limit 参数分段读取未展示的部分；若来自命令输出，请缩小范围重跑（如加 head/tail/grep 限定）分段获取。]'
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
@@ -272,6 +285,29 @@ async function resumePendingTool(
   perf.addTool(1, toolCall.name, Date.now() - t0, obj.status !== 'error')
 }
 
+/** 收尾提示（轮次硬停时注入本次请求，不写回 messages）：先给模型一份
+ *  「已完成工具成果」清单（按工具名汇总成功/失败次数），再要求总结性答复。
+ *  硬停时模型最需要知道的是自己已经做成了什么，否则容易复述任务而不是收尾。 */
+function buildWrapUpNotice(ctx: LoopContext): string {
+  const counts = new Map<string, { ok: number; fail: number }>()
+  for (const tc of ctx.allToolCalls) {
+    const e = counts.get(tc.name) || { ok: 0, fail: 0 }
+    if (tc.status === 'error') e.fail++
+    else e.ok++
+    counts.set(tc.name, e)
+  }
+  const lines = ['【系统】工具调用轮次已用尽，本次请求已禁用全部工具。请立刻基于已有信息给出总结性答复，不要再调用任何工具。']
+  const total = ctx.allToolCalls.length
+  if (total > 0) {
+    const names = [...counts.entries()]
+      .map(([name, e]) => (e.fail > 0 ? `${name}×${e.ok + e.fail}（失败 ${e.fail}）` : `${name}×${e.ok}`))
+      .join('、')
+    lines.push(`已完成的工具调用共 ${total} 次：${names}。各次调用的结果都在上方对话历史中，可直接引用，无需重跑。`)
+  }
+  lines.push('答复要求：汇总已完成的工作与关键结果；如有未完成事项，用文字列出剩余步骤与所需信息，等待用户指示，不要试图继续执行。')
+  return lines.join('\n')
+}
+
 /** 单轮请求消息准备：Hermes 文本协议注入 / 上下文预算裁剪 / 收尾提示。
  *  切点修复由 truncateForBudget 负责（不以 tool 开头、不留悬空 tool_calls）。 */
 export function prepareRoundMessages(
@@ -312,10 +348,7 @@ export function prepareRoundMessages(
   // 轮次上限硬停：禁用工具再问一轮，让它把已有信息总结成最终答复。
   // 收尾提示只进本次请求，不写回 messages——落库的幽灵指令会污染后续所有轮次。
   if (ctx.wrapUp) {
-    sendMessages = [...sendMessages, {
-      role: 'user',
-      content: '【系统】工具调用轮次已用尽。请立刻基于已有信息用文字给出最终答复，不要再调用任何工具。',
-    }]
+    sendMessages = [...sendMessages, { role: 'user', content: buildWrapUpNotice(ctx) }]
   }
   return sendMessages
 }
@@ -391,9 +424,18 @@ export async function streamRound(
   res: Response, ctx: LoopContext, deps: AgentLoopDeps, perf: AgentPerfCollector,
 ): Promise<{ toolCalls: LoopToolCall[]; roundContent: string }> {
   const { events, signal } = deps
+  // 热路径微优化（每个 SSE 分片都走一遍，长回复一条流就是成百上千个分片）：
+  //   1. 事件回调提到循环外，避免每个分片重复做 events.xxx 属性查找；
+  //   2. firstToken 用本地标记只打一次——perf.firstToken 每次都会回写
+  //      cur.firstTokenMs，而首字时间在一条流内是固定的，重复调用是纯开销。
+  // 事件触发顺序与打点语义不变。
+  const onChunk = events.onChunk
+  const onThinking = events.onThinking
+  const onToolDraft = events.onToolDraft
   let roundContent = ''
   const toolCallMap = new Map<number, ToolCallAccum>()
   let draftAnnounced = false
+  let firstTokenSeen = false
 
   for await (const data of ssePayloads(res.body!)) {
     if (data === '[DONE]') break
@@ -406,22 +448,22 @@ export async function streamRound(
 
       const think = extractReasoning(delta)
       if (think) {
-        perf.firstToken()
+        if (!firstTokenSeen) { perf.firstToken(); firstTokenSeen = true }
         ctx.fullThinking += think
-        events.onThinking?.(think)
+        onThinking?.(think)
       }
       if (delta?.content) {
-        perf.firstToken()
+        if (!firstTokenSeen) { perf.firstToken(); firstTokenSeen = true }
         roundContent += delta.content
         ctx.fullContent += delta.content
-        events.onChunk?.(delta.content)
+        onChunk?.(delta.content)
       }
       const parsedTcs = parseToolCallsFromDelta(delta)
       if (parsedTcs) {
         for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc)
         if (!draftAnnounced) {
           draftAnnounced = true
-          events.onToolDraft?.(parsedTcs[0]?.function?.name || '…')
+          onToolDraft?.(parsedTcs[0]?.function?.name || '…')
         }
       }
       if (choice.finish_reason === 'tool_calls') {
@@ -458,9 +500,14 @@ export async function gateToolCalls(
   for (const tc of toolCalls) {
     if (signal?.aborted) return []
 
-    const repeat = checkRepeatCall(ctx.callSignatures, callSignature(tc.name, tc.arguments))
+    const sig = callSignature(tc.name, tc.arguments)
+    const repeat = checkRepeatCall(ctx.callSignatures, sig)
     if (repeat.blocked) {
-      messages.push({ role: 'tool', tool_call_id: tc.id, content: repeat.message })
+      // checkRepeatCall 就地累加计数，被拦时回读即得「本次是第几次」：
+      // 拦截文案只说此前已被调用 N 次，补上本次序号，模型对重复程度更明确
+      const seen = ctx.callSignatures.get(sig) || 0
+      const hint = seen > 0 ? '\n\n[系统提示] 本次已是第 ' + seen + ' 次相同参数调用。' : ''
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: repeat.message + hint })
       continue
     }
 

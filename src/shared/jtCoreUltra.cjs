@@ -28,14 +28,20 @@ __export(jtCoreUltra_exports, {
   ULTRA_MAX_TURNS: () => MAX_TURNS,
   UltraNeedsClientError: () => UltraNeedsClientError,
   allReady: () => allReady,
+  buildUltraContext: () => buildUltraContext,
   canTransition: () => canTransition,
+  executeUltraPlans: () => executeUltraPlans,
   fastNextSpeaker: () => fastNextSpeaker,
   findCompressSplitPoint: () => findCompressSplitPoint,
+  gateUltraToolCalls: () => gateUltraToolCalls,
   needsCompression: () => needsCompression,
   parseNextSpeaker: () => parseNextSpeaker,
+  prepareUltraMessages: () => prepareUltraMessages,
+  requestUltraRound: () => requestUltraRound,
   resolveNextSpeaker: () => resolveNextSpeaker,
   runUltraLoop: () => runUltraLoop,
   shouldSemanticCheck: () => shouldSemanticCheck,
+  streamUltraRound: () => streamUltraRound,
   toolFingerprint: () => toolFingerprint,
   ultraBackoff: () => delayWithJitter,
   ultraQuotaDelay: () => quotaDelay,
@@ -48,6 +54,7 @@ async function* ssePayloads(body) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
+  let dataLines = [];
   try {
     for (; ; ) {
       const { done, value } = await reader.read();
@@ -55,12 +62,22 @@ async function* ssePayloads(body) {
       buf += decoder.decode(value, { stream: true });
       let nl;
       while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).trim();
+        const raw = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        yield line.slice(5).trim();
+        const line = (raw.endsWith("\r") ? raw.slice(0, -1) : raw).trim();
+        if (!line) {
+          if (dataLines.length > 0) {
+            const payload = dataLines.join("\n");
+            dataLines = [];
+            yield payload;
+          }
+          continue;
+        }
+        if (line.startsWith(":")) continue;
+        if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
       }
     }
+    if (dataLines.length > 0) yield dataLines.join("\n");
   } finally {
     try {
       reader.cancel();
@@ -74,6 +91,9 @@ async function* ssePayloads(body) {
 }
 
 // src/shared/toolCallStream.ts
+function normIndex(v) {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
 function parseToolCallsFromDelta(delta) {
   const d = delta;
   if (d?.tool_calls && Array.isArray(d.tool_calls)) {
@@ -85,39 +105,73 @@ function parseToolCallsFromDelta(delta) {
   return null;
 }
 function accumulateToolCallDelta(map, tc) {
-  const idx = tc.index ?? 0;
+  if (!tc || typeof tc !== "object") return;
+  const idx = normIndex(tc.index);
   if (!map.has(idx)) map.set(idx, { id: "", name: "", arguments: "" });
   const slot = map.get(idx);
-  if (tc.id && !slot.id) slot.id = tc.id;
+  if (typeof tc.id === "string" && tc.id && !slot.id) slot.id = tc.id;
   const name = tc.function?.name;
-  if (name && !slot.name) slot.name = name;
+  if (typeof name === "string" && name && !slot.name) slot.name = name;
   const args = tc.function?.arguments;
-  if (args) {
-    if (args.trimStart().startsWith("{")) {
-      if (slot.argsComplete) {
-        slot.arguments = args;
-        return;
-      }
+  if (typeof args !== "string") {
+    if (args && typeof args === "object") {
       try {
-        JSON.parse(slot.arguments);
+        slot.arguments = JSON.stringify(args);
         slot.argsComplete = true;
-        slot.arguments = args;
-        return;
       } catch {
       }
     }
-    slot.arguments += args;
+    return;
   }
+  if (!args) return;
+  if (args.trimStart().startsWith("{")) {
+    if (slot.argsComplete) {
+      slot.arguments = args;
+      return;
+    }
+    try {
+      JSON.parse(slot.arguments);
+      slot.argsComplete = true;
+      slot.arguments = args;
+      return;
+    } catch {
+    }
+  }
+  slot.arguments += args;
 }
 function adoptNonStreamToolCalls(map, messageToolCalls) {
   if (map.size > 0) return;
   if (!Array.isArray(messageToolCalls)) return;
-  for (const raw of messageToolCalls) {
-    const idx = raw.index ?? 0;
+  for (let i = 0; i < messageToolCalls.length; i++) {
+    const raw = messageToolCalls[i];
+    if (!raw || typeof raw !== "object") continue;
+    const fnName = typeof raw.function?.name === "string" ? raw.function.name : "";
+    if (!fnName) continue;
+    const rawArgs = raw.function?.arguments;
+    let args = "";
+    if (typeof rawArgs === "string") {
+      args = rawArgs;
+    } else if (rawArgs && typeof rawArgs === "object") {
+      try {
+        args = JSON.stringify(rawArgs);
+      } catch {
+        continue;
+      }
+    }
+    if (args !== "") {
+      try {
+        JSON.parse(args);
+      } catch {
+        continue;
+      }
+    }
+    const idx = typeof raw.index === "number" && Number.isFinite(raw.index) ? raw.index : i;
     map.set(idx, {
-      id: raw.id || "",
-      name: raw.function?.name || "",
-      arguments: raw.function?.arguments || ""
+      id: typeof raw.id === "string" ? raw.id : "",
+      name: fnName,
+      arguments: args,
+      // 全量快照已验证合法：标记 argsComplete，后续若仍收到 '{' 开头的分片按快照替换
+      argsComplete: args !== "" ? true : void 0
     });
   }
 }
@@ -126,16 +180,24 @@ function toolCallsToArray(map) {
 }
 
 // src/shared/toolLoopGuard.ts
-var SOFT_REPEAT_THRESHOLD = 3;
-var HARD_REPEAT_THRESHOLD = 5;
+var REPEAT_SOFT_LIMIT = 3;
+var REPEAT_HARD_LIMIT = 5;
+function sortKeysDeep(v) {
+  if (Array.isArray(v)) return v.map(sortKeysDeep);
+  if (v && typeof v === "object") {
+    const src = v;
+    const sorted = {};
+    for (const k of Object.keys(src).sort()) sorted[k] = sortKeysDeep(src[k]);
+    return sorted;
+  }
+  return v;
+}
 function callSignature(name, args) {
   let norm = String(args || "").trim();
   try {
     const parsed = JSON.parse(norm);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const sorted = {};
-      for (const k of Object.keys(parsed).sort()) sorted[k] = parsed[k];
-      norm = JSON.stringify(sorted);
+    if (parsed && typeof parsed === "object") {
+      norm = JSON.stringify(sortKeysDeep(parsed));
     }
   } catch {
   }
@@ -159,8 +221,8 @@ function checkRepeatCall(counter, signature) {
   const seen = (counter.get(signature) || 0) + 1;
   counter.set(signature, seen);
   const toolName = signature.split("::")[0];
-  if (seen < HARD_REPEAT_THRESHOLD) {
-    const soft = seen >= SOFT_REPEAT_THRESHOLD;
+  if (seen < REPEAT_HARD_LIMIT) {
+    const soft = seen >= REPEAT_SOFT_LIMIT;
     return {
       blocked: false,
       message: soft ? JSON.stringify({
@@ -275,9 +337,9 @@ function clampToolResult(text, toolName) {
   const head = Math.floor(MAX * 0.3);
   const tail = MAX - head;
   if (toolName && TAIL_KEEP_TOOLS.has(toolName)) {
-    return text.slice(0, head) + "\n\n\u2026[\u4E2D\u95F4 " + (text.length - MAX) + " \u5B57\u7B26\u5DF2\u7701\u7565\uFF1B\u4E0B\u65B9\u4FDD\u7559\u672B\u5C3E " + tail + " \u5B57\u7B26\uFF08\u9519\u8BEF\u5806\u6808\u901A\u5E38\u5728\u7ED3\u5C3E\uFF09\u3002\u5982\u9700\u67E5\u770B\u88AB\u7701\u7565\u7684\u90E8\u5206\uFF0C\u53EF\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\u547D\u4EE4\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\u6216\u6539\u7528\u5206\u6BB5\u8BFB\u53D6\u3002]\u2026\n\n" + text.slice(-tail);
+    return text.slice(0, head) + "\n\n\u2026[\u4E2D\u95F4 " + (text.length - MAX) + " \u5B57\u7B26\u5DF2\u7701\u7565\uFF1B\u4E0B\u65B9\u4FDD\u7559\u672B\u5C3E " + tail + " \u5B57\u7B26\uFF08\u9519\u8BEF\u5806\u6808\u901A\u5E38\u5728\u7ED3\u5C3E\uFF09\u3002\u5982\u9700\u67E5\u770B\u88AB\u7701\u7565\u7684\u90E8\u5206\uFF0C\u53EF\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\u547D\u4EE4\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\uFF0C\u6216\u628A\u5B8C\u6574\u8F93\u51FA\u91CD\u5B9A\u5411\u5230\u6587\u4EF6\u540E\u7528 read_file \u7684 offset/limit \u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u3002]\u2026\n\n" + text.slice(-tail);
   }
-  return text.slice(0, MAX) + "\n\n[\u8F93\u51FA\u8FC7\u957F\u5DF2\u622A\u65AD\uFF1A\u539F\u59CB " + text.length + " \u5B57\u7B26\uFF0C\u4EC5\u4FDD\u7559\u524D " + MAX + "\u3002\u5982\u9700\u5B8C\u6574\u5185\u5BB9\uFF0C\u8BF7\u7528\u8303\u56F4\u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u3002]";
+  return text.slice(0, MAX) + "\n\n[\u8F93\u51FA\u8FC7\u957F\u5DF2\u622A\u65AD\uFF1A\u539F\u59CB " + text.length + " \u5B57\u7B26\uFF0C\u4EC5\u4FDD\u7559\u524D " + MAX + "\u3002\u7EED\u8BFB\u6307\u5F15\uFF1A\u82E5\u5185\u5BB9\u6765\u81EA\u6587\u4EF6\uFF0C\u8BF7\u7528 read_file \u7684 offset/limit \u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u672A\u5C55\u793A\u7684\u90E8\u5206\uFF1B\u82E5\u6765\u81EA\u547D\u4EE4\u8F93\u51FA\uFF0C\u8BF7\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\u5206\u6BB5\u83B7\u53D6\u3002]";
 }
 function buildUpstreamError(status, errText) {
   const detail = (errText || "").slice(0, 300);
@@ -973,246 +1035,290 @@ async function execOne(deps, tc, signal) {
     return { text: "\u274C \u9519\u8BEF: " + String(e?.message || e) };
   }
 }
-async function runUltraLoop(inputMessages, deps) {
-  const messages = [...inputMessages];
-  let fullContent = deps.resume?.content || "";
-  let fullThinking = deps.resume?.thinking || "";
-  const allToolCalls = deps.resume?.toolCalls ? [...deps.resume.toolCalls] : [];
-  const repeatMap = /* @__PURE__ */ new Map();
-  const toolUseCounter = /* @__PURE__ */ new Map();
-  const toolLoop = new ToolLoopDetector();
-  const contentLoop = new ContentLoopDetector();
-  const recovery = new LoopRecovery();
-  const stuck = new StuckDetector();
-  const turnBudget = new TurnBudget();
-  const fallback = new ModelFallback([deps.model, ...deps.fallbackModels || []]);
-  const confirmationBus = new ConfirmationBus();
-  const requestQueue = new SerialRequestQueue();
-  const approvedScopes = new ApprovedScopes();
-  (deps.approvedScopes || []).forEach((k) => approvedScopes.approve(k));
-  const sandbox = new SandboxEscalation();
-  const policyMode = modeFromLevel(deps.permissionLevel || "edit");
-  const ignoreMatcher = new IgnoreMatcher(["node_modules", "dist", "release", ".git", "*.log"]);
-  const ideBlock = deps.ideContext?.toPromptBlock() || "";
-  let lastSemanticCheck = 0;
-  let wrappedUp = false;
-  const signal = deps.signal;
-  const tools = deps.tools.filter((t) => !(deps.disabledTools || []).includes(t.name));
-  const toolsSchema = tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
-  const hermesBlock = (() => {
-    if (!shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) || !tools.length) return "";
-    return buildToolsBlock(tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
+function buildUltraContext(deps) {
+  const ctx = {
+    fullContent: deps.resume?.content || "",
+    fullThinking: deps.resume?.thinking || "",
+    allToolCalls: deps.resume?.toolCalls ? [...deps.resume.toolCalls] : [],
+    repeatMap: /* @__PURE__ */ new Map(),
+    toolUseCounter: /* @__PURE__ */ new Map(),
+    toolLoop: new ToolLoopDetector(),
+    contentLoop: new ContentLoopDetector(),
+    recovery: new LoopRecovery(),
+    stuck: new StuckDetector(),
+    turnBudget: new TurnBudget(),
+    fallback: new ModelFallback([deps.model, ...deps.fallbackModels || []]),
+    confirmationBus: new ConfirmationBus(),
+    requestQueue: new SerialRequestQueue(),
+    approvedScopes: new ApprovedScopes(),
+    sandbox: new SandboxEscalation(),
+    policyMode: modeFromLevel(deps.permissionLevel || "edit"),
+    ignoreMatcher: new IgnoreMatcher(["node_modules", "dist", "release", ".git", "*.log"]),
+    ideBlock: deps.ideContext?.toPromptBlock() || "",
+    lastSemanticCheck: 0,
+    wrappedUp: false,
+    tools: [],
+    toolsSchema: [],
+    hermesBlock: "",
+    contextWindow: 0,
+    maxTokens: 0
+  };
+  (deps.approvedScopes || []).forEach((k) => ctx.approvedScopes.approve(k));
+  ctx.tools = deps.tools.filter((t) => !(deps.disabledTools || []).includes(t.name));
+  ctx.toolsSchema = ctx.tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  ctx.hermesBlock = (() => {
+    if (!shouldInjectHermes(deps.model, deps.apiBase, deps.hermesMode) || !ctx.tools.length) return "";
+    return buildToolsBlock(ctx.tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })), { compact: true });
   })();
-  const contextWindow = resolveContextWindow(deps.model, deps.contextWindow);
-  const maxTokens = deps.maxTokens || maxOutputTokens(contextWindow);
-  if (deps.pendingTool) {
+  ctx.contextWindow = resolveContextWindow(deps.model, deps.contextWindow);
+  ctx.maxTokens = deps.maxTokens || maxOutputTokens(ctx.contextWindow);
+  return ctx;
+}
+function prepareUltraMessages(ctx, messages, deps, mode) {
+  if (mode === "resume") {
     const p = deps.pendingTool;
-    messages.push({ role: "tool", tool_call_id: p.toolCall.id, content: p.decision || p.toolCall.result || "" });
-    if (!allToolCalls.some((t) => t.id === p.toolCall.id)) allToolCalls.push({ ...p.toolCall, status: p.decision ? "error" : "done" });
+    if (p) {
+      messages.push({ role: "tool", tool_call_id: p.toolCall.id, content: p.decision || p.toolCall.result || "" });
+      if (!ctx.allToolCalls.some((t) => t.id === p.toolCall.id)) ctx.allToolCalls.push({ ...p.toolCall, status: p.decision ? "error" : "done" });
+    }
+    return { reqMessages: messages, overflow: false };
   }
-  const maxTurns = turnBudget.next();
-  if (maxTurns === 0) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "max-session-turns", error: "\u4F1A\u8BDD turn \u4E0A\u9650" };
-  for (let turn = 0; turn < maxTurns; turn++) {
-    turnBudget.consume();
-    if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-    const tokenCount = estimateMessagesTokens(messages);
-    if (tokenCount >= contextWindow * 0.92) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "context-overflow", error: "\u4E0A\u4E0B\u6587\u7A97\u53E3\u5373\u5C06\u6EA2\u51FA" };
-    if (tokenCount / contextWindow >= 0.5) {
-      const comp = compress(messages, contextWindow);
-      if (comp.status === "compressed") {
-        messages.length = 0;
-        messages.push(...comp.messages);
-      }
-    }
-    const trimmed = trimToBudget(messages, contextWindow, estimateMessagesTokens);
-    if (trimmed.dropped > 0) {
+  const tokenCount = estimateMessagesTokens(messages);
+  if (tokenCount >= ctx.contextWindow * 0.92) return { reqMessages: messages, overflow: true };
+  if (tokenCount / ctx.contextWindow >= 0.5) {
+    const comp = compress(messages, ctx.contextWindow);
+    if (comp.status === "compressed") {
       messages.length = 0;
-      messages.push(...trimmed.messages);
+      messages.push(...comp.messages);
     }
-    let reqMessages = messages;
-    if (hermesBlock) {
-      reqMessages = reqMessages[0]?.role === "system" ? [{ ...reqMessages[0], content: String(reqMessages[0].content || "") + "\n\n" + hermesBlock }, ...reqMessages.slice(1)] : [{ role: "system", content: hermesBlock }, ...reqMessages];
-    }
-    let res = null;
-    let lastErr = "";
-    for (let attempt = 1; attempt <= 10; attempt++) {
-      if (signal?.aborted) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-      deps.events.onNetStatus?.(attempt === 1 ? "connecting" : "retrying", { attempt });
-      try {
-        res = await deps.callLLM(buildRequestBody(reqMessages, toolsSchema, { model: fallback.current, maxTokens, toolChoice: !wrappedUp, wrapUp: wrappedUp, ideBlock }), signal);
-        if (res.ok && res.body) break;
-        const status = res.status;
-        let bodyText = "";
-        try {
-          bodyText = (await res.text()).slice(0, 400);
-        } catch {
-        }
-        const decision = decideRetry(status, attempt, { shouldRetryOnContent: (c) => !c || !c.trim() }, { content: bodyText, serverDelayMs: parseRetryAfter(res.headers.get("retry-after")) });
-        if (!decision.retry) {
-          if (status === 429 && !fallback.exhausted && fallback.fallback()) {
-            attempt = 0;
-            continue;
-          }
-          lastErr = status >= 400 ? buildUpstreamError(status, bodyText) : decision.reason;
-          res = null;
-          break;
-        }
-        await sleepAbortable(Math.min(decision.delayMs, 3e4), signal);
-      } catch (e) {
-        if (e?.name === "AbortError") return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-        lastErr = String(e?.message || e);
-        if (attempt < 10) await sleepAbortable(Math.min(5e3 * Math.pow(2, attempt - 1), 3e4), signal);
-      }
-    }
-    if (!res || !res.ok || !res.body) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "error", error: lastErr };
-    const toolCallMap = /* @__PURE__ */ new Map();
-    let roundContent = "", draftAnnounced = false;
-    const perf = { firstTokenMs: 0, t0: Date.now() };
+  }
+  const trimmed = trimToBudget(messages, ctx.contextWindow, estimateMessagesTokens);
+  if (trimmed.dropped > 0) {
+    messages.length = 0;
+    messages.push(...trimmed.messages);
+  }
+  let reqMessages = messages;
+  if (ctx.hermesBlock) {
+    reqMessages = reqMessages[0]?.role === "system" ? [{ ...reqMessages[0], content: String(reqMessages[0].content || "") + "\n\n" + ctx.hermesBlock }, ...reqMessages.slice(1)] : [{ role: "system", content: ctx.hermesBlock }, ...reqMessages];
+  }
+  return { reqMessages, overflow: false };
+}
+async function requestUltraRound(ctx, reqMessages, deps) {
+  const signal = deps.signal;
+  let res = null;
+  let lastErr = "";
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    if (signal?.aborted) return { res: null, aborted: true };
+    deps.events.onNetStatus?.(attempt === 1 ? "connecting" : "retrying", { attempt });
     try {
-      for await (const data of ssePayloads(res.body)) {
-        if (data === "[DONE]") continue;
-        let ev;
-        try {
-          ev = JSON.parse(data);
-        } catch {
+      res = await deps.callLLM(buildRequestBody(reqMessages, ctx.toolsSchema, { model: ctx.fallback.current, maxTokens: ctx.maxTokens, toolChoice: !ctx.wrappedUp, wrapUp: ctx.wrappedUp, ideBlock: ctx.ideBlock }), signal);
+      if (res.ok && res.body) break;
+      const status = res.status;
+      let bodyText = "";
+      try {
+        bodyText = (await res.text()).slice(0, 400);
+      } catch {
+      }
+      const decision = decideRetry(status, attempt, { shouldRetryOnContent: (c) => !c || !c.trim() }, { content: bodyText, serverDelayMs: parseRetryAfter(res.headers.get("retry-after")) });
+      if (!decision.retry) {
+        if (status === 429 && !ctx.fallback.exhausted && ctx.fallback.fallback()) {
+          attempt = 0;
           continue;
         }
-        const d = ev.choices?.[0]?.delta;
-        if (!d) continue;
-        if (d.reasoning_content || d.reasoning) {
-          const t = String(d.reasoning_content || d.reasoning);
-          fullThinking += t;
-          deps.events.onThinking?.(t);
-        }
-        if (d.content) {
-          if (!perf.firstTokenMs) perf.firstTokenMs = Date.now() - perf.t0;
-          const t = String(d.content);
-          roundContent += t;
-          fullContent += t;
-          deps.events.onChunk?.(t);
-        }
-        const parsed = parseToolCallsFromDelta(d);
-        if (parsed) {
-          for (const tc of parsed) accumulateToolCallDelta(toolCallMap, tc);
-          if (!draftAnnounced) {
-            draftAnnounced = true;
-            deps.events.onToolDraft?.(parsed[0]?.function?.name || "\u2026");
-          }
-        }
-        if (ev.choices?.[0]?.finish_reason === "tool_calls") adoptNonStreamToolCalls(toolCallMap, ev.choices[0].message?.tool_calls);
+        lastErr = status >= 400 ? buildUpstreamError(status, bodyText) : decision.reason;
+        res = null;
+        break;
       }
+      await sleepAbortable(Math.min(decision.delayMs, 3e4), signal);
     } catch (e) {
-      if (e?.name === "AbortError") return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "aborted" };
-      return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "error", error: String(e?.message || e) };
+      if (e?.name === "AbortError") return { res: null, aborted: true };
+      lastErr = String(e?.message || e);
+      if (attempt < 10) await sleepAbortable(Math.min(5e3 * Math.pow(2, attempt - 1), 3e4), signal);
     }
-    let toolCalls = toolCallsToArray(toolCallMap);
-    if (!toolCalls.length && roundContent.includes("<tool_call>")) {
-      const hs = parseHermesToolCalls(roundContent);
-      if (hs.length) {
-        toolCalls = hs.map((h, i) => ({ id: "hermes_" + i + "_" + Date.now(), name: h.name, arguments: h.arguments }));
-        roundContent = stripToolCallBlocks(roundContent);
-      }
-    }
-    deps.events.onPerf?.({ ...perf, turns: turn + 1, engine: "ultra", toolCalls: toolCalls.length });
-    const toolHit = toolCalls.some((tc) => toolLoop.add(toolFingerprint(tc.name, tc.arguments)));
-    const signalRec = recovery.signal(toolHit || contentLoop.add(roundContent));
-    if (signalRec === "stop") return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "loop-detected", error: "\u5FAA\u73AF\u68C0\u6D4B\u786C\u505C" };
-    if (signalRec === "nudge") messages.push({ role: "user", content: STEP_BACK_MESSAGE });
-    if (!toolCalls.length) {
-      const last = messages[messages.length - 1];
-      const ctx = { pendingTools: 0, quotaError: false, skip: false, lastMessageRole: last?.role, lastMessageContent: typeof last?.content === "string" ? last.content : "" };
-      if (resolveNextSpeaker(ctx) === "model") {
-        messages.push({ role: "user", content: CONTINUE_PROMPT });
-        continue;
-      }
-      if (deps.semanticLoopCheck && shouldSemanticCheck(turn, lastSemanticCheck, LLM_CONFIDENCE_THRESHOLD)) {
-        lastSemanticCheck = turn;
-        if (await deps.semanticLoopCheck(messages.slice(-LLM_HISTORY_TURNS))) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "loop-detected", error: "LLM \u5224\u5B9A\u4E3A\u5FAA\u73AF" };
-      }
-      return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls };
-    }
-    messages.push({ role: "assistant", content: roundContent || void 0, tool_calls: toolCalls.map((tc, idx) => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: tc.arguments }, index: idx })) });
-    const plans = [];
-    for (const tc of toolCalls) {
-      const obj = { ...tc, status: "running", started_at: (/* @__PURE__ */ new Date()).toISOString() };
-      const fsm = new ToolCallStateMachine();
-      const repeat = checkRepeatCall(repeatMap, callSignature(tc.name, tc.arguments));
-      if (repeat.blocked) {
-        obj.status = "error";
-        obj.result = "\u274C \u9519\u8BEF: " + (repeat.message || "\u91CD\u590D\u8C03\u7528\u88AB\u62E6\u622A");
-        deps.events.onToolStart?.(obj);
-        deps.events.onToolEnd?.(obj);
-        stuck.push({ kind: "error", sig: String(repeat.message || "repeat"), ok: false });
-        allToolCalls.push(obj);
-        messages.push({ role: "tool", tool_call_id: tc.id, content: obj.result });
-        continue;
-      }
-      const need = deps.needsClient?.(obj) ?? null;
-      if (need) throw new UltraNeedsClientError(need, obj, messages, { content: fullContent, thinking: fullThinking, toolCalls: [...allToolCalls, ...plans.map((p) => p.tc)] }, deps.scopeKeyOf?.(obj));
-      const denial = await deps.confirmTool?.(obj);
-      if (denial) {
-        obj.status = "error";
-        obj.result = denial;
-        deps.events.onToolStart?.(obj);
-        deps.events.onToolEnd?.(obj);
-        allToolCalls.push(obj);
-        messages.push({ role: "tool", tool_call_id: tc.id, content: obj.result });
-        continue;
-      }
-      const decision = decidePolicy(tc.name, { yolo: policyMode === "never", confirmTools: /* @__PURE__ */ new Set(["shell", "delete_file"]) });
-      fsm.transition(decision === "ask" ? "awaiting_approval" : "scheduled");
-      if (decision === "ask") {
-        let a = {};
-        try {
-          a = JSON.parse(tc.arguments || "{}");
-        } catch {
-        }
-        const key = approvedScopes.scopeKeyOf(tc.name, a);
-        if (approvedScopes.isApproved(key)) fsm.transition("scheduled");
-        else {
-          await confirmationBus.request(tc.id, "\u9700\u8981\u786E\u8BA4");
-          fsm.transition("scheduled");
-        }
-      }
-      plans.push({ tc: obj, fsm, decision });
-    }
-    const stuckMsg = stuck.check();
-    if (stuckMsg) messages.push({ role: "user", content: "\u3010\u5361\u6B7B\u63D0\u9192\u3011" + stuckMsg });
-    const barrier = await yieldIfBlocked(plans);
-    if (barrier.stuck && !plans.length) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "error", error: "\u8C03\u5EA6\u5668\u5361\u6B7B" };
-    await requestQueue.submit(async () => {
-      let i = 0;
-      while (i < plans.length) {
-        if (signal?.aborted) return;
-        const group = [];
-        if (READONLY.has(plans[i].tc.name)) {
-          while (i < plans.length && READONLY.has(plans[i].tc.name)) group.push(plans[i++]);
-        } else group.push(plans[i++]);
-        await Promise.all(group.map(async (p) => {
-          p.fsm.transition("executing", { liveOutput: "" });
-          deps.events.onToolStart?.(p.tc);
-          const __exec = await execOne(deps, p.tc, signal);
-          const outText = __exec.text;
-          const failed = outText.startsWith("\u274C");
-          p.tc.result = outText;
-          p.tc.status = failed ? "error" : "done";
-          p.tc.finished_at = (/* @__PURE__ */ new Date()).toISOString();
-          p.fsm.transition(failed ? "error" : "success", failed ? { error: outText } : { result: outText });
-          const outcome = normalizeOutcome(p.tc, outText, failed);
-          bumpToolUse(toolUseCounter, p.tc.name);
-          deps.events.onToolEnd?.(p.tc);
-          allToolCalls.push(p.tc);
-          stuck.push({ kind: failed ? "error" : "observation", sig: toolFingerprint(p.tc.name, outcome.output.slice(0, 80)), ok: !failed });
-          if (failed) sandbox.onSandboxDenial();
-          const __content = __exec.image ? toolContentWithImage(outText + (toolUseHint(toolUseCounter, p.tc.name) ? "\n" + toolUseHint(toolUseCounter, p.tc.name) : ""), __exec.image) : outText + (toolUseHint(toolUseCounter, p.tc.name) ? "\n" + toolUseHint(toolUseCounter, p.tc.name) : "");
-          messages.push({ role: "tool", tool_call_id: p.tc.id, content: __content });
-        }));
-      }
-    });
-    if (turn >= maxTurns - 2 && !wrappedUp) wrappedUp = true;
-    if (wrappedUp && turn >= maxTurns - 1) return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "max-turns", error: "\u5DF2\u8FBE\u6700\u5927 turn \u6570" };
   }
-  return { content: fullContent, thinking: fullThinking, toolCalls: allToolCalls, stopped: "max-turns" };
+  if (!res || !res.ok || !res.body) return { res: null, error: lastErr };
+  return { res };
+}
+async function streamUltraRound(res, ctx, deps, turn) {
+  const toolCallMap = /* @__PURE__ */ new Map();
+  let roundContent = "", draftAnnounced = false;
+  const perf = { firstTokenMs: 0, t0: Date.now() };
+  try {
+    for await (const data of ssePayloads(res.body)) {
+      if (data === "[DONE]") continue;
+      let ev;
+      try {
+        ev = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      const d = ev.choices?.[0]?.delta;
+      if (!d) continue;
+      if (d.reasoning_content || d.reasoning) {
+        const t = String(d.reasoning_content || d.reasoning);
+        ctx.fullThinking += t;
+        deps.events.onThinking?.(t);
+      }
+      if (d.content) {
+        if (!perf.firstTokenMs) perf.firstTokenMs = Date.now() - perf.t0;
+        const t = String(d.content);
+        roundContent += t;
+        ctx.fullContent += t;
+        deps.events.onChunk?.(t);
+      }
+      const parsed = parseToolCallsFromDelta(d);
+      if (parsed) {
+        for (const tc of parsed) accumulateToolCallDelta(toolCallMap, tc);
+        if (!draftAnnounced) {
+          draftAnnounced = true;
+          deps.events.onToolDraft?.(parsed[0]?.function?.name || "\u2026");
+        }
+      }
+      if (ev.choices?.[0]?.finish_reason === "tool_calls") adoptNonStreamToolCalls(toolCallMap, ev.choices[0].message?.tool_calls);
+    }
+  } catch (e) {
+    if (e?.name === "AbortError") return { toolCalls: [], roundContent: "", aborted: true };
+    return { toolCalls: [], roundContent: "", error: String(e?.message || e) };
+  }
+  let toolCalls = toolCallsToArray(toolCallMap);
+  if (!toolCalls.length && roundContent.includes("<tool_call>")) {
+    const hs = parseHermesToolCalls(roundContent);
+    if (hs.length) {
+      toolCalls = hs.map((h, i) => ({ id: "hermes_" + i + "_" + Date.now(), name: h.name, arguments: h.arguments }));
+      roundContent = stripToolCallBlocks(roundContent);
+    }
+  }
+  deps.events.onPerf?.({ ...perf, turns: turn + 1, engine: "ultra", toolCalls: toolCalls.length });
+  return { toolCalls, roundContent };
+}
+async function gateUltraToolCalls(ctx, deps, messages, toolCalls, roundContent, turn) {
+  const toolHit = toolCalls.some((tc) => ctx.toolLoop.add(toolFingerprint(tc.name, tc.arguments)));
+  const signalRec = ctx.recovery.signal(toolHit || ctx.contentLoop.add(roundContent));
+  if (signalRec === "stop") return { plans: [], exit: { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "loop-detected", error: "\u5FAA\u73AF\u68C0\u6D4B\u786C\u505C" } };
+  if (signalRec === "nudge") messages.push({ role: "user", content: STEP_BACK_MESSAGE });
+  if (!toolCalls.length) {
+    const last = messages[messages.length - 1];
+    const spkCtx = { pendingTools: 0, quotaError: false, skip: false, lastMessageRole: last?.role, lastMessageContent: typeof last?.content === "string" ? last.content : "" };
+    if (resolveNextSpeaker(spkCtx) === "model") {
+      messages.push({ role: "user", content: CONTINUE_PROMPT });
+      return { plans: [], continueLoop: true };
+    }
+    if (deps.semanticLoopCheck && shouldSemanticCheck(turn, ctx.lastSemanticCheck, LLM_CONFIDENCE_THRESHOLD)) {
+      ctx.lastSemanticCheck = turn;
+      if (await deps.semanticLoopCheck(messages.slice(-LLM_HISTORY_TURNS))) return { plans: [], exit: { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "loop-detected", error: "LLM \u5224\u5B9A\u4E3A\u5FAA\u73AF" } };
+    }
+    return { plans: [], exit: { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls } };
+  }
+  messages.push({ role: "assistant", content: roundContent || void 0, tool_calls: toolCalls.map((tc, idx) => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: tc.arguments }, index: idx })) });
+  const plans = [];
+  for (const tc of toolCalls) {
+    const obj = { ...tc, status: "running", started_at: (/* @__PURE__ */ new Date()).toISOString() };
+    const fsm = new ToolCallStateMachine();
+    const repeat = checkRepeatCall(ctx.repeatMap, callSignature(tc.name, tc.arguments));
+    if (repeat.blocked) {
+      obj.status = "error";
+      obj.result = "\u274C \u9519\u8BEF: " + (repeat.message || "\u91CD\u590D\u8C03\u7528\u88AB\u62E6\u622A");
+      deps.events.onToolStart?.(obj);
+      deps.events.onToolEnd?.(obj);
+      ctx.stuck.push({ kind: "error", sig: String(repeat.message || "repeat"), ok: false });
+      ctx.allToolCalls.push(obj);
+      messages.push({ role: "tool", tool_call_id: tc.id, content: obj.result });
+      continue;
+    }
+    const need = deps.needsClient?.(obj) ?? null;
+    if (need) throw new UltraNeedsClientError(need, obj, messages, { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: [...ctx.allToolCalls, ...plans.map((p) => p.tc)] }, deps.scopeKeyOf?.(obj));
+    const denial = await deps.confirmTool?.(obj);
+    if (denial) {
+      obj.status = "error";
+      obj.result = denial;
+      deps.events.onToolStart?.(obj);
+      deps.events.onToolEnd?.(obj);
+      ctx.allToolCalls.push(obj);
+      messages.push({ role: "tool", tool_call_id: tc.id, content: obj.result });
+      continue;
+    }
+    const decision = decidePolicy(tc.name, { yolo: ctx.policyMode === "never", confirmTools: /* @__PURE__ */ new Set(["shell", "delete_file"]) });
+    fsm.transition(decision === "ask" ? "awaiting_approval" : "scheduled");
+    if (decision === "ask") {
+      let a = {};
+      try {
+        a = JSON.parse(tc.arguments || "{}");
+      } catch {
+      }
+      const key = ctx.approvedScopes.scopeKeyOf(tc.name, a);
+      if (ctx.approvedScopes.isApproved(key)) fsm.transition("scheduled");
+      else {
+        await ctx.confirmationBus.request(tc.id, "\u9700\u8981\u786E\u8BA4");
+        fsm.transition("scheduled");
+      }
+    }
+    plans.push({ tc: obj, fsm, decision });
+  }
+  const stuckMsg = ctx.stuck.check();
+  if (stuckMsg) messages.push({ role: "user", content: "\u3010\u5361\u6B7B\u63D0\u9192\u3011" + stuckMsg });
+  return { plans };
+}
+async function executeUltraPlans(ctx, deps, messages, plans) {
+  const signal = deps.signal;
+  const barrier = await yieldIfBlocked(plans);
+  if (barrier.stuck && !plans.length) return { schedulerStuck: true };
+  await ctx.requestQueue.submit(async () => {
+    let i = 0;
+    while (i < plans.length) {
+      if (signal?.aborted) return;
+      const group = [];
+      if (READONLY.has(plans[i].tc.name)) {
+        while (i < plans.length && READONLY.has(plans[i].tc.name)) group.push(plans[i++]);
+      } else group.push(plans[i++]);
+      await Promise.all(group.map(async (p) => {
+        p.fsm.transition("executing", { liveOutput: "" });
+        deps.events.onToolStart?.(p.tc);
+        const __exec = await execOne(deps, p.tc, signal);
+        const outText = __exec.text;
+        const failed = outText.startsWith("\u274C");
+        p.tc.result = outText;
+        p.tc.status = failed ? "error" : "done";
+        p.tc.finished_at = (/* @__PURE__ */ new Date()).toISOString();
+        p.fsm.transition(failed ? "error" : "success", failed ? { error: outText } : { result: outText });
+        const outcome = normalizeOutcome(p.tc, outText, failed);
+        bumpToolUse(ctx.toolUseCounter, p.tc.name);
+        deps.events.onToolEnd?.(p.tc);
+        ctx.allToolCalls.push(p.tc);
+        ctx.stuck.push({ kind: failed ? "error" : "observation", sig: toolFingerprint(p.tc.name, outcome.output.slice(0, 80)), ok: !failed });
+        if (failed) ctx.sandbox.onSandboxDenial();
+        const __content = __exec.image ? toolContentWithImage(outText + (toolUseHint(ctx.toolUseCounter, p.tc.name) ? "\n" + toolUseHint(ctx.toolUseCounter, p.tc.name) : ""), __exec.image) : outText + (toolUseHint(ctx.toolUseCounter, p.tc.name) ? "\n" + toolUseHint(ctx.toolUseCounter, p.tc.name) : "");
+        messages.push({ role: "tool", tool_call_id: p.tc.id, content: __content });
+      }));
+    }
+  });
+  return {};
+}
+async function runUltraLoop(inputMessages, deps) {
+  const messages = [...inputMessages];
+  const ctx = buildUltraContext(deps);
+  prepareUltraMessages(ctx, messages, deps, "resume");
+  const maxTurns = ctx.turnBudget.next();
+  if (maxTurns === 0) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "max-session-turns", error: "\u4F1A\u8BDD turn \u4E0A\u9650" };
+  for (let turn = 0; turn < maxTurns; turn++) {
+    ctx.turnBudget.consume();
+    if (deps.signal?.aborted) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
+    const prepared = prepareUltraMessages(ctx, messages, deps, "round");
+    if (prepared.overflow) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "context-overflow", error: "\u4E0A\u4E0B\u6587\u7A97\u53E3\u5373\u5C06\u6EA2\u51FA" };
+    const requested = await requestUltraRound(ctx, prepared.reqMessages, deps);
+    if (requested.aborted) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
+    if (!requested.res) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "error", error: requested.error ?? "" };
+    const streamed = await streamUltraRound(requested.res, ctx, deps, turn);
+    if (streamed.aborted) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "aborted" };
+    if (streamed.error) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "error", error: streamed.error };
+    const gate = await gateUltraToolCalls(ctx, deps, messages, streamed.toolCalls, streamed.roundContent, turn);
+    if (gate.exit) return gate.exit;
+    if (gate.continueLoop) continue;
+    const executed = await executeUltraPlans(ctx, deps, messages, gate.plans);
+    if (executed.schedulerStuck) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "error", error: "\u8C03\u5EA6\u5668\u5361\u6B7B" };
+    if (turn >= maxTurns - 2 && !ctx.wrappedUp) ctx.wrappedUp = true;
+    if (ctx.wrappedUp && turn >= maxTurns - 1) return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "max-turns", error: "\u5DF2\u8FBE\u6700\u5927 turn \u6570" };
+  }
+  return { content: ctx.fullContent, thinking: ctx.fullThinking, toolCalls: ctx.allToolCalls, stopped: "max-turns" };
 }
 function toolContentWithImage(text, image) {
   const cleaned = String(text || "").replace(/!\[[^\]]*\]\([^)]+\)/g, "").trim();
@@ -1231,14 +1337,20 @@ function toolContentWithImage(text, image) {
   ULTRA_MAX_TURNS,
   UltraNeedsClientError,
   allReady,
+  buildUltraContext,
   canTransition,
+  executeUltraPlans,
   fastNextSpeaker,
   findCompressSplitPoint,
+  gateUltraToolCalls,
   needsCompression,
   parseNextSpeaker,
+  prepareUltraMessages,
+  requestUltraRound,
   resolveNextSpeaker,
   runUltraLoop,
   shouldSemanticCheck,
+  streamUltraRound,
   toolFingerprint,
   ultraBackoff,
   ultraQuotaDelay,

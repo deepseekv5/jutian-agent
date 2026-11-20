@@ -11,10 +11,20 @@
  *     - direct 在类型层属于 RouteStrategy（单次无工具答复），kernel 字段只有
  *       pro | ultra | auto | super 四档，因此 direct 策略落到最轻的 pro 内核。
  *  2. 规则投票：复杂度、风险、领域、工具、自主性、计划规模、输入策略各自投票，
- *     得票最高的策略/内核胜出；第一、第二名票差越小置信度越低（冲突即低置信）。
- *  3. 硬约束兜底：critical 风险必须开护栏、expert 复杂度必须走 deep、
- *     trivial 且不需要工具必须走 direct。硬约束优先级永远高于投票结果。
- *  4. 运行时覆盖：maxRounds / maxTokens / temperature / 护栏 / 验证 / hermes
+ *     得票最高的策略/内核胜出。
+ *  3. 冲突消解（v18.1 优化）：投票冲突不再直接等于「低置信、显犹豫」。信号维度有
+ *     明确的优先级阶梯：硬约束 > 自主目标(用户显式意志) > 工具需求 > 风险 >
+ *     领域专家 > 复杂度 > 计划规模 > 输入策略。当低优先级维度（复杂度/计划/输入策略）
+ *     与高优先级维度结论冲突时，按阶梯果断裁决（例如「复杂度说 trivial 该直接答复，
+ *     但任务明确需要工具」→ 工具需求胜出，果断升级策略），被否决方的票从置信度
+ *     占比中剔除，不再把置信度拉到 15% 这种不可用区间。
+ *  4. 专家规则：一组高权重领域规则（代码+验证闭环、目标闭环自主、工程工具循环等），
+ *     把「任务明确要求写代码/跑命令就是需要工具循环」这类确定性判断编码为一票定音。
+ *  5. 硬约束兜底：critical 风险必须开护栏、expert 复杂度必须走 deep、
+ *     trivial 且不需要工具必须走 direct。硬约束优先级永远高于投票与消解结果。
+ *  6. 置信度公式：主决策有效票占比 × 维度共识 − 冲突惩罚（衰减函数、封顶 0.3）
+ *     + 消解加成，下限 0.35——冲突可以反映不确定性，但不能让路由显得比随机猜还犹豫。
+ *  7. 运行时覆盖：maxRounds / maxTokens / temperature / 护栏 / 验证 / hermes
  *     均按任务特征动态给出，且集中在 computeOverrides 一处计算，便于审计。
  *
  * 本文件只依赖 ../types，不 import 其它 super 模块，保证可并行开发/独立测试。
@@ -125,6 +135,28 @@ interface Tally<T> {
   total: number
 }
 
+/**
+ * 冲突消解结果。
+ *
+ * 消解的意义：投票冲突不等于决策不确定——当冲突双方分属优先级阶梯的不同层级时，
+ * 胜负由阶梯规则确定性裁决，路由应当「果断」而不是「犹豫」。被否决方的落选票
+ * 从置信度占比与冲突惩罚中剔除（overruled），并按裁决方式给予果断加成。
+ */
+interface ConflictResolution {
+  /** 最终采纳的策略（可能与投票第一名不同） */
+  strategy: RouteStrategy
+  /** 是否发生了「低优先级结论被推翻」的策略切换 */
+  flipped: boolean
+  /** 被推翻前的策略（flipped 时有效） */
+  from: RouteStrategy
+  /** 消解说明（写入 reasons 前排；未发生任何消解时为 null） */
+  reason: string | null
+  /** 被压制（不参与置信度占比与冲突惩罚）的票集合 */
+  overruled: Set<Vote>
+  /** 置信度果断加成：消解本身是确定性规则，应当体现确定性 */
+  bonus: number
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * 常量表
  * ───────────────────────────────────────────────────────────────────────────── */
@@ -220,6 +252,68 @@ const STRATEGY_BASE_ROUNDS: Record<RouteStrategy, number> = {
   autonomous: 14,
   deep: 20,
 }
+
+/**
+ * 策略升级阶梯：数字越大策略越「重」。冲突惩罚按两个策略之间的档位距离衰减——
+ * 相邻档位（如 single_tool 与 iterative）的分歧是「程度问题」，不是「方向问题」。
+ */
+const STRATEGY_TIER: Record<RouteStrategy, number> = {
+  direct: 0,
+  single_tool: 1,
+  iterative: 2,
+  autonomous: 3,
+  deep: 3,
+}
+
+/** 冲突惩罚封顶：无论多少维度冲突，置信度扣减不超过该值（防止跌到不可用区间）。 */
+const CONFLICT_PENALTY_CAP = 0.3
+
+/** 置信度下限：多规则冲突时路由可以承认不确定，但不能跌到 15% 这种不可用区间。 */
+export const MIN_ROUTE_CONFIDENCE = 0.35
+
+/**
+ * 信号维度优先级阶梯（高 -> 低）。冲突消解按此裁决：
+ * 硬约束（applyHardConstraints）> 自主目标（用户显式意志）> 工具需求 > 风险 >
+ * 领域专家 > 复杂度 > 计划规模 > 输入策略。
+ */
+const HIGH_PRIORITY_TAGS: readonly RuleTag[] = ['autonomy', 'tool', 'risk', 'domain']
+const LOW_PRIORITY_TAGS: readonly RuleTag[] = ['complexity', 'plan', 'strategy']
+
+/** 维度标签的中文展示名（冲突消解理由用）。 */
+const TAG_LABEL: Record<RuleTag, string> = {
+  constraint: '硬约束',
+  autonomy: '自主目标',
+  tool: '工具需求',
+  risk: '风险',
+  domain: '领域专家',
+  complexity: '复杂度',
+  plan: '计划规模',
+  strategy: '输入策略',
+  history: '历史',
+}
+
+/** 理由展示优先级：越决定性越靠前（硬约束说明由 applyHardConstraints 单独置顶）。 */
+const REASON_DIM_ORDER: Record<RuleTag, number> = {
+  constraint: 0,
+  autonomy: 1,
+  tool: 2,
+  risk: 3,
+  domain: 4,
+  complexity: 5,
+  plan: 6,
+  strategy: 7,
+  history: 8,
+}
+
+/** 专家规则触发的「行动意图」集合（来自 analyzer 的 intent 抽取）。 */
+const ACTION_INTENTS: ReadonlySet<string> = new Set([
+  '实现代码', '修复缺陷', '重构优化', '命令行执行', '测试验证',
+])
+
+/** 验证词匹配（intent / 工具名 / 计划文本三个来源）。 */
+const VERIFICATION_INTENT_RE = /测试|验证|检查|校验|verify|test|check|lint/i
+const VERIFICATION_TOOL_RE = /test|verify|check|lint/i
+const VERIFICATION_TEXT_RE = /测试|验证|检查|校验|核对|verify|test|check|lint|assert/i
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * 通用小工具
@@ -694,6 +788,132 @@ function autonomyRules(ctx: RuleContext): RoutingRule[] {
 }
 
 /**
+ * 判断任务是否带验证信号（路由只能看到 TaskAnalysis/Plan/Strategy，不接触原始文本，
+ * 因此从意图标签、建议工具、计划步骤文本、输入策略四个来源综合判断）。
+ */
+function hasVerificationSignal(ctx: RuleContextWithHints): boolean {
+  const { analysis, strategy, plan } = ctx
+  if (strategy.verifyEachStep === true) return true
+  if (VERIFICATION_INTENT_RE.test(analysis.intent)) return true
+  if ((analysis.suggestedTools ?? []).some(tool => VERIFICATION_TOOL_RE.test(tool))) return true
+  return (plan.steps ?? []).some(step =>
+    VERIFICATION_TEXT_RE.test(`${step.title}${step.description}${step.expectedOutput}`))
+}
+
+/**
+ * 领域专家规则（v18.1 新增，高权重一票定音）。
+ *
+ * 这组规则把「确定性判断」编码为高权重票，避免被低权重启发式稀释：
+ *  1. code + 需要工具 + 含验证信号 -> iterative 验证闭环（小任务停留在 pro 轻内核）；
+ *  2. 目标闭环信号（自动/直到/完成全部，由 analyzer 折算为 benefitsFromAutonomy）
+ *     -> autonomous + auto，果断不被轻策略拦截；
+ *  3. code/shell + 需要工具 -> iterative 工具循环（写代码/执行命令必须离开纯文本答复）；
+ *  4. 明确行动意图（实现/修复/重构/执行/验证）+ 需要工具 -> iterative；
+ *  5. 简单任务却要求 >=3 类工具协同 -> 果断升级 iterative（负载与档位不匹配）。
+ *
+ * 全部策略升级型规则都要求 !benefitsFromAutonomy：目标闭环信号在场时由规则 2
+ * 一票定音，其余规则不再叠加 iterative 票抬高 runner（避免稀释自主决策的占比）。
+ */
+function expertRules(ctx: RuleContextWithHints): RoutingRule[] {
+  const { analysis } = ctx
+  const level = analysis.complexity.level
+  const smallTask = level === 'trivial' || level === 'simple'
+  const escalated = level === 'trivial' || level === 'simple' || level === 'moderate'
+  const lightKernel: KernelName = smallTask ? 'pro' : 'super'
+  const rules: RoutingRule[] = []
+  const autonomy = analysis.benefitsFromAutonomy
+  // 真实分析器对工程任务给出的建议工具集 >= 2（如 code_search + read_file）；
+  // 单工具场景保持轻策略（single_tool 足够），专家规则不越俎代庖。
+  const multiTool = (analysis.suggestedTools ?? []).length >= 2
+
+  // 专家规则 1：代码任务 + 需要工具 + 验证信号 -> iterative 验证闭环。
+  if (analysis.domain === 'code' && analysis.needsTools && !autonomy && escalated && multiTool
+      && hasVerificationSignal(ctx)) {
+    rules.push({
+      tag: 'tool',
+      name: 'expert-code-verify-loop',
+      evaluate: () => [{
+        tag: 'tool',
+        strategy: 'iterative' as RouteStrategy,
+        kernel: lightKernel,
+        weight: 4.2,
+        reason: '专家规则：代码任务需要工具且包含验证要求——使用 iterative 验证闭环'
+          + (smallTask ? '（小型任务停留在 pro 轻内核）' : ''),
+        patch: { enableVerification: true },
+      }],
+    })
+  }
+
+  // 专家规则 2：目标闭环（自动/直到/完成全部）-> autonomous + auto，一票定音。
+  if (autonomy) {
+    rules.push({
+      tag: 'autonomy',
+      name: 'expert-goal-loop-autonomous',
+      evaluate: () => [{
+        tag: 'autonomy',
+        strategy: 'autonomous' as RouteStrategy,
+        kernel: 'auto' as KernelName,
+        weight: 5.5,
+        reason: '专家规则：用户表达了自主闭环目标（自动/直到/完成全部）——果断使用 autonomous 策略 + auto 内核',
+        patch: { hermesMode: 'auto', enableVerification: true },
+      }],
+    })
+  }
+
+  // 专家规则 3：工程领域（code/shell）+ 需要工具 -> iterative 工具循环。
+  if ((analysis.domain === 'code' || analysis.domain === 'shell') && analysis.needsTools
+      && !autonomy && escalated && multiTool) {
+    rules.push({
+      tag: 'tool',
+      name: 'expert-engineering-tool-loop',
+      evaluate: () => [{
+        tag: 'tool',
+        strategy: 'iterative' as RouteStrategy,
+        kernel: lightKernel,
+        weight: 3.0,
+        reason: `专家规则：${analysis.domain} 任务明确需要工具——写代码/执行命令必须经过工具循环，果断升级为 iterative`
+          + (smallTask ? '（小型任务用 pro 内核轻量执行）' : ''),
+        patch: { enableVerification: analysis.domain === 'code' },
+      }],
+    })
+  }
+
+  // 专家规则 4：明确行动意图 + 需要工具 -> iterative。
+  if (ACTION_INTENTS.has(analysis.intent) && analysis.needsTools && !autonomy
+      && escalated && multiTool) {
+    rules.push({
+      tag: 'tool',
+      name: 'expert-action-intent-loop',
+      evaluate: () => [{
+        tag: 'tool',
+        strategy: 'iterative' as RouteStrategy,
+        kernel: lightKernel,
+        weight: 3.2,
+        reason: `专家规则：意图「${analysis.intent}」是明确的执行型任务且需要工具——使用 iterative 策略推进`,
+      }],
+    })
+  }
+
+  // 专家规则 5：简单任务却要求多类工具协同 -> 果断升级 iterative。
+  if (analysis.needsTools && !autonomy && smallTask
+      && (analysis.suggestedTools ?? []).length >= 3) {
+    rules.push({
+      tag: 'tool',
+      name: 'expert-multi-tool-mismatch',
+      evaluate: () => [{
+        tag: 'tool',
+        strategy: 'iterative' as RouteStrategy,
+        kernel: 'pro' as KernelName,
+        weight: 3.4,
+        reason: `专家规则：简单任务却需要 ${analysis.suggestedTools.length} 类工具协同——负载与档位不匹配，果断升级为 iterative`,
+      }],
+    })
+  }
+
+  return rules
+}
+
+/**
  * 计划规模规则。步骤多、关键路径长、难度高都推高策略等级。
  * 这组规则的价值在于：即便 analysis 判定为 simple，一个 20 步的计划也不该走 direct。
  */
@@ -870,8 +1090,11 @@ function tallyVotes<T extends string>(votes: Vote[], key: 'strategy' | 'kernel')
 }
 
 /**
- * 统计跨维度冲突度：若第一名和第二名由完全不同维度投票产生，冲突更强；
- * 若两者共享同一维度（例如 risk 同时投了 deep 和 iterative），冲突较弱。
+ * 统计跨维度冲突度（只对「未被消解」的真实分歧计惩罚）：
+ * - 若第一名和第二名由完全不同维度投票产生，冲突更强；
+ * - 若两者共享同一维度（例如 risk 同时投了 deep 和 iterative），冲突较弱；
+ * - 档位距离衰减：相邻策略档位之间的分歧是「程度问题」，惩罚按 0.25 倍计；
+ *   隔一档按 0.6 倍；跨三档以上才是全额冲突。
  */
 function conflictPenalty(tally: Tally<string>): number {
   if (tally.runnerUp === undefined || tally.total === 0) return 0
@@ -888,7 +1111,121 @@ function conflictPenalty(tally: Tally<string>): number {
   const closeness = tally.bestScore === 0
     ? 0
     : clamp(tally.runnerScore / tally.bestScore, 0, 1)
-  return closeness * (1 - overlap) * 0.35
+
+  const bestTier = STRATEGY_TIER[tally.best as RouteStrategy] ?? 0
+  const runnerTier = STRATEGY_TIER[tally.runnerUp as RouteStrategy] ?? 0
+  const distance = Math.abs(bestTier - runnerTier)
+  const distanceFactor = distance <= 1 ? 0.25 : distance === 2 ? 0.6 : 1
+  return closeness * (1 - overlap) * 0.35 * distanceFactor
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 冲突消解（v18.1）
+ *
+ * 优先级阶梯：硬约束 > 自主目标 > 工具需求 > 风险 > 领域专家 > 复杂度 > 计划 > 输入策略。
+ * 典型场景：「帮我写快速排序」——复杂度判 trivial 建议直接答复，但任务明确需要工具，
+ * 旧逻辑让两派票数接近、置信度跌到 15%；新逻辑按「工具需求 > 复杂度」果断升级策略，
+ * 被否决方的票从置信度占比中剔除，置信度回到可用区间。
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 冲突消解主入口：返回最终策略 + 被压制的票。
+ *
+ * flip 规则（低优先级结论被高优先级推翻，切换策略）：
+ *   C. 自主目标 > 其它：benefitsFromAutonomy（自动/直到/完成全部）在场且投票未选 autonomous。
+ *   A. 工具需求 > 复杂度/计划/输入策略：needsTools 为真时 direct 永远不可用，
+ *      升级目标取非 direct 策略中票重最高者（与工具/领域维度自身倾向保持一致）。
+ *   B. 风险 > 复杂度：high/critical 风险在场且投票落在 direct/single_tool。
+ *
+ * 压制规则 D（不切换策略，只剔除拉低置信度的落选票）：
+ *   低优先级维度（复杂度/计划/输入策略）投给了最终赢家以外的策略，且赢家有
+ *   高优先级维度支持——按阶梯压制其落选票。高优先级维度之间的分歧保持诚实，
+ *   不做压制（那是真正需要反映的不确定性）。
+ */
+function resolveConflicts(
+  votes: Vote[],
+  tally: Tally<RouteStrategy>,
+  ctx: RuleContextWithHints,
+): ConflictResolution {
+  const winner = tally.best
+  const overruled = new Set<Vote>()
+  let flipped = false
+  let from = winner
+  let strategy = winner
+  let reason: string | null = null
+
+  /** 某维度是否给某策略投过有效票。 */
+  const supports = (s: RouteStrategy, tag: RuleTag): boolean =>
+    votes.some(v => v.strategy === s && v.tag === tag && v.weight > 0)
+
+  // 消解规则 C：用户显式自主目标（自动/直到/完成全部）> 其它信号。
+  if (ctx.analysis.benefitsFromAutonomy && winner !== 'autonomous'
+      && supports('autonomous', 'autonomy')) {
+    flipped = true
+    from = winner
+    strategy = 'autonomous'
+    reason = '冲突消解：检测到自主闭环目标信号，按「自主目标 > 复杂度/计划」果断升级为 autonomous'
+  }
+
+  // 消解规则 A：工具需求 > 复杂度/计划/输入策略。
+  if (!flipped && ctx.analysis.needsTools && winner === 'direct') {
+    const scores = new Map<RouteStrategy, number>()
+    for (const v of votes) {
+      if (v.strategy !== undefined && v.strategy !== 'direct' && v.weight > 0) {
+        scores.set(v.strategy, (scores.get(v.strategy) ?? 0) + v.weight)
+      }
+    }
+    const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1])
+    if (ranked.length > 0) {
+      flipped = true
+      from = 'direct'
+      strategy = ranked[0][0]
+      reason = '冲突消解：复杂度/计划建议直接答复，但任务明确需要工具——按「工具需求 > 复杂度」果断升级为 '
+        + strategy
+    }
+  }
+
+  // 消解规则 B：风险 > 复杂度。高风险任务即便复杂度不高，也要走带护栏的策略。
+  if (!flipped && (ctx.analysis.risk === 'high' || ctx.analysis.risk === 'critical')
+      && (winner === 'direct' || winner === 'single_tool') && supports('deep', 'risk')) {
+    flipped = true
+    from = winner
+    strategy = 'deep'
+    reason = `冲突消解：风险等级 ${ctx.analysis.risk} 高于复杂度判断，按「风险 > 复杂度」升级为 deep`
+  }
+
+  if (flipped) {
+    // 被推翻策略的所有票一律压制（包括投给它的领域票——它站在了落选一边）。
+    for (const v of votes) {
+      if (v.strategy === from) overruled.add(v)
+    }
+  }
+
+  // 压制规则 D：低优先级维度的落选票不参与置信度占比与冲突惩罚。
+  const winnerVoters = tally.voters.get(strategy) ?? new Set<RuleTag>()
+  const hasHighSupport = HIGH_PRIORITY_TAGS.some(tag => winnerVoters.has(tag))
+  let suppressed = false
+  if (hasHighSupport) {
+    for (const v of votes) {
+      if (!overruled.has(v) && LOW_PRIORITY_TAGS.includes(v.tag)
+          && v.strategy !== undefined && v.strategy !== strategy) {
+        overruled.add(v)
+        suppressed = true
+      }
+    }
+  }
+
+  if (reason === null && suppressed) {
+    const losingTags = [...new Set(
+      votes.filter(v => overruled.has(v)).map(v => v.tag),
+    )]
+    const supportTags = [...winnerVoters].filter(tag => HIGH_PRIORITY_TAGS.includes(tag))
+    reason = `冲突消解：${losingTags.map(tag => TAG_LABEL[tag]).join('、')}`
+      + `与更高优先级的${supportTags.map(tag => TAG_LABEL[tag]).join('、')}信号结论不一致，已按优先级采纳 ${strategy}`
+  }
+
+  const bonus = flipped ? 0.08 : suppressed ? 0.04 : 0
+  return { strategy, flipped, from, reason, overruled, bonus }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -1027,6 +1364,7 @@ function buildAllRules(ctx: RuleContextWithHints): RoutingRule[] {
     ...riskRules(ctx),
     ...complexityRules(ctx),
     ...domainRules(ctx),
+    ...expertRules(ctx),
     ...toolRules(ctx),
     ...autonomyRules(ctx),
     ...planRules(ctx),
@@ -1124,8 +1462,13 @@ function applyHardConstraints(
   }
 
   // 约束 6：策略与内核保持一致（防止投票选出 iterative + ultra 这种错配）。
+  // 例外：小型任务（trivial/simple）的 iterative 若由专家规则/冲突消解明确落在
+  // pro 轻内核，保持轻量路由不被重对齐（pro 与 super 在执行层同源）。
   const expectedKernel = STRATEGY_KERNEL[decision.strategy]
-  if (decision.kernel !== expectedKernel && level !== 'expert' && risk !== 'critical') {
+  const lightIterativeOnPro = decision.strategy === 'iterative'
+    && (level === 'trivial' || level === 'simple')
+    && decision.kernel === 'pro'
+  if (decision.kernel !== expectedKernel && !lightIterativeOnPro && level !== 'expert' && risk !== 'critical') {
     // expert/critical 已经由上面锁定内核，其余情况按策略对齐。
     decision.kernel = expectedKernel
   }
@@ -1170,38 +1513,47 @@ export class KernelRouterImpl implements KernelRouter {
       weight: v.weight * this.weightScale,
     }))
 
-    // 3. 分别对策略和内核计分。
+    // 3. 策略投票计分。
     const strategyTally = tallyVotes<RouteStrategy>(votes, 'strategy')
-    const kernelTally = tallyVotes<KernelName>(votes, 'kernel')
 
-    // 4. 选出策略；内核优先用内核得票，但若该内核与策略严重错配则以策略映射为准。
-    const chosenStrategy = strategyTally.best
-    let chosenKernel = kernelTally.best
+    // 4. 冲突消解：按「硬约束 > 自主目标 > 工具需求 > 风险 > 复杂度 > ...」阶梯
+    //    果断裁决投票冲突，并压制低优先级维度的落选票（不拉低置信度）。
+    const resolution = resolveConflicts(votes, strategyTally, ctx)
+    const chosenStrategy = resolution.strategy
+
+    // 5. 有效票计分：剔除被压制的落选票后，对策略与内核重新计分，
+    //    让「主决策票占比」反映真正起作用的信号。
+    const effVotes = resolution.overruled.size > 0
+      ? votes.filter(v => !resolution.overruled.has(v))
+      : votes
+    const effTally = tallyVotes<RouteStrategy>(effVotes, 'strategy')
+    const kernelTally = tallyVotes<KernelName>(effVotes, 'kernel')
 
     // 当内核票非常弱（几乎没有内核规则命中）时，直接采用策略映射。
+    let chosenKernel = kernelTally.best
     if (kernelTally.total < 0.5) {
       chosenKernel = STRATEGY_KERNEL[chosenStrategy]
     }
 
-    // 5. 合并规则补丁并计算覆盖参数。
+    // 6. 合并规则补丁（含被压制票的补丁：预算宁多勿少，护栏宁开勿关）并计算覆盖参数。
     const patch = mergePatches(votes)
     const overrides = computeOverrides(ctx, chosenStrategy, patch)
 
-    // 6. 应用硬约束（可能改写策略/内核/覆盖）。
+    // 7. 应用硬约束（可能改写策略/内核/覆盖）。
     const decision = { strategy: chosenStrategy, kernel: chosenKernel, overrides }
     const constraintNotes = applyHardConstraints(decision, ctx)
 
-    // 7. 置信度：票势 + 一致性 - 冲突。
-    const confidence = this.computeConfidence(
-      strategyTally,
-      kernelTally,
+    // 8. 置信度：主决策有效票占比 × 共识 − 冲突惩罚（衰减、封顶）+ 消解加成。
+    const confidence = this.computeConfidence({
+      effTally,
       analysis,
-      votes,
       decision,
-    )
+      resolution,
+      constraintCount: constraintNotes.length,
+    })
 
-    // 8. 汇总可解释理由（按票重降序，硬约束说明置顶）。
-    const reasons = this.buildReasons(votes, constraintNotes, strategyTally, decision)
+    // 9. 汇总可解释理由（硬约束置顶 -> 消解说明 -> 结论摘要 -> 按决定性排序的支持理由）。
+    const reasons = this.buildReasons(votes, constraintNotes, resolution, decision, effTally)
 
     return {
       strategy: decision.strategy,
@@ -1223,77 +1575,122 @@ export class KernelRouterImpl implements KernelRouter {
 
   /* ── 置信度计算 ── */
 
-  private computeConfidence(
-    strategyTally: Tally<RouteStrategy>,
-    kernelTally: Tally<KernelName>,
-    analysis: TaskAnalysis,
-    votes: Vote[],
-    decision: { strategy: RouteStrategy; kernel: KernelName },
-  ): number {
-    // 基础分：第一名得票占总票的比例（一边倒接近 1，势均力敌接近 0.5）。
-    const dominance = strategyTally.total > 0
-      ? strategyTally.bestScore / strategyTally.total
-      : 0.5
+  /**
+   * 置信度公式（v18.1）：
+   *
+   *   置信度 = 0.8 × 票面置信度 + 0.2 × 任务分析置信度
+   *   票面置信度 = 主决策有效票占比 × 维度共识 − 冲突惩罚（衰减函数） + 消解加成 − 兜底修正
+   *
+   * 与旧版的关键差异：
+   *  - 占比只统计「有效票」：被冲突消解压制的落选票不再稀释主决策占比；
+   *  - 冲突惩罚经过衰减函数且封顶 0.3：多规则冲突时置信度不会跌到 15% 这种不可用值；
+   *  - 消解加成：冲突由明确的优先级阶梯裁决，决策程序本身是确定的，应当体现果断；
+   *  - 下限 0.35：路由可以承认不确定，但不能显得比随机猜还犹豫。
+   */
+  private computeConfidence(input: {
+    effTally: Tally<RouteStrategy>
+    analysis: TaskAnalysis
+    decision: { strategy: RouteStrategy; kernel: KernelName }
+    resolution: ConflictResolution
+    constraintCount: number
+  }): number {
+    const { effTally, analysis, decision, resolution, constraintCount } = input
 
-    // 共识加成：第一名由多个不同维度共同支持时，说明信号一致。
-    const bestVoters = strategyTally.voters.get(strategyTally.best) ?? new Set<RuleTag>()
-    const consensus = clamp(0.6 + bestVoters.size * 0.1, 0.6, 1)
+    // 主决策票权重占比：与最强对手的成对占比（被压制的票已剔除，全票支持时为 1）。
+    const best = effTally.bestScore
+    const runner = effTally.runnerScore
+    const dominance = best + runner > 0 ? best / (best + runner) : 0.5
 
-    // 冲突惩罚：策略与内核维度冲突 + 策略内部一二名冲突。
-    const strategyConflict = conflictPenalty(strategyTally)
-    const kernelConflict = conflictPenalty(kernelTally)
-    const kernelMismatch = decision.kernel === STRATEGY_KERNEL[decision.strategy] ? 0 : 0.12
+    // 共识加成：支持主决策的独立维度越多越可信。
+    const bestVoters = effTally.voters.get(effTally.best) ?? new Set<RuleTag>()
+    const consensus = clamp(0.68 + bestVoters.size * 0.08, 0.68, 1)
 
-    // 分析本身置信度也纳入考量（领域识别越确定，路由越可信）。
+    let voteConfidence = dominance * consensus
+
+    // 冲突惩罚（衰减函数）：只惩罚未被消解的真实分歧。指数衰减让惩罚随冲突增长
+    // 快速饱和，封顶 CONFLICT_PENALTY_CAP——冲突多时也不会跌穿可用区间。
+    const expectedKernel = STRATEGY_KERNEL[decision.strategy]
+    // 小型任务（trivial/simple）的 iterative 停在 pro 轻内核是专家规则/消解的明确设计，
+    // 不算策略-内核错配（pro 与 super 在执行层同源，见 superCore.selectRunner）。
+    const lightIterativeOnPro = decision.strategy === 'iterative'
+      && (analysis.complexity.level === 'trivial' || analysis.complexity.level === 'simple')
+      && decision.kernel === 'pro'
+    const kernelMismatch = decision.kernel === expectedKernel || lightIterativeOnPro
+      ? 0
+      : 0.12
+    const rawPenalty = conflictPenalty(effTally) + kernelMismatch
+    voteConfidence -= CONFLICT_PENALTY_CAP * (1 - Math.exp(-rawPenalty / CONFLICT_PENALTY_CAP))
+
+    // 消解加成：flip 裁决 +0.08，压制落选票 +0.04。
+    voteConfidence += resolution.bonus
+
+    // 硬约束兜底与极高风险：诚实反映「这是兜底而非自然共识」。
+    if (constraintCount > 0) voteConfidence -= 0.05
+    if (analysis.risk === 'critical') voteConfidence -= 0.04
+
+    // 分析本身置信度（领域识别越确定，路由越可信），权重低于票面信号。
     const analysisConfidence = unit(analysis.confidence)
+    const confidence = voteConfidence * 0.8 + analysisConfidence * 0.2
 
-    let confidence = dominance * consensus
-      - strategyConflict
-      - kernelConflict
-      - kernelMismatch
-    confidence = confidence * 0.75 + analysisConfidence * 0.25
-
-    // 硬约束被触发时，虽然决策本身确定，但要诚实反映「这是兜底而非自然共识」。
-    const constraintVotes = votes.filter(v => v.tag === 'constraint' && v.weight > 0)
-    if (constraintVotes.length > 0) confidence -= 0.08
-
-    // 高风险任务我们更保守，置信度略微下调（承认不确定性）。
-    if (analysis.risk === 'critical') confidence -= 0.05
-
-    return clamp(confidence, 0.05, 1)
+    return clamp(confidence, MIN_ROUTE_CONFIDENCE, 1)
   }
 
   /* ── 理由汇总 ── */
 
+  /**
+   * 理由汇总（v18.1）：
+   *  1. 硬约束说明置顶（最高决定性）；
+   *  2. 冲突消解说明（确定性裁决）；
+   *  3. 决策结论摘要；
+   *  4. 支持理由：只保留支持最终决策的票，每个维度只留票重最高的一条
+   *     （同类合并——修复 e2e 中出现两条「领域为 code」的问题），
+   *     按决定性优先级排序（自主目标/工具需求 > 风险 > 领域 > 复杂度 > ...）；
+   *  5. 总条数 ≤6，保证理由列表一眼能读完。
+   */
   private buildReasons(
     votes: Vote[],
     constraintNotes: string[],
-    tally: Tally<RouteStrategy>,
+    resolution: ConflictResolution,
     decision: { strategy: RouteStrategy; kernel: KernelName },
+    effTally: Tally<RouteStrategy>,
   ): string[] {
     const reasons: string[] = []
 
-    // 硬约束说明置顶。
+    // 1. 硬约束说明置顶。
     for (const note of constraintNotes) reasons.push(note)
 
-    // 决策结论摘要。
+    // 2. 冲突消解说明。
+    if (resolution.reason) reasons.push(resolution.reason)
+
+    // 3. 决策结论摘要。
+    const dominancePct = effTally.bestScore + effTally.runnerScore > 0
+      ? Math.round((effTally.bestScore / (effTally.bestScore + effTally.runnerScore)) * 100)
+      : 100
     reasons.push(
-      `最终决策：strategy=${decision.strategy}，kernel=${decision.kernel}` +
-      `（策略得票 ${round(tally.bestScore, 1)}，共 ${round(tally.total, 1)}）`,
+      `最终决策：strategy=${decision.strategy}，kernel=${decision.kernel}`
+      + `（主决策有效票占比 ${dominancePct}%）`,
     )
 
-    // 其余理由按票重降序，去重。
-    const seen = new Set<string>()
-    const informative = votes
-      .filter(v => v.reason.length > 0)
-      .sort((a, b) => b.weight - a.weight)
-    for (const vote of informative) {
+    // 4. 支持理由：按维度合并 + 决定性排序。
+    const bestByTag = new Map<RuleTag, Vote>()
+    for (const vote of votes) {
+      if (resolution.overruled.has(vote)) continue
+      if (vote.weight <= 0 || vote.reason.length === 0) continue
+      if (vote.strategy !== undefined && vote.strategy !== decision.strategy) continue
+      const current = bestByTag.get(vote.tag)
+      if (!current || vote.weight > current.weight) bestByTag.set(vote.tag, vote)
+    }
+    const ordered = [...bestByTag.values()].sort((a, b) =>
+      REASON_DIM_ORDER[a.tag] - REASON_DIM_ORDER[b.tag] || b.weight - a.weight)
+    const seen = new Set<string>(reasons)
+    for (const vote of ordered) {
       if (seen.has(vote.reason)) continue
       seen.add(vote.reason)
       reasons.push(vote.reason)
     }
 
-    return reasons
+    // 5. 总条数上限。
+    return reasons.slice(0, 6)
   }
 }
 

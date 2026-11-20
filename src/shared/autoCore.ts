@@ -33,6 +33,14 @@ export interface GoalEvaluation { done: boolean; note: string; ok: boolean }
 
 const EVALUATOR_SYSTEM = '你是任务完成度评估器。给定「用户目标」和「本轮最终回复」，判断目标是否已被实质性完成。只输出 JSON：{"done":true|false,"note":"一句话说明还缺什么或已完成什么"}。判定规则：只看有没有真正把事情做出来（文件已落盘、命令已执行、问题已解决），不因客套话、计划描述、"我将要"、"已完成"字样而判定完成；宁可保守判未完成。'
 
+/** 按 code point 截断字符串：String.slice 按 UTF-16 码元切，会把 emoji 等代理对
+ *  从中间切开产生非法孤立代理；这里按码点取前 max 个，天然对齐代理对边界。 */
+function truncateByCodePoints(str: string, max: number): string {
+  // 长度（码元数）不超限时无需截断，原样返回。
+  if (str.length <= max) return str
+  return Array.from(str).slice(0, max).join('')
+}
+
 /** 从消息历史抽取用户目标：取最后一条 user 文本（去掉系统注入的续跑提示）。 */
 export function extractGoal(messages: LoopMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -82,7 +90,7 @@ export async function evaluateGoalAuto(deps: AutoDeps, goalText: string, lastRep
     const m = text.match(/\{[\s\S]*\}/)
     if (!m) return { done: false, note: '', ok: false }
     const parsed = JSON.parse(m[0])
-    return { done: !!parsed.done, note: String(parsed.note || '').slice(0, 160), ok: true }
+    return { done: !!parsed.done, note: truncateByCodePoints(String(parsed.note || ''), 160), ok: true }
   } catch {
     return { done: false, note: '评估失败', ok: false }
   }
@@ -144,7 +152,9 @@ export async function runAutoLoop(messages: LoopMessage[], deps: AutoDeps): Prom
         stopped: 'round-limit', error: '自主内核检测到连续两轮执行相同操作、无实质进展，已停止以避免空转。',
       }
     }
-    signatures.push(sig)
+    // 零工具轮（纯文本答复）签名为空串：不参与停滞判定，也不入栈，
+    // 避免空串占据「上一轮签名」位置、干扰后续连续重复的判断。
+    if (sig) signatures.push(sig)
 
     // 目标评估（三态）：评估器不可用 → 停，绝不拿"评估失败"当"未完成"续跑。
     // 评估过程静默进行——不往正文塞进度方块，让自主闭环安静把活干完。

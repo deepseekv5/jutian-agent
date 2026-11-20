@@ -4443,6 +4443,49 @@ var STRATEGY_BASE_ROUNDS = {
   autonomous: 14,
   deep: 20
 };
+var STRATEGY_TIER = {
+  direct: 0,
+  single_tool: 1,
+  iterative: 2,
+  autonomous: 3,
+  deep: 3
+};
+var CONFLICT_PENALTY_CAP = 0.3;
+var MIN_ROUTE_CONFIDENCE = 0.35;
+var HIGH_PRIORITY_TAGS = ["autonomy", "tool", "risk", "domain"];
+var LOW_PRIORITY_TAGS = ["complexity", "plan", "strategy"];
+var TAG_LABEL = {
+  constraint: "\u786C\u7EA6\u675F",
+  autonomy: "\u81EA\u4E3B\u76EE\u6807",
+  tool: "\u5DE5\u5177\u9700\u6C42",
+  risk: "\u98CE\u9669",
+  domain: "\u9886\u57DF\u4E13\u5BB6",
+  complexity: "\u590D\u6742\u5EA6",
+  plan: "\u8BA1\u5212\u89C4\u6A21",
+  strategy: "\u8F93\u5165\u7B56\u7565",
+  history: "\u5386\u53F2"
+};
+var REASON_DIM_ORDER = {
+  constraint: 0,
+  autonomy: 1,
+  tool: 2,
+  risk: 3,
+  domain: 4,
+  complexity: 5,
+  plan: 6,
+  strategy: 7,
+  history: 8
+};
+var ACTION_INTENTS = /* @__PURE__ */ new Set([
+  "\u5B9E\u73B0\u4EE3\u7801",
+  "\u4FEE\u590D\u7F3A\u9677",
+  "\u91CD\u6784\u4F18\u5316",
+  "\u547D\u4EE4\u884C\u6267\u884C",
+  "\u6D4B\u8BD5\u9A8C\u8BC1"
+]);
+var VERIFICATION_INTENT_RE = /测试|验证|检查|校验|verify|test|check|lint/i;
+var VERIFICATION_TOOL_RE = /test|verify|check|lint/i;
+var VERIFICATION_TEXT_RE = /测试|验证|检查|校验|核对|verify|test|check|lint|assert/i;
 function clamp2(value, min, max) {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
@@ -4842,6 +4885,92 @@ function autonomyRules(ctx) {
     }
   }];
 }
+function hasVerificationSignal(ctx) {
+  const { analysis, strategy, plan } = ctx;
+  if (strategy.verifyEachStep === true) return true;
+  if (VERIFICATION_INTENT_RE.test(analysis.intent)) return true;
+  if ((analysis.suggestedTools ?? []).some((tool) => VERIFICATION_TOOL_RE.test(tool))) return true;
+  return (plan.steps ?? []).some((step) => VERIFICATION_TEXT_RE.test(`${step.title}${step.description}${step.expectedOutput}`));
+}
+function expertRules(ctx) {
+  const { analysis } = ctx;
+  const level = analysis.complexity.level;
+  const smallTask = level === "trivial" || level === "simple";
+  const escalated = level === "trivial" || level === "simple" || level === "moderate";
+  const lightKernel = smallTask ? "pro" : "super";
+  const rules = [];
+  const autonomy = analysis.benefitsFromAutonomy;
+  const multiTool = (analysis.suggestedTools ?? []).length >= 2;
+  if (analysis.domain === "code" && analysis.needsTools && !autonomy && escalated && multiTool && hasVerificationSignal(ctx)) {
+    rules.push({
+      tag: "tool",
+      name: "expert-code-verify-loop",
+      evaluate: () => [{
+        tag: "tool",
+        strategy: "iterative",
+        kernel: lightKernel,
+        weight: 4.2,
+        reason: "\u4E13\u5BB6\u89C4\u5219\uFF1A\u4EE3\u7801\u4EFB\u52A1\u9700\u8981\u5DE5\u5177\u4E14\u5305\u542B\u9A8C\u8BC1\u8981\u6C42\u2014\u2014\u4F7F\u7528 iterative \u9A8C\u8BC1\u95ED\u73AF" + (smallTask ? "\uFF08\u5C0F\u578B\u4EFB\u52A1\u505C\u7559\u5728 pro \u8F7B\u5185\u6838\uFF09" : ""),
+        patch: { enableVerification: true }
+      }]
+    });
+  }
+  if (autonomy) {
+    rules.push({
+      tag: "autonomy",
+      name: "expert-goal-loop-autonomous",
+      evaluate: () => [{
+        tag: "autonomy",
+        strategy: "autonomous",
+        kernel: "auto",
+        weight: 5.5,
+        reason: "\u4E13\u5BB6\u89C4\u5219\uFF1A\u7528\u6237\u8868\u8FBE\u4E86\u81EA\u4E3B\u95ED\u73AF\u76EE\u6807\uFF08\u81EA\u52A8/\u76F4\u5230/\u5B8C\u6210\u5168\u90E8\uFF09\u2014\u2014\u679C\u65AD\u4F7F\u7528 autonomous \u7B56\u7565 + auto \u5185\u6838",
+        patch: { hermesMode: "auto", enableVerification: true }
+      }]
+    });
+  }
+  if ((analysis.domain === "code" || analysis.domain === "shell") && analysis.needsTools && !autonomy && escalated && multiTool) {
+    rules.push({
+      tag: "tool",
+      name: "expert-engineering-tool-loop",
+      evaluate: () => [{
+        tag: "tool",
+        strategy: "iterative",
+        kernel: lightKernel,
+        weight: 3,
+        reason: `\u4E13\u5BB6\u89C4\u5219\uFF1A${analysis.domain} \u4EFB\u52A1\u660E\u786E\u9700\u8981\u5DE5\u5177\u2014\u2014\u5199\u4EE3\u7801/\u6267\u884C\u547D\u4EE4\u5FC5\u987B\u7ECF\u8FC7\u5DE5\u5177\u5FAA\u73AF\uFF0C\u679C\u65AD\u5347\u7EA7\u4E3A iterative` + (smallTask ? "\uFF08\u5C0F\u578B\u4EFB\u52A1\u7528 pro \u5185\u6838\u8F7B\u91CF\u6267\u884C\uFF09" : ""),
+        patch: { enableVerification: analysis.domain === "code" }
+      }]
+    });
+  }
+  if (ACTION_INTENTS.has(analysis.intent) && analysis.needsTools && !autonomy && escalated && multiTool) {
+    rules.push({
+      tag: "tool",
+      name: "expert-action-intent-loop",
+      evaluate: () => [{
+        tag: "tool",
+        strategy: "iterative",
+        kernel: lightKernel,
+        weight: 3.2,
+        reason: `\u4E13\u5BB6\u89C4\u5219\uFF1A\u610F\u56FE\u300C${analysis.intent}\u300D\u662F\u660E\u786E\u7684\u6267\u884C\u578B\u4EFB\u52A1\u4E14\u9700\u8981\u5DE5\u5177\u2014\u2014\u4F7F\u7528 iterative \u7B56\u7565\u63A8\u8FDB`
+      }]
+    });
+  }
+  if (analysis.needsTools && !autonomy && smallTask && (analysis.suggestedTools ?? []).length >= 3) {
+    rules.push({
+      tag: "tool",
+      name: "expert-multi-tool-mismatch",
+      evaluate: () => [{
+        tag: "tool",
+        strategy: "iterative",
+        kernel: "pro",
+        weight: 3.4,
+        reason: `\u4E13\u5BB6\u89C4\u5219\uFF1A\u7B80\u5355\u4EFB\u52A1\u5374\u9700\u8981 ${analysis.suggestedTools.length} \u7C7B\u5DE5\u5177\u534F\u540C\u2014\u2014\u8D1F\u8F7D\u4E0E\u6863\u4F4D\u4E0D\u5339\u914D\uFF0C\u679C\u65AD\u5347\u7EA7\u4E3A iterative`
+      }]
+    });
+  }
+  return rules;
+}
 function planRules(ctx) {
   const rules = [];
   const { stepCount, avgDifficulty, criticalLength } = ctx;
@@ -4999,7 +5128,72 @@ function conflictPenalty(tally) {
   const unionSize = (/* @__PURE__ */ new Set([...bestVoters, ...runnerVoters])).size || 1;
   const overlap = shared / unionSize;
   const closeness = tally.bestScore === 0 ? 0 : clamp2(tally.runnerScore / tally.bestScore, 0, 1);
-  return closeness * (1 - overlap) * 0.35;
+  const bestTier = STRATEGY_TIER[tally.best] ?? 0;
+  const runnerTier = STRATEGY_TIER[tally.runnerUp] ?? 0;
+  const distance = Math.abs(bestTier - runnerTier);
+  const distanceFactor = distance <= 1 ? 0.25 : distance === 2 ? 0.6 : 1;
+  return closeness * (1 - overlap) * 0.35 * distanceFactor;
+}
+function resolveConflicts(votes, tally, ctx) {
+  const winner = tally.best;
+  const overruled = /* @__PURE__ */ new Set();
+  let flipped = false;
+  let from = winner;
+  let strategy = winner;
+  let reason = null;
+  const supports = (s, tag) => votes.some((v) => v.strategy === s && v.tag === tag && v.weight > 0);
+  if (ctx.analysis.benefitsFromAutonomy && winner !== "autonomous" && supports("autonomous", "autonomy")) {
+    flipped = true;
+    from = winner;
+    strategy = "autonomous";
+    reason = "\u51B2\u7A81\u6D88\u89E3\uFF1A\u68C0\u6D4B\u5230\u81EA\u4E3B\u95ED\u73AF\u76EE\u6807\u4FE1\u53F7\uFF0C\u6309\u300C\u81EA\u4E3B\u76EE\u6807 > \u590D\u6742\u5EA6/\u8BA1\u5212\u300D\u679C\u65AD\u5347\u7EA7\u4E3A autonomous";
+  }
+  if (!flipped && ctx.analysis.needsTools && winner === "direct") {
+    const scores = /* @__PURE__ */ new Map();
+    for (const v of votes) {
+      if (v.strategy !== void 0 && v.strategy !== "direct" && v.weight > 0) {
+        scores.set(v.strategy, (scores.get(v.strategy) ?? 0) + v.weight);
+      }
+    }
+    const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+    if (ranked.length > 0) {
+      flipped = true;
+      from = "direct";
+      strategy = ranked[0][0];
+      reason = "\u51B2\u7A81\u6D88\u89E3\uFF1A\u590D\u6742\u5EA6/\u8BA1\u5212\u5EFA\u8BAE\u76F4\u63A5\u7B54\u590D\uFF0C\u4F46\u4EFB\u52A1\u660E\u786E\u9700\u8981\u5DE5\u5177\u2014\u2014\u6309\u300C\u5DE5\u5177\u9700\u6C42 > \u590D\u6742\u5EA6\u300D\u679C\u65AD\u5347\u7EA7\u4E3A " + strategy;
+    }
+  }
+  if (!flipped && (ctx.analysis.risk === "high" || ctx.analysis.risk === "critical") && (winner === "direct" || winner === "single_tool") && supports("deep", "risk")) {
+    flipped = true;
+    from = winner;
+    strategy = "deep";
+    reason = `\u51B2\u7A81\u6D88\u89E3\uFF1A\u98CE\u9669\u7B49\u7EA7 ${ctx.analysis.risk} \u9AD8\u4E8E\u590D\u6742\u5EA6\u5224\u65AD\uFF0C\u6309\u300C\u98CE\u9669 > \u590D\u6742\u5EA6\u300D\u5347\u7EA7\u4E3A deep`;
+  }
+  if (flipped) {
+    for (const v of votes) {
+      if (v.strategy === from) overruled.add(v);
+    }
+  }
+  const winnerVoters = tally.voters.get(strategy) ?? /* @__PURE__ */ new Set();
+  const hasHighSupport = HIGH_PRIORITY_TAGS.some((tag) => winnerVoters.has(tag));
+  let suppressed = false;
+  if (hasHighSupport) {
+    for (const v of votes) {
+      if (!overruled.has(v) && LOW_PRIORITY_TAGS.includes(v.tag) && v.strategy !== void 0 && v.strategy !== strategy) {
+        overruled.add(v);
+        suppressed = true;
+      }
+    }
+  }
+  if (reason === null && suppressed) {
+    const losingTags = [...new Set(
+      votes.filter((v) => overruled.has(v)).map((v) => v.tag)
+    )];
+    const supportTags = [...winnerVoters].filter((tag) => HIGH_PRIORITY_TAGS.includes(tag));
+    reason = `\u51B2\u7A81\u6D88\u89E3\uFF1A${losingTags.map((tag) => TAG_LABEL[tag]).join("\u3001")}\u4E0E\u66F4\u9AD8\u4F18\u5148\u7EA7\u7684${supportTags.map((tag) => TAG_LABEL[tag]).join("\u3001")}\u4FE1\u53F7\u7ED3\u8BBA\u4E0D\u4E00\u81F4\uFF0C\u5DF2\u6309\u4F18\u5148\u7EA7\u91C7\u7EB3 ${strategy}`;
+  }
+  const bonus = flipped ? 0.08 : suppressed ? 0.04 : 0;
+  return { strategy, flipped, from, reason, overruled, bonus };
 }
 function mergePatches(votes) {
   const patch = {};
@@ -5087,6 +5281,7 @@ function buildAllRules(ctx) {
     ...riskRules(ctx),
     ...complexityRules(ctx),
     ...domainRules(ctx),
+    ...expertRules(ctx),
     ...toolRules(ctx),
     ...autonomyRules(ctx),
     ...planRules(ctx),
@@ -5152,7 +5347,8 @@ function applyHardConstraints(decision, ctx) {
     decision.overrides.enableGuardrails = true;
   }
   const expectedKernel = STRATEGY_KERNEL[decision.strategy];
-  if (decision.kernel !== expectedKernel && level !== "expert" && risk !== "critical") {
+  const lightIterativeOnPro = decision.strategy === "iterative" && (level === "trivial" || level === "simple") && decision.kernel === "pro";
+  if (decision.kernel !== expectedKernel && !lightIterativeOnPro && level !== "expert" && risk !== "critical") {
     decision.kernel = expectedKernel;
   }
   return notes;
@@ -5179,8 +5375,11 @@ var KernelRouterImpl = class {
       weight: v.weight * this.weightScale
     }));
     const strategyTally = tallyVotes(votes, "strategy");
-    const kernelTally = tallyVotes(votes, "kernel");
-    const chosenStrategy = strategyTally.best;
+    const resolution = resolveConflicts(votes, strategyTally, ctx);
+    const chosenStrategy = resolution.strategy;
+    const effVotes = resolution.overruled.size > 0 ? votes.filter((v) => !resolution.overruled.has(v)) : votes;
+    const effTally = tallyVotes(effVotes, "strategy");
+    const kernelTally = tallyVotes(effVotes, "kernel");
     let chosenKernel = kernelTally.best;
     if (kernelTally.total < 0.5) {
       chosenKernel = STRATEGY_KERNEL[chosenStrategy];
@@ -5189,14 +5388,14 @@ var KernelRouterImpl = class {
     const overrides = computeOverrides(ctx, chosenStrategy, patch);
     const decision = { strategy: chosenStrategy, kernel: chosenKernel, overrides };
     const constraintNotes = applyHardConstraints(decision, ctx);
-    const confidence = this.computeConfidence(
-      strategyTally,
-      kernelTally,
+    const confidence = this.computeConfidence({
+      effTally,
       analysis,
-      votes,
-      decision
-    );
-    const reasons = this.buildReasons(votes, constraintNotes, strategyTally, decision);
+      decision,
+      resolution,
+      constraintCount: constraintNotes.length
+    });
+    const reasons = this.buildReasons(votes, constraintNotes, resolution, decision, effTally);
     return {
       strategy: decision.strategy,
       kernel: decision.kernel,
@@ -5210,36 +5409,73 @@ var KernelRouterImpl = class {
     return this.routeTask(analysis, plan, strategy);
   }
   /* ── 置信度计算 ── */
-  computeConfidence(strategyTally, kernelTally, analysis, votes, decision) {
-    const dominance = strategyTally.total > 0 ? strategyTally.bestScore / strategyTally.total : 0.5;
-    const bestVoters = strategyTally.voters.get(strategyTally.best) ?? /* @__PURE__ */ new Set();
-    const consensus = clamp2(0.6 + bestVoters.size * 0.1, 0.6, 1);
-    const strategyConflict = conflictPenalty(strategyTally);
-    const kernelConflict = conflictPenalty(kernelTally);
-    const kernelMismatch = decision.kernel === STRATEGY_KERNEL[decision.strategy] ? 0 : 0.12;
+  /**
+   * 置信度公式（v18.1）：
+   *
+   *   置信度 = 0.8 × 票面置信度 + 0.2 × 任务分析置信度
+   *   票面置信度 = 主决策有效票占比 × 维度共识 − 冲突惩罚（衰减函数） + 消解加成 − 兜底修正
+   *
+   * 与旧版的关键差异：
+   *  - 占比只统计「有效票」：被冲突消解压制的落选票不再稀释主决策占比；
+   *  - 冲突惩罚经过衰减函数且封顶 0.3：多规则冲突时置信度不会跌到 15% 这种不可用值；
+   *  - 消解加成：冲突由明确的优先级阶梯裁决，决策程序本身是确定的，应当体现果断；
+   *  - 下限 0.35：路由可以承认不确定，但不能显得比随机猜还犹豫。
+   */
+  computeConfidence(input) {
+    const { effTally, analysis, decision, resolution, constraintCount } = input;
+    const best = effTally.bestScore;
+    const runner = effTally.runnerScore;
+    const dominance = best + runner > 0 ? best / (best + runner) : 0.5;
+    const bestVoters = effTally.voters.get(effTally.best) ?? /* @__PURE__ */ new Set();
+    const consensus = clamp2(0.68 + bestVoters.size * 0.08, 0.68, 1);
+    let voteConfidence = dominance * consensus;
+    const expectedKernel = STRATEGY_KERNEL[decision.strategy];
+    const lightIterativeOnPro = decision.strategy === "iterative" && (analysis.complexity.level === "trivial" || analysis.complexity.level === "simple") && decision.kernel === "pro";
+    const kernelMismatch = decision.kernel === expectedKernel || lightIterativeOnPro ? 0 : 0.12;
+    const rawPenalty = conflictPenalty(effTally) + kernelMismatch;
+    voteConfidence -= CONFLICT_PENALTY_CAP * (1 - Math.exp(-rawPenalty / CONFLICT_PENALTY_CAP));
+    voteConfidence += resolution.bonus;
+    if (constraintCount > 0) voteConfidence -= 0.05;
+    if (analysis.risk === "critical") voteConfidence -= 0.04;
     const analysisConfidence = unit(analysis.confidence);
-    let confidence = dominance * consensus - strategyConflict - kernelConflict - kernelMismatch;
-    confidence = confidence * 0.75 + analysisConfidence * 0.25;
-    const constraintVotes = votes.filter((v) => v.tag === "constraint" && v.weight > 0);
-    if (constraintVotes.length > 0) confidence -= 0.08;
-    if (analysis.risk === "critical") confidence -= 0.05;
-    return clamp2(confidence, 0.05, 1);
+    const confidence = voteConfidence * 0.8 + analysisConfidence * 0.2;
+    return clamp2(confidence, MIN_ROUTE_CONFIDENCE, 1);
   }
   /* ── 理由汇总 ── */
-  buildReasons(votes, constraintNotes, tally, decision) {
+  /**
+   * 理由汇总（v18.1）：
+   *  1. 硬约束说明置顶（最高决定性）；
+   *  2. 冲突消解说明（确定性裁决）；
+   *  3. 决策结论摘要；
+   *  4. 支持理由：只保留支持最终决策的票，每个维度只留票重最高的一条
+   *     （同类合并——修复 e2e 中出现两条「领域为 code」的问题），
+   *     按决定性优先级排序（自主目标/工具需求 > 风险 > 领域 > 复杂度 > ...）；
+   *  5. 总条数 ≤6，保证理由列表一眼能读完。
+   */
+  buildReasons(votes, constraintNotes, resolution, decision, effTally) {
     const reasons = [];
     for (const note of constraintNotes) reasons.push(note);
+    if (resolution.reason) reasons.push(resolution.reason);
+    const dominancePct = effTally.bestScore + effTally.runnerScore > 0 ? Math.round(effTally.bestScore / (effTally.bestScore + effTally.runnerScore) * 100) : 100;
     reasons.push(
-      `\u6700\u7EC8\u51B3\u7B56\uFF1Astrategy=${decision.strategy}\uFF0Ckernel=${decision.kernel}\uFF08\u7B56\u7565\u5F97\u7968 ${round3(tally.bestScore, 1)}\uFF0C\u5171 ${round3(tally.total, 1)}\uFF09`
+      `\u6700\u7EC8\u51B3\u7B56\uFF1Astrategy=${decision.strategy}\uFF0Ckernel=${decision.kernel}\uFF08\u4E3B\u51B3\u7B56\u6709\u6548\u7968\u5360\u6BD4 ${dominancePct}%\uFF09`
     );
-    const seen = /* @__PURE__ */ new Set();
-    const informative = votes.filter((v) => v.reason.length > 0).sort((a, b) => b.weight - a.weight);
-    for (const vote of informative) {
+    const bestByTag = /* @__PURE__ */ new Map();
+    for (const vote of votes) {
+      if (resolution.overruled.has(vote)) continue;
+      if (vote.weight <= 0 || vote.reason.length === 0) continue;
+      if (vote.strategy !== void 0 && vote.strategy !== decision.strategy) continue;
+      const current = bestByTag.get(vote.tag);
+      if (!current || vote.weight > current.weight) bestByTag.set(vote.tag, vote);
+    }
+    const ordered = [...bestByTag.values()].sort((a, b) => REASON_DIM_ORDER[a.tag] - REASON_DIM_ORDER[b.tag] || b.weight - a.weight);
+    const seen = new Set(reasons);
+    for (const vote of ordered) {
       if (seen.has(vote.reason)) continue;
       seen.add(vote.reason);
       reasons.push(vote.reason);
     }
-    return reasons;
+    return reasons.slice(0, 6);
   }
 };
 function createKernelRouter(options) {
@@ -5353,7 +5589,8 @@ var DEFAULT_MODEL_PROFILES = [
   {
     id: "deepseek-v3",
     name: "DeepSeek V3",
-    contextWindow: 128e3,
+    // DeepSeek-V3 官方 API 上下文为 64K（V3.1+ 才扩展到 128K），校准为 64K。
+    contextWindow: 64e3,
     strength: ["code", "research", "data", "qa", "writing", "planning"],
     costTier: 0,
     speedTier: 1,
@@ -5432,7 +5669,8 @@ var DEFAULT_MODEL_PROFILES = [
   {
     id: "qwen2.5-72b",
     name: "Qwen2.5 72B",
-    contextWindow: 32768,
+    // Qwen2.5-72B-Instruct 官方支持 128K 上下文（原值 32K 与真实规格不符）。
+    contextWindow: 128e3,
     strength: ["code", "research", "writing", "conversation", "data"],
     costTier: 0,
     speedTier: 1,
@@ -5541,6 +5779,62 @@ var DEFAULT_MODEL_PROFILES = [
     supportsTools: true,
     supportsVision: true
   },
+  // ── 免费 / 本地档（零成本兜底候选）──
+  {
+    id: "glm-4-flash",
+    name: "GLM-4 Flash\uFF08\u514D\u8D39\uFF09",
+    contextWindow: 128e3,
+    strength: ["code", "writing", "qa", "conversation"],
+    costTier: 0,
+    speedTier: 0,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false
+  },
+  {
+    id: "spark-lite",
+    name: "\u661F\u706B Spark Lite\uFF08\u514D\u8D39\uFF09",
+    contextWindow: 32768,
+    strength: ["conversation", "writing", "qa"],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false
+  },
+  {
+    id: "moonshot-kimi-free",
+    name: "Kimi \u514D\u8D39\u6863\uFF08Moonshot\uFF09",
+    contextWindow: 128e3,
+    strength: ["research", "writing", "conversation", "qa"],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false
+  },
+  {
+    id: "poly-free",
+    name: "Poly \u514D\u8D39\u805A\u5408\u8DEF\u7531",
+    contextWindow: 128e3,
+    strength: ["conversation", "writing", "qa", "code"],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false
+  },
+  {
+    id: "ollama-local",
+    name: "Ollama \u672C\u5730\u6A21\u578B",
+    contextWindow: 32768,
+    strength: ["code", "conversation", "qa"],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false
+  },
   {
     id: "local-7b",
     name: "\u672C\u5730\u5C0F\u6A21\u578B 7B",
@@ -5628,6 +5922,23 @@ function windowFitScore(required, model) {
   if (ratio < 1) return clamp3(ratio * 0.5, 0, 0.5);
   return clamp3(0.5 + Math.log2(ratio) * 0.16, 0.5, 1);
 }
+function windowUsagePenalty(requiredTokens, contextWindow) {
+  if (!Number.isFinite(requiredTokens) || !Number.isFinite(contextWindow)) return 0;
+  if (requiredTokens <= 0 || contextWindow <= 0) return 0;
+  const usage = requiredTokens / contextWindow;
+  if (usage <= 0.5) return 0;
+  if (usage <= 0.9) return (usage - 0.5) * 0.15;
+  return 0.06 + (usage - 0.9) * 0.4;
+}
+function tieBreakBySpeedThenCost(a, b) {
+  const speedA = clamp3(a.speedTier, 0, 3);
+  const speedB = clamp3(b.speedTier, 0, 3);
+  if (speedA !== speedB) return speedA - speedB;
+  const costA = clamp3(a.costTier, 0, 3);
+  const costB = clamp3(b.costTier, 0, 3);
+  if (costA !== costB) return costA - costB;
+  return 0;
+}
 function hardRejection(analysis, model, requiredTokens) {
   if (analysis.needsTools && !model.supportsTools) {
     return "\u4EFB\u52A1\u9700\u8981\u5DE5\u5177\u8C03\u7528\uFF0C\u4F46\u8BE5\u6A21\u578B\u4E0D\u652F\u6301\u5DE5\u5177";
@@ -5654,10 +5965,10 @@ function scoreModel(analysis, model, preference, requiredTokens) {
   const windowScore = windowFitScore(requiredTokens, model);
   const costScore = tierToScore(model.costTier);
   const speedScore = tierToScore(model.speedTier);
-  let windowPenalty = 0;
-  if (model.contextWindow < requiredTokens * 1.2) {
-    windowPenalty = 0.08;
-    softPenalties.push("\u4E0A\u4E0B\u6587\u7A97\u53E3\u4F59\u91CF\u504F\u7D27\uFF08\u4E0D\u8DB3\u9700\u6C42\u7684 1.2 \u500D\uFF09");
+  const windowPenalty = windowUsagePenalty(requiredTokens, model.contextWindow);
+  if (windowPenalty > 0) {
+    const usagePct = Math.round(requiredTokens / model.contextWindow * 100);
+    softPenalties.push(`\u4E0A\u4E0B\u6587\u7A97\u53E3\u4F59\u91CF\u504F\u7D27\uFF08\u4EFB\u52A1\u4F30\u7B97\u7EA6\u5360\u7A97\u53E3 ${usagePct}%\uFF09`);
   }
   let domainPenalty = 0;
   if (domainScore < 0.5) {
@@ -5693,9 +6004,24 @@ var ModelSelectorImpl = class {
   /**
    * 主入口：需求中称 selectModel，契约接口名为 select。
    * 两者行为完全一致，select 在下方直接委托给本方法。
+   *
+   * 兜底保障：候选列表为空/未提供时回退内置默认库；任何内部异常都不向上抛出，
+   * 返回保守默认（第一个支持工具的候选，否则候选首位）并附可读理由。
    */
   selectModel(analysis, available, preference = "quality") {
-    const candidates = available && available.length > 0 ? available : DEFAULT_MODEL_PROFILES;
+    const usingDefaultPool = !available || available.length === 0;
+    const candidates = usingDefaultPool ? DEFAULT_MODEL_PROFILES : available;
+    try {
+      return this.selectFromCandidates(analysis, candidates, preference, usingDefaultPool);
+    } catch (error) {
+      return this.conservativeChoice(available, preference, error);
+    }
+  }
+  /**
+   * 常规选择流程（假定 candidates 非空）。
+   * 全部候选被硬约束淘汰时进入降级/兜底路径，绝不返回空 choice。
+   */
+  selectFromCandidates(analysis, candidates, preference, usingDefaultPool) {
     const requiredTokens = estimateRequiredTokens(analysis);
     const scored = [];
     const rejected = [];
@@ -5709,6 +6035,8 @@ var ModelSelectorImpl = class {
     }
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
+      const tie = tieBreakBySpeedThenCost(a.model, b.model);
+      if (tie !== 0) return tie;
       return candidates.indexOf(a.model) - candidates.indexOf(b.model);
     });
     if (scored.length === 0) {
@@ -5726,6 +6054,11 @@ var ModelSelectorImpl = class {
     reasons.unshift(
       `\u5728 ${candidates.length} \u4E2A\u5019\u9009\u4E2D\u9009\u51FA\u300C${best.model.name}\u300D\uFF08\u504F\u597D=${preference}\uFF0C\u5F97\u5206=${best.score}\uFF09`
     );
+    if (usingDefaultPool) {
+      reasons.unshift(
+        "\u5019\u9009\u5217\u8868\u4E3A\u7A7A\uFF08\u6216\u672A\u63D0\u4F9B\uFF09\uFF0C\u5DF2\u56DE\u9000\u5230\u5185\u7F6E\u9ED8\u8BA4\u6A21\u578B\u5E93\u4E2D\u7684\u4FDD\u5B88\u9ED8\u8BA4\u6863\u5E76\u6309\u5E38\u89C4\u6D41\u7A0B\u9009\u62E9"
+      );
+    }
     reasons.push(
       `\u5DF2\u6DD8\u6C70 ${rejected.length} \u4E2A\u4E0D\u6EE1\u8DB3\u786C\u7EA6\u675F\u7684\u6A21\u578B` + (rejected.length > 0 ? `\uFF1A${rejected.slice(0, 3).map((r) => `${r.model.name}(${r.reason})`).join("\uFF1B")}` : "")
     );
@@ -5736,14 +6069,34 @@ var ModelSelectorImpl = class {
       alternatives
     };
   }
+  /**
+   * 异常路径兜底：打分/排序等内部逻辑意外报错时，返回保守默认
+   * （优先第一个支持工具调用的候选，否则候选列表首位），绝不向上抛出。
+   */
+  conservativeChoice(available, preference, error) {
+    const pool = available && available.length > 0 ? available : DEFAULT_MODEL_PROFILES;
+    const model = pool.find((m) => m && m.supportsTools) ?? pool[0] ?? DEFAULT_MODEL_PROFILES[0];
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      model,
+      score: 0,
+      reasons: [
+        `\u8B66\u544A\uFF1A\u6A21\u578B\u9009\u62E9\u5668\u5185\u90E8\u5F02\u5E38\uFF08${message}\uFF09\uFF0C\u5DF2\u8DF3\u8FC7\u5E38\u89C4\u6253\u5206\u6D41\u7A0B`,
+        "\u515C\u5E95\u7B56\u7565\uFF1A\u4F18\u5148\u8FD4\u56DE\u7B2C\u4E00\u4E2A\u652F\u6301\u5DE5\u5177\u8C03\u7528\u7684\u5019\u9009\uFF0C\u5426\u5219\u8FD4\u56DE\u5019\u9009\u5217\u8868\u9996\u4F4D\uFF08\u4FDD\u5B88\u9ED8\u8BA4\uFF09",
+        `\u504F\u597D=${preference} \u672A\u53C2\u4E0E\u672C\u6B21\u51B3\u7B56\uFF0C\u8BF7\u68C0\u67E5\u4EFB\u52A1\u5206\u6790\u8F93\u5165\u662F\u5426\u5B8C\u6574`
+      ],
+      alternatives: []
+    };
+  }
   /** 契约接口方法：委托给 selectModel。 */
   select(analysis, available, preference) {
     return this.selectModel(analysis, available, preference);
   }
   /**
    * 降级选择：当所有模型都被窗口硬约束淘汰时，仅保留工具/视觉硬约束，
-   * 放开窗口约束重新评分。若仍然为空（例如所有模型都不支持工具），
-   * 则选择「违反约束最少」的一个，并在理由中明确标记。
+   * 放开窗口约束重新评分。若仍然为空（例如所有模型都不支持工具/视觉），
+   * 则返回保守默认（优先第一个支持工具调用的候选，否则候选列表首位），
+   * 并在理由中明确标记，绝不向上抛错。
    */
   fallbackChoice(analysis, candidates, preference, requiredTokens, rejected) {
     const viable = [];
@@ -5756,7 +6109,12 @@ var ModelSelectorImpl = class {
       viable.push(scoreModel(analysis, model, preference, requiredTokens));
     }
     if (viable.length > 0) {
-      viable.sort((a, b) => b.score - a.score);
+      viable.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const tie = tieBreakBySpeedThenCost(a.model, b.model);
+        if (tie !== 0) return tie;
+        return candidates.indexOf(a.model) - candidates.indexOf(b.model);
+      });
       const best = viable[0];
       return {
         model: best.model,
@@ -5769,12 +6127,13 @@ var ModelSelectorImpl = class {
         alternatives: viable.slice(1, this.maxAlternatives + 1).map((s) => s.model)
       };
     }
-    const fallback = candidates[0] ?? DEFAULT_MODEL_PROFILES[0];
+    const fallback = candidates.find((m) => m && m.supportsTools) ?? candidates[0] ?? DEFAULT_MODEL_PROFILES[0];
     return {
       model: fallback,
       score: 0,
       reasons: [
-        "\u4E25\u91CD\u8B66\u544A\uFF1A\u6CA1\u6709\u4EFB\u4F55\u5019\u9009\u6EE1\u8DB3\u5DE5\u5177/\u89C6\u89C9\u786C\u7EA6\u675F\uFF0C\u8FD4\u56DE\u515C\u5E95\u6A21\u578B",
+        "\u4E25\u91CD\u8B66\u544A\uFF1A\u6CA1\u6709\u4EFB\u4F55\u5019\u9009\u6EE1\u8DB3\u5DE5\u5177/\u89C6\u89C9\u786C\u7EA6\u675F\uFF0C\u8FD4\u56DE\u4FDD\u5B88\u9ED8\u8BA4\u515C\u5E95\u6A21\u578B",
+        `\u515C\u5E95\u7B56\u7565\uFF1A\u4F18\u5148\u53D6\u7B2C\u4E00\u4E2A\u652F\u6301\u5DE5\u5177\u8C03\u7528\u7684\u5019\u9009\uFF0C\u5426\u5219\u53D6\u5019\u9009\u5217\u8868\u9996\u4F4D\uFF08\u5F53\u524D\u9009\u4E2D\u300C${fallback.name}\u300D\uFF09`,
         `\u88AB\u6DD8\u6C70\u539F\u56E0\uFF1A${rejected.slice(0, 3).map((r) => `${r.model.name}(${r.reason})`).join("\uFF1B") || "\u65E0"}`,
         "\u8BF7\u8C03\u7528\u65B9\u8865\u5145\u652F\u6301\u6240\u9700\u80FD\u529B\u7684\u6A21\u578B\u540E\u91CD\u8BD5"
       ],
@@ -6424,6 +6783,20 @@ function mulRatios(a, b) {
     reserved: a.reserved * b.reserved
   };
 }
+var EXPERT_RESERVED_FLOOR = 0.15;
+function enforceReservedFloor(ratios, analysis) {
+  const floor = analysis.complexity.level === "expert" ? EXPERT_RESERVED_FLOOR : 0;
+  if (floor <= 0 || ratios.reserved >= floor) return ratios;
+  const others = ratios.system + ratios.history + ratios.tools + ratios.plan;
+  const out = { ...ratios, reserved: floor };
+  if (others <= 0) return out;
+  const scale = (1 - floor) / others;
+  out.system = ratios.system * scale;
+  out.history = ratios.history * scale;
+  out.tools = ratios.tools * scale;
+  out.plan = ratios.plan * scale;
+  return out;
+}
 function applyDemandAdjustments(weights, analysis, plan) {
   const w = { ...weights };
   if (!analysis.needsTools) {
@@ -6500,16 +6873,49 @@ function classifyMessage(msg) {
   if (role === "tool" || role === "function") return "tool";
   return "other";
 }
+var USER_BASE_SCORE = 10;
+var QUOTE_BOOST = 5;
 var ERROR_HINT_RE = /(error|exception|traceback|failed|失败|错误|异常|timeout|超时|denied|拒绝)/i;
-function messageImportance(msg, index, firstUserIndex, total) {
+var QUOTE_MIN_FRAG_LEN = 10;
+var QUOTE_MAX_FRAGS = 40;
+function assistantQuotesToolResult(content, toolTexts) {
+  if (!content || toolTexts.length === 0) return false;
+  const hay = toolTexts.join("\n").replace(/\s+/g, " ");
+  if (!hay) return false;
+  const frags = content.split(/[\r\n]+|[。；！？!?;.、，：]/);
+  let checked = 0;
+  for (const raw of frags) {
+    if (checked >= QUOTE_MAX_FRAGS) break;
+    const frag = raw.trim().replace(/\s+/g, " ");
+    if (frag.length < QUOTE_MIN_FRAG_LEN) continue;
+    checked++;
+    if (hay.includes(frag)) return true;
+  }
+  return false;
+}
+function adjacentToolTexts(messages, index) {
+  const texts = [];
+  for (let j = index - 1; j >= 0 && texts.length < 3; j--) {
+    const m = messages[j];
+    if (classifyMessage(m) !== "tool") break;
+    const t = contentText(m.content);
+    if (t) texts.push(t);
+  }
+  return texts;
+}
+function messageImportance(msg, index, firstUserIndex, total, all) {
   const kind = classifyMessage(msg);
   let score = 0;
   if (kind === "system") return Number.POSITIVE_INFINITY;
   if (kind === "user") {
-    score += 8;
+    score += USER_BASE_SCORE;
     if (index === firstUserIndex) score += 18;
   } else if (kind === "assistant") {
     score += hasToolCalls(msg) ? 6 : 3;
+    if (all && score < USER_BASE_SCORE) {
+      const quoted = assistantQuotesToolResult(contentText(msg.content), adjacentToolTexts(all, index));
+      if (quoted) score = Math.min(score + QUOTE_BOOST, USER_BASE_SCORE - 1);
+    }
   } else if (kind === "tool") {
     score += 1;
     const text = contentText(msg.content);
@@ -6524,8 +6930,8 @@ function messageImportance(msg, index, firstUserIndex, total) {
   return score;
 }
 var TOOL_FOLD_THRESHOLD = 4e3;
-var FOLD_HEAD = 900;
-var FOLD_TAIL = 700;
+var FOLD_HEAD = 300;
+var FOLD_TAIL = 300;
 function foldToolResult(text, threshold = TOOL_FOLD_THRESHOLD) {
   if (text.length <= threshold) return { text, folded: false, saved: 0 };
   const head = text.slice(0, FOLD_HEAD);
@@ -6533,7 +6939,7 @@ function foldToolResult(text, threshold = TOOL_FOLD_THRESHOLD) {
   const omitted = text.length - FOLD_HEAD - FOLD_TAIL;
   const marker = `
 
-\u2026[\u4E0A\u4E0B\u6587\u5DE5\u7A0B\uFF1A\u5DF2\u6298\u53E0 ${omitted} \u5B57\u7B26\uFF08\u539F\u957F ${text.length}\uFF09\u3002\u4FDD\u7559\u5F00\u5934\u4E0E\u7ED3\u5C3E\u4EE5\u4FBF\u8BCA\u65AD\uFF1B\u5982\u9700\u5B8C\u6574\u5185\u5BB9\u8BF7\u7528\u8303\u56F4\u53C2\u6570\u91CD\u65B0\u8BFB\u53D6\u3002]\u2026
+\u2026[\u4E0A\u4E0B\u6587\u5DE5\u7A0B\uFF1A\u5DF2\u6298\u53E0 ${omitted} \u5B57\u7B26\uFF0C\u5B8C\u6574\u5185\u5BB9\u53EF read_file \u539F\u6587\u4EF6\uFF08\u539F\u957F ${text.length}\uFF0C\u6B64\u5904\u4EC5\u4FDD\u7559\u9996\u5C3E\u5404 ${FOLD_HEAD}/${FOLD_TAIL} \u5B57\u7B26\u7528\u4E8E\u8BCA\u65AD\uFF09\u3002]\u2026
 
 `;
   const folded = head + marker + tail;
@@ -6609,7 +7015,7 @@ function trimMessages(messages, budget, opts = {}) {
   const firstUserIndex = prepared.findIndex((m) => classifyMessage(m) === "user");
   const turns = splitTurns(prepared);
   const recentTurnStart = turns.length > keepRecentTurns ? turns[turns.length - keepRecentTurns].start : turns.length > 0 ? turns[0].start : prepared.length;
-  const importance = (m, i) => messageImportance(m, i, firstUserIndex, prepared.length);
+  const importance = (m, i) => messageImportance(m, i, firstUserIndex, prepared.length, prepared);
   const blocks = buildBlocks(prepared, firstUserIndex, importance, profile);
   const protectedBlockIdx = /* @__PURE__ */ new Set();
   for (let bi = 0; bi < blocks.length; bi++) {
@@ -6815,7 +7221,7 @@ var ContextAssemblerImpl = class {
     const complexityW = COMPLEXITY_WEIGHTS[analysis.complexity.level] || BASE_RATIO;
     const weighted = mulRatios(mulRatios(BASE_RATIO, domainW), complexityW);
     const adjusted = applyDemandAdjustments(weighted, analysis, plan);
-    const ratios = normalizeRatios(adjusted);
+    const ratios = enforceReservedFloor(normalizeRatios(adjusted), analysis);
     return materializeAllocation(total, ratios, total < 800);
   }
   /**
@@ -6830,17 +7236,22 @@ var ContextAssemblerImpl = class {
     });
   }
   /**
-   * 系统提示组装：四段各自包 <system-reminder>，最后拼成一个 system 文本。
-   * 没有计划时该段留空，不产生空标签。
+   * 系统提示组装：四段各自包 <system-reminder>，按固定顺序拼成一个 system 文本。
+   *
+   * 顺序稳定性契约：analysis → plan → strategy → guardrail。
+   * 用"标题 + 正文"的有序列表驱动拼装，而不是手写拼接语句，保证：
+   *   1. 顺序由列表字面量的位置决定，维护时不会被打乱；
+   *   2. 正文为空的段（如 plan 为 null、或计划没有任何步骤）整段跳过，
+   *      不产生空标签，也不会留下连续空行。
    */
   buildSystemPrompt(analysis, plan, decision) {
-    const blocks = [
-      wrapReminder("task-analysis", formatAnalysisSummary(analysis)),
-      wrapReminder("execution-plan", formatPlanDigest(plan)),
-      wrapReminder("execution-strategy", formatStrategyHint(decision)),
-      wrapReminder("guardrails", formatGuardrailRules(analysis))
-    ].filter(Boolean);
-    return blocks.join("\n");
+    const segments = [
+      ["task-analysis", formatAnalysisSummary(analysis)],
+      ["execution-plan", formatPlanDigest(plan)],
+      ["execution-strategy", formatStrategyHint(decision)],
+      ["guardrails", formatGuardrailRules(analysis)]
+    ];
+    return segments.filter(([, body]) => body.length > 0).map(([title, body]) => wrapReminder(title, body)).join("\n");
   }
   /**
    * 用与裁剪完全一致的口径估算任意文本 token（对外暴露，便于调用方做预算决策）。
@@ -7048,11 +7459,12 @@ var TOOL_RULES = [
   }),
   makePatternRule({
     id: "cmd.format_disk",
-    description: "\u683C\u5F0F\u5316\u78C1\u76D8",
+    description: "\u683C\u5F0F\u5316\u78C1\u76D8/\u91CD\u5EFA\u6587\u4EF6\u7CFB\u7EDF\uFF08mkfs\uFF09",
     scope: "tool",
     severity: "block",
     field: "argsText",
-    patterns: [/mkfs\./, /format\s+[a-z]:/i, /diskpart/i, /格式化磁盘/, /格式化硬盘/]
+    // \bmkfs\b 同时覆盖 mkfs.ext4 与不带点的裸 mkfs（mkfs /dev/sda1）。
+    patterns: [/\bmkfs\b/, /format\s+[a-z]:/i, /diskpart/i, /格式化磁盘/, /格式化硬盘/, /格式化系统盘/]
   }),
   makePatternRule({
     id: "cmd.dd_disk",
@@ -7068,7 +7480,7 @@ var TOOL_RULES = [
     scope: "tool",
     severity: "block",
     field: "argsText",
-    patterns: [/\bshutdown\b/, /\breboot\b/, /\bhalt\b/, /关机/, /重启系统/, /重新启动计算机/]
+    patterns: [/\bshutdown\b/, /\breboot\b/, /\bhalt\b/, /\bpoweroff\b/, /关机/, /重启系统/, /重新启动计算机/, /重启计算机/, /重启电脑/, /关闭计算机/, /立即重启/]
   }),
   makePatternRule({
     id: "cmd.kill_all",
@@ -7277,8 +7689,82 @@ var TOOL_RULES = [
     severity: "warn",
     field: "argsText",
     patterns: [/curl[^\n]*(@|-F)[^\n]*(\.env|credentials|id_rsa|\.ssh)/i, /upload[^\n]*(\.env|\.ssh|private)/i, /上传密钥/]
+  }),
+  // ── F 组：本批次新增的高危/可疑命令（护栏链补强）────────────────────────
+  // 分级原则：不可逆的系统级破坏（炸盘/删卷/关机级）= block；
+  // 有外部影响但可补救或属常规运维（发包/递归改属主/强推）= warn。
+  makePatternRule({
+    id: "cmd.fork_bomb",
+    description: "Fork \u70B8\u5F39\uFF08\u51FD\u6570\u81EA\u6211\u590D\u5236\u8017\u5C3D\u8FDB\u7A0B\uFF09",
+    scope: "tool",
+    severity: "block",
+    field: "argsText",
+    patterns: [
+      /\(\s*\)\s*\{\s*:\s*\|\s*:\s*&?\s*\}\s*;\s*:/,
+      /fork.?bomb/i,
+      /进程炸弹/,
+      /fork炸弹/
+    ],
+    reason: "Fork \u70B8\u5F39\u4F1A\u77AC\u95F4\u8017\u5C3D\u7CFB\u7EDF\u8FDB\u7A0B\u8D44\u6E90\u5BFC\u81F4\u673A\u5668\u5047\u6B7B\uFF0C\u5FC5\u987B\u4EBA\u5DE5\u786E\u8BA4"
+  }),
+  makePatternRule({
+    id: "cmd.raw_device_write",
+    description: "shell \u91CD\u5B9A\u5411\u76F4\u5199\u5757\u8BBE\u5907\uFF08\u5982 > /dev/sda\uFF09",
+    scope: "tool",
+    severity: "block",
+    field: "argsText",
+    patterns: [/>+\s*\/dev\/(sd[a-z]|hd[a-z]|nvme|vd[a-z]|mmcblk)/, /直写磁盘设备/, /直接写入块设备/],
+    reason: "\u7ED5\u8FC7\u6587\u4EF6\u7CFB\u7EDF\u76F4\u63A5\u5199\u5757\u8BBE\u5907\u4F1A\u77AC\u95F4\u6467\u6BC1\u6574\u5757\u78C1\u76D8\u6570\u636E"
+  }),
+  makePatternRule({
+    id: "cmd.chown_root",
+    description: "\u628A\u6587\u4EF6\u5C5E\u4E3B\u6539\u6210 root \u6216\u5BF9\u6839\u76EE\u5F55\u9012\u5F52 chown",
+    scope: "tool",
+    severity: "block",
+    field: "argsText",
+    patterns: [/chown\s+(-[a-z]+\s+)*[^;|\n]*\broot\b/, /chown\s+(-[a-z]+\s+)+[^;|\n]*\s\/\s*$/, /改属主为root/, /根目录递归改属主/],
+    reason: "\u6539\u5C5E\u4E3B\u4E3A root \u6216\u5BF9\u6839\u76EE\u5F55\u9012\u5F52 chown \u4F1A\u7834\u574F\u7CFB\u7EDF\u6743\u9650\u4F53\u7CFB"
+  }),
+  makePatternRule({
+    id: "cmd.chown_recursive",
+    description: "\u9012\u5F52\u4FEE\u6539\u6587\u4EF6\u5C5E\u4E3B\uFF08chown -R\uFF09",
+    scope: "tool",
+    severity: "warn",
+    field: "argsText",
+    patterns: [/\bchown\s+(-[a-z]*r[a-z]*\b\s*)+/, /递归修改属主/, /递归改属主/],
+    reason: "\u9012\u5F52\u4FEE\u6539\u5C5E\u4E3B\u5F71\u54CD\u9762\u5927\uFF0C\u8BF7\u786E\u8BA4\u76EE\u6807\u76EE\u5F55\u6B63\u786E"
+  }),
+  makePatternRule({
+    id: "cmd.npm_publish",
+    description: "\u5411\u516C\u5171\u5305\u4ED3\u5E93\u53D1\u5E03\uFF08npm/yarn/pnpm publish\uFF09",
+    scope: "tool",
+    severity: "warn",
+    field: "argsText",
+    patterns: [/npm\s+publish/, /yarn\s+publish/, /pnpm\s+publish/, /发布npm包/, /发布到npm/],
+    reason: "\u5305\u4E00\u65E6\u53D1\u5E03\u5373\u4E3A\u516C\u5F00\u4E14\u96BE\u4EE5\u5F7B\u5E95\u64A4\u56DE\uFF0C\u8BF7\u786E\u8BA4\u7248\u672C\u53F7\u4E0E\u5185\u5BB9"
+  }),
+  makePatternRule({
+    id: "cmd.docker_prune",
+    description: "docker \u5168\u91CF\u6E05\u7406\uFF08system/image/volume prune -a\uFF09",
+    scope: "tool",
+    severity: "block",
+    field: "argsText",
+    patterns: [/docker\s+(system|image|volume|container)\s+prune\s+[^\n]*-a/, /清理全部docker/, /删除全部镜像/, /删除全部容器/],
+    reason: "prune -a \u4F1A\u5220\u9664\u6240\u6709\u672A\u4F7F\u7528\u7684\u5BB9\u5668/\u955C\u50CF/\u5377\uFF0C\u5220\u9664\u540E\u901A\u5E38\u65E0\u6CD5\u6062\u590D"
   })
 ];
+function isSecretPlaceholderValue(raw) {
+  const v = raw.trim().replace(/^['"`（(]+/, "").replace(/['"`）)]+$/, "").trim();
+  if (v === "") return true;
+  if (/^(process\.env\.|process\.env\[|os\.environ|env\[)/i.test(v)) return true;
+  if (/^getenv\s*\(/i.test(v)) return true;
+  if (/^(config|settings|options|params|opts|ctx|env)\./i.test(v)) return true;
+  if (v.startsWith("${")) return true;
+  if (/^<[^>]*>$/.test(v)) return true;
+  if (/^([*xX.。…•_-])\1{2,}$/.test(v)) return true;
+  if (/^(占位|占位符|占位密码|示例|示例密码|空|无|未设置|your[-_ ]?password|your[-_ ]?secret|changeme|change[-_]?me|placeholder|example|sample|dummy|redacted|not[-_ ]?set|todo|fixme|none|null|undefined)$/i.test(v)) return true;
+  return false;
+}
 var OUTPUT_RULES = [
   // ── 密钥泄露 ────────────────────────────────────────────────────────────
   makePatternRule({
@@ -7329,16 +7815,30 @@ var OUTPUT_RULES = [
     scope: "output",
     severity: "warn",
     field: "text",
-    patterns: [/\beyj[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\b/i]
+    // 收紧阈值：真实 JWT 的头/载荷是 base64 后的 JSON（一般 20+ 字符），
+    // 每段要求 >=16 字符可避免把 'eyj.xxx.yyy' 形态的普通文本误判为令牌。
+    patterns: [/\beyj[a-z0-9_-]{16,}\.[a-z0-9_-]{16,}\.[a-z0-9_-]{16,}\b/i]
   }),
-  makePatternRule({
+  {
     id: "secret.password",
-    description: "\u660E\u6587\u5BC6\u7801",
+    description: "\u660E\u6587\u5BC6\u7801\uFF08\u5360\u4F4D\u7B26/\u63A9\u7801/\u73AF\u5883\u53D8\u91CF\u5F15\u7528\u4E0D\u544A\u8B66\uFF09",
     scope: "output",
     severity: "warn",
-    field: "text",
-    patterns: [/password\s*[:=]\s*['"]?[^\s'"]{6,}/i, /密码\s*[:：]\s*\S{6,}/]
-  }),
+    test(ctx) {
+      const text = ctx.text || "";
+      if (!/password|passwd|pwd|密码|口令/i.test(text)) return { hit: false };
+      const re = /(?:password|passwd|pwd|密码|口令)\s*['"]?\s*[:：=]\s*['"]?([^\s'";；]{6,})/gi;
+      for (const m of text.matchAll(re)) {
+        const value = m[1] || "";
+        if (isSecretPlaceholderValue(value)) continue;
+        return {
+          hit: true,
+          reason: "\u8F93\u51FA\u7591\u4F3C\u5305\u542B\u660E\u6587\u5BC6\u7801\u8D4B\u503C\uFF08password/\u5BC6\u7801 = \u2026\uFF09\uFF0C\u5EFA\u8BAE\u8131\u654F\u540E\u518D\u5C55\u793A\uFF1B\u5360\u4F4D\u7B26\u4E0E\u73AF\u5883\u53D8\u91CF\u5F15\u7528\u4E0D\u4F1A\u89E6\u53D1\u672C\u89C4\u5219"
+        };
+      }
+      return { hit: false };
+    }
+  },
   makePatternRule({
     id: "secret.github_token",
     description: "GitHub Token",
@@ -7604,12 +8104,19 @@ var GuardrailChainImpl = class {
       this.rules.push(...TOOL_RULES, ...OUTPUT_RULES, OUTPUT_LENGTH_RULE, ...LOOP_RULES, ...BUDGET_RULES);
     }
   }
-  /** 注册自定义规则。返回 this 便于链式调用。 */
+  /**
+   * 注册自定义规则。id 冲突时后者覆盖前者（便于禁用/替换内置规则），
+   * 并返回被替换的那条旧规则；新增（无冲突）时返回 null——调用方可据此感知覆盖行为。
+   */
   addRule(rule) {
     const idx = this.rules.findIndex((r) => r.id === rule.id);
-    if (idx >= 0) this.rules[idx] = rule;
-    else this.rules.push(rule);
-    return this;
+    if (idx >= 0) {
+      const replaced = this.rules[idx];
+      this.rules[idx] = rule;
+      return replaced;
+    }
+    this.rules.push(rule);
+    return null;
   }
   /** 移除规则（按 id）。返回是否移除成功。 */
   removeRule(id) {

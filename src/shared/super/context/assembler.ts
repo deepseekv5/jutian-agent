@@ -236,10 +236,11 @@ export function estimateMessagesTokens(messages: LoopMessage[], profile: TokenEs
 /* ════════════════════════════════════════════════════════════════════════════
  * 第 2 节：预算分配（多级策略）
  *
- * 分配分四级，逐级细化：
+ * 分配分级细化：
  *   L1 基线比例     —— 默认 system 12% / history 46% / tools 18% / plan 10% / reserved 14%
  *   L2 领域偏移     —— code 多给 tools，research/writing 多给 history，planning 多给 plan
  *   L3 需求修正     —— needsTools=false 时 tools 预算转给 history；计划步数多时 plan 增加
+ *   L3.5 下限强制   —— expert 复杂度强制 reserved >= 15%（防长输出把窗口挤爆）
  *   L4 归一化取整   —— 保证五类之和恰好等于 total，且每类不低于最小值
  * ════════════════════════════════════════════════════════════════════════════ */
 
@@ -330,6 +331,32 @@ function mulRatios(a: RatioPolicy, b: RatioPolicy): RatioPolicy {
     plan: a.plan * b.plan,
     reserved: a.reserved * b.reserved,
   }
+}
+
+/**
+ * expert 复杂度的 reserved 份额下限。
+ * expert 任务输出长、返工多，若 reserved 不足，模型输出会"爆窗"挤掉历史或触发截断；
+ * 因此无论领域与风险如何组合，归一化后强制 reserved >= 15%。
+ */
+const EXPERT_RESERVED_FLOOR = 0.15
+
+/**
+ * L3.5 reserved 下限强制：归一化后若 reserved 份额低于下限（当前仅 expert 复杂度），
+ * 把 reserved 抬到下限，差额从其余四类按各自当前份额等比例扣回，
+ * 保持其它类别之间的相对结构不变。返回的新比例总和仍为 1。
+ */
+function enforceReservedFloor(ratios: RatioPolicy, analysis: TaskAnalysis): RatioPolicy {
+  const floor = analysis.complexity.level === 'expert' ? EXPERT_RESERVED_FLOOR : 0
+  if (floor <= 0 || ratios.reserved >= floor) return ratios
+  const others = ratios.system + ratios.history + ratios.tools + ratios.plan
+  const out: RatioPolicy = { ...ratios, reserved: floor }
+  if (others <= 0) return out // 理论不可达（四类全为 0 时无法扣回，直接返回）
+  const scale = (1 - floor) / others
+  out.system = ratios.system * scale
+  out.history = ratios.history * scale
+  out.tools = ratios.tools * scale
+  out.plan = ratios.plan * scale
+  return out
 }
 
 /**
@@ -462,26 +489,90 @@ function classifyMessage(msg: LoopMessage): MsgKind {
 }
 
 /**
+ * user 消息的基础分：在所有普通角色中最高。
+ * 设计意图：含用户消息的轮次权重最高——用户原话是任务的"锚"，
+ * 除此之外，最近 2 轮内的 user 由"最近轮保护"（recentTurnStart）做硬保证、
+ * 首条 user 由"首尾锚点保护"做硬保证，评分只是给中间轮次的软排序。
+ */
+const USER_BASE_SCORE = 10
+/** assistant 正文引用了相邻工具结果时的加权（见 assistantQuotesToolResult）。 */
+const QUOTE_BOOST = 5
+
+const ERROR_HINT_RE = /(error|exception|traceback|failed|失败|错误|异常|timeout|超时|denied|拒绝)/i
+
+/** 视为"引用"的最小片段长度（字符）。过短会把普通衔接词误判为逐字引用。 */
+const QUOTE_MIN_FRAG_LEN = 10
+/** 引文检测最多检查的片段数（性能上限，超出直接跳过——评分是热路径，不容许失控）。 */
+const QUOTE_MAX_FRAGS = 40
+
+/**
+ * 判断 assistant 正文是否逐字引用了相邻工具结果的内容。
+ * 做法：正文按行/句切成片段，折叠空白后取长度足够的片段在工具结果文本里查找，
+ * 命中任意片段即视为引用。纯启发式，仅用于重要性加分，不影响协议合法性。
+ * 中英文都适用：中文按句读切分（。；！？等），英文按行与句号切分。
+ */
+function assistantQuotesToolResult(content: string, toolTexts: string[]): boolean {
+  if (!content || toolTexts.length === 0) return false
+  const hay = toolTexts.join('\n').replace(/\s+/g, ' ')
+  if (!hay) return false
+  const frags = content.split(/[\r\n]+|[。；！？!?;.、，：]/)
+  let checked = 0
+  for (const raw of frags) {
+    if (checked >= QUOTE_MAX_FRAGS) break
+    const frag = raw.trim().replace(/\s+/g, ' ')
+    if (frag.length < QUOTE_MIN_FRAG_LEN) continue
+    checked++
+    if (hay.includes(frag)) return true
+  }
+  return false
+}
+
+/** 收集某条消息前方紧邻的连续 tool 结果文本（最多 3 条），作为引文检测的对照语料。 */
+function adjacentToolTexts(messages: LoopMessage[], index: number): string[] {
+  const texts: string[] = []
+  for (let j = index - 1; j >= 0 && texts.length < 3; j--) {
+    const m = messages[j]
+    if (classifyMessage(m) !== 'tool') break
+    const t = contentText(m.content)
+    if (t) texts.push(t)
+  }
+  return texts
+}
+
+/**
  * 消息重要性评分（越高越该保留）。所有加分项都可解释：
- *   - 首条 user：任务起点，+18
- *   - user 消息：+8（用户意图优先于模型自述）
+ *   - system：+∞（永不裁剪）
+ *   - user：+USER_BASE_SCORE（最高基础分；用户意图优先于模型自述）
+ *   - 首条 user：任务起点，再 +18
  *   - assistant 含 tool_calls：+6（保留工具链路）
- *   - assistant 正文：+3
+ *   - assistant 正文逐字引用过相邻工具结果：+QUOTE_BOOST（裁掉会让上下文断裂，
+ *     比如"如上面报错所示"的正文一旦与工具结果分离，模型就失去所指）；
+ *     加权后封顶在 user 基础分之下，保证用户消息仍最高
+ *   - assistant 普通正文：+3
  *   - tool 结果：基础 +1；包含 error/exception/失败 关键词 +6（错误是诊断关键）
  *   - 内容越长（信息密度）轻微加分，但封顶 +4
  *   - 携带附件：+5
  */
-const ERROR_HINT_RE = /(error|exception|traceback|failed|失败|错误|异常|timeout|超时|denied|拒绝)/i
-
-function messageImportance(msg: LoopMessage, index: number, firstUserIndex: number, total: number): number {
+function messageImportance(
+  msg: LoopMessage,
+  index: number,
+  firstUserIndex: number,
+  total: number,
+  all?: LoopMessage[],
+): number {
   const kind = classifyMessage(msg)
   let score = 0
   if (kind === 'system') return Number.POSITIVE_INFINITY
   if (kind === 'user') {
-    score += 8
+    score += USER_BASE_SCORE
     if (index === firstUserIndex) score += 18
   } else if (kind === 'assistant') {
     score += hasToolCalls(msg) ? 6 : 3
+    // 引用检测：正文里逐字引用了相邻工具结果的内容 → 提升权重，避免上下文断裂。
+    if (all && score < USER_BASE_SCORE) {
+      const quoted = assistantQuotesToolResult(contentText(msg.content), adjacentToolTexts(all, index))
+      if (quoted) score = Math.min(score + QUOTE_BOOST, USER_BASE_SCORE - 1)
+    }
   } else if (kind === 'tool') {
     score += 1
     const text = contentText(msg.content)
@@ -501,12 +592,18 @@ function messageImportance(msg: LoopMessage, index: number, firstUserIndex: numb
 
 /** 折叠阈值：工具结果超过该字符数就摘要化。 */
 const TOOL_FOLD_THRESHOLD = 4000
-/** 折叠后保留的头部/尾部字符数。 */
-const FOLD_HEAD = 900
-const FOLD_TAIL = 700
+/**
+ * 折叠后保留的头部/尾部字符数（保守取值）。
+ * 头尾各 300 字符已足够定位"这是什么输出、最后发生了什么"；
+ * 更长的内容应让模型按需 read_file 原文件取回，而不是长期占用历史预算。
+ */
+const FOLD_HEAD = 300
+const FOLD_TAIL = 300
 
 /**
  * 折叠单个超长工具结果为"保头 + 省略提示 + 保尾"的摘要字符串。
+ * 省略提示必须同时包含：折叠了多少字符、如何取回完整内容（read_file 原文件），
+ * 让模型在丢失正文后仍有明确的恢复路径。
  * 不改消息其它字段（tool_call_id 等），只替换 content，保持协议合法。
  */
 function foldToolResult(text: string, threshold: number = TOOL_FOLD_THRESHOLD): { text: string; folded: boolean; saved: number } {
@@ -514,7 +611,7 @@ function foldToolResult(text: string, threshold: number = TOOL_FOLD_THRESHOLD): 
   const head = text.slice(0, FOLD_HEAD)
   const tail = text.slice(-FOLD_TAIL)
   const omitted = text.length - FOLD_HEAD - FOLD_TAIL
-  const marker = `\n\n…[上下文工程：已折叠 ${omitted} 字符（原长 ${text.length}）。保留开头与结尾以便诊断；如需完整内容请用范围参数重新读取。]…\n\n`
+  const marker = `\n\n…[上下文工程：已折叠 ${omitted} 字符，完整内容可 read_file 原文件（原长 ${text.length}，此处仅保留首尾各 ${FOLD_HEAD}/${FOLD_TAIL} 字符用于诊断）。]…\n\n`
   const folded = head + marker + tail
   return { text: folded, folded: true, saved: text.length - folded.length }
 }
@@ -662,7 +759,7 @@ function trimMessages(
     : (turns.length > 0 ? turns[0].start : prepared.length)
 
   const importance = (m: LoopMessage, i: number) =>
-    messageImportance(m, i, firstUserIndex, prepared.length)
+    messageImportance(m, i, firstUserIndex, prepared.length, prepared)
 
   // ── Step 4：把正文切成不可拆分的块。
   const blocks = buildBlocks(prepared, firstUserIndex, importance, profile)
@@ -939,12 +1036,12 @@ export class ContextAssemblerImpl implements ContextAssembler {
     if (total === 0) {
       return { system: 0, history: 0, tools: 0, plan: 0, reserved: 0, total: 0 }
     }
-    // L1 基线 × L2 领域/复杂度权重 × L3 需求修正 → 归一化。
+    // L1 基线 × L2 领域/复杂度权重 × L3 需求修正 → 归一化 → L3.5 reserved 下限。
     const domainW = DOMAIN_WEIGHTS[analysis.domain] || BASE_RATIO
     const complexityW = COMPLEXITY_WEIGHTS[analysis.complexity.level] || BASE_RATIO
     const weighted = mulRatios(mulRatios(BASE_RATIO, domainW), complexityW)
     const adjusted = applyDemandAdjustments(weighted, analysis, plan)
-    const ratios = normalizeRatios(adjusted)
+    const ratios = enforceReservedFloor(normalizeRatios(adjusted), analysis)
     // L4 落实为整数；窗口很小时（<800）放宽最小预算，避免下限吃掉全部额度。
     return materializeAllocation(total, ratios, total < 800)
   }
@@ -962,17 +1059,25 @@ export class ContextAssemblerImpl implements ContextAssembler {
   }
 
   /**
-   * 系统提示组装：四段各自包 <system-reminder>，最后拼成一个 system 文本。
-   * 没有计划时该段留空，不产生空标签。
+   * 系统提示组装：四段各自包 <system-reminder>，按固定顺序拼成一个 system 文本。
+   *
+   * 顺序稳定性契约：analysis → plan → strategy → guardrail。
+   * 用"标题 + 正文"的有序列表驱动拼装，而不是手写拼接语句，保证：
+   *   1. 顺序由列表字面量的位置决定，维护时不会被打乱；
+   *   2. 正文为空的段（如 plan 为 null、或计划没有任何步骤）整段跳过，
+   *      不产生空标签，也不会留下连续空行。
    */
   buildSystemPrompt(analysis: TaskAnalysis, plan: ExecutionPlan | null, decision: RouteDecision): string {
-    const blocks: string[] = [
-      wrapReminder('task-analysis', formatAnalysisSummary(analysis)),
-      wrapReminder('execution-plan', formatPlanDigest(plan)),
-      wrapReminder('execution-strategy', formatStrategyHint(decision)),
-      wrapReminder('guardrails', formatGuardrailRules(analysis)),
-    ].filter(Boolean)
-    return blocks.join('\n')
+    const segments: Array<[string, string]> = [
+      ['task-analysis', formatAnalysisSummary(analysis)],
+      ['execution-plan', formatPlanDigest(plan)],
+      ['execution-strategy', formatStrategyHint(decision)],
+      ['guardrails', formatGuardrailRules(analysis)],
+    ]
+    return segments
+      .filter(([, body]) => body.length > 0)
+      .map(([title, body]) => wrapReminder(title, body))
+      .join('\n')
   }
 
   /**

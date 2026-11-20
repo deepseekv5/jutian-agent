@@ -50,15 +50,29 @@ export function graphemeTruncateToBytes(str: string, maxBytes: number, suffix = 
     }
     return kept + suffix
   } catch {
-    return str.slice(0, maxBytes) + suffix
+    // Intl.Segmenter 不可用时的兜底：按 Unicode 码点（for..of 迭代）切，
+    // 不能用 slice(maxBytes)——那按 UTF-16 码元切，会把代理对（emoji）腰斩成非法字符串
+    let kept = ''
+    let used = 0
+    for (const ch of str) {
+      const b = Buffer.byteLength(ch, 'utf8')
+      if (used + b > maxBytes) break
+      kept += ch
+      used += b
+    }
+    return kept + suffix
   }
 }
 
-/** 折叠单条旧工具响应：超 2KB 折到 2KB + 归档标记 */
+/** 折叠单条旧工具响应：超 2KB 折到 2KB 内（归档标记计入预算） */
 export function collapseToolResponse(content: string, maxBytes = COLLAPSED_MAX_BYTES): string {
   if (Buffer.byteLength(content, 'utf8') <= maxBytes) return content
   const suffix = `\n…[该轮工具输出已折叠：原始 ${Buffer.byteLength(content, 'utf8')} 字节。需要完整内容可重新调用工具，或在文件空间中查看。]`
-  return graphemeTruncateToBytes(content, maxBytes, suffix)
+  // 标记占用计入字节预算：折叠结果总字节不超过 maxBytes。
+  // 否则折叠结果仍超 2KB，下一轮会被再次折叠且标记里的字节数变了——
+  // 文本每轮都在变，「压缩一次后文本稳定（前缀缓存友好）」就不成立。
+  const budget = Math.max(0, maxBytes - Buffer.byteLength(suffix, 'utf8'))
+  return graphemeTruncateToBytes(content, budget, suffix)
 }
 
 /**
@@ -105,6 +119,9 @@ export function primaryOutput(content: string): string {
 export function truncateKeepTail(content: string, tailLines = TAIL_LINES_KEPT): string {
   // 对象形态的输出先取主字符串字段（{output: ...} 之类），截尾才截在正确文本上
   content = primaryOutput(content)
+  // 幂等保护：已归档的内容不再重截。否则下一轮（31 行）会被再次归档，
+  // 头部的省略行数反复改写，文本不稳定、破坏前缀缓存。
+  if (content.startsWith('[输出已归档')) return content
   const lines = content.split('\n')
   if (lines.length <= tailLines) return content
   const omitted = lines.length - tailLines

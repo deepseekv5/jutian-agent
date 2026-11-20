@@ -92,6 +92,7 @@ async function* ssePayloads(body) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
+  let dataLines = [];
   try {
     for (; ; ) {
       const { done, value } = await reader.read();
@@ -99,12 +100,22 @@ async function* ssePayloads(body) {
       buf += decoder.decode(value, { stream: true });
       let nl;
       while ((nl = buf.indexOf("\n")) >= 0) {
-        const line = buf.slice(0, nl).trim();
+        const raw = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        yield line.slice(5).trim();
+        const line = (raw.endsWith("\r") ? raw.slice(0, -1) : raw).trim();
+        if (!line) {
+          if (dataLines.length > 0) {
+            const payload = dataLines.join("\n");
+            dataLines = [];
+            yield payload;
+          }
+          continue;
+        }
+        if (line.startsWith(":")) continue;
+        if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
       }
     }
+    if (dataLines.length > 0) yield dataLines.join("\n");
   } finally {
     try {
       reader.cancel();
@@ -118,12 +129,21 @@ async function* ssePayloads(body) {
 }
 
 // src/shared/reasoning.ts
+var THINK_OPEN = "<think>";
+var THINK_CLOSE = "</think>";
+function stripThinkTags(text) {
+  if (!text || !text.includes("<")) return text;
+  return text.split(THINK_OPEN).join("").split(THINK_CLOSE).join("");
+}
 function extractReasoning(obj) {
   if (!obj || typeof obj !== "object") return "";
   const o = obj;
   for (const key of ["reasoning_content", "reasoning", "thinking"]) {
     const v = o[key];
-    if (typeof v === "string" && v) return v;
+    if (typeof v === "string" && v) {
+      const stripped = stripThinkTags(v);
+      if (stripped) return stripped;
+    }
   }
   const details = o.reasoning_details;
   if (Array.isArray(details)) {
@@ -133,12 +153,16 @@ function extractReasoning(obj) {
         out += d.text;
       }
     }
-    if (out) return out;
+    const stripped = stripThinkTags(out);
+    if (stripped) return stripped;
   }
   return "";
 }
 
 // src/shared/toolCallStream.ts
+function normIndex(v) {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
 function parseToolCallsFromDelta(delta) {
   const d = delta;
   if (d?.tool_calls && Array.isArray(d.tool_calls)) {
@@ -150,39 +174,73 @@ function parseToolCallsFromDelta(delta) {
   return null;
 }
 function accumulateToolCallDelta(map, tc) {
-  const idx = tc.index ?? 0;
+  if (!tc || typeof tc !== "object") return;
+  const idx = normIndex(tc.index);
   if (!map.has(idx)) map.set(idx, { id: "", name: "", arguments: "" });
   const slot = map.get(idx);
-  if (tc.id && !slot.id) slot.id = tc.id;
+  if (typeof tc.id === "string" && tc.id && !slot.id) slot.id = tc.id;
   const name = tc.function?.name;
-  if (name && !slot.name) slot.name = name;
+  if (typeof name === "string" && name && !slot.name) slot.name = name;
   const args = tc.function?.arguments;
-  if (args) {
-    if (args.trimStart().startsWith("{")) {
-      if (slot.argsComplete) {
-        slot.arguments = args;
-        return;
-      }
+  if (typeof args !== "string") {
+    if (args && typeof args === "object") {
       try {
-        JSON.parse(slot.arguments);
+        slot.arguments = JSON.stringify(args);
         slot.argsComplete = true;
-        slot.arguments = args;
-        return;
       } catch {
       }
     }
-    slot.arguments += args;
+    return;
   }
+  if (!args) return;
+  if (args.trimStart().startsWith("{")) {
+    if (slot.argsComplete) {
+      slot.arguments = args;
+      return;
+    }
+    try {
+      JSON.parse(slot.arguments);
+      slot.argsComplete = true;
+      slot.arguments = args;
+      return;
+    } catch {
+    }
+  }
+  slot.arguments += args;
 }
 function adoptNonStreamToolCalls(map, messageToolCalls) {
   if (map.size > 0) return;
   if (!Array.isArray(messageToolCalls)) return;
-  for (const raw of messageToolCalls) {
-    const idx = raw.index ?? 0;
+  for (let i = 0; i < messageToolCalls.length; i++) {
+    const raw = messageToolCalls[i];
+    if (!raw || typeof raw !== "object") continue;
+    const fnName = typeof raw.function?.name === "string" ? raw.function.name : "";
+    if (!fnName) continue;
+    const rawArgs = raw.function?.arguments;
+    let args = "";
+    if (typeof rawArgs === "string") {
+      args = rawArgs;
+    } else if (rawArgs && typeof rawArgs === "object") {
+      try {
+        args = JSON.stringify(rawArgs);
+      } catch {
+        continue;
+      }
+    }
+    if (args !== "") {
+      try {
+        JSON.parse(args);
+      } catch {
+        continue;
+      }
+    }
+    const idx = typeof raw.index === "number" && Number.isFinite(raw.index) ? raw.index : i;
     map.set(idx, {
-      id: raw.id || "",
-      name: raw.function?.name || "",
-      arguments: raw.function?.arguments || ""
+      id: typeof raw.id === "string" ? raw.id : "",
+      name: fnName,
+      arguments: args,
+      // 全量快照已验证合法：标记 argsComplete，后续若仍收到 '{' 开头的分片按快照替换
+      argsComplete: args !== "" ? true : void 0
     });
   }
 }
@@ -192,16 +250,24 @@ function toolCallsToArray(map) {
 
 // src/shared/toolLoopGuard.ts
 var MAX_TOOL_ROUNDS = 12;
-var SOFT_REPEAT_THRESHOLD = 3;
-var HARD_REPEAT_THRESHOLD = 5;
+var REPEAT_SOFT_LIMIT = 3;
+var REPEAT_HARD_LIMIT = 5;
+function sortKeysDeep(v) {
+  if (Array.isArray(v)) return v.map(sortKeysDeep);
+  if (v && typeof v === "object") {
+    const src = v;
+    const sorted = {};
+    for (const k of Object.keys(src).sort()) sorted[k] = sortKeysDeep(src[k]);
+    return sorted;
+  }
+  return v;
+}
 function callSignature(name, args) {
   let norm = String(args || "").trim();
   try {
     const parsed = JSON.parse(norm);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const sorted = {};
-      for (const k of Object.keys(parsed).sort()) sorted[k] = parsed[k];
-      norm = JSON.stringify(sorted);
+    if (parsed && typeof parsed === "object") {
+      norm = JSON.stringify(sortKeysDeep(parsed));
     }
   } catch {
   }
@@ -235,16 +301,25 @@ function bumpToolFail(counter, failed) {
 }
 function toolFailHint(n, lastName) {
   if (n < CONSECUTIVE_FAIL_THRESHOLD) return "";
-  return `
+  const parts = [
+    `
 
-[\u7CFB\u7EDF\u63D0\u793A] \u5DF2\u8FDE\u7EED ${n} \u4E2A\u5DE5\u5177\u8C03\u7528\u5931\u8D25\uFF08\u6700\u8FD1\uFF1A${lastName}\uFF09\u3002\u8BF7\u5148\u505C\u4E0B\u68C0\u67E5\uFF1A\u9519\u8BEF\u539F\u56E0\u662F\u5426\u76F8\u540C\uFF1F\u5148\u8BFB\u76F8\u5173\u6587\u4EF6/\u91CD\u65B0\u786E\u8BA4\u73AF\u5883\u72B6\u6001\u518D\u884C\u52A8\uFF0C\u6216\u6362\u4E00\u79CD\u65B9\u6CD5\u2014\u2014\u4E0D\u8981\u4EE5\u540C\u6837\u65B9\u5F0F\u91CD\u8BD5\u3002`;
+[\u7CFB\u7EDF\u63D0\u793A] \u5DF2\u8FDE\u7EED ${n} \u4E2A\u5DE5\u5177\u8C03\u7528\u5931\u8D25\uFF08\u6700\u8FD1\uFF1A${lastName}\uFF09\u3002\u8BF7\u5148\u505C\u4E0B\u68C0\u67E5\uFF1A\u9519\u8BEF\u539F\u56E0\u662F\u5426\u76F8\u540C\uFF1F`,
+    `\u4E0B\u4E00\u6B65\u4E8C\u9009\u4E00\uFF1A\u82E5\u662F\u6743\u9650\u4E0D\u8DB3\u3001\u8DEF\u5F84\u4E0D\u5B58\u5728\u8FD9\u7C7B\u73AF\u5883\u95EE\u9898\uFF0C\u6539\u7528\u5BF9\u5E94\u5DE5\u5177\u5148\u6838\u5B9E\uFF08\u5982\u5217\u76EE\u5F55\u3001\u6743\u9650\u68C0\u67E5\uFF09\uFF0C\u786E\u8BA4\u76EE\u6807\u662F\u5426\u5B58\u5728\u3001\u662F\u5426\u53EF\u8BBF\u95EE\u518D\u884C\u52A8\uFF1B\u82E5\u662F\u53C2\u6570\u6216\u524D\u63D0\u5F04\u9519\uFF0C\u5148\u8BFB\u76F8\u5173\u6587\u4EF6\u3001\u91CD\u65B0\u786E\u8BA4\u73AF\u5883\u72B6\u6001\u3002\u4E0D\u8981\u4EE5\u540C\u6837\u65B9\u5F0F\u91CD\u8BD5\u3002`
+  ];
+  if (n >= REPEAT_HARD_LIMIT) {
+    parts.push(
+      `\u5DF2\u8FDE\u7EED\u5931\u8D25 ${n} \u6B21\uFF08\u8FBE\u5230\u786C\u9608\u503C ${REPEAT_HARD_LIMIT}\uFF09\uFF0C\u8BE5\u95EE\u9898\u5927\u6982\u7387\u65E0\u6CD5\u9760\u91CD\u8BD5\u89E3\u51B3\uFF1A\u5EFA\u8BAE\u7ACB\u5373\u6536\u5C3E\u2014\u2014\u57FA\u4E8E\u5DF2\u6709\u6210\u679C\u5411\u7528\u6237\u7ED9\u51FA\u603B\u7ED3\u6027\u7B54\u590D\uFF0C\u8BF4\u660E\u5269\u4F59\u6B65\u9AA4\u4E0E\u963B\u585E\u539F\u56E0\uFF0C\u7B49\u5F85\u7528\u6237\u6307\u793A\uFF0C\u4E0D\u8981\u518D\u7EE7\u7EED\u5C1D\u8BD5\u5DE5\u5177\u8C03\u7528\u3002`
+    );
+  }
+  return parts.join("\n");
 }
 function checkRepeatCall(counter, signature) {
   const seen = (counter.get(signature) || 0) + 1;
   counter.set(signature, seen);
   const toolName = signature.split("::")[0];
-  if (seen < HARD_REPEAT_THRESHOLD) {
-    const soft = seen >= SOFT_REPEAT_THRESHOLD;
+  if (seen < REPEAT_HARD_LIMIT) {
+    const soft = seen >= REPEAT_SOFT_LIMIT;
     return {
       blocked: false,
       message: soft ? JSON.stringify({
@@ -440,7 +515,7 @@ function truncateForBudget(messages, budgetTokens) {
   const system = messages.slice(0, sysEnd);
   const rest = messages.slice(sysEnd);
   let used = system.reduce((a, m) => a + messageTokens(m), 0);
-  let cut = rest.length;
+  let cut = 0;
   for (let i = rest.length - 1; i >= 0; i--) {
     const t = messageTokens(rest[i]);
     if (used + t > budgetTokens && rest.length - i >= 4) {
@@ -449,29 +524,44 @@ function truncateForBudget(messages, budgetTokens) {
     }
     used += t;
   }
-  while (cut < rest.length && rest[cut].role === "tool") {
-    const prev = cut > 0 ? rest[cut - 1] : null;
-    if (prev && prev.role === "assistant" && prev.tool_calls) {
-      cut--;
-      continue;
-    }
-    cut++;
-  }
   while (cut < rest.length) {
     const m = rest[cut];
-    if (m.role === "assistant" && m.tool_calls) {
-      const ids = m.tool_calls.map((tc) => tc.id).filter(Boolean);
-      const next = rest[cut + 1];
-      if (next && next.role === "tool" && ids.includes(String(next.tool_call_id || ""))) break;
-      cut++;
-      continue;
+    if (m.role !== "tool" && !(m.role === "assistant" && m.tool_calls)) break;
+    let start = cut;
+    if (m.role === "tool") {
+      let s = cut;
+      while (s > 0 && rest[s - 1].role === "tool") s--;
+      const owner = s > 0 ? rest[s - 1] : null;
+      const ownerIds = owner && owner.role === "assistant" && owner.tool_calls ? new Set(
+        (owner.tool_calls ?? []).map((tc) => String(tc?.id ?? "")).filter(Boolean)
+      ) : null;
+      if (!ownerIds || !ownerIds.has(String(m.tool_call_id ?? ""))) {
+        let e = cut;
+        while (e < rest.length && rest[e].role === "tool") e++;
+        used -= rest.slice(cut, e).reduce((a, x) => a + messageTokens(x), 0);
+        cut = e;
+        continue;
+      }
+      start = s - 1;
     }
-    break;
+    const ids = new Set(
+      (rest[start].tool_calls ?? []).map((tc) => String(tc?.id ?? "")).filter(Boolean)
+    );
+    let end = start + 1;
+    while (end < rest.length && rest[end].role === "tool" && ids.has(String(rest[end].tool_call_id ?? ""))) end++;
+    const prefixTokens = rest.slice(start, cut).reduce((a, x) => a + messageTokens(x), 0);
+    if (end > start + 1 && used + prefixTokens <= budgetTokens) {
+      cut = start;
+      used += prefixTokens;
+      break;
+    }
+    used -= rest.slice(cut, end).reduce((a, x) => a + messageTokens(x), 0);
+    cut = end;
   }
   const kept = [...system, ...rest.slice(cut)];
   return { messages: kept, dropped: cut, tokens: totalTokens(kept) };
 }
-var CONTEXT_OVERFLOW_PATTERN = /context length|prompt is too long|too many tokens|maximum context|context_length_exceeded|request too large|exceed[s]? the (maximum )?context|context window|输入过长|上下文超长/i;
+var CONTEXT_OVERFLOW_PATTERN = /context length|prompt (is )?too long|too many tokens|maximum context|context_length_exceeded|request too large|exceed[s]?( the)?( maximum )? context|context window|input (is )?too long|输入过长|输入太长|上下文过长|上下文超长|上下文太长|超出上下文|上下文超出/i;
 function isContextOverflowError(message) {
   return CONTEXT_OVERFLOW_PATTERN.test(String(message || ""));
 }
@@ -512,7 +602,19 @@ var READONLY_TOOLS = /* @__PURE__ */ new Set([
   "color_tools",
   "hash_tools",
   "base64_tools",
-  "url_tools"
+  "url_tools",
+  "get_file_info",
+  "read_many_files",
+  "glob",
+  "grep_search",
+  "code_analysis",
+  "find_in_files",
+  "file_stats",
+  "text_diff",
+  "shell_list",
+  "list_skills",
+  "load_skill",
+  "consult_guidance"
 ]);
 var TOOL_TIMEOUT_MS = 18e4;
 var TAIL_KEEP_TOOLS = /* @__PURE__ */ new Set(["shell", "npm_run", "git_operation", "run_tests", "web_fetch"]);
@@ -522,9 +624,9 @@ function clampToolResult(text, toolName) {
   const head = Math.floor(MAX * 0.3);
   const tail = MAX - head;
   if (toolName && TAIL_KEEP_TOOLS.has(toolName)) {
-    return text.slice(0, head) + "\n\n\u2026[\u4E2D\u95F4 " + (text.length - MAX) + " \u5B57\u7B26\u5DF2\u7701\u7565\uFF1B\u4E0B\u65B9\u4FDD\u7559\u672B\u5C3E " + tail + " \u5B57\u7B26\uFF08\u9519\u8BEF\u5806\u6808\u901A\u5E38\u5728\u7ED3\u5C3E\uFF09\u3002\u5982\u9700\u67E5\u770B\u88AB\u7701\u7565\u7684\u90E8\u5206\uFF0C\u53EF\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\u547D\u4EE4\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\u6216\u6539\u7528\u5206\u6BB5\u8BFB\u53D6\u3002]\u2026\n\n" + text.slice(-tail);
+    return text.slice(0, head) + "\n\n\u2026[\u4E2D\u95F4 " + (text.length - MAX) + " \u5B57\u7B26\u5DF2\u7701\u7565\uFF1B\u4E0B\u65B9\u4FDD\u7559\u672B\u5C3E " + tail + " \u5B57\u7B26\uFF08\u9519\u8BEF\u5806\u6808\u901A\u5E38\u5728\u7ED3\u5C3E\uFF09\u3002\u5982\u9700\u67E5\u770B\u88AB\u7701\u7565\u7684\u90E8\u5206\uFF0C\u53EF\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\u547D\u4EE4\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\uFF0C\u6216\u628A\u5B8C\u6574\u8F93\u51FA\u91CD\u5B9A\u5411\u5230\u6587\u4EF6\u540E\u7528 read_file \u7684 offset/limit \u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u3002]\u2026\n\n" + text.slice(-tail);
   }
-  return text.slice(0, MAX) + "\n\n[\u8F93\u51FA\u8FC7\u957F\u5DF2\u622A\u65AD\uFF1A\u539F\u59CB " + text.length + " \u5B57\u7B26\uFF0C\u4EC5\u4FDD\u7559\u524D " + MAX + "\u3002\u5982\u9700\u5B8C\u6574\u5185\u5BB9\uFF0C\u8BF7\u7528\u8303\u56F4\u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u3002]";
+  return text.slice(0, MAX) + "\n\n[\u8F93\u51FA\u8FC7\u957F\u5DF2\u622A\u65AD\uFF1A\u539F\u59CB " + text.length + " \u5B57\u7B26\uFF0C\u4EC5\u4FDD\u7559\u524D " + MAX + "\u3002\u7EED\u8BFB\u6307\u5F15\uFF1A\u82E5\u5185\u5BB9\u6765\u81EA\u6587\u4EF6\uFF0C\u8BF7\u7528 read_file \u7684 offset/limit \u53C2\u6570\u5206\u6BB5\u8BFB\u53D6\u672A\u5C55\u793A\u7684\u90E8\u5206\uFF1B\u82E5\u6765\u81EA\u547D\u4EE4\u8F93\u51FA\uFF0C\u8BF7\u7F29\u5C0F\u8303\u56F4\u91CD\u8DD1\uFF08\u5982\u52A0 head/tail/grep \u9650\u5B9A\uFF09\u5206\u6BB5\u83B7\u53D6\u3002]";
 }
 function withTimeout(p, ms, msg) {
   return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
@@ -602,6 +704,23 @@ async function resumePendingTool(ctx, deps, messages, perf) {
   ctx.allToolCalls.push(obj);
   perf.addTool(1, toolCall.name, Date.now() - t0, obj.status !== "error");
 }
+function buildWrapUpNotice(ctx) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const tc of ctx.allToolCalls) {
+    const e = counts.get(tc.name) || { ok: 0, fail: 0 };
+    if (tc.status === "error") e.fail++;
+    else e.ok++;
+    counts.set(tc.name, e);
+  }
+  const lines = ["\u3010\u7CFB\u7EDF\u3011\u5DE5\u5177\u8C03\u7528\u8F6E\u6B21\u5DF2\u7528\u5C3D\uFF0C\u672C\u6B21\u8BF7\u6C42\u5DF2\u7981\u7528\u5168\u90E8\u5DE5\u5177\u3002\u8BF7\u7ACB\u523B\u57FA\u4E8E\u5DF2\u6709\u4FE1\u606F\u7ED9\u51FA\u603B\u7ED3\u6027\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u4EFB\u4F55\u5DE5\u5177\u3002"];
+  const total = ctx.allToolCalls.length;
+  if (total > 0) {
+    const names = [...counts.entries()].map(([name, e]) => e.fail > 0 ? `${name}\xD7${e.ok + e.fail}\uFF08\u5931\u8D25 ${e.fail}\uFF09` : `${name}\xD7${e.ok}`).join("\u3001");
+    lines.push(`\u5DF2\u5B8C\u6210\u7684\u5DE5\u5177\u8C03\u7528\u5171 ${total} \u6B21\uFF1A${names}\u3002\u5404\u6B21\u8C03\u7528\u7684\u7ED3\u679C\u90FD\u5728\u4E0A\u65B9\u5BF9\u8BDD\u5386\u53F2\u4E2D\uFF0C\u53EF\u76F4\u63A5\u5F15\u7528\uFF0C\u65E0\u9700\u91CD\u8DD1\u3002`);
+  }
+  lines.push("\u7B54\u590D\u8981\u6C42\uFF1A\u6C47\u603B\u5DF2\u5B8C\u6210\u7684\u5DE5\u4F5C\u4E0E\u5173\u952E\u7ED3\u679C\uFF1B\u5982\u6709\u672A\u5B8C\u6210\u4E8B\u9879\uFF0C\u7528\u6587\u5B57\u5217\u51FA\u5269\u4F59\u6B65\u9AA4\u4E0E\u6240\u9700\u4FE1\u606F\uFF0C\u7B49\u5F85\u7528\u6237\u6307\u793A\uFF0C\u4E0D\u8981\u8BD5\u56FE\u7EE7\u7EED\u6267\u884C\u3002");
+  return lines.join("\n");
+}
 function prepareRoundMessages(ctx, messages, deps) {
   const disabled = new Set(deps.disabledTools || []);
   const tools = deps.tools.filter((t) => !disabled.has(t.name));
@@ -631,10 +750,7 @@ function prepareRoundMessages(ctx, messages, deps) {
     }
   }
   if (ctx.wrapUp) {
-    sendMessages = [...sendMessages, {
-      role: "user",
-      content: "\u3010\u7CFB\u7EDF\u3011\u5DE5\u5177\u8C03\u7528\u8F6E\u6B21\u5DF2\u7528\u5C3D\u3002\u8BF7\u7ACB\u523B\u57FA\u4E8E\u5DF2\u6709\u4FE1\u606F\u7528\u6587\u5B57\u7ED9\u51FA\u6700\u7EC8\u7B54\u590D\uFF0C\u4E0D\u8981\u518D\u8C03\u7528\u4EFB\u4F55\u5DE5\u5177\u3002"
-    }];
+    sendMessages = [...sendMessages, { role: "user", content: buildWrapUpNotice(ctx) }];
   }
   return sendMessages;
 }
@@ -694,9 +810,13 @@ async function requestRound(deps, ctx, sendMessages, maxTokens, signal, perf) {
 }
 async function streamRound(res, ctx, deps, perf) {
   const { events, signal } = deps;
+  const onChunk = events.onChunk;
+  const onThinking = events.onThinking;
+  const onToolDraft = events.onToolDraft;
   let roundContent = "";
   const toolCallMap = /* @__PURE__ */ new Map();
   let draftAnnounced = false;
+  let firstTokenSeen = false;
   for await (const data of ssePayloads(res.body)) {
     if (data === "[DONE]") break;
     if (signal?.aborted) return { toolCalls: [], roundContent };
@@ -707,22 +827,28 @@ async function streamRound(res, ctx, deps, perf) {
       const delta = choice.delta;
       const think = extractReasoning(delta);
       if (think) {
-        perf.firstToken();
+        if (!firstTokenSeen) {
+          perf.firstToken();
+          firstTokenSeen = true;
+        }
         ctx.fullThinking += think;
-        events.onThinking?.(think);
+        onThinking?.(think);
       }
       if (delta?.content) {
-        perf.firstToken();
+        if (!firstTokenSeen) {
+          perf.firstToken();
+          firstTokenSeen = true;
+        }
         roundContent += delta.content;
         ctx.fullContent += delta.content;
-        events.onChunk?.(delta.content);
+        onChunk?.(delta.content);
       }
       const parsedTcs = parseToolCallsFromDelta(delta);
       if (parsedTcs) {
         for (const tc of parsedTcs) accumulateToolCallDelta(toolCallMap, tc);
         if (!draftAnnounced) {
           draftAnnounced = true;
-          events.onToolDraft?.(parsedTcs[0]?.function?.name || "\u2026");
+          onToolDraft?.(parsedTcs[0]?.function?.name || "\u2026");
         }
       }
       if (choice.finish_reason === "tool_calls") {
@@ -748,9 +874,12 @@ async function gateToolCalls(ctx, deps, messages, toolCalls) {
   const plans = [];
   for (const tc of toolCalls) {
     if (signal?.aborted) return [];
-    const repeat = checkRepeatCall(ctx.callSignatures, callSignature(tc.name, tc.arguments));
+    const sig = callSignature(tc.name, tc.arguments);
+    const repeat = checkRepeatCall(ctx.callSignatures, sig);
     if (repeat.blocked) {
-      messages.push({ role: "tool", tool_call_id: tc.id, content: repeat.message });
+      const seen = ctx.callSignatures.get(sig) || 0;
+      const hint = seen > 0 ? "\n\n[\u7CFB\u7EDF\u63D0\u793A] \u672C\u6B21\u5DF2\u662F\u7B2C " + seen + " \u6B21\u76F8\u540C\u53C2\u6570\u8C03\u7528\u3002" : "";
+      messages.push({ role: "tool", tool_call_id: tc.id, content: repeat.message + hint });
       continue;
     }
     const obj = {
@@ -908,6 +1037,10 @@ function buildUpstreamError(status, errText) {
 
 // src/shared/autoCore.ts
 var EVALUATOR_SYSTEM = '\u4F60\u662F\u4EFB\u52A1\u5B8C\u6210\u5EA6\u8BC4\u4F30\u5668\u3002\u7ED9\u5B9A\u300C\u7528\u6237\u76EE\u6807\u300D\u548C\u300C\u672C\u8F6E\u6700\u7EC8\u56DE\u590D\u300D\uFF0C\u5224\u65AD\u76EE\u6807\u662F\u5426\u5DF2\u88AB\u5B9E\u8D28\u6027\u5B8C\u6210\u3002\u53EA\u8F93\u51FA JSON\uFF1A{"done":true|false,"note":"\u4E00\u53E5\u8BDD\u8BF4\u660E\u8FD8\u7F3A\u4EC0\u4E48\u6216\u5DF2\u5B8C\u6210\u4EC0\u4E48"}\u3002\u5224\u5B9A\u89C4\u5219\uFF1A\u53EA\u770B\u6709\u6CA1\u6709\u771F\u6B63\u628A\u4E8B\u60C5\u505A\u51FA\u6765\uFF08\u6587\u4EF6\u5DF2\u843D\u76D8\u3001\u547D\u4EE4\u5DF2\u6267\u884C\u3001\u95EE\u9898\u5DF2\u89E3\u51B3\uFF09\uFF0C\u4E0D\u56E0\u5BA2\u5957\u8BDD\u3001\u8BA1\u5212\u63CF\u8FF0\u3001"\u6211\u5C06\u8981"\u3001"\u5DF2\u5B8C\u6210"\u5B57\u6837\u800C\u5224\u5B9A\u5B8C\u6210\uFF1B\u5B81\u53EF\u4FDD\u5B88\u5224\u672A\u5B8C\u6210\u3002';
+function truncateByCodePoints(str, max) {
+  if (str.length <= max) return str;
+  return Array.from(str).slice(0, max).join("");
+}
 function extractGoal(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -946,7 +1079,7 @@ ${String(lastReply || "").slice(0, 3e3)}` }
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return { done: false, note: "", ok: false };
     const parsed = JSON.parse(m[0]);
-    return { done: !!parsed.done, note: String(parsed.note || "").slice(0, 160), ok: true };
+    return { done: !!parsed.done, note: truncateByCodePoints(String(parsed.note || ""), 160), ok: true };
   } catch {
     return { done: false, note: "\u8BC4\u4F30\u5931\u8D25", ok: false };
   }
@@ -991,7 +1124,7 @@ async function runAutoLoop(messages, deps) {
         error: "\u81EA\u4E3B\u5185\u6838\u68C0\u6D4B\u5230\u8FDE\u7EED\u4E24\u8F6E\u6267\u884C\u76F8\u540C\u64CD\u4F5C\u3001\u65E0\u5B9E\u8D28\u8FDB\u5C55\uFF0C\u5DF2\u505C\u6B62\u4EE5\u907F\u514D\u7A7A\u8F6C\u3002"
       };
     }
-    signatures.push(sig);
+    if (sig) signatures.push(sig);
     const ev = await evaluateGoalAuto(deps, goal, result.content, signal);
     if (!ev.ok) break;
     if (ev.done) break;

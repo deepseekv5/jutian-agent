@@ -110,6 +110,9 @@ export interface TruncateResult<T> {
  * 从最新往最旧累计 token，超预算即切；随后修复切点保证历史合法：
  *   - 不能以 role='tool' 开头（缺前驱 assistant(tool_calls)）
  *   - 不能留下没有工具响应的 assistant(tool_calls)
+ *   - 工具调用组整体同进退：assistant(tool_calls) 与其全部 tool 响应要么都留、
+ *     要么都丢（并行多 tool_calls 切在响应中间、或 tool_call_id 对不上时，
+ *     按整组处理，绝不留悬空引用）
  * 系统消息始终保留（静态提示词是行为约束，丢了模型会乱来）。
  */
 export function truncateForBudget<T extends BudgetMessage>(messages: T[], budgetTokens: number): TruncateResult<T> {
@@ -124,7 +127,10 @@ export function truncateForBudget<T extends BudgetMessage>(messages: T[], budget
   const rest = messages.slice(sysEnd)
 
   let used = system.reduce((a, m) => a + messageTokens(m), 0)
-  let cut = rest.length
+  // 初始为 0：非 system 消息不足 4 条时尾部保护会让循环找不到切点，
+  // 此时必须保住全部（宁可超预算，也绝不能把当前用户输入丢掉）。
+  // rest ≥ 4 条时循环必然在 i=0 处命中切点（总量已确认超预算），初值不参与结果。
+  let cut = 0
   for (let i = rest.length - 1; i >= 0; i--) {
     const t = messageTokens(rest[i])
     // 至少保留最后 4 条（最后一条通常是当前用户输入）
@@ -135,23 +141,62 @@ export function truncateForBudget<T extends BudgetMessage>(messages: T[], budget
     used += t
   }
 
-  // 修复切点：不能以 tool 开头
-  while (cut < rest.length && rest[cut].role === 'tool') {
-    const prev = cut > 0 ? rest[cut - 1] : null
-    if (prev && prev.role === 'assistant' && prev.tool_calls) { cut--; continue }
-    cut++
-  }
-  // 修复切点：assistant(tool_calls) 必须有对应的 tool 响应紧随
+  // 修复切点：assistant(tool_calls) 与其后全部 tool 响应必须「同进退」——
+  // 一组 = assistant(tool_calls) + 紧随的、id 匹配的连续 tool 响应。
+  //   - 整组塞得进剩余预算 → 切点前移到组首（整组保留，尽量少丢上下文）
+  //   - 塞不进（或组内一条响应都没有）→ 切点后移到组尾（整组丢弃）
+  //   - 孤儿 tool（前驱不是 assistant(tool_calls)，或 tool_call_id 对不上——
+  //     模型吐错 id / 网关改写时真实会发生）→ 整段连续 tool 丢弃
+  // 绝不允许保留区以孤儿 tool 开头，也绝不允许留下没有响应的 tool_calls，
+  // 否则上游按非法历史直接 400。循环每条路径都让 cut 严格前进，保证终止。
   while (cut < rest.length) {
     const m = rest[cut]
-    if (m.role === 'assistant' && m.tool_calls) {
-      const ids = (m.tool_calls as { id?: string }[]).map((tc) => tc.id).filter(Boolean) as string[]
-      const next = rest[cut + 1]
-      if (next && next.role === 'tool' && ids.includes(String(next.tool_call_id || ''))) break
-      cut++
-      continue
+    if (m.role !== 'tool' && !(m.role === 'assistant' && m.tool_calls)) break
+
+    let start = cut
+    if (m.role === 'tool') {
+      // 向前走完整段连续 tool，源头必须紧邻 assistant(tool_calls)
+      let s = cut
+      while (s > 0 && rest[s - 1].role === 'tool') s--
+      const owner = s > 0 ? rest[s - 1] : null
+      const ownerIds = owner && owner.role === 'assistant' && owner.tool_calls
+        ? new Set(
+            ((owner.tool_calls as { id?: string }[] | undefined) ?? [])
+              .map((tc) => String(tc?.id ?? ''))
+              .filter(Boolean),
+          )
+        : null
+      if (!ownerIds || !ownerIds.has(String(m.tool_call_id ?? ''))) {
+        // 孤儿 tool：无 owner，或 id 对不上。整段连续 tool 都无法配对，全部丢弃
+        let e = cut
+        while (e < rest.length && rest[e].role === 'tool') e++
+        used -= rest.slice(cut, e).reduce((a, x) => a + messageTokens(x), 0)
+        cut = e
+        continue
+      }
+      start = s - 1
     }
-    break
+
+    // 组尾：assistant 之后连续且 id 匹配的 tool 响应
+    const ids = new Set(
+      ((rest[start].tool_calls as { id?: string }[] | undefined) ?? [])
+        .map((tc) => String(tc?.id ?? ''))
+        .filter(Boolean),
+    )
+    let end = start + 1
+    while (end < rest.length && rest[end].role === 'tool' && ids.has(String(rest[end].tool_call_id ?? ''))) end++
+
+    // start < cut 时，[start, cut) 是此前被裁掉、现在要补回的组前缀
+    const prefixTokens = rest.slice(start, cut).reduce((a, x) => a + messageTokens(x), 0)
+    if (end > start + 1 && used + prefixTokens <= budgetTokens) {
+      // 整组保留：组首成为新保留区起点，其后全是合法历史
+      cut = start
+      used += prefixTokens
+      break
+    }
+    // 整组丢弃（组没有可配对的响应，或补回组前缀会超预算），从组尾继续检查
+    used -= rest.slice(cut, end).reduce((a, x) => a + messageTokens(x), 0)
+    cut = end
   }
 
   const kept = [...system, ...rest.slice(cut)]
@@ -160,8 +205,15 @@ export function truncateForBudget<T extends BudgetMessage>(messages: T[], budget
 
 /* ─── 上游错误分类（决定「重试」还是「压缩后重放」） ─── */
 
+/**
+ * 上游溢出错误形态（按上游逐一核对）：
+ *   - OpenAI:  "This model's maximum context length is ..." / code: context_length_exceeded
+ *   - Anthropic: "prompt is too long" / "input length and max_tokens exceed context limit"
+ *   - 本地网关: code "context_length_exceeded"
+ *   - 中文表述: 上下文过长 / 超出上下文 / 上下文超长 / 输入过长
+ */
 const CONTEXT_OVERFLOW_PATTERN =
-  /context length|prompt is too long|too many tokens|maximum context|context_length_exceeded|request too large|exceed[s]? the (maximum )?context|context window|输入过长|上下文超长/i
+  /context length|prompt (is )?too long|too many tokens|maximum context|context_length_exceeded|request too large|exceed[s]?( the)?( maximum )? context|context window|input (is )?too long|输入过长|输入太长|上下文过长|上下文超长|上下文太长|超出上下文|上下文超出/i
 
 const QUOTA_PATTERN =
   /insufficient_quota|quota exceeded|out of budget|billing|insufficient balance|payment required|credit.*(exhaust|expired)/i

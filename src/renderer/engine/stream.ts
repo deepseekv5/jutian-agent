@@ -23,6 +23,9 @@ import {
   type ToolCallAccum,
 } from '../../shared/toolCallStream'
 import { buildHttpErrorMessage } from './httpErrors'
+// 只读工具单一来源（v18.1.0）：服务端补齐 12 个只读工具后，渲染层本地副本曾漂移，
+// 改为直接复用 shared 导出——client 引擎兜底也享受同样的并行判定
+import { READONLY_TOOLS } from '../../shared/agentLoop'
 import { checkRoundLimit, checkRepeatCall, callSignature, bumpToolUse, toolUseHint, bumpToolFail, toolFailHint } from '../../shared/toolLoopGuard'
 import { createAgentPerf } from '../../shared/agentPerf'
 import { shouldRetryHttp, backoffMs, MAX_ATTEMPTS } from '../../shared/retry'
@@ -66,13 +69,8 @@ const CLIENT_TOOLS = new Set(['dispatch_subagents', 'update_plan'])
  * 只读工具（v13.6）：无副作用、相互独立，可并行执行。
  * 模型"同时读 3 个文件再回答"是最高频的多调用场景，串行执行是纯等待。
  * 有副作用的（write/shell/delete/move）严格串行，保持顺序语义。
+ * v18.1.0：本地副本已删除，集合单一来源见顶部 import（shared/agentLoop）。
  */
-const READONLY_TOOLS = new Set([
-  'read_file', 'list_dir', 'search_files', 'search_content', 'web_search', 'web_fetch',
-  'system_info', 'process_list', 'port_check', 'recall',
-  'text_tools', 'json_process', 'timestamp_tools', 'uuid_generate', 'random_tools',
-  'color_tools', 'hash_tools', 'base64_tools', 'url_tools',
-])
 
 /** 单工具硬超时：任何工具挂死都不能拖死整轮对话（shell 自身有更短超时则先到先生效） */
 const TOOL_TIMEOUT_MS = 180_000

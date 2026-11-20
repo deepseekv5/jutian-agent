@@ -11,10 +11,16 @@
  *     cost 偏成本档；工具/视觉作为「能力门槛」不因偏好而被牺牲。
  *  3. 硬约束淘汰：任务需要工具但模型不支持工具 -> 直接淘汰；任务有附件/图片
  *     但模型不支持视觉 -> 直接淘汰；窗口小于任务所需最小 token -> 硬淘汰。
- *  4. 软约束降分：窗口余量不足（未到硬淘汰线）按比例降分；领域不匹配降分。
- *  5. 内置 DEFAULT_MODEL_PROFILES：20+ 常见模型（GPT / Claude / DeepSeek /
- *     Kimi / Qwen / Gemini / 国产免费档等）作为默认候选常量。
- *  6. 所有决策都带可读理由（进入 ModelChoice.reasons）。
+ *  4. 软约束降分：窗口使用率超过 50% 后按梯度罚分（越接近窗口上限罚得越重，
+ *     90% 以上斜率加倍）；领域不匹配降分。
+ *  5. 内置 DEFAULT_MODEL_PROFILES：30+ 常见模型（GPT / Claude / DeepSeek /
+ *     Kimi / Qwen / Gemini / 国产免费档 / 本地 ollama 档等）作为默认候选常量。
+ *  6. 同分决胜：score 相同时按速度档低者优（快者先），其次成本档低者优，
+ *     最后保持候选顺序稳定。
+ *  7. 兜底保障：候选列表为空时回退内置默认库并在理由中说明；全部候选被硬约束
+ *     淘汰时放宽窗口约束降级选择；极端情况返回保守默认（第一个支持工具的候选，
+ *     否则候选首位）；任何内部异常都不向上抛出，返回保守默认并附可读理由。
+ *  8. 所有决策都带可读理由（进入 ModelChoice.reasons）。
  *
  * 本文件只依赖 ../types，不 import 其它 super 模块。
  */
@@ -32,9 +38,10 @@ import type {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 /**
- * 内置常见模型档案（20+）。
+ * 内置常见模型档案（30+，含免费/本地档）。
  * costTier: 0 免费 - 3 昂贵；speedTier: 0 快 - 3 慢。
  * strength 列表描述该模型擅长的领域（用于领域匹配打分）。
+ * contextWindow 以各厂商官方 API 公开的上下文长度为准（常见值口径）。
  */
 export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
   // ── OpenAI GPT 系列 ──
@@ -144,7 +151,8 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
   {
     id: 'deepseek-v3',
     name: 'DeepSeek V3',
-    contextWindow: 128000,
+    // DeepSeek-V3 官方 API 上下文为 64K（V3.1+ 才扩展到 128K），校准为 64K。
+    contextWindow: 64000,
     strength: ['code', 'research', 'data', 'qa', 'writing', 'planning'],
     costTier: 0,
     speedTier: 1,
@@ -225,7 +233,8 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
   {
     id: 'qwen2.5-72b',
     name: 'Qwen2.5 72B',
-    contextWindow: 32768,
+    // Qwen2.5-72B-Instruct 官方支持 128K 上下文（原值 32K 与真实规格不符）。
+    contextWindow: 128000,
     strength: ['code', 'research', 'writing', 'conversation', 'data'],
     costTier: 0,
     speedTier: 1,
@@ -335,6 +344,62 @@ export const DEFAULT_MODEL_PROFILES: ModelProfile[] = [
     reasoning: true,
     supportsTools: true,
     supportsVision: true,
+  },
+  // ── 免费 / 本地档（零成本兜底候选）──
+  {
+    id: 'glm-4-flash',
+    name: 'GLM-4 Flash（免费）',
+    contextWindow: 128000,
+    strength: ['code', 'writing', 'qa', 'conversation'],
+    costTier: 0,
+    speedTier: 0,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false,
+  },
+  {
+    id: 'spark-lite',
+    name: '星火 Spark Lite（免费）',
+    contextWindow: 32768,
+    strength: ['conversation', 'writing', 'qa'],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false,
+  },
+  {
+    id: 'moonshot-kimi-free',
+    name: 'Kimi 免费档（Moonshot）',
+    contextWindow: 128000,
+    strength: ['research', 'writing', 'conversation', 'qa'],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false,
+  },
+  {
+    id: 'poly-free',
+    name: 'Poly 免费聚合路由',
+    contextWindow: 128000,
+    strength: ['conversation', 'writing', 'qa', 'code'],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false,
+  },
+  {
+    id: 'ollama-local',
+    name: 'Ollama 本地模型',
+    contextWindow: 32768,
+    strength: ['code', 'conversation', 'qa'],
+    costTier: 0,
+    speedTier: 1,
+    reasoning: false,
+    supportsTools: true,
+    supportsVision: false,
   },
   {
     id: 'local-7b',
@@ -474,6 +539,40 @@ function windowFitScore(required: number, model: ModelProfile): number {
   return clamp(0.5 + Math.log2(ratio) * 0.16, 0.5, 1)
 }
 
+/**
+ * 窗口使用率软罚分（梯度制，导出便于单测锁定形状）：
+ *  - 使用率 <= 50%：余量充裕，不罚分；
+ *  - 50%-90%：随使用率线性爬升（每 10 个百分点约 +0.015）；
+ *  - 90%-100%：进入紧张区，斜率加倍以上（每 10 个百分点约 +0.04）。
+ * 即「接近 90% 时的罚分幅度明显大于刚超 50% 时」，是梯度而非线性跳变。
+ * 使用率超过 100% 的模型已被硬约束淘汰，仅在放宽窗口的降级路径中可能出现
+ * （此时罚分继续累加，配合 clamp 保证分数非负）。
+ */
+export function windowUsagePenalty(requiredTokens: number, contextWindow: number): number {
+  if (!Number.isFinite(requiredTokens) || !Number.isFinite(contextWindow)) return 0
+  if (requiredTokens <= 0 || contextWindow <= 0) return 0
+  const usage = requiredTokens / contextWindow
+  if (usage <= 0.5) return 0
+  if (usage <= 0.9) return (usage - 0.5) * 0.15
+  return 0.06 + (usage - 0.9) * 0.4
+}
+
+/**
+ * 同分决胜比较器（导出便于单测）：score 相同时
+ *  1. 速度档低者优先（快者先）；
+ *  2. 速度档相同则成本档低者优；
+ *  3. 完全相同返回 0，由调用方保持候选顺序稳定。
+ */
+export function tieBreakBySpeedThenCost(a: ModelProfile, b: ModelProfile): number {
+  const speedA = clamp(a.speedTier, 0, 3)
+  const speedB = clamp(b.speedTier, 0, 3)
+  if (speedA !== speedB) return speedA - speedB
+  const costA = clamp(a.costTier, 0, 3)
+  const costB = clamp(b.costTier, 0, 3)
+  if (costA !== costB) return costA - costB
+  return 0
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * 硬约束淘汰
  * ───────────────────────────────────────────────────────────────────────────── */
@@ -546,11 +645,11 @@ function scoreModel(
   const costScore = tierToScore(model.costTier)
   const speedScore = tierToScore(model.speedTier)
 
-  // ── 软约束：窗口余量不足按比例降分 ──
-  let windowPenalty = 0
-  if (model.contextWindow < requiredTokens * 1.2) {
-    windowPenalty = 0.08
-    softPenalties.push('上下文窗口余量偏紧（不足需求的 1.2 倍）')
+  // ── 软约束：窗口使用率梯度罚分（越接近窗口上限罚得越重，见 windowUsagePenalty）──
+  const windowPenalty = windowUsagePenalty(requiredTokens, model.contextWindow)
+  if (windowPenalty > 0) {
+    const usagePct = Math.round((requiredTokens / model.contextWindow) * 100)
+    softPenalties.push(`上下文窗口余量偏紧（任务估算约占窗口 ${usagePct}%）`)
   }
 
   // ── 软约束：领域不匹配降分 ──
@@ -611,15 +710,34 @@ export class ModelSelectorImpl implements ModelSelector {
   /**
    * 主入口：需求中称 selectModel，契约接口名为 select。
    * 两者行为完全一致，select 在下方直接委托给本方法。
+   *
+   * 兜底保障：候选列表为空/未提供时回退内置默认库；任何内部异常都不向上抛出，
+   * 返回保守默认（第一个支持工具的候选，否则候选首位）并附可读理由。
    */
   selectModel(
     analysis: TaskAnalysis,
     available: ModelProfile[],
     preference: ModelPreference = 'quality',
   ): ModelChoice {
-    const candidates = available && available.length > 0
-      ? available
-      : DEFAULT_MODEL_PROFILES
+    const usingDefaultPool = !available || available.length === 0
+    const candidates = usingDefaultPool ? DEFAULT_MODEL_PROFILES : available
+    try {
+      return this.selectFromCandidates(analysis, candidates, preference, usingDefaultPool)
+    } catch (error) {
+      return this.conservativeChoice(available, preference, error)
+    }
+  }
+
+  /**
+   * 常规选择流程（假定 candidates 非空）。
+   * 全部候选被硬约束淘汰时进入降级/兜底路径，绝不返回空 choice。
+   */
+  private selectFromCandidates(
+    analysis: TaskAnalysis,
+    candidates: ModelProfile[],
+    preference: ModelPreference,
+    usingDefaultPool: boolean,
+  ): ModelChoice {
     const requiredTokens = estimateRequiredTokens(analysis)
 
     const scored: ScoredModel[] = []
@@ -635,9 +753,12 @@ export class ModelSelectorImpl implements ModelSelector {
       scored.push(scoreModel(analysis, model, preference, requiredTokens))
     }
 
-    // 按分数降序排序（同分时按顺序稳定排序）。
+    // 按分数降序排序；同分时按 tie-break（速度档低者优先，其次成本档低者优），
+    // 仍相同则保持候选顺序稳定。
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
+      const tie = tieBreakBySpeedThenCost(a.model, b.model)
+      if (tie !== 0) return tie
       return candidates.indexOf(a.model) - candidates.indexOf(b.model)
     })
 
@@ -663,6 +784,11 @@ export class ModelSelectorImpl implements ModelSelector {
       `在 ${candidates.length} 个候选中选出「${best.model.name}」` +
       `（偏好=${preference}，得分=${best.score}）`,
     )
+    if (usingDefaultPool) {
+      reasons.unshift(
+        '候选列表为空（或未提供），已回退到内置默认模型库中的保守默认档并按常规流程选择',
+      )
+    }
     reasons.push(
       `已淘汰 ${rejected.length} 个不满足硬约束的模型` +
       (rejected.length > 0 ? `：${rejected.slice(0, 3).map(r => `${r.model.name}(${r.reason})`).join('；')}` : ''),
@@ -673,6 +799,30 @@ export class ModelSelectorImpl implements ModelSelector {
       score: best.score,
       reasons,
       alternatives,
+    }
+  }
+
+  /**
+   * 异常路径兜底：打分/排序等内部逻辑意外报错时，返回保守默认
+   * （优先第一个支持工具调用的候选，否则候选列表首位），绝不向上抛出。
+   */
+  private conservativeChoice(
+    available: ModelProfile[] | undefined | null,
+    preference: ModelPreference,
+    error: unknown,
+  ): ModelChoice {
+    const pool = available && available.length > 0 ? available : DEFAULT_MODEL_PROFILES
+    const model = pool.find(m => m && m.supportsTools) ?? pool[0] ?? DEFAULT_MODEL_PROFILES[0]
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      model,
+      score: 0,
+      reasons: [
+        `警告：模型选择器内部异常（${message}），已跳过常规打分流程`,
+        '兜底策略：优先返回第一个支持工具调用的候选，否则返回候选列表首位（保守默认）',
+        `偏好=${preference} 未参与本次决策，请检查任务分析输入是否完整`,
+      ],
+      alternatives: [],
     }
   }
 
@@ -687,8 +837,9 @@ export class ModelSelectorImpl implements ModelSelector {
 
   /**
    * 降级选择：当所有模型都被窗口硬约束淘汰时，仅保留工具/视觉硬约束，
-   * 放开窗口约束重新评分。若仍然为空（例如所有模型都不支持工具），
-   * 则选择「违反约束最少」的一个，并在理由中明确标记。
+   * 放开窗口约束重新评分。若仍然为空（例如所有模型都不支持工具/视觉），
+   * 则返回保守默认（优先第一个支持工具调用的候选，否则候选列表首位），
+   * 并在理由中明确标记，绝不向上抛错。
    */
   private fallbackChoice(
     analysis: TaskAnalysis,
@@ -709,7 +860,13 @@ export class ModelSelectorImpl implements ModelSelector {
     }
 
     if (viable.length > 0) {
-      viable.sort((a, b) => b.score - a.score)
+      // 与主路径一致的排序规则：分数降序 + 同分 tie-break + 顺序稳定。
+      viable.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score
+        const tie = tieBreakBySpeedThenCost(a.model, b.model)
+        if (tie !== 0) return tie
+        return candidates.indexOf(a.model) - candidates.indexOf(b.model)
+      })
       const best = viable[0]
       return {
         model: best.model,
@@ -724,13 +881,18 @@ export class ModelSelectorImpl implements ModelSelector {
       }
     }
 
-    // 极端情况：连能力约束都无人满足，取第一个候选作为兜底并如实标记。
-    const fallback = candidates[0] ?? DEFAULT_MODEL_PROFILES[0]
+    // 极端情况：连工具/视觉能力约束都无人满足，按「第一个支持工具调用的候选 >
+    // 候选列表首位 > 内置库首位」的顺序取保守默认兜底，并如实标记。
+    const fallback =
+      candidates.find(m => m && m.supportsTools) ??
+      candidates[0] ??
+      DEFAULT_MODEL_PROFILES[0]
     return {
       model: fallback,
       score: 0,
       reasons: [
-        '严重警告：没有任何候选满足工具/视觉硬约束，返回兜底模型',
+        '严重警告：没有任何候选满足工具/视觉硬约束，返回保守默认兜底模型',
+        `兜底策略：优先取第一个支持工具调用的候选，否则取候选列表首位（当前选中「${fallback.name}」）`,
         `被淘汰原因：${rejected.slice(0, 3).map(r => `${r.model.name}(${r.reason})`).join('；') || '无'}`,
         '请调用方补充支持所需能力的模型后重试',
       ],

