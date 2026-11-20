@@ -72,11 +72,34 @@ var LEGACY_HOME = path.join(HOME, ".laoyou-agent"); // 旧目录，搬空即删
   } catch (e) { console.error("[migrate] failed:", e.message); }
 })();
 
+// ─── PYTHON_BIN 白名单（安全扫描复核：防环境变量被污染后启动任意程序）───
+// 桌面启动器注入的是绝对路径（Resources/python-runtime/.../python3 或
+// ...\Scripts\python.exe），手工配置常写 python / python3 / python3.11。
+// 只放行这两类；带参数、shell 元字符、指向非 python 可执行文件的值一律回退 python3。
+// spawn/execFile 用 argv 数组，这里收口是为了「程序选择」本身不被环境变量劫持。
+function safePythonBin(raw) {
+  var v = String(raw == null ? "" : raw).trim();
+  if (!v) return "python3";
+  // 已知解释器名：python / python3 / python3.11 / py / py.exe（Windows 启动器）
+  if (/^(?:python|python3(?:\.\d+)?|py(?:\.exe)?)$/i.test(v)) return v;
+  // 绝对路径：POSIX 用 path.isAbsolute，Windows 盘符（C:\...）单独认，
+  // 这样在 macOS 上写 Windows 风格配置做校验时也不会误判。
+  var isAbs = path.isAbsolute(v) || /^[a-zA-Z]:[\\/]/.test(v);
+  if (isAbs && !/["'`$&|;<>\n\r]/.test(v)) {
+    // 用正则提取末段而非 path.basename——后者在 POSIX 上不认 \ 分隔符，
+    // 会把 Windows 风格绝对路径整条当成 basename（跨平台配置校验场景）。
+    var base = String(v.split(/[\\/]/).pop() || "").toLowerCase();
+    // 文件名本身必须是 python 解释器；路径里允许空格（带空格的应用安装目录很常见）
+    if (/^python(?:w|3(?:\.\d+)?)?(?:\.exe|\.bat|\.cmd)?$/.test(base)) return v;
+  }
+  return "python3";
+}
+
 // ─── STT 常驻 worker：模型只加载一次，避免每次识别冷启动 python+import（提速关键）───
 var _stt = { proc: null, buf: "", queue: [], current: null };
 function _sttEnsure() {
   if (_stt.proc && _stt.proc.exitCode === null) return _stt.proc;
-  const pyBin = process.env.PYTHON_BIN || "python3";
+  const pyBin = safePythonBin(process.env.PYTHON_BIN);
   const sttScript = process.env.STT_SCRIPT || path.join(__dirname, "src", "shared", "stt.py");
   _stt.buf = ""; _stt.current = null;
   _stt.proc = cp.spawn(pyBin, [sttScript, "--serve"], {
@@ -3749,11 +3772,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
       try {
         const { execFile } = require("child_process");
         pyVer = await new Promise((resolve) => {
-          execFile(process.env.PYTHON_BIN || "python3", ["--version"], { timeout: 3000 }, (err, stdout, stderr) => resolve(err ? "" : String(stdout || stderr).trim()));
+          execFile(safePythonBin(process.env.PYTHON_BIN), ["--version"], { timeout: 3000 }, (err, stdout, stderr) => resolve(err ? "" : String(stdout || stderr).trim()));
         });
         pyOk = !!pyVer;
       } catch { pyOk = false }
-      check.push({ name: "Python 运行时", ok: pyOk, detail: pyVer || (process.env.PYTHON_BIN || "python3") + " 不可用" });
+      check.push({ name: "Python 运行时", ok: pyOk, detail: pyVer || safePythonBin(process.env.PYTHON_BIN) + " 不可用" });
       // 4. STT 脚本
       let sttOk = false;
       try { sttOk = fs.existsSync(process.env.STT_SCRIPT || ""); } catch { sttOk = false }
@@ -6697,7 +6720,7 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`], { timeout: 120e3, 
         fs.mkdirSync(tmpDir, { recursive: true });
         const wavPath = path.join(tmpDir, `rec_${Date.now()}.wav`);
         fs.writeFileSync(wavPath, audioData);
-        const pyBin = process.env.PYTHON_BIN || "python3";
+        const pyBin = safePythonBin(process.env.PYTHON_BIN);
         // stt.py 位于 asar 外（Resources/stt），Python 无法读取 asar 内文件
         const sttScript = process.env.STT_SCRIPT || path.join(__dirname, "src", "shared", "stt.py");
         try {
