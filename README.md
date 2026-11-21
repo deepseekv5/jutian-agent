@@ -36,10 +36,9 @@
 
 | | | |
 |---|---|---|
-| [六件事,做到位](#highlights) | [子代理 — AI 派出 AI](#swarm) | [免费模型 — AI 没有门槛](#free-models) |
-| [用户扩展层 — AI 编辑界面](#uxl) | [手机远程](#remote) | [📖 文档导航](#docs) |
-| [手机远程](#remote) | [三条原则](#principles) | [📖 文档导航](#docs) |
-| [快速开始](#quick-start) | [架构](#architecture) | [数据一览](#stats) |
+| [六件事,做到位](#highlights) | [四套内核 — 选择权可以交出去](#kernels) | [子代理 — AI 派出 AI](#swarm) |
+| [免费模型 — AI 没有门槛](#free-models) | [用户扩展层 — AI 编辑界面](#uxl) | [手机远程](#remote) |
+| [三条原则](#principles) | [快速开始](#quick-start) | [架构](#architecture) |
 | [路线图](#roadmap) | [常见问题](#faq) | [参与贡献](#contributing) |
 
 <br>
@@ -50,7 +49,7 @@
 
 **01 — 说人话,它动手**
 
-51 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
+58 个内置工具直连真实终端与文件系统。你说目标,它拆步骤、调工具、验证、给结果。不是建议,是执行。
 
 **02 — 代码模式**
 
@@ -71,6 +70,23 @@ LY HARNESS 插件中心:58 个工具逐个开关、MCP 服务即插即用、Skil
 **06 — 越用越懂你**
 
 长期记忆只存索引,细节按需取;知识库文档随时检索。它记得你的偏好、你的项目、你说话的方式。
+
+<br>
+
+<a id="kernels"></a>
+
+## ✦ 四套内核 — 选择权可以交出去
+
+| 内核 | 机制 | 适合 |
+|---|---|---|
+| **JT Core Pro+** | 五阶段工具循环,只读工具并行 | 日常任务 |
+| **JT Core Ultra** | gemini-cli 护栏:七态 FSM、三层循环检测、模型回落 | 复杂工程 |
+| **JT Core Auto** | 自主目标闭环:独立评估器判完成度,未完成自动续跑 | "帮我把这件事做完" |
+| **JT Core Super** | **全自动路由**:11 阶段流水线自动调度上面三套 | 不想选的时候 |
+
+Super 自己分析任务(信号采集→复杂度评分→执行计划→内核路由→模型选择→护栏→反馈学习),每次决策的理由完整记录,诊断面板可查"为什么这样路由"。对用户完全静默——该把活干完就安静干完。
+
+→ **完整文档**:[四套内核](docs/guide/kernels.md) · [超级内核架构](docs/dev/super-kernel.md)
 
 <br>
 
@@ -134,9 +150,9 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 | **jutian-local-<架构>.apk** | ~55MB | **本地版**：内置 Node 运行时与完整前端，装一个 APK 就能在手机上跑完整 Agent，不依赖电脑，数据存手机本地。按架构分包：arm64-v8a（主流）、armeabi-v7a（较早设备）、x86_64（模拟器） |
 | jutian-remote-*.apk | ~60KB | 远控版：轻量界面壳，连电脑或 Termux 上的服务 |
 
-本地版跑的是与桌面完全同一份后端与前端：对话、58 个工具、技能市场、记忆、语音全在。首次启动自动解压运行时，约 10-30 秒进入界面。
+本地版跑的是与桌面完全同一份后端与前端：对话、58 个工具、技能市场、记忆、语音全在。首次启动自动解压运行时，约 10-30 秒进入界面。**支持应用内更新**：关于页直接热更新内核包（下载→SHA-256 校验→原子替换→重启），无需重装 APK、无需 root。
 
-另有 Termux 独立部署包 `jutian-mobile-*.zip`：解压后 `bash install.sh`，Node 22+ 上使用内置 SQLite（真 SQL，知识库可用）。
+另有 Termux 独立部署包 `jutian-mobile-*.zip`：解压后 `bash install.sh`，Node 22+ 上使用内置 SQLite（真 SQL，知识库可用）——同一份包也是安卓应用内更新的更新源。
 
 <br>
 
@@ -194,16 +210,16 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 
 ### 用户指南
 
-| 文档 | 一句话 |
-|---|---|
 | 文档 | English | 一句话 |
 |---|---|---|
+| [📖 文档中心](guide.html) | Docs | 39 页在线文档站:全部指南可读、可搜索、可跳转 |
 | [📥 安装与启动](docs/guide/install.md) | [Install](docs/en/guide/install.md) | 安装包 / 源码 / 手动三种方式,首次配置,常见安装问题 |
 | [🧠 模型接入](docs/guide/models.md) | [Models](docs/en/guide/models.md) | OpenAI 兼容配置、拉取模型、思考档位、模式开关、语音 |
+| [⚙️ 四套内核](docs/guide/kernels.md) | — | Pro+ / Ultra / Auto / Super 对照与切换方式 |
 | [🧩 子代理集群](docs/guide/swarm.md) | [Swarm](docs/en/guide/swarm.md) | 集群指挥室 vs 并行池、团队模板、@接力、通知聚合 |
 | [🎁 免费模型](docs/guide/free-models.md) | [Free models](docs/en/guide/free-models.md) | Kilo 免 key 免费档一键切换、账户密钥配置、付费档解锁 |
 | [📱 手机远程](docs/guide/remote.md) | [Remote](docs/en/guide/remote.md) | 扫码配对、能力清单、局域网信任模型、常见问题 |
-| [🔌 LY HARNESS](docs/guide/harness.md) | [Harness](docs/en/guide/harness.md) | 52 工具逐个开关、MCP 管理、Skills 挂载 |
+| [🔌 LY HARNESS](docs/guide/harness.md) | [Harness](docs/en/guide/harness.md) | 58 工具逐个开关、MCP 管理、Skills 挂载 |
 | [📚 知识库与记忆](docs/guide/knowledge.md) | [Knowledge](docs/en/guide/knowledge.md) | RAG 检索、embedding 配置、记忆与知识库怎么选 |
 | [🔒 数据与隐私](docs/guide/privacy.md) | [Privacy](docs/en/guide/privacy.md) | 数据目录总表、什么会上网、密钥掩码、备份、彻底删除 |
 
@@ -212,8 +228,11 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 | 文档 | 一句话 |
 |---|---|
 | [🏗 架构](docs/dev/architecture.md) | 三层结构、一轮对话的数据流、端口约定、目录导览 |
+| [🧬 内核架构](docs/dev/kernel-architecture.md) | Pro+ 五阶段拆分、LoopContext 与行为等价清单 |
+| [🌌 超级内核](docs/dev/super-kernel.md) | Super 11 阶段流水线与五模块契约设计 |
 | [📦 构建与发布](docs/dev/build.md) | 命令总表、mac/win 打包、补丁更新、CI 策略、发布 checklist |
 | [🛠 新增一个工具](docs/dev/add-tool.md) | 从实现到 schema 到三端可用的完整步骤 |
+| [🔐 安全审计](docs/dev/security-scan-2026-11-20.md) | 全项目扫描 591 项的逐条判定与证据 |
 
 ### 工程
 
@@ -273,7 +292,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 │                  Electron 主进程                   │
 │  ┌─────────────┐  ┌────────────────────────────┐ │
 │  │  serve.cjs  │  │    窗口 / 托盘 / 状态记忆     │ │
-│  │  52 工具     │  │    窗口 / 托盘 / 状态记忆     │ │
+│  │  58 工具     │  │    窗口 / 托盘 / 状态记忆     │ │
 │  │  llm-proxy  │  └────────────────────────────┘ │
 │  │  MCP 客户端  │                                  │
 │  │  定时任务    │    ┌─────────────────────┐     │
@@ -304,10 +323,12 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 │   │   ├── engine/            流式引擎/子代理/代理循环
 │   │   └── hooks/ store/ types/ utils/
 │   ├── server/serve.ts        后端唯一源码
-│   └── shared/                工具 schema / MCP / 约束知识库(guidance)/ 员工模型 / CLI
-├── docs/                      产品官网(Pages)+ 全部文档
-│   ├── guide/                 用户指南(8 篇)
-│   ├── dev/                   开发者文档(3 篇)
+│   └── shared/                工具 schema / 四内核(agentLoop·jtCoreUltra·autoCore·superCore)
+│                              / super/ 五模块 / MCP / 约束知识库(guidance) / 员工模型 / CLI
+├── docs/                      产品官网(Pages)+ 文档中心(guide.html 39 页)+ 全部文档
+│   ├── guide/                 用户指南(12 篇)
+│   ├── dev/                   开发者文档(7 篇)
+│   ├── adr/                   架构决策记录(5 篇)
 │   └── notes/                 工程笔记
 ├── public/                    手机端单页
 └── scripts/                   构建与补丁
@@ -315,7 +336,7 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 
 </details>
 
-→ **深入阅读**:[架构](docs/dev/architecture.md) · [构建与发布](docs/dev/build.md)
+→ **深入阅读**:[架构](docs/dev/architecture.md) · [内核架构](docs/dev/kernel-architecture.md) · [超级内核](docs/dev/super-kernel.md) · [构建与发布](docs/dev/build.md)
 
 <br>
 
@@ -323,9 +344,9 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 
 ## ✦ 数据一览
 
-| **51** | **5+** | **6** | **0** |
-|:---:|:---:|:---:|:---:|
-| 内置工具 | 数字员工 | 核心界面 | 字节上云 |
+| **58** | **5+** | **6** | **0** | **4** |
+|:---:|:---:|:---:|:---:|:---:|
+| 内置工具 | 数字员工 | 核心界面 | 字节上云 | 内核引擎 |
 
 <br>
 
@@ -346,6 +367,9 @@ npm run electron:build:win  # 打包 Windows (setup.exe)
 - [x] 代码编辑器 VSCode 化(大纲/面包屑/查找替换/移动行/状态栏)
 - [x] MCP SSE / streamable-http + 服务级权限 + 推荐服务市场
 - [x] 定时任务 × 工具执行（agent 模式）与标准 cron
+- [x] 内核五阶段拆分 + 自主闭环内核 Auto + append_file 增量写入（v17）
+- [x] Super 超级内核:11 阶段全自动路由（v18）
+- [x] Linux / 安卓应用内更新链路（v18.1.1）
 - [ ] 定时任务 × 集群编排
 - [x] 会话导出 HTML / PDF
 

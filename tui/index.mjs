@@ -6,7 +6,7 @@
  *   jt（后端未运行时）     自动拉起：仓库 serve.cjs → 已安装的巨天 App，就绪后进入
  *   jt --resume=<id>      恢复指定会话
  *
- * 冷启动不依赖桌面 App：serve.cjs 直接后台起后端（安全盾/51 工具全量可用）。
+ * 冷启动不依赖桌面 App：serve.cjs 直接后台起后端（安全盾/58 工具全量可用）。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,9 +19,20 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`巨天 TUI（终端版）
   jt                  进入终端对话（后端未运行时自动拉起）
   jt --resume=<id>    恢复指定会话
+  jt --engine=<name>  指定内核（ultra / auto / super），默认走服务端设置
   JUTIAN_PORT=xxxx    指定后端端口（默认 3211）`)
   process.exit(0)
 }
+
+// v18.1.2 修复：engineArg 曾被引用但从未定义——jt 启动到 startTui 即 ReferenceError。
+// 现在 --engine=<name> 显式透传给 /api/agent/run（与桌面四内核同一分发）；未传则 undefined。
+const ENGINE_WHITELIST = ['ultra', 'auto', 'super']
+const engineArg = (() => {
+  const arg = process.argv.find(a => a.startsWith('--engine='))
+  if (!arg) return undefined
+  const v = arg.split('=')[1]
+  return ENGINE_WHITELIST.includes(v) ? v : undefined
+})()
 
 async function main() {
   // 1) 探测后端

@@ -12,11 +12,11 @@
 
 ## 内置工具开关
 
-51 个内置工具,每个都有独立开关与一行说明:
+58 个内置工具,每个都有独立开关与一行说明:
 
 | 分类 | 代表工具 |
 |---|---|
-| 文件 | `read_file` `write_file` `edit_file` `search_files` `list_dir` `move_file` |
+| 文件 | `read_file` `write_file` `append_file`(增量写入) `edit_file` `search_files` `list_dir` `move_file` |
 | 终端 | `shell` `process_list` `port_check` `system_info` |
 | 网络 | `web_fetch` `web_search` `http_request` |
 | 代码 | `git_operation` `npm_run` `code_analysis` |

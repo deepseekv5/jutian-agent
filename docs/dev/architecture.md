@@ -12,7 +12,7 @@
 │  ┌──────────────┐   ┌──────────────────────────────┐ │
 │  │   serve.cjs  │   │  窗口 / 托盘 / 全局快捷键      │ │
 │  │  (HTTP :3211)│   │  窗口状态记忆                 │ │
-│  │  38 内置工具  │   │                              │ │
+│  │  58 内置工具  │   │                              │ │
 │  │  llm-proxy   │   └──────────────────────────────┘ │
 │  │  MCP 客户端   │   ┌──────────────────────────────┐ │
 │  │  定时任务     │───│  手机远程门卫 (配对码)          │ │
@@ -31,7 +31,7 @@
 
 ### 1. serve.ts — 单进程后端(唯一源码 `src/server/serve.ts`)
 
-- **工具 API**:51 个内置工具的实现,全部返回 `{ success, output }` 形状
+- **工具 API**:58 个内置工具的实现,全部返回 `{ success, output }` 形状
 - **llm-proxy**:`/api/llm-proxy` 转发 OpenAI 兼容流式请求;上游错误原样透传状态码
 - **MCP 客户端**:stdio JSON-RPC 2.0,管理外部工具生态
 - **门卫链**:OPTIONS 预检 → 不可信 Origin 403 → DNS-rebinding 421 → 非本机走配对码
@@ -60,6 +60,33 @@ src/renderer/
 ├── engine/     流式引擎 / 子代理并行池 / 代理循环
 └── hooks/ store/ types/ utils/
 ```
+
+## 推理内核(`src/shared`)
+
+四套内核共用同一份工具清单与安全门禁,源码在 `src/shared/`,构建产物(`.cjs`)服务端与渲染层共用:
+
+| 内核 | 文件 | 说明 |
+|---|---|---|
+| JT Core Pro+ | `agentLoop.ts` | 五阶段工具循环(准备 → 请求 → 流式 → 门禁 → 执行),细节见 [内核架构](kernel-architecture.md) |
+| JT Core Ultra | `jtCoreUltra.ts` + `ultra/` | gemini-cli 护栏全量移植(FSM / 循环检测 / 模型回落),子系统拆在 `ultra/` 下 |
+| JT Core Auto | `autoCore.ts` | 自主目标闭环:把 `agentLoop` 当一轮执行,独立评估器逐轮判完成度 + 自动续跑;三态保护 / 停滞检测 / 封顶 5 轮 |
+| JT Core Super | `superCore.ts` + `super/` | 全自动路由编排层:11 阶段流水线把前三套当执行器,见 [超级内核架构](super-kernel.md) |
+
+`src/shared/super/` 五模块互不 import,只依赖 `super/types.ts` 类型契约;编排集中在 `super/` 之外的 `superCore.ts`:
+
+```
+src/shared/super/
+├── signals/     信号采集(extractor)
+├── analysis/    复杂度评分(complexity)+ 任务分析(analyzer)
+├── planning/    执行计划(planner)+ 依赖图(dependencyGraph)+ 策略选择(strategies)
+├── routing/     内核路由(router)+ 模型选择(modelSelector)+ 自适应学习(adaptation)
+├── context/     上下文工程(assembler)
+├── guardrails/  护栏链(chain)
+├── runtime/     事件总线(events)+ 调度器(scheduler)
+└── types.ts     跨模块类型契约(唯一依赖面)
+```
+
+引擎档位由 `agentEngine` 设置分发:渲染层三档(vercel / server / client)与四内核并存;服务端内核循环经 `/api/agent/run` 提供,桌面 server 档、TUI 与手机远程共用同一条链路。
 
 ## 关键数据流
 

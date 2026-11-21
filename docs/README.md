@@ -1,68 +1,63 @@
-# 巨天agent · 产品官网
+# 巨天agent · 产品官网与文档中心
 
-> 桌面 AI 工作台的官方网站。极简、克制、本地优先。
-> 纯静态站点：无构建步骤、无运行时依赖、无框架。
-
-## 快速开始
-
-```bash
-# 方式一：Python（macOS 自带）
-cd jutian-site
-python3 -m http.server 5173
-
-# 方式二：Node
-npx serve jutian-site          # 或 npx http-server jutian-site -p 5173
-```
-
-浏览器打开 <http://localhost:5173>。
-
-> 直接双击 `index.html` 也能看，但建议用本地服务器：`defer` 脚本与懒加载在 `file://` 下部分浏览器会受限。
+本目录即产品官网，发布在 GitHub Pages：<https://deepseekv5.github.io/jutian-agent/>。
+官网（产品展示）与文档中心（guide.html）一体：纯静态站点，无构建步骤、无运行时依赖、无框架。
 
 ## 目录结构
 
 ```
-jutian-site/
-├── index.html            首页：Hero（产品窗口）/ 理念 / 亮点预览 / 数据 / 场景速览 / 下载
-├── highlights.html       核心亮点：六大能力 bento
-├── features.html         特性与参数：规格表 + 12 项特性 + 架构图
-├── scenarios.html        使用场景：sticky 标题 + 滚动场景卡（5 组）
-├── about.html            关于：品牌故事 + 三条原则 + 数据
-├── contact.html          联系：表单（前端校验）+ 渠道
-├── README.md
+docs/
+├── index.html              首页：Hero / 亮点 / 场景 / 下载（Apple 产品页深色风）
+├── highlights.html         核心亮点
+├── features.html           特性与参数
+├── scenarios.html          使用场景
+├── about.html              关于
+├── legal.html              协议与隐私政策（由 src/shared/legal.ts 单一来源生成）
+├── activity-1024.html      1024 程序员节活动页（唯一仍用旧版 CSS 体系的页面）
+├── guide.html              文档中心（VitePress 风格三栏布局，39 页双层）
+├── notice.md               发行说明单一来源（各版本要点段落，最新在前）
+├── THIRD_PARTY_NOTICES.md  第三方组件与许可证
+├── adr/                    架构决策记录（ADR-0001 至 0005 + 索引 README）
+├── dev/                    开发文档（工程架构 / 内核五阶段 / 超级内核 / 新增工具 / 构建发布 / 安全审计报告）
+├── en/                     英文镜像（guide/ dev/ + CONTRIBUTING/SECURITY）
+├── guide/                  用户指南（安装 / 模型 / 免费模型 / 优化 / 终端版 / 手机远程 / Harness / 知识库 / 子代理集群 / 隐私 / 界面多语言）
+├── notes/                  开发笔记（DEVELOPMENT / LEARNING / AGENT-CHAT / CODE-SPEC）
 └── assets/
-    ├── css/
-    │   ├── tokens.css       设计令牌：间距/字体/色板/阴影/动效曲线（唯一设计决策来源）
-    │   ├── base.css         重置 + 排版基线 + 工具类
-    │   ├── layout.css       容器/12 列栅格/导航/页脚
-    │   ├── components.css   按钮/卡片/bento/规格表/表单/徽标
-    │   ├── motion.css       滚动渐入/视差/3D 倾斜/页面转场/reduced-motion 降级
-    │   └── pages.css        各页版式：Hero/App 窗口 mockup/场景卡/关于/联系
-    ├── js/
-    │   ├── scroll.js        IntersectionObserver 渐入 + rAF 视差 + 数字滚动
-    │   ├── interactions.js  磁性按钮 / 3D 倾斜 / Hero 跟随 / 表单校验 / 懒加载淡入
-    │   └── app.js           入口：导航显隐 / 主题切换 / 页面转场 / 抽屉 / 模块装配
-    └── img/
-        ├── favicon.svg
-        ├── gen-scenes.cjs   场景插画生成脚本（改动后重跑即可）
-        └── scene-*.svg      7 张线稿插画（代码/终端/集群/写作/审查/数据/对话）
+    ├── css/apple.css       Apple 产品页深色风共享样式（六个产品页引用，自包含）
+    ├── css/tokens|base|layout|components|motion|pages.css   旧版分层样式（现仅 activity-1024.html 引用）
+    ├── js/                 旧版动效脚本（scroll / interactions / app，仅 activity-1024.html 引用）
+    └── img/                favicon.svg、scene-*.svg 线稿插画（gen-scenes.cjs 生成）、app/ 应用截图（home/code/flow/chat）
 ```
 
-## 设计与工程约定
+六个产品页（index/highlights/features/scenarios/about/legal）共享 `assets/css/apple.css`，样式内联各自页面；
+guide.html 同样自带内联样式，不依赖全站 CSS。产品页截图取自 `assets/img/app/`。
 
-**视觉（v2 编辑式）**：设计语言是「纸 / 墨 / 发丝线」三个色阶 + mono 标注体系。
-首屏标题 48–108px（font-weight 900、字距 -0.028em）逐行揭示；正文 17px / 行高 1.85。
-去掉了径向光晕、图标卡片墙、胶囊标签堆——用编辑式行（hairline + mono 索引）、真实终端卡
-（进入视口后逐字敲命令、逐行出结果）和纯黑宣言段制造节奏。品牌绿只做标点。
-深色主题通过 `[data-theme="dark"]` 翻色板实现，布局零改动。
+## 文档中心（guide.html）
 
-**动效铁律**：只动 `transform` 与 `opacity`；绝不在动画里触发重排。
-入场用 `cubic-bezier(0.16,1,0.3,1)`（expo-out），微交互用 `cubic-bezier(0.4,0,0.6,1)` + 320ms；
-滚动监听统一走单个 rAF 循环，绝不在回调里读写布局。
-`prefers-reduced-motion: reduce` 与移动端（≤760px）会自动关闭视差、倾斜与转场。
+**39 页双层结构**，按「入门 / 内核 / 开发 / 参考 / 记录」五组组织：
 
-**性能**：CSS 分 6 层按职责加载；图片全部 `loading="lazy" decoding="async"` 并带尺寸属性（无 CLS）；
-长区块用 `content-visibility: auto` 跳过视口外绘制；DOM 无冗余包裹层；JS 三个模块合计约 12KB（未压缩）。
+- **10 页精选导览**：内容内联在 guide.html 里，随版本手工维护——快速开始、四套内核、超级内核架构、
+  应用内更新、工具总览、安全架构、新增工具、终端版 jtcode、本地开放 API、隐私与合规
+- **29 页仓库文档**：直接 fetch 仓库真实 md——`docs/guide/*`、`docs/dev/*`、`docs/adr/*`、
+  `docs/notes/*`、`CHANGELOG.md`、`docs/THIRD_PARTY_NOTICES.md`
 
-**响应式**：断点 900 / 760 / 620 / 560。移动端导航收起为抽屉，bento 从 6 列 → 2 列 → 1 列，
-sticky 场景卡退化为顺序阅读，视差与 3D 效果关闭。
+**fetch 单一来源机制**：这 29 页加载的就是仓库里的 md 文件（相对路径优先，失败回落
+raw.githubusercontent.com）。仓库 md 更新后，官网文档自动同步，无需单独部署页面。
 
+其它能力：Cmd/Ctrl+K 全文搜索（标题 + 正文，已加载内容缓存）；`#/slug` hash 内部路由
+（可刷新、可直达，上一页/下一页串联，右侧标题大纲）；仓库文档页外链直达 GitHub blob。
+
+## 本地预览
+
+```bash
+cd docs
+python3 -m http.server 5173
+```
+
+浏览器打开 <http://localhost:5173>。文档中心的 fetch 需要 HTTP 环境（`file://` 下浏览器
+fetch 受限，仓库 md 页会加载不出），建议始终用本地服务器预览。
+
+## 部署
+
+push main 即自动发布：GitHub Pages 从 main 分支的 `/docs` 目录构建（Deploy from branch），
+无任何构建步骤，仓库更新后约一分钟生效。
