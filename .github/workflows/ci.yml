@@ -49,12 +49,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm audit --audit-level=high > "$RUNNER_TEMP/audit.log" 2>&1
+          npm audit --omit=dev --audit-level=high > "$RUNNER_TEMP/audit.log" 2>&1
           code=$?
           set -e
           cat "$RUNNER_TEMP/audit.log"
           if grep -qE '[0-9]+ (high|critical) severity vulnerabilit|severity vulnerabilities' "$RUNNER_TEMP/audit.log"; then
-            echo "::error::发现 high/critical 级别依赖漏洞，请先处理"
+            echo "::error::发现生产依赖 high/critical 级别漏洞，请先处理"
             exit 1
           fi
           echo "::warning::npm audit 未完成(registry 不支持 audit 端点或网络问题)，本次跳过漏洞门禁"

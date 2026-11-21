@@ -86,6 +86,77 @@ function AgentPerfSection() {
   )
 }
 
+/** Super 路由记录（v18.1.2）：监听 serverStream 广播的 super-route 事件，
+ *  展示最近 N 次全自动路由的决策与理由——可解释性的前端闭环。 */
+interface RouteRecord {
+  kernel: string
+  strategy: string
+  confidence: number
+  reasons: string[]
+  at: number
+}
+const ROUTE_MAX = 20
+const routeLog: RouteRecord[] = []   // 模块级：跨面板开合保留（会话级）；只 unshift/截断，不重赋值
+if (typeof window !== 'undefined') {
+  window.addEventListener('super-route', (e) => {
+    const d = (e as CustomEvent).detail
+    if (!d || !d.kernel) return
+    routeLog.unshift({ kernel: String(d.kernel), strategy: String(d.strategy || ''), confidence: Number(d.confidence) || 0, reasons: Array.isArray(d.reasons) ? d.reasons.slice(0, 6) : [], at: Date.now() })
+    if (routeLog.length > ROUTE_MAX) routeLog.length = ROUTE_MAX
+  })
+}
+function SuperRouteSection() {
+  const { c } = useTheme()
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const h = () => bump((n) => n + 1)
+    window.addEventListener('super-route', h)
+    return () => window.removeEventListener('super-route', h)
+  }, [])
+  if (!routeLog.length) {
+    return (
+      <details className="rounded-xl px-3.5 py-2.5" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+        <summary className="flex items-center gap-2 cursor-pointer list-none">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#30d158' }} />
+          <span className="text-[12.5px] font-medium" style={{ color: c.textHead }}>内核路由</span>
+          <span className="text-[11.5px] ml-1" style={{ color: c.textTertiary }}>暂无记录（用 Super 内核跑一次任务后出现）</span>
+        </summary>
+      </details>
+    )
+  }
+  return (
+    <details className="rounded-xl px-3.5 py-2.5" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }} open>
+      <summary className="flex items-center gap-2 cursor-pointer list-none">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#30d158' }} />
+        <span className="text-[12.5px] font-medium" style={{ color: c.textHead }}>内核路由</span>
+        <span className="text-[11.5px] ml-1" style={{ color: c.textTertiary }}>最近 {routeLog.length} 次自动路由决策</span>
+      </summary>
+      <div className="mt-2.5 space-y-2">
+        {routeLog.map((r, i) => (
+          <div key={r.at + '-' + i} className="rounded-lg px-3 py-2" style={{ background: c.surfaceCard, border: `1px solid ${c.borderLight}` }}>
+            <div className="flex items-center gap-2 text-[12px]" style={{ color: c.textHead }}>
+              <b>{r.kernel}</b>
+              <span style={{ color: c.textTertiary }}>·</span>
+              <span>{r.strategy}</span>
+              <span className="ml-auto font-mono" style={{ color: r.confidence >= 0.5 ? '#30d158' : c.textTertiary }}>
+                置信 {(r.confidence * 100).toFixed(0)}%
+              </span>
+              <span className="font-mono text-[10.5px]" style={{ color: c.textTertiary }}>{new Date(r.at).toLocaleTimeString()}</span>
+            </div>
+            {r.reasons.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {r.reasons.map((x, j) => (
+                  <li key={j} className="text-[11.5px] leading-relaxed" style={{ color: c.textSecondary }}>· {x}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
   const [results, setResults] = useState<CheckResult[]>([])
@@ -203,6 +274,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-2">
+        <SuperRouteSection />
         <AgentPerfSection />
         {results.map((r) => (
           <details key={r.id} className="rounded-xl px-3.5 py-2.5" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>

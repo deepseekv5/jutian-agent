@@ -90,7 +90,7 @@ const DEFAULT_SETTINGS: Settings = {
   harnessUrl: 'http://127.0.0.1:3080',
   ttsSpeed: '1.0',
   autoSpeak: false,
-  agentEngine: 'vercel',
+  agentEngine: 'super',  // v18.1.2：新用户默认 Super 全自动路由（老用户已保存的设置不受影响）
   compactLayout: true,
 }
 
@@ -156,7 +156,7 @@ export async function getSettings(): Promise<Settings> {
       autoCompactPct: result.autoCompactPct ? parseInt(result.autoCompactPct, 10) || 70 : (localSettings.autoCompactPct ?? 70),
       ttsSpeed: result.ttsSpeed || localSettings.ttsSpeed || '1.0',
       autoSpeak: result.autoSpeak !== undefined ? result.autoSpeak === 'true' : !!localSettings.autoSpeak,
-      agentEngine: (result.agentEngine as Settings['agentEngine']) || localSettings.agentEngine || 'vercel',
+      agentEngine: (result.agentEngine as Settings['agentEngine']) || localSettings.agentEngine || 'super',
       compactLayout: result.compactLayout !== undefined ? result.compactLayout === 'true' : localSettings.compactLayout !== false,
     }
     // 自愈：把服务器端最新值写回 localStorage，避免陈旧缓存永久覆盖
@@ -215,7 +215,7 @@ export async function saveSettings(s: Settings): Promise<void> {
   await put('autoCompactPct', String(s.autoCompactPct ?? 70))
   await put('ttsSpeed', s.ttsSpeed || '1.0')
   await put('autoSpeak', String(!!s.autoSpeak))
-  await put('agentEngine', String(s.agentEngine || 'vercel'))
+  await put('agentEngine', String(s.agentEngine || 'super'))
   await put('compactLayout', String(s.compactLayout !== false))
   if (failed > 0) reportWriteFailure('设置', '/api/settings × ' + failed)
 }

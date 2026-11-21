@@ -19,7 +19,7 @@ import type { StreamCallbacks } from './stream'
 import { isSessionApproved } from '../app/permissionGate'
 
 interface ServerEvent {
-  type: 'chunk' | 'thinking' | 'tool_start' | 'tool_end' | 'tool_draft' | 'net' | 'perf' | 'done' | 'error' | 'aborted' | 'needs_client'
+  type: 'chunk' | 'thinking' | 'tool_start' | 'tool_end' | 'tool_draft' | 'net' | 'perf' | 'done' | 'error' | 'aborted' | 'needs_client' | 'super_trace' | 'super_metric'
   text?: string
   name?: string
   tool?: ToolCall
@@ -114,6 +114,13 @@ export async function streamChatViaServer(
           break
         case 'net': callbacks.onNetStatus?.(ev.phase || 'connecting', ev.info); break
         case 'perf': callbacks.onPerf?.(ev.report as any); break
+        case 'super_trace':
+          // v18.1.2：Super 全自动路由决策——广播到全局（诊断面板监听展示"为什么这样路由"）
+          try { window.dispatchEvent(new CustomEvent('super-route', { detail: (ev as any).decision })) } catch { /* 非浏览器环境 */ }
+          break
+        case 'super_metric':
+          try { window.dispatchEvent(new CustomEvent('super-metric', { detail: { name: (ev as any).name, value: (ev as any).value } })) } catch { /* 非浏览器环境 */ }
+          break
         case 'done':
           await callbacks.onDone(ev.content || '', ev.toolCalls || [], ev.thinking || undefined)
           return

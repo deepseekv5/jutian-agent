@@ -3844,11 +3844,11 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
      */
     // JT Core 引擎状态/切换（v15.1.0）：GET 查询，POST 落库（前端各入口共用）
     if (url.pathname === "/api/agent/engine" && req.method === "GET") {
-      let cur = "vercel";
+      let cur = "super";  // v18.1.2：无设置时默认 Super（全自动路由）
       try { const v = db.getSetting("agentEngine"); if (v) cur = String(v); } catch {}
-      // v16.9.1：Grok 移除后，db 里的 'grok' 是孤儿值——归一到 vercel 并落库
+      // v16.9.1：Grok 移除后，db 里的 'grok' 是孤儿值——v18.1.2 起归一到推荐档 super 并落库
       if (!ENGINE_WHITELIST.includes(cur)) {
-        cur = "vercel";
+        cur = "super";  // 孤儿值归一到推荐档
         try { db.setSetting("agentEngine", cur); invalidateSettingsCache(); } catch {}
       }
       return json(res, { engine: cur, ultraAvailable: !!ULTRA_LOOP, proAvailable: !!AGENT_LOOP, autoAvailable: !!AUTO_LOOP, superAvailable: !!SUPER_LOOP,
@@ -3856,7 +3856,7 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     }
     if (url.pathname === "/api/agent/engine" && req.method === "POST") {
       const d = await body(req);
-      const v = ENGINE_WHITELIST.includes(String(d.engine)) ? String(d.engine) : "vercel";
+      const v = ENGINE_WHITELIST.includes(String(d.engine)) ? String(d.engine) : "super";
       try { db.setSetting("agentEngine", v); invalidateSettingsCache(); } catch {}
       return json(res, { ok: true, engine: v });
     }
