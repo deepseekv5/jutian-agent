@@ -215,7 +215,9 @@ export async function saveSettings(s: Settings): Promise<void> {
   await put('autoCompactPct', String(s.autoCompactPct ?? 70))
   await put('ttsSpeed', s.ttsSpeed || '1.0')
   await put('autoSpeak', String(!!s.autoSpeak))
-  await put('agentEngine', String(s.agentEngine || 'super'))
+  // v18.1.3：agentEngine 只在显式携带时写入——组件在 settings 加载完成前以
+  // 默认值回写（竞态）会把用户已选内核（如 auto）覆盖成默认，实测踩过
+  if (s.agentEngine) await put('agentEngine', String(s.agentEngine))
   await put('compactLayout', String(s.compactLayout !== false))
   if (failed > 0) reportWriteFailure('设置', '/api/settings × ' + failed)
 }
