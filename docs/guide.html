@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档中心 · 巨天agent</title>
+<meta name="description" content="巨天agent 文档中心：快速开始、四内核对照、应用内更新、工具与安全、终端版与本地 API。">
+<link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
+<style>
+/* ── 文档站样式：VitePress 布局 × 官网深色 Apple 底 ── */
+:root{
+  --bg:#101012; --bg-soft:#17171a; --bg-elev:#1d1d21;
+  --text:#e8e8ea; --text-2:#a5a5ad; --text-3:#6e6e76;
+  --border:rgba(255,255,255,.09); --border-soft:rgba(255,255,255,.06);
+  --accent:#30d158; --accent-soft:rgba(48,209,88,.12);
+  --code-bg:#0b0b0d; --code-border:rgba(255,255,255,.08);
+  --sidebar-w:264px; --outline-w:212px; --nav-h:52px;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--nav-h) + 20px)}
+body{background:var(--bg);color:var(--text);font:15px/1.75 -apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:rgba(48,209,88,.28)}
+
+/* ── 顶部导航 ── */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);display:flex;align-items:center;
+  backdrop-filter:saturate(180%) blur(18px);-webkit-backdrop-filter:saturate(180%) blur(18px);
+  background:rgba(16,16,18,.78);border-bottom:1px solid var(--border)}
+.nav__inner{width:100%;max-width:1440px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:22px}
+.nav__brand{display:flex;align-items:center;gap:9px;color:#fff;font-size:14.5px;font-weight:650;letter-spacing:.01em}
+.nav__brand:hover{text-decoration:none}
+.nav__brand svg{flex:none}
+.nav__sep{width:1px;height:18px;background:var(--border);margin:0 2px}
+.nav__group{display:flex;gap:2px}
+.nav__group a{color:var(--text-2);font-size:12.5px;padding:5px 10px;border-radius:7px;transition:.15s}
+.nav__group a:hover{color:var(--text);background:rgba(255,255,255,.06);text-decoration:none}
+.nav__group a.on{color:var(--accent);background:var(--accent-soft)}
+.nav__right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.nav__search{display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:8px;cursor:pointer;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text-3);font-size:12px;transition:.15s}
+.nav__search:hover{border-color:rgba(255,255,255,.18);color:var(--text-2)}
+.nav__search kbd{font:10.5px var(--mono);background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;border:1px solid var(--border)}
+.nav__gh{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:var(--text-2);transition:.15s}
+.nav__gh:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav__home{color:var(--text-2);font-size:12.5px;padding:5px 10px;border-radius:7px}
+.nav__home:hover{color:var(--text);background:rgba(255,255,255,.06);text-decoration:none}
+.menu-btn{display:none}
+
+/* ── 三栏骨架 ── */
+.layout{display:flex;max-width:1440px;margin:0 auto;padding-top:var(--nav-h)}
+.sidebar{position:fixed;top:var(--nav-h);bottom:0;left:0;width:var(--sidebar-w);overflow-y:auto;
+  padding:26px 18px 40px 22px;border-right:1px solid var(--border-soft);scrollbar-width:thin}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
+.side-group{margin-bottom:26px}
+.side-group__title{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--text-3);text-transform:uppercase;margin:0 0 9px 12px}
+.side-link{display:block;position:relative;color:var(--text-2);font-size:13px;padding:6px 12px;border-radius:8px;margin-bottom:2px;transition:.15s;line-height:1.45}
+.side-link:hover{color:var(--text);background:rgba(255,255,255,.05);text-decoration:none}
+.side-link.on{color:var(--accent);background:var(--accent-soft);font-weight:550}
+.side-link.on::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--accent)}
+.side-link .badge{font-size:10px;color:var(--accent);border:1px solid rgba(48,209,88,.4);border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:1px}
+
+/* ── 正文 ── */
+.main{flex:1;min-width:0;padding:40px 44px 90px calc(var(--sidebar-w) + 34px);display:flex;justify-content:center}
+.doc{width:100%;max-width:720px;min-width:0}
+.outline{position:fixed;top:var(--nav-h);right:0;bottom:0;width:var(--outline-w);overflow-y:auto;padding:44px 20px 40px 12px;
+  border-left:1px solid var(--border-soft);font-size:12px}
+.outline__title{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--text-3);text-transform:uppercase;margin-bottom:10px}
+.outline a{display:block;color:var(--text-3);padding:4px 0 4px 12px;border-left:1px solid var(--border);line-height:1.5;transition:.15s}
+.outline a:hover{color:var(--text-2);text-decoration:none}
+.outline a.on{color:var(--accent);border-left-color:var(--accent)}
+.outline a.h3{padding-left:26px}
+@media (max-width:1280px){.outline{display:none}.main{padding-right:34px}}
+
+/* ── markdown 正文排版 ── */
+.doc h1{font-size:30px;font-weight:750;letter-spacing:-.01em;line-height:1.25;margin-bottom:6px;color:#fff}
+.doc .doc-lead{color:var(--text-2);font-size:15.5px;margin:0 0 30px}
+.doc h2{font-size:21px;font-weight:700;color:#fff;margin:44px 0 14px;padding-top:6px;scroll-margin-top:calc(var(--nav-h) + 18px)}
+.doc h2 .anchor,.doc h3 .anchor{color:var(--text-3);opacity:0;font-weight:400;margin-left:7px;font-size:.8em;transition:.15s;text-decoration:none}
+.doc h2:hover .anchor,.doc h3:hover .anchor{opacity:1}
+.doc h3{font-size:16.5px;font-weight:650;color:#f2f2f4;margin:30px 0 10px;scroll-margin-top:calc(var(--nav-h) + 18px)}
+.doc p{color:var(--text-2);margin:11px 0}
+.doc strong{color:var(--text);font-weight:640}
+.doc ul,.doc ol{margin:11px 0;padding-left:24px;color:var(--text-2)}
+.doc li{margin:5px 0}
+.doc li::marker{color:var(--text-3)}
+.doc hr{border:none;border-top:1px solid var(--border-soft);margin:34px 0}
+.doc code{font-family:var(--mono);font-size:.86em;background:rgba(255,255,255,.07);border:1px solid var(--border-soft);
+  border-radius:5px;padding:1.5px 6px;color:#d9f2e2;word-break:break-word}
+.doc pre{position:relative;background:var(--code-bg);border:1px solid var(--code-border);border-radius:11px;padding:14px 16px;overflow-x:auto;margin:16px 0}
+.doc pre code{background:none;border:none;padding:0;color:#cfe8d8;font-size:12.5px;line-height:1.7;display:block}
+.copy-btn{position:absolute;top:8px;right:8px;height:26px;padding:0 9px;border-radius:6px;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-3);font-size:11px;opacity:0;transition:.15s}
+.doc pre:hover .copy-btn{opacity:1}
+.copy-btn:hover{color:#fff;border-color:rgba(255,255,255,.2)}
+.doc blockquote{border-left:3px solid var(--accent);background:rgba(255,255,255,.03);border-radius:0 9px 9px 0;
+  padding:10px 16px;margin:15px 0;color:var(--text-2)}
+.doc blockquote p{margin:4px 0}
+.tip{border-left-color:#4aa3ff;background:rgba(74,163,255,.07)}
+.tip b.tip-label{color:#7ab8ff}
+.warn{border-left-color:#f5a623;background:rgba(245,166,35,.07)}
+.warn b.tip-label{color:#ffc36b}
+.doc table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+.doc th{color:var(--text);font-weight:640;text-align:left;padding:8px 12px;border-bottom:1px solid var(--border)}
+.doc td{color:var(--text-2);padding:8px 12px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+.doc tr:hover td{background:rgba(255,255,255,.025)}
+
+/* ── 翻页器 ── */
+.pager{display:flex;gap:14px;margin-top:52px}
+.pager a{flex:1;border:1px solid var(--border);border-radius:12px;padding:13px 17px;transition:.15s}
+.pager a:hover{border-color:rgba(48,209,88,.45);background:var(--accent-soft);text-decoration:none}
+.pager .dir{font-size:11px;color:var(--text-3)}
+.pager .pt{font-size:13.5px;color:var(--text);font-weight:550;margin-top:2px}
+.pager a.next{text-align:right}
+
+/* ── 搜索弹层 ── */
+.mask{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:none}
+.mask.open{display:block}
+.search-box{position:fixed;z-index:201;top:16vh;left:50%;transform:translateX(-50%);width:min(560px,92vw);
+  background:var(--bg-elev);border:1px solid rgba(255,255,255,.14);border-radius:14px;overflow:hidden;display:none;
+  box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.search-box.open{display:block}
+.search-box input{width:100%;height:48px;background:none;border:none;outline:none;color:var(--text);
+  font-size:14px;padding:0 18px;border-bottom:1px solid var(--border)}
+.search-box input::placeholder{color:var(--text-3)}
+.search-res{max-height:46vh;overflow-y:auto;padding:8px}
+.search-res a{display:block;padding:9px 13px;border-radius:9px;color:var(--text-2);font-size:13px}
+.search-res a:hover,.search-res a.sel{background:var(--accent-soft);color:var(--text);text-decoration:none}
+.search-res a .hit-title{font-weight:600;color:var(--text)}
+.search-res a .hit-path{font-size:11px;color:var(--text-3);margin-top:1px}
+.search-res a mark{background:none;color:var(--accent)}
+.search-empty{padding:26px;text-align:center;color:var(--text-3);font-size:13px}
+
+/* ── 移动端 ── */
+@media (max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:.22s;z-index:120;background:var(--bg);padding-top:70px}
+  .sidebar.open{transform:none}
+  .main{padding:26px 20px 80px}
+  .menu-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;
+    color:var(--text-2);cursor:pointer}
+  .menu-btn:hover{background:rgba(255,255,255,.06)}
+  .nav__group{display:none}
+  .nav__search span{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <button class="menu-btn" id="menuBtn" aria-label="打开目录">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a class="nav__brand" href="index.html" aria-label="巨天agent 首页">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
+      巨天agent
+    </a>
+    <div class="nav__sep"></div>
+    <span style="color:var(--text-3);font-size:12.5px">文档中心</span>
+    <nav class="nav__group" id="navGroups" aria-label="文档分组"></nav>
+    <div class="nav__right">
+      <button class="nav__search" id="searchBtn" aria-label="搜索文档">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+        <span>搜索文档</span><kbd>K</kbd>
+      </button>
+      <a class="nav__gh" href="https://github.com/deepseekv5/jutian-agent" target="_blank" rel="noopener" aria-label="GitHub 仓库">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <a class="nav__home" href="index.html">返回官网</a>
+    </div>
+  </div>
+</nav>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar" aria-label="文档导航"></aside>
+  <main class="main"><article class="doc" id="doc"></article></main>
+  <aside class="outline" id="outline" aria-label="本页目录"></aside>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="search-box" id="searchBox" role="dialog" aria-label="搜索文档">
+  <input id="searchInput" type="text" placeholder="搜索文档标题与内容…" autocomplete="off">
+  <div class="search-res" id="searchRes"></div>
+</div>
+
+<script>
+/* ═══════════ 文档数据（整理自仓库真实文档） ═══════════ */
+const DOCS = [
+{
+slug:'quickstart', group:'入门', title:'快速开始', lead:'从下载安装到第一句话拿到结果，三分钟跑通巨天agent。',
+md:`## 安装
+
+\`\`\`bash
+# macOS（Apple Silicon / Intel）
+# 下载 jutian-agent-<版本>-arm64.dmg 或 -x64.dmg，拖入「应用程序」
+xattr -cr /Applications/巨天agent.app   # 未公证提示时执行一次
+
+# Windows
+# 下载 jutian-agent-<版本>-setup.exe，双击安装，可选安装目录
+
+# Linux
+# AppImage：chmod +x 后直接运行
+chmod +x jutian-agent-<版本>-x86_64.AppImage
+./jutian-agent-<版本>-x86_64.AppImage
+
+# Android（本地独立运行）
+# 安装 jutian-local-<版本>.apk，手机上独立跑内核，无需电脑
+\`\`\`
+
+> [!TIP] 全部安装包在 [GitHub Releases](https://github.com/deepseekv5/jutian-agent/releases) 页，国内网络可用 Gitee 镜像仓库同名资产。
+
+## 配置模型
+
+打开 **设置 → 推理**：
+
+1. 选择提供商（OpenAI / DeepSeek / Moonshot Kimi / 通义千问 / 智谱 GLM / 自定义），粘贴 API Key；
+2. 或什么都不填——**免费模型开箱即用**：Kilo 网关（19 个免费档，含 openrouter/free 自动路由）、OpenCode Zen Free、Pollinations（GPT-OSS 20B），点「一键启用」即可对话；
+3. 本地模型：LM Studio / Ollama 等兼容端点直接填 \`http://localhost:1234/v1\`。
+
+## 第一句话
+
+在输入框直接下达任务，例如：
+
+\`\`\`text
+在桌面建一个 demo.txt，写入"你好巨天"，然后读出来确认
+\`\`\`
+
+模型会规划步骤 → 调用 \`write_file\` → \`read_file\` → 给出确认。全程工具卡可见参数与输出，可随时打断。
+
+> [!WARNING] 工具真实执行命令与文件操作。默认权限档「edit」已拦截危险命令（删库/关机/直写块设备等），请勿在含重要数据的目录里放开权限做实验。
+
+## 下一步
+
+- [四套内核怎么选（或完全不选）](/kernels)
+- [应用内更新怎么工作](/update)
+- [全部 58 个工具](/tools)
+`
+},
+{
+slug:'kernels', group:'内核', title:'四套内核', lead:'Pro+ / Ultra / Auto / Super —— 能力递进，也可以完全不选。',
+md:`## 概览
+
+| 内核 | 定位 | 适合 |
+|---|---|---|
+| **JT Core Pro+** | 五阶段工具循环（准备→请求→流式→闸门→执行），只读工具并行 | 日常任务、通用默认 |
+| **JT Core Ultra** | 移植 gemini-cli 全套护栏：七态 FSM、三层循环检测、模型回落、计划模式 | 复杂工程、需要严格过程管控 |
+| **JT Core Auto** | 自主目标闭环：每轮后独立评估器判断完成度，未完成自动续跑（三态保护+停滞检测+封顶） | 「帮我把这件事做完」类目标 |
+| **JT Core Super** | **全自动路由**（推荐）：11 阶段流水线自动分析任务并调度上面三套内核 | 不想选的时候 |
+
+## 为什么推荐 Super
+
+三套内核各有擅场，但"要用户选内核"本身就是负担。Super 把选择收走：
+
+\`\`\`text
+信号采集 → 复杂度评分 → 任务分析 → 执行计划 → 策略选择
+→ 内核路由 → 模型选择 → 上下文工程 → 护栏 → 执行 → 反馈学习
+\`\`\`
+
+- 简单问候 → 路由到 Pro+ 单轮直答（置信度 92%）
+- 写代码跑测试 → 迭代式工具循环
+- 「自动修复所有失败测试直到全部通过」→ Auto 自主闭环
+- 全程静默，不往正文塞进度标记；每次路由的理由完整记录，诊断面板可查「为什么这样路由」
+
+## 切换方式
+
+- **设置 → 推理 → JT Core 内核**：Pro+ / Ultra / Auto / Super 四档
+- **输入框状态条**：点击内核徽章循环切换（Super / Auto / Ultra / Harness / Pro+）
+- **命令面板**：\`Cmd+K\`（Windows \`Ctrl+K\`）搜索"切换内核"
+
+> [!TIP] 选择会持久化到本机设置；老用户已选的档位不会被自动更改。
+`
+},
+{
+slug:'super-core', group:'内核', title:'超级内核架构', lead:'JT Core Super：把三套内核当执行器的全自动路由决策层。',
+md:`## 设计动机
+
+Pro+ / Ultra / Auto 各自很强，但要用户选。Super 的答案：**内核自己分析任务，自动决定用哪套执行器、什么策略、什么模型、要不要护栏**——用户只管下达目标。
+
+## 十一阶段流水线
+
+\`\`\`text
+① 信号采集      13 维度中英词表（代码/文件/shell/调研/创作/多步/闭环…）
+② 复杂度评分    五维加权（长度/领域/步骤/风险/上下文），0-100 分+可解释理由
+③ 任务分析      10 领域多标签、风险四级、意图抽取、建议工具集
+④ 执行计划      9 领域步骤模板 + 依赖图（Kahn 分层 + 三色 DFS 环检测 + 关键路径）
+⑤ 策略选择      6 种执行策略（直答/单工具/迭代/自主/深度/并行快审）
+⑥ 内核路由      规则投票 + 冲突消解（硬约束>自主>工具>风险>复杂度），置信度+理由
+⑦ 模型选择      32 档模型画像，7 维打分、三类硬约束、三层兜底
+⑧ 上下文工程    四级预算分配 + 历史裁剪（工具配对同进退）+ system-reminder 注入
+⑨ 护栏          54 条规则：危险命令/密钥泄露/注入/循环/预算
+⑩ 执行          调度 Pro+ / Ultra / Auto 之一（注入为执行器，零重复实现）
+⑪ 反馈闭环      按（策略×领域）记录成功率，样本充足时微调未来路由
+\`\`\`
+
+## 关键设计
+
+**可解释**：每一步决策产出理由与置信度，完整 trace 写入事件总线，诊断面板可展示"为什么这样路由"。黑盒自动化是可怕的，可解释是底线。
+
+**静默**：内部状态（正在评估/正在路由）不进对话正文，只走事件总线——高端体验是安静把活干完。
+
+**复用而非重写**：Super 只做决策层，Pro+/Ultra/Auto 的既有验证成果全部继承。
+
+模块布局见仓库 [\`src/shared/super/\`](https://github.com/deepseekv5/jutian-agent/tree/main/src/shared/super)（五模块互不依赖，契约在 \`types.ts\`），架构文档见 \`docs/dev/super-kernel.md\`。
+
+> [!TIP] 自适应学习按历史成功率微调路由权重，带指数衰减与最小样本阈值——失败经验会强化对应场景的护栏，样本太少不调整。
+`
+},
+{
+slug:'update', group:'入门', title:'应用内更新', lead:'桌面 asar 原子替换、Linux 完整包兜底、安卓内核包热更新——三条链路一次讲清。',
+md:`## 桌面（macOS / Windows）
+
+设置 → 关于 → 「检查更新」：从 GitHub Release 拉取 \`jutian-agent-<版本>-app.asar\`，SHA-256 校验（镜像站篡改防护）→ 写 \`.new\` → 备份 \`.bak\` → 原子替换。开机 12 秒与每 30 分钟静默自检（同样走哈希校验），发现新版后台下载，「重启即用」。
+
+- Windows 上运行中的 asar 被锁定，采用**启动时替换**：下载完成后下次启动在加载 asar 之前换名。
+- 更新包含不了 \`app.asar.unpacked\` 的原生模块——升级 better-sqlite3 / Electron 的版本会发完整安装包并在说明标注。
+
+## Linux
+
+v18.1.1 起 Release 同样提供 \`-app.asar\`。但 AppImage（squashfs 只读挂载）与 deb（\`/opt\` root 目录）**安装目录通常不可写**，应用会预检并明确提示，此时下载 AppImage/deb 完整包覆盖更新。tar.gz 自解压场景可热更新。
+
+## Android
+
+\`jutian-local-<版本>.apk\` 内置内核包；应用内「关于」页可**热更新内核**（无需重装 APK、无需 root）：
+
+\`\`\`text
+下载 jutian-mobile-<版本>.zip → SHA-256 校验
+→ 解压到 filesDir/app-new → 原子换名替换 → 重启进程生效
+\`\`\`
+
+- 失败自动回滚，绝不损坏现有版本；
+- 版本戳含 \`bundle-base-version\`（记录 APK 版本）：应用内更新后重启**不会**被 APK 内置旧包覆盖，APK 真升级时才重新解压。
+
+> [!TIP] 更新包由 CI 从源码构建并自动上传 Release，哈希值取自 GitHub 资产 digest；第三方镜像下载的包也会先过哈希。
+`
+},
+{
+slug:'tools', group:'开发', title:'工具总览', lead:'58 个内置工具直连真实系统：终端、文件、网络、数据、多媒体、技能与记忆。',
+md:`## 分类速览
+
+| 域 | 工具（部分） |
+|---|---|
+| 文件 | read_file · write_file · append_file（增量写入大文件）· edit_file（含行号模式）· move/delete · list_dir · search_files · search_content · find_in_files |
+| 终端 | shell（后台任务/输出游标/终止）· system_info · process_list · port_check |
+| 网络 | web_search（SERP 直抓首选）· web_fetch（SSRF 防护）· http_request · url_tools |
+| 数据 | json_process · text_tools · text_diff · hash · base64 · uuid · timestamp · random |
+| 多媒体 | screenshot · image_generate · STT/TTS（本地 python-runtime） |
+| 技能 | list/load/install/create_skill · create_extension |
+| 记忆 | remember · recall · forget · save_knowledge · consult_guidance（约束知识库） |
+| 编排 | schedule_task（定时）· dispatch_subagents（子代理并行池）· update_plan · todo_write |
+
+## 增量写入：写大文件不烂尾
+
+\`write_file\` 要求一次性给完整内容，模型写大文件时长输出容易被 max_tokens 截断。\`append_file\` 让模型分段交付：
+
+\`\`\`text
+append_file(path, "第一段…", mode=start)    # 建文件写首段
+append_file(path, "第二段…", mode=append)   # 逐段追加，写一行落一行
+\`\`\`
+
+每段一次独立工具调用、输出短、不会截断；前段未以换行结尾时自动补 \`\\n\`。
+
+## 安全三件套（默认开启）
+
+1. **危险命令拦截**：删库/关机/直写块设备/fork 炸弹/反弹 shell 等，按执行意图全位置拦截（AI 被拦会尝试 osascript 变体，同样会被拦）；
+2. **注入扫描**：工具输出里藏的「忽略之前的指令」等话术 → 打标提醒模型并记录；
+3. **密钥屏蔽**：输出中的 API Key 自动掩码 + \`{{KEY}}\` 占位符（执行时才替换真值，不进模型上下文）。
+
+安全规则库带版本与实时更新（设置 → 安全）。
+`
+},
+{
+slug:'security', group:'开发', title:'安全架构', lead:'本地权限的门卫语义、SSRF 防护、供应链校验与一次全项目审计的结论。',
+md:`## 网络门卫
+
+- 本机服务默认仅监听 \`127.0.0.1\`；开启局域网访问时强制 UI 令牌（每次启动随机生成，长度不足不启用）+ Origin 校验；
+- \`web_fetch\` / \`http_request\` 共用 SSRF 防护：私网 IP、\`169.254.169.254\` 云元数据、重定向后二次校验全部拦截；
+- 上游 LLM 代理透传真实状态码，密钥不落日志。
+
+## 供应链
+
+- 更新包 SHA-256 校验（GitHub 资产 digest），第三方镜像下载的包同样先过哈希再落盘；
+- asar 头部结构二次校验（\`{"files"\` 标记）；
+- 安全规则包（恶意命令库）带版本与实时更新。
+
+## 全项目审计（2026-11-20）
+
+Mimosa 扫描 591 项，逐条复核：551 项来自 vendored Python 标准库（误报），40 项一方代码经数据流核实**无可利用漏洞**；npm audit 0 漏洞。唯一加固点：\`PYTHON_BIN\` 环境变量白名单化（\`safePythonBin()\` 四处收口）。完整判定证据见 [\`docs/dev/security-scan-2026-11-20.md\`](https://github.com/deepseekv5/jutian-agent/blob/main/docs/dev/security-scan-2026-11-20.md)。
+
+> [!WARNING] 本应用拥有本机全权限（终端/文件/网络）。请只从官方 Release 下载安装包与更新包；局域网访问开关用完即关。
+`
+},
+{
+slug:'add-tool', group:'开发', title:'新增一个工具', lead:'从实现到 schema 到三端可用的完整步骤——十一行起步。',
+md:`## 三处落点
+
+工具 schema 单一来源是 \`src/shared/builtin-tools.json\`，桌面端、手机端、服务端三方读同一份。
+
+**1. 实现（\`src/server/serve.ts\`）**——返回形状铁律 \`{ success, output?, error?, changeId? }\`，裸字符串会导致所有端不显示结果：
+
+\`\`\`js
+async function my_tool(a) {
+  const p = resolveWork(a.path);          // 工作区路径解析
+  if (!ok(p)) return { success: false, error: "路径不允许" };
+  // …真实逻辑…
+  return { success: true, output: "✅ 完成" };
+}
+\`\`\`
+
+**2. 注册（同文件 \`TOOLS\` 表）**
+
+\`\`\`js
+var TOOLS = { /* … */ my_tool, /* … */ };
+\`\`\`
+
+**3. schema（\`builtin-tools.json\`）**
+
+\`\`\`json
+{ "name": "my_tool",
+  "description": "做什么、什么时候用",
+  "parameters": { "type": "object",
+    "properties": { "path": { "type": "string", "description": "目标路径" } },
+    "required": ["path"] } }
+\`\`\`
+
+## 必过的门禁
+
+- \`scripts/verify.mjs\` 会做 schema ↔ TOOLS 注册表**双向比对**：schema 里声明了但后端不可调（"模型看得到但一调就报未知工具"）会拦下；后端有但 schema 未声明属设计选择，需登记 \`INTENTIONALLY_HIDDEN\`；
+- 参数规格 \`src/shared/toolArgs.ts\` 的 \`TOOL_SPECS\` 加一条，模型传参才有强校验；
+- 涉及 shell 的工具过 \`tests/shellInjection.test.ts\` 静态扫描（禁止字符串拼接进命令文本）；
+- 新增只读工具记得加入 \`agentLoop.ts\` 的 \`READONLY_TOOLS\`（享受并行执行），有副作用的不许加。
+
+完整步骤见仓库 [\`docs/dev/add-tool.md\`](https://github.com/deepseekv5/jutian-agent/blob/main/docs/dev/add-tool.md)。
+`
+},
+{
+slug:'tui', group:'参考', title:'终端版 jtcode', lead:'同一内核、同一安全门禁的 Claude Code 式终端对话。',
+md:`## 启动
+
+\`\`\`bash
+npm run tui          # 仓库内
+# 或全局安装后（桌面 App 会注册 jtcode 命令）
+jtcode               # cwd = 启动所在文件夹，补系统提示词
+\`\`\`
+
+冷启动自动拉起本机后端（serve.cjs），ink 渲染 TUI；\`agent/run\` 薄客户端直连内核。
+
+## 常用命令
+
+| 命令 | 作用 |
+|---|---|
+| \`/tools\` | 查看 58 个工具 |
+| \`/model\` | 切换模型 |
+| \`/cwd\` | 显示/切换工作目录 |
+| \`/exit\` | 退出 |
+
+\`write_file\` 的 \`path\` 参数只放文件路径本身（相对 cwd）；工作目录隔离——TUI 传入的 cwd 只在本次 agent 循环内生效，不污染桌面端全局工作区。
+
+> [!TIP] 终端版与桌面版共享同一套 58 工具、安全三件套与约束知识库；测试 TUI 用 \`script\` 而非 \`expect\` pty（ink 的 TTY 检测差异）。
+`
+},
+{
+slug:'local-api', group:'参考', title:'本地开放 API', lead:'OpenAI 兼容端点 + 手机远程：让其他本地程序调用同一内核。',
+md:`## OpenAI 兼容端点
+
+设置 → 本地 API 开启后（默认关闭，开启后仅限本机）：
+
+\`\`\`bash
+curl http://127.0.0.1:3211/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "X-App-Token: <设置页生成的密钥>" \\
+  -d '{"model":"…","messages":[{"role":"user","content":"你好"}]}'
+\`\`\`
+
+- \`/v1/chat/completions\`：标准 OpenAI 形状（llm-proxy 内部转发，密钥解析/免费档/接力全复用）；
+- \`/api/tools/execute\`：直接执行任一内置工具（同走安全门禁）；
+- \`/api/health\`：健康与版本。
+
+## 手机远程
+
+桌面端生成二维码 → 手机 App「远控」扫码配对 → 同一账号、同一会话、同一安全门禁。远控模式下手机是桌面内核的遥控器；\`jutian-local\` APK 则是手机**独立运行**内核（nodejs-mobile 嵌入 Node 18）。
+
+## 访问限制语义
+
+- UI 密钥通过 Electron \`webRequest\` 注入 \`X-App-Token\`，勿用 \`?app=\` 换 Cookie 的旧方式（会锁死自己）；
+- 任意 \`localhost\` 端口曾可读密钥的旧问题已在 v12 时代修复：非同宿主 Origin 一律拒；
+- 局域网开关仅在你明确需要时打开，密钥可随时重新生成（旧密钥立即失效）。
+`
+},
+{
+slug:'privacy', group:'参考', title:'隐私与合规', lead:'本地优先的数据边界、AI 生成内容标识与拟人化互动合规。',
+md:`## 数据边界
+
+- 对话/会话/记忆/知识库全部存于本机 \`~/.lyclaw/\`（安卓在应用私有目录），MIT 开源、无遥测；
+- 出网仅四类：你配置的模型端点、更新检查（GitHub/镜像）、公告检查、技能市场安装（手动触发）；
+- 备份与导出走统一入口，安卓经系统 SAF 由你选择落盘位置。
+
+## AI 生成内容标识
+
+按《人工智能生成合成内容标识办法》（2025-09-01 施行）与 GB 45438-2025：AI 输出在会话内显式标识，导出文件携带隐式标识元数据。
+
+## 拟人化互动
+
+按五部门令第 21 号《人工智能拟人化互动服务管理暂行办法》（2026-07-15 施行）：危机干预话术接入（12356 心理援助热线）、禁止挽留用户的对话策略、未成年人保护模式、角色人格边界——逐条落在提示词与运行时门禁（11 项契约进 verify 门禁）。
+
+完整协议与隐私政策见 [legal.html](legal.html)（随版本更新，由 \`src/shared/legal.ts\` 单一来源生成）。
+`
+},
+/* ── 以下页面直接加载仓库真实 md 文件（单一来源：仓库更新，官网自动同步） ── */
+{ slug:'guide/install', group:'入门', title:'安装指南', src:'docs/guide/install.md', lead:'五端安装细节与常见问题。' },
+{ slug:'guide/models', group:'入门', title:'模型配置', src:'docs/guide/models.md', lead:'提供商、本地模型与能力参数。' },
+{ slug:'guide/free-models', group:'入门', title:'免费模型', src:'docs/guide/free-models.md', lead:'零门槛开箱即用的模型来源。' },
+{ slug:'guide/optimize', group:'入门', title:'优化建议', src:'docs/guide/optimize-v13-6.md', lead:'让低配设备跑得更顺。' },
+{ slug:'dev/kernel-arch', group:'内核', title:'内核五阶段架构', src:'docs/dev/kernel-architecture.md', lead:'Pro+ 五阶段的职责边界与行为等价清单。' },
+{ slug:'dev/guidance-kb', group:'内核', title:'约束知识库', src:'docs/dev/guidance-kb.md', lead:'consult_guidance 三层约束体系。' },
+{ slug:'dev/add-tool', group:'开发', title:'新增工具（完整版）', src:'docs/dev/add-tool.md', lead:'从实现到 schema 到三端可用的完整步骤。' },
+{ slug:'dev/architecture', group:'开发', title:'工程架构', src:'docs/dev/architecture.md', lead:'仓库结构与设计决策导览。' },
+{ slug:'dev/build', group:'开发', title:'构建与发布', src:'docs/dev/build.md', lead:'本地构建、打包与 CI 发行。' },
+{ slug:'dev/security-scan', group:'开发', title:'安全审计报告', src:'docs/dev/security-scan-2026-11-20.md', lead:'2026-11-20 全项目扫描的逐条判定与证据。' },
+{ slug:'adr', group:'开发', title:'架构决策记录', src:'docs/adr/README.md', lead:'ADR 索引：为什么这样设计。' },
+{ slug:'adr/0001', group:'开发', title:'ADR-0001 单文件后端', src:'docs/adr/0001-single-file-backend.md', lead:'serve.ts 为什么不拆模块。' },
+{ slug:'adr/0002', group:'开发', title:'ADR-0002 去重复优于改结构', src:'docs/adr/0002-dedupe-over-restructure.md', lead:'简洁度策略的出处。' },
+{ slug:'adr/0003', group:'开发', title:'ADR-0003 权限在代码层强制', src:'docs/adr/0003-permission-enforced-in-code.md', lead:'权限不做配置项的原因。' },
+{ slug:'adr/0004', group:'开发', title:'ADR-0004 集成测试优先', src:'docs/adr/0004-integration-tests-over-unit.md', lead:'测试策略取舍。' },
+{ slug:'adr/0005', group:'开发', title:'ADR-0005 工具循环防护', src:'docs/adr/0005-tool-loop-guards.md', lead:'循环检测与失败恢复设计。' },
+{ slug:'guide/tui', group:'参考', title:'终端版（完整指南）', src:'docs/guide/tui.md', lead:'jtcode 安装、命令与工作目录语义。' },
+{ slug:'guide/remote', group:'参考', title:'手机远程', src:'docs/guide/remote.md', lead:'扫码配对与远控模式。' },
+{ slug:'guide/harness', group:'参考', title:'插件中心 Harness', src:'docs/guide/harness.md', lead:'MCP、技能与扩展的宿主。' },
+{ slug:'guide/knowledge', group:'参考', title:'知识库', src:'docs/guide/knowledge.md', lead:'RAG 检索与文档投喂。' },
+{ slug:'guide/swarm', group:'参考', title:'子代理集群', src:'docs/guide/swarm.md', lead:'并行池与任务编排。' },
+{ slug:'guide/privacy', group:'参考', title:'隐私指南（完整版）', src:'docs/guide/privacy.md', lead:'数据边界逐项说明。' },
+{ slug:'guide/ui-i18n', group:'参考', title:'界面多语言', src:'docs/guide/ui-i18n.md', lead:'中英切换与翻译规范。' },
+{ slug:'notes/development', group:'记录', title:'开发笔记', src:'docs/notes/DEVELOPMENT.md', lead:'开发过程中的现场记录。' },
+{ slug:'notes/learning', group:'记录', title:'学习笔记', src:'docs/notes/LEARNING.md', lead:'从其它产品学到的与踩过的。' },
+{ slug:'notes/agent-chat', group:'记录', title:'对话架构笔记', src:'docs/notes/AGENT-CHAT.md', lead:'消息时序与渲染约定。' },
+{ slug:'notes/code-spec', group:'记录', title:'代码规范', src:'docs/notes/CODE-SPEC.md', lead:'风格约定与红线。' },
+{ slug:'changelog', group:'记录', title:'更新日志', src:'CHANGELOG.md', lead:'全版本变更轨迹。' },
+{ slug:'third-party', group:'记录', title:'第三方声明', src:'docs/THIRD_PARTY_NOTICES.md', lead:'移植组件与许可证。' }
+];
+
+/* ═══════════ 分组与路由 ═══════════ */
+const GROUPS = ['入门','内核','开发','参考','记录'];
+const GROUP_DESC = { '入门':'装好跑通','内核':'四套内核与超级路由','开发':'工具、安全与扩展','参考':'终端、API 与合规','记录':'仓库文档与历史' };
+const current = () => (location.hash.replace(/^#\//,'') || 'quickstart');
+const findDoc = s => DOCS.find(d => d.slug === s) || DOCS[0];
+
+/* ═══════════ 轻量 Markdown 渲染器 ═══════════ */
+const GH_BLOB = 'https://github.com/deepseekv5/jutian-agent/blob/main/';
+const GH_RAW = 'https://raw.githubusercontent.com/deepseekv5/jutian-agent/main/';
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+/* 仓库内相对链接 → 文档中心内部路由（md 间互链单一来源）；未收录的指 GitHub 原文 */
+function rewriteLink(h, ctx){
+  if (/^(https?:\/\/|mailto:)/.test(h)) return { href: h, ext: true };
+  if (/^#/.test(h)) return { href: h, ext: false };
+  const stripHash = h.split('#')[0];
+  if (!stripHash) return { href: h, ext: false };               // 纯页内锚点
+  if (/\.html?$/i.test(stripHash)) return { href: stripHash, ext: false };  // 官网静态页（legal.html 等）
+  // 解析相对路径到仓库根，再查是否已收录为文档中心页面
+  const dir = (ctx && ctx.srcDir ? ctx.srcDir : '').replace(/\/?$/,'/');
+  const parts = (dir + stripHash).split('/');
+  const norm = [];
+  for (const p of parts){ if (p === '..') norm.pop(); else if (p !== '.' && p !== '') norm.push(p); }
+  const repoPath = norm.join('/');
+  const hit = DOCS.find(d => d.src === repoPath);
+  if (hit) return { href: '#/' + hit.slug, ext: false };
+  return { href: GH_BLOB + repoPath, ext: true };
+}
+function inline(s, ctx){
+  return esc(s)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,t,h)=>{
+      const r = rewriteLink(h, ctx);
+      const ext = r.ext ? ' target="_blank" rel="noopener"' : '';
+      return `<a href="${r.href}"${ext}>${t}</a>`;
+    });
+}
+let anchorSeq = 0;
+function renderMd(md, ctx){
+  const lines = md.split('\n');
+  let out = '', i = 0, inCode = false, codeBuf = [], codeLang = '', listStack = [];
+  const usedIds = new Set();
+  const closeList = () => { while(listStack.length){ out += listStack.pop()==='ol'?'</ol>':'</ul>' } };
+  while (i < lines.length){
+    const L = lines[i];
+    if (/^```/.test(L.trim())){
+      if (inCode){
+        const id = 'code' + (++anchorSeq);
+        out += `<pre><button class="copy-btn" data-copy="${id}">复制</button><code id="${id}">${esc(codeBuf.join('\n'))}</code></pre>`;
+        inCode = false; codeBuf = [];
+      } else { inCode = true; codeLang = L.trim().slice(3).trim(); codeBuf = []; }
+      i++; continue;
+    }
+    if (inCode){ codeBuf.push(L); i++; continue; }
+    if (/^#{1,3}\s/.test(L)){
+      closeList();
+      const m = L.match(/^(#{1,3})\s+(.*)/); const lv = m[1].length, txt = m[2];
+      const plain = txt.replace(/[`*]/g,'');
+      let id = 'h-' + plain.toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g,'-').replace(/^-|-$/g,'');
+      while (usedIds.has(id)) id = id + '-x' + (++anchorSeq);  // fetch 文档里重复标题的锚点去重
+      usedIds.add(id);
+      const inner = inline(txt, ctx).replace(/<code>/g,'<code>').replace(/<\/code>/g,'</code>');
+      out += `<h${lv} id="${id}">${inner}<a class="anchor" href="#${id}">#</a></h${lv}>`;
+      i++; continue;
+    }
+    if (/^>\s?/.test(L)){
+      closeList();
+      let body = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])){ body.push(lines[i].replace(/^>\s?/,'')); i++; }
+      const joined = body.join('\n');
+      const tipM = joined.match(/^\[!(TIP|WARNING|IMPORTANT)\]\s*([\s\S]*)/);
+      if (tipM){
+        const cls = tipM[1]==='WARNING' ? 'warn' : 'tip';
+        const label = tipM[1]==='WARNING' ? '注意' : tipM[1]==='IMPORTANT' ? '重要' : '提示';
+        out += `<blockquote class="${cls}"><p><b class="tip-label">${label}　</b>${inline(tipM[2], ctx).replace(/\n/g,'<br>')}</p></blockquote>`;
+      } else {
+        out += `<blockquote>${body.map(x=>`<p>${inline(x, ctx)}</p>`).join('')}</blockquote>`;
+      }
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(L) || /^\s*\d+\.\s+/.test(L)){
+      const wantList = /^\s*\d+\.\s+/.test(L) ? 'ol' : 'ul';
+      if (!listStack.length || listStack[listStack.length-1] !== wantList){
+        closeList(); out += wantList==='ol' ? '<ol>' : '<ul>'; listStack.push(wantList);
+      }
+      out += `<li>${inline(L.replace(/^\s*(?:[-*]|\d+\.)\s+/,''), ctx)}</li>`;
+      i++; continue;
+    }
+    if (/^\|/.test(L.trim())){
+      closeList();
+      const rows = [];
+      while (i < lines.length && /^\|/.test(lines[i].trim())){ rows.push(lines[i].trim()); i++; }
+      const cells = r => r.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      if (rows.length >= 2 && /^[\s|:-]+$/.test(rows[1])){
+        out += '<table><thead><tr>' + cells(rows[0]).map(c=>`<th>${inline(c, ctx)}</th>`).join('') + '</tr></thead><tbody>';
+        for (let r = 2; r < rows.length; r++) out += '<tr>' + cells(rows[r]).map(c=>`<td>${inline(c, ctx)}</td>`).join('') + '</tr>';
+        out += '</tbody></table>';
+      }
+      continue;
+    }
+    if (/^---+$/.test(L.trim())){ closeList(); out += '<hr>'; i++; continue; }
+    if (!L.trim()){ closeList(); i++; continue; }
+    closeList();
+    let para = [L]; i++;
+    while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|```|>|\s*[-*]\s|\s*\d+\.\s|\||---+$)/.test(lines[i])){ para.push(lines[i]); i++; }
+    out += `<p>${inline(para.join(' '), ctx).replace(/\n/g,'<br>')}</p>`;
+  }
+  closeList();
+  return out;
+}
+
+/* ═══════════ 视图渲染 ═══════════ */
+const docEl = document.getElementById('doc');
+const outlineEl = document.getElementById('outline');
+const sidebarEl = document.getElementById('sidebar');
+const navGroupsEl = document.getElementById('navGroups');
+
+function renderSidebar(activeSlug){
+  let html = '';
+  for (const g of GROUPS){
+    const items = DOCS.filter(d => d.group === g);
+    if (!items.length) continue;
+    html += `<div class="side-group"><div class="side-group__title">${g}</div>`;
+    for (const d of items) html += `<a class="side-link${d.slug===activeSlug?' on':''}" href="#/${d.slug}">${d.title}${d.slug==='quickstart'?'<span class="badge">Start</span>':''}</a>`;
+    html += `</div>`;
+  }
+  sidebarEl.innerHTML = html;
+}
+function renderNavGroups(activeSlug){
+  const g = findDoc(activeSlug).group;
+  navGroupsEl.innerHTML = GROUPS.map(x => `<a href="#/${DOCS.find(d=>d.group===x).slug}" class="${x===g?'on':''}">${x}</a>`).join('');
+}
+function renderOutline(){
+  const heads = docEl.querySelectorAll('h2, h3');
+  if (!heads.length){ outlineEl.innerHTML = ''; return; }
+  let html = '<div class="outline__title">本页目录</div>';
+  heads.forEach(h => { html += `<a class="${h.tagName==='H3'?'h3':''}" href="#${h.id}">${h.textContent.replace(/#$/,'').trim()}</a>` });
+  outlineEl.innerHTML = html;
+}
+/* fetch 型文档的正文缓存（仓库 md 单一来源；搜索也用它） */
+const fetchCache = new Map();
+let fetchCachePromise = null;
+function ensureFetchCache(){
+  if (!fetchCachePromise){
+    fetchCachePromise = Promise.all(DOCS.filter(d => d.src).map(d =>
+      fetchDocText(d).then(t => fetchCache.set(d.slug, t)).catch(() => {})
+    ));
+  }
+  return fetchCachePromise;
+}
+function fetchDocText(d){
+  // d.src 是仓库根相对路径。优先同域相对路径（Pages 部署在 docs/，本地服务同理）；
+  // 仓库根级文档（如 CHANGELOG.md）不在 Pages 发布目录里，回退 raw.githubusercontent
+  // （raw 对 CORS 全开放；file:// 直开也会走到这条回退）。
+  const rel = d.src.replace(/^docs\//, '');
+  const raw = GH_RAW + d.src;
+  return fetch(rel).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text() })
+    .catch(() => fetch(raw).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text() }));
+}
+function renderDoc(slug){
+  const d = findDoc(slug);
+  document.title = `${d.title} · 巨天agent 文档`;
+  renderSidebar(slug); renderNavGroups(slug);
+  window.scrollTo({ top: 0 });
+  if (d.src){
+    // fetch 型：加载仓库真实 md（缓存），ctx.srcDir 供相对链接重写
+    const cached = fetchCache.get(slug);
+    if (cached != null){ mountDoc(d, cached); return; }
+    docEl.innerHTML = `<h1>${d.title}</h1><p class="doc-lead">${d.lead}</p>
+      <p style="color:var(--text-3);font-size:13px">正在加载仓库文档…</p>`;
+    fetchDocText(d)
+      .then(text => { fetchCache.set(slug, text); if (findDoc(current()).slug === slug) mountDoc(d, text); })
+      .catch(() => {
+        if (findDoc(current()).slug !== slug) return;
+        docEl.innerHTML = `<h1>${d.title}</h1><p class="doc-lead">${d.lead}</p>
+          <blockquote class="warn"><p><b class="tip-label">注意　</b>文档加载失败。直接通过 file:// 打开本页会被浏览器拦截本地请求，请访问线上文档站或本地静态服务。</p></blockquote>
+          <p><a href="${GH_BLOB}${d.src}" target="_blank" rel="noopener">在 GitHub 查看源文件 →</a></p>`;
+      });
+    return;
+  }
+  mountDoc(d, d.md);
+}
+function mountDoc(d, mdText){
+  const slug = d.slug;
+  const idx = DOCS.indexOf(d);
+  const prev = DOCS[idx-1], next = DOCS[idx+1];
+  const ctx = { srcDir: d.src ? d.src.split('/').slice(0, -1).join('/') : '' };
+  const srcNote = d.src
+    ? `<p style="margin:-16px 0 26px"><span style="color:var(--text-3);font-size:12px">来自仓库文档 · </span><a style="font-size:12px" href="${GH_BLOB}${d.src}" target="_blank" rel="noopener">在 GitHub 查看源文件 →</a></p>`
+    : '';
+  docEl.innerHTML =
+    `<h1>${d.title}</h1><p class="doc-lead">${d.lead}</p>` + srcNote +
+    renderMd(mdText, ctx) +
+    `<div class="pager">` +
+    (prev ? `<a href="#/${prev.slug}"><div class="dir">← 上一篇</div><div class="pt">${prev.title}</div></a>` : '<span style="flex:1"></span>') +
+    (next ? `<a class="next" href="#/${next.slug}"><div class="dir">下一篇 →</div><div class="pt">${next.title}</div></a>` : '<span style="flex:1"></span>') +
+    `</div>`;
+  renderOutline();
+  // outline 滚动高亮
+  const links = [...outlineEl.querySelectorAll('a')];
+  if ('IntersectionObserver' in window && links.length){
+    const map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+    const io = new IntersectionObserver(es => {
+      es.forEach(e => { if (e.isIntersecting){ links.forEach(a=>a.classList.remove('on')); const a = map.get(e.target.id); if (a) a.classList.add('on'); } });
+    }, { rootMargin: '-70px 0px -70% 0px' });
+    docEl.querySelectorAll('h2').forEach(h => io.observe(h));
+  }
+}
+
+/* ═══════════ 复制按钮 ═══════════ */
+docEl.addEventListener('click', e => {
+  const btn = e.target.closest('.copy-btn'); if (!btn) return;
+  const code = document.getElementById(btn.dataset.copy);
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    btn.textContent = '已复制'; setTimeout(() => btn.textContent = '复制', 1400);
+  }).catch(() => {});
+});
+
+/* ═══════════ 搜索 ═══════════ */
+const mask = document.getElementById('mask'), searchBox = document.getElementById('searchBox');
+const searchInput = document.getElementById('searchInput'), searchRes = document.getElementById('searchRes');
+let selIdx = 0, lastHits = [];
+function openSearch(){
+  mask.classList.add('open'); searchBox.classList.add('open'); searchInput.value=''; doSearch(''); searchInput.focus();
+  // 懒预热仓库文档正文缓存：就绪后若搜索框还开着，自动重搜让 fetch 型页面进入正文索引
+  ensureFetchCache().then(() => { if (searchBox.classList.contains('open')) doSearch(searchInput.value); });
+}
+function closeSearch(){ mask.classList.remove('open'); searchBox.classList.remove('open'); }
+function doSearch(q){
+  q = q.trim().toLowerCase();
+  if (!q){ lastHits = DOCS.map(d => ({ d, score: d.slug==='quickstart'?2:1, snippet:'' })); }
+  else {
+    lastHits = [];
+    for (const d of DOCS){
+      const body = d.md || fetchCache.get(d.slug) || '';
+      const hay = (d.title + ' ' + d.lead + ' ' + body).toLowerCase();
+      const pos = hay.indexOf(q);
+      if (pos < 0) continue;
+      const score = (d.title.toLowerCase().includes(q) ? 3 : 0) + (pos < 200 ? 1 : 0);
+      const start = Math.max(0, body.toLowerCase().indexOf(q) - 40);
+      lastHits.push({ d, score, snippet: body.slice(start, start + 90).replace(/\n/g,' ') });
+    }
+    lastHits.sort((a,b) => b.score - a.score);
+  }
+  selIdx = 0;
+  searchRes.innerHTML = lastHits.length
+    ? lastHits.map((h,i) => {
+        const t = q ? highlight(h.d.title, q) : h.d.title;
+        const s = h.snippet ? `<div class="hit-path">${q ? highlight(esc(h.snippet), q) : esc(h.lead)}</div>` : `<div class="hit-path">${esc(h.d.lead)}</div>`;
+        return `<a href="#/${h.d.slug}" data-i="${i}"><div class="hit-title">${t}</div>${s}</a>`;
+      }).join('')
+    : `<div class="search-empty">没有匹配的文档</div>`;
+  markSel();
+}
+function highlight(text, q){
+  if (!q) return esc(text);
+  const t = esc(text); const eq = esc(q);
+  return t.replace(new RegExp(eq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'), m => `<mark>${m}</mark>`);
+}
+function markSel(){ [...searchRes.querySelectorAll('a')].forEach((a,i)=>a.classList.toggle('sel', i===selIdx)); }
+document.getElementById('searchBtn').onclick = openSearch;
+mask.onclick = closeSearch;
+searchInput.oninput = () => doSearch(searchInput.value);
+searchInput.onkeydown = e => {
+  if (e.key === 'ArrowDown'){ selIdx = Math.min(selIdx+1, lastHits.length-1); markSel(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp'){ selIdx = Math.max(selIdx-1, 0); markSel(); e.preventDefault(); }
+  else if (e.key === 'Enter' && lastHits[selIdx]){ closeSearch(); location.hash = '#/' + lastHits[selIdx].d.slug; }
+  else if (e.key === 'Escape') closeSearch();
+};
+searchRes.onclick = () => closeSearch();
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); openSearch(); }
+  if (e.key === 'Escape') closeSearch();
+});
+
+/* ═══════════ 移动端侧栏 ═══════════ */
+const menuBtn = document.getElementById('menuBtn');
+menuBtn.onclick = () => sidebarEl.classList.toggle('open');
+sidebarEl.addEventListener('click', e => { if (e.target.closest('.side-link')) sidebarEl.classList.remove('open'); });
+document.addEventListener('click', e => {
+  if (window.innerWidth <= 900 && sidebarEl.classList.contains('open') && !sidebarEl.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target))
+    sidebarEl.classList.remove('open');
+});
+
+/* ═══════════ 路由 ═══════════ */
+window.addEventListener('hashchange', () => renderDoc(current()));
+renderDoc(current());
+</script>
+</body>
+</html>
