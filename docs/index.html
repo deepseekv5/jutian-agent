@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>巨天agent — 一句话，它把活干完</title>
-<meta name="description" content="巨天agent 是一个桌面 AI 工作台：对话、代码、终端，和一支数字员工团队，收进同一个窗口。本地优先，43 个内置工具直连真实系统，免费模型零门槛，AI 角色能说会画。">
+<meta name="description" content="巨天agent 是一个桌面 AI 工作台：对话、代码、终端，和一支数字员工团队，收进同一个窗口。本地优先，58 个内置工具直连真实系统，免费模型零门槛，AI 角色能说会画。">
 <meta name="theme-color" content="#000000">
 <meta property="og:title" content="巨天agent — 一句话，它把活干完">
 <meta property="og:description" content="桌面，是 AI 最好的位置。">
@@ -34,26 +34,30 @@
 
 <main>
 
-  <!-- ═══ Hero ═══ -->
-  <section class="a-hero">
+  <!-- ═══ Hero（WinIsland 布局：左文右渐变玻璃产品窗 + 氛围光晕） ═══ -->
+  <section class="a-hero wi-glow">
     <div class="a-hero__glow" data-glow aria-hidden="true"></div>
-    <div class="a-wrap">
-      <p class="a-hero__badge a-reveal">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
-        巨天agent 16
-      </p>
-      <h1 class="a-h1 a-lines">一句话，<br>它把活干完。</h1>
-      <p class="a-hero__lead a-lead a-reveal" style="transition-delay:.35s">对话、代码、终端，和一支数字员工团队——收进同一个窗口。<br>不经过别人的服务器，数据留在这台电脑。</p>
-      <div class="a-hero__links a-reveal" style="transition-delay:.48s">
-        <a class="a-link" href="#download">下载最新版
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </a>
-        <a class="a-link" href="highlights.html">看它能做什么
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
-        </a>
+    <div class="a-wrap wi-hero">
+      <div class="wi-hero__copy">
+        <p class="a-hero__badge a-reveal">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 16.6 Q12 10.1 20 16.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 2.7c.42 2.3 1.08 2.96 3.38 3.38-2.3.42-2.96 1.08-3.38 3.38-.42-2.3-1.08-2.96-3.38-3.38 2.3-.42 2.96-1.08 3.38-3.38z" fill="#30d158"/></svg>
+          巨天agent 18
+        </p>
+        <h1 class="a-h1 a-lines">一句话，<br>它把活干完。</h1>
+        <p class="a-hero__lead a-lead a-reveal" style="transition-delay:.35s">对话、代码、终端，和一支数字员工团队——收进同一个窗口。<br>不经过别人的服务器，数据留在这台电脑。</p>
+        <div class="a-hero__links a-reveal" style="transition-delay:.48s; display:flex; flex-wrap:wrap; gap:14px">
+          <a class="wi-pill wi-pill--primary" href="#download">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+            下载最新版
+          </a>
+          <a class="wi-pill wi-pill--ghost" href="highlights.html">看它能做什么
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+        <p class="a-hero__meta a-reveal" style="transition-delay:.56s">macOS 13+ / Windows 10+ &nbsp;·&nbsp; MIT 开源 &nbsp;·&nbsp; 免费模型开箱即聊</p>
       </div>
-      <p class="a-hero__meta a-reveal" style="transition-delay:.56s">macOS 13+ / Windows 10+ &nbsp;·&nbsp; MIT 开源 &nbsp;·&nbsp; 免费模型开箱即聊</p>
-    </div>
+      <div class="wi-hero__shot a-reveal" style="transition-delay:.3s">
+        <div class="a-hero__stage" data-parallax style="max-width:none">
     <div class="a-hero__stage" data-parallax>
       <!-- v16.6 编排素材：一次完整任务的过程复刻（内容人工编排，视觉 1:1 复刻应用） -->
       <div class="a-win" role="img" aria-label="巨天agent 工作流演示：TODO 分析任务从读取到写入的完整过程">
@@ -93,15 +97,50 @@
           <div class="a-win__foot"><span class="a-win__mode">办公模式</span><span class="a-win__ctx">上下文 12.4% · 16.2K/128K</span></div>
         </div>
       </div>
+      </div>
     </div>
   </section>
+
+  <!-- ═══ 特性词胶囊跑马灯（WinIsland 风格：两端渐隐横向滚动） ═══ -->
+  <div class="wi-marquee" aria-hidden="true">
+    <div class="wi-marquee__track">
+      <span class="wi-chip"><b>58 个工具</b>直连真实系统</span>
+      <span class="wi-chip">四套推理内核</span>
+      <span class="wi-chip"><b>Super</b> 全自动路由</span>
+      <span class="wi-chip">子代理并行池</span>
+      <span class="wi-chip">定时任务</span>
+      <span class="wi-chip">技能市场</span>
+      <span class="wi-chip">知识库检索</span>
+      <span class="wi-chip">安全盾拦截</span>
+      <span class="wi-chip">液态玻璃界面</span>
+      <span class="wi-chip">手机远程</span>
+      <span class="wi-chip">安卓独立运行</span>
+      <span class="wi-chip"><b>应用内更新</b></span>
+      <span class="wi-chip">语音通话</span>
+      <span class="wi-chip">本地优先 · 零遥测</span>
+      <span class="wi-chip"><b>58 个工具</b>直连真实系统</span>
+      <span class="wi-chip">四套推理内核</span>
+      <span class="wi-chip"><b>Super</b> 全自动路由</span>
+      <span class="wi-chip">子代理并行池</span>
+      <span class="wi-chip">定时任务</span>
+      <span class="wi-chip">技能市场</span>
+      <span class="wi-chip">知识库检索</span>
+      <span class="wi-chip">安全盾拦截</span>
+      <span class="wi-chip">液态玻璃界面</span>
+      <span class="wi-chip">手机远程</span>
+      <span class="wi-chip">安卓独立运行</span>
+      <span class="wi-chip"><b>应用内更新</b></span>
+      <span class="wi-chip">语音通话</span>
+      <span class="wi-chip">本地优先 · 零遥测</span>
+    </div>
+  </div>
 
   <!-- ═══ 性能（仿 A20 Pro 区：眉标+大标题+描述+四格图标） ═══ -->
   <section class="a-section">
     <div class="a-wrap a-center">
       <p class="a-eyebrow a-reveal">性能</p>
       <h2 class="a-h2 a-reveal" style="margin-top:14px">本地就绪的引擎，<br>强悍出征。</h2>
-      <p class="a-desc a-reveal" style="margin-top:30px">43 个内置工具<b>直连终端与文件系统</b>。你说目标，它拆步骤、调工具、验证、给结果——不是建议，是执行。每轮对话前<b>自动快照</b>，一整轮改动一键撤销。独立的评估器<b>逐轮检查</b>，目标没完成就自动续跑。</p>
+      <p class="a-desc a-reveal" style="margin-top:30px">58 个内置工具<b>直连终端与文件系统</b>。你说目标，它拆步骤、调工具、验证、给结果——不是建议，是执行。每轮对话前<b>自动快照</b>，一整轮改动一键撤销。独立的评估器<b>逐轮检查</b>，目标没完成就自动续跑。</p>
 
       <!-- 引擎核心视觉 -->
       <div class="a-engine a-reveal" role="img" aria-label="巨天引擎示意：发光核心与环绕轨道">
@@ -119,7 +158,7 @@
       <div class="a-feats a-stagger" style="margin-top:clamp(60px,7vw,100px)">
         <div class="a-feat a-reveal">
           <span class="a-feat__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg></span>
-          <div class="a-feat__title">43 个内置工具</div>
+          <div class="a-feat__title">58 个内置工具</div>
           <div class="a-feat__sub">直连真实系统</div>
           <div class="a-feat__desc">终端、文件、检索、进程——不是演示环境，是你每天用的这台电脑。MCP 协议可继续扩展。</div>
         </div>
@@ -170,7 +209,7 @@
   </section>
   <div class="a-hairline" aria-hidden="true"></div>
 
-  <!-- ═══ 工具跑马灯（43 个内置工具的名字流） ═══ -->
+  <!-- ═══ 工具跑马灯（58 个内置工具的名字流） ═══ -->
   <div class="a-marquee" aria-hidden="true">
     <div class="a-marquee__track">
       <span>shell<i></i></span><span>read_file<i></i></span><span>write_file<i></i></span><span>edit_file<i></i></span><span>search_code<i></i></span><span>search_files<i></i></span><span>list_dir<i></i></span><span>web_search<i></i></span><span>web_fetch<i></i></span><span>git_status<i></i></span><span>git_commit<i></i></span><span>screenshot<i></i></span><span>deep_research<i></i></span><span>generate_image<i></i></span><span>consult_guidance<i></i></span><span>mcp_call<i></i></span><span>cron_create<i></i></span><span>skill_invoke<i></i></span>

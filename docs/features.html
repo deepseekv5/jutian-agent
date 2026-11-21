@@ -8,6 +8,16 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 <link rel="stylesheet" href="assets/css/apple.css">
+<style>
+  /* 页内叠加样式（仅本页生效，不改 apple.css）：wi-* 契约类与既有 a-* 容器协调 */
+  /* 顶部大字标题区保留居中排版（分栏仅 index hero 需要），仅注入 wi-glow 氛围光晕 */
+  .a-hero.wi-glow { text-align: center; padding: clamp(120px, 14vw, 170px) 0 0; }
+  .a-hero.wi-glow .a-wrap { text-align: center; }
+  /* 规格表容器 → 单块液态玻璃面板（行分隔线保留，水平内距让内容离开玻璃边缘） */
+  .a-rows.wi-glass { padding: 6px clamp(22px, 4.5vw, 40px); }
+  /* 12 项特性卡：玻璃底覆盖原渐变底（wi-glass 在 apple.css 后段本已胜出，此处按契约加双保险） */
+  .a-card.wi-glass { background: var(--wi-glass); }
+</style>
 </head>
 <body>
 
@@ -20,7 +30,7 @@
     <nav class="a-nav__links" aria-label="主导航">
       <a href="index.html">首页</a>
       <a href="highlights.html">亮点</a>
-      <a href="features.html">特性</a>
+      <a href="features.html" class="on">特性</a>
       <a href="scenarios.html">场景</a>
       <a href="guide.html">文档</a>
       <a href="about.html">关于</a>
@@ -31,7 +41,7 @@
 
 <main>
 
-  <section class="a-hero" style="padding-bottom:0">
+  <section class="a-hero wi-glow" style="padding-bottom:0">
     <div class="a-wrap">
       <p class="a-eyebrow a-reveal">特性与参数</p>
       <h2 class="a-h2 a-reveal" style="margin-top:14px">规格，摊开说。</h2>
@@ -41,7 +51,7 @@
 
   <section class="a-section" style="padding-top:clamp(50px,6vw,80px)">
     <div class="a-wrap">
-      <div class="a-rows">
+      <div class="a-rows wi-glass">
         <div class="a-row a-reveal"><span class="a-row__idx">平台</span><div><div class="a-row__title">macOS / Windows / Linux / Android</div><p class="a-row__desc">macOS 13+（Apple Silicon / Intel）· Windows 10+ x64 · Linux 全发行 · Android 可独立运行</p></div><span class="a-row__aside"><b>4 端</b>同发</span></div>
         <div class="a-row a-reveal"><span class="a-row__idx">体积</span><div><div class="a-row__title">约 120 MB</div><p class="a-row__desc">首次安装后自动清理临时文件，不占多余空间。</p></div><span class="a-row__aside"><b>120</b>MB 级</span></div>
         <div class="a-row a-reveal"><span class="a-row__idx">内存</span><div><div class="a-row__title">空闲约 380 MB</div><p class="a-row__desc">低性能设备自动降级玻璃模糊与动画，老机器也能跑。</p></div><span class="a-row__aside"><b>auto</b>自动降级</span></div>
@@ -62,18 +72,18 @@
       <p class="a-eyebrow a-reveal">完整特性</p>
       <h2 class="a-h2 a-reveal" style="margin:14px 0 clamp(40px,5vw,64px)">打开就有的部分。</h2>
       <div class="a-cards a-stagger">
-        <div class="a-card"><p class="a-card__kicker">001 · 多标签工作区</p><p class="a-card__big">同窗<br>多开</p><p class="a-card__sub">对话、代码、终端、知识库；Cmd+N/T/W 全键盘，切走不丢状态</p></div>
-        <div class="a-card"><p class="a-card__kicker">002 · Git 检查点</p><p class="a-card__big">改坏了<br>不慌</p><p class="a-card__sub">每轮对话前自动快照工作目录，一整轮改动一键撤销</p></div>
-        <div class="a-card"><p class="a-card__kicker">003 · 深度思考档位</p><p class="a-card__big">5 档<br>随消息切</p><p class="a-card__sub">关闭/低/中/高/最大——简单问题不浪费，难问题不糊弄</p></div>
-        <div class="a-card"><p class="a-card__kicker">004 · 全局全文搜索</p><p class="a-card__big">搜正文<br>直达消息</p><p class="a-card__sub">搜标题也搜每一条消息正文，命中直接跳转并高亮</p></div>
-        <div class="a-card"><p class="a-card__kicker">005 · 原生玻璃界面</p><p class="a-card__big">macOS<br>液态玻璃</p><p class="a-card__sub">原生窗口材质 + 系统菜单齐备；低性能设备自动退回纯净底色</p></div>
-        <div class="a-card"><p class="a-card__kicker">006 · 语音通话模式</p><p class="a-card__big">边说边<br>干活</p><p class="a-card__sub">桌宠一键唤起，双手占用时最好用</p></div>
-        <div class="a-card"><p class="a-card__kicker">007 · 命令面板</p><p class="a-card__big">⌘K<br>一步到位</p><p class="a-card__sub">跳会话、开页面、发指令</p></div>
-        <div class="a-card"><p class="a-card__kicker">008 · 长期记忆</p><p class="a-card__big">记得你<br>的偏好</p><p class="a-card__sub">只存索引不塞全文，重要细节按需取</p></div>
-        <div class="a-card"><p class="a-card__kicker">009 · 知识库</p><p class="a-card__big">回答<br>有出处</p><p class="a-card__sub">文档导入即检索，引用可点开</p></div>
-        <div class="a-card"><p class="a-card__kicker">010 · 截图即问</p><p class="a-card__big">框选<br>直接问</p><p class="a-card__sub">「这是什么」「报错什么意思」，AI 直接看图回答</p></div>
-        <div class="a-card"><p class="a-card__kicker">011 · PPT 生成</p><p class="a-card__big">一句话<br>到 .pptx</p><p class="a-card__sub">PowerPoint / Keynote / WPS 直接打开继续改</p></div>
-        <div class="a-card"><p class="a-card__kicker">012 · 定时任务</p><p class="a-card__big">到点<br>自动跑</p><p class="a-card__sub">日报、巡检、监控，它替你盯着</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">001 · 多标签工作区</p><p class="a-card__big">同窗<br>多开</p><p class="a-card__sub">对话、代码、终端、知识库；Cmd+N/T/W 全键盘，切走不丢状态</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">002 · Git 检查点</p><p class="a-card__big">改坏了<br>不慌</p><p class="a-card__sub">每轮对话前自动快照工作目录，一整轮改动一键撤销</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">003 · 深度思考档位</p><p class="a-card__big">5 档<br>随消息切</p><p class="a-card__sub">关闭/低/中/高/最大——简单问题不浪费，难问题不糊弄</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">004 · 全局全文搜索</p><p class="a-card__big">搜正文<br>直达消息</p><p class="a-card__sub">搜标题也搜每一条消息正文，命中直接跳转并高亮</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">005 · 原生玻璃界面</p><p class="a-card__big">macOS<br>液态玻璃</p><p class="a-card__sub">原生窗口材质 + 系统菜单齐备；低性能设备自动退回纯净底色</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">006 · 语音通话模式</p><p class="a-card__big">边说边<br>干活</p><p class="a-card__sub">桌宠一键唤起，双手占用时最好用</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">007 · 命令面板</p><p class="a-card__big">⌘K<br>一步到位</p><p class="a-card__sub">跳会话、开页面、发指令</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">008 · 长期记忆</p><p class="a-card__big">记得你<br>的偏好</p><p class="a-card__sub">只存索引不塞全文，重要细节按需取</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">009 · 知识库</p><p class="a-card__big">回答<br>有出处</p><p class="a-card__sub">文档导入即检索，引用可点开</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">010 · 截图即问</p><p class="a-card__big">框选<br>直接问</p><p class="a-card__sub">「这是什么」「报错什么意思」，AI 直接看图回答</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">011 · PPT 生成</p><p class="a-card__big">一句话<br>到 .pptx</p><p class="a-card__sub">PowerPoint / Keynote / WPS 直接打开继续改</p></div>
+        <div class="a-card wi-glass wi-glass--hover"><p class="a-card__kicker">012 · 定时任务</p><p class="a-card__big">到点<br>自动跑</p><p class="a-card__sub">日报、巡检、监控，它替你盯着</p></div>
       </div>
     </div>
   </section>
@@ -100,8 +110,8 @@
       <h2 class="a-h2">规格都在这了。</h2>
       <p class="a-lead" style="margin-top:16px">剩下的，装上自己看。</p>
       <div class="a-cta__row">
-        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
-        <a class="a-btn a-btn--ghost" href="index.html">回到首页</a>
+        <a class="wi-pill wi-pill--primary" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
+        <a class="wi-pill wi-pill--ghost" href="index.html">回到首页</a>
       </div>
     </div>
   </section>

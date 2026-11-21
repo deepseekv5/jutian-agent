@@ -8,6 +8,14 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 <link rel="stylesheet" href="assets/css/apple.css">
+<style>
+/* 页面级 WinIsland 适配（不改 apple.css）：wi-glow 只取氛围光晕，保留本页 hero 居中排版；
+   场景卡玻璃化后由 wi-glass 接管背景/描边/圆角/投影 */
+.a-hero.wi-glow { text-align: center; padding: clamp(90px, 11vw, 150px) 0 0; overflow: clip; }
+.a-hero.wi-glow .a-wrap { text-align: center; }
+.a-hero.wi-glow .a-lead { margin-left: auto; margin-right: auto; }
+.a-card.wi-glass { background: var(--wi-glass); border-radius: 24px; }
+</style>
 </head>
 <body>
 
@@ -21,7 +29,7 @@
       <a href="index.html">首页</a>
       <a href="highlights.html">亮点</a>
       <a href="features.html">特性</a>
-      <a href="scenarios.html">场景</a>
+      <a href="scenarios.html" class="on">场景</a>
       <a href="guide.html">文档</a>
       <a href="about.html">关于</a>
     </nav>
@@ -31,7 +39,7 @@
 
 <main>
 
-  <section class="a-hero" style="padding-bottom:0">
+  <section class="a-hero wi-glow" style="padding-bottom:0">
     <div class="a-wrap">
       <p class="a-eyebrow a-reveal">使用场景</p>
       <h2 class="a-h2 a-reveal" style="margin-top:14px">四种最常见的下午。</h2>
@@ -86,12 +94,12 @@
       <p class="a-eyebrow a-reveal">场景 03 · 04</p>
       <h2 class="a-h3 a-reveal" style="margin:12px 0 clamp(32px,4vw,52px)">写内容，整数据。</h2>
       <div class="a-cards a-stagger" style="grid-template-columns:1fr 1fr">
-        <div class="a-card a-reveal">
+        <div class="a-card wi-glass wi-glass--hover a-reveal">
           <p class="a-card__kicker">写内容</p>
           <p class="a-card__big">初稿<br>十分钟</p>
           <p class="a-card__sub">「按这个大纲写初稿，语气克制一点。」它给结构、给措辞、给三种开头，你只管挑。语气和偏好它记得，下次不用重新交代。每次回答的工具调用都记着——查了哪个文件、跑了哪条命令，点开就能核。</p>
         </div>
-        <div class="a-card a-reveal">
+        <div class="a-card wi-glass wi-glass--hover a-reveal">
           <p class="a-card__kicker">整数据</p>
           <p class="a-card__big">杂乱<br>变表格</p>
           <p class="a-card__sub">「把这堆 JSON 整理成表格，按日期排。」读取、清洗、归类、输出，一步做完再开口。结果可核对、可导出、可复用。</p>
@@ -122,8 +130,8 @@
       <h2 class="a-h2">你的下午，你挑。</h2>
       <p class="a-lead" style="margin-top:16px">把重复的活交出去。</p>
       <div class="a-cta__row">
-        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
-        <a class="a-btn a-btn--ghost" href="index.html">回到首页</a>
+        <a class="wi-pill wi-pill--primary" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
+        <a class="wi-pill wi-pill--ghost" href="index.html">回到首页</a>
       </div>
     </div>
   </section>

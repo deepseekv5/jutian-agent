@@ -302,3 +302,94 @@ img, svg { display: block; }
 /* v16.6.1：卡片图标统一顶部放置（接入/升级卡全部带专属图标） */
 .a-card__icon { margin: 0 auto 16px; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: var(--a-green); background: linear-gradient(180deg, rgba(48,209,88,.14), rgba(48,209,88,.05)); box-shadow: 0 0 0 1px rgba(48,209,88,.22) inset; }
 .a-card__icon svg { width: 24px; height: 24px; }
+
+/* ═══ WinIsland 主题层（v19）：悬浮胶囊导航 / 液态玻璃 / 氛围光晕 / 胶囊 CTA / 特性跑马灯。
+   学习 winisland.cn 设计语言，叠加在既有 Apple 排版体系之上（类名 wi-*，六页共享）。 ═══ */
+:root {
+  --wi-bg: #0f1013;
+  --wi-glass: rgba(255,255,255,.055);
+  --wi-stroke: rgba(255,255,255,.1);
+  --wi-nav-h: 52px;
+}
+
+/* 1) 全站底色：近黑微蓝灰（比纯黑多一层质感），保留纯黑段落由页面自行覆盖 */
+body { background: var(--wi-bg); }
+
+/* 2) 氛围光晕：hero 顶部蓝绿双径向渐变（页面根容器加 .wi-glow） */
+.wi-glow { position: relative; }
+.wi-glow::before { content: ''; position: absolute; left: -12%; right: -12%; top: -14%; height: 72%;
+  pointer-events: none; z-index: 0; filter: blur(38px);
+  background: radial-gradient(58% 62% at 72% 30%, rgba(41,151,255,.15), transparent 64%),
+              radial-gradient(46% 54% at 22% 26%, rgba(48,209,88,.10), transparent 60%); }
+.wi-glow > * { position: relative; z-index: 1; }
+
+/* 3) 悬浮胶囊导航：全宽 sticky → 居中悬浮玻璃胶囊（结构不变，样式升级全站生效） */
+.a-nav { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  width: min(1180px, calc(100% - 28px)); border-radius: 999px;
+  background: rgba(20,20,24,.66); border: 1px solid var(--wi-stroke);
+  backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: 0 12px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07); }
+.a-nav__inner { height: 52px; max-width: none; padding: 0 10px 0 18px; }
+.a-nav__links a { padding: 6px 13px; border-radius: 999px; transition: background .18s, color .18s; }
+.a-nav__links a:hover { background: rgba(255,255,255,.08); }
+.a-nav__links a.on { color: #fff; background: rgba(255,255,255,.1); }
+.a-nav__cta { height: 32px; display: inline-flex; align-items: center; }
+@media (max-width: 760px) { .a-nav { width: calc(100% - 20px); } }
+
+/* 4) 液态玻璃卡（backdrop 磨砂 + 白描边 + 内高光 + 深投影） */
+.wi-glass { background: var(--wi-glass);
+  backdrop-filter: blur(28px) saturate(170%); -webkit-backdrop-filter: blur(28px) saturate(170%);
+  border: 1px solid var(--wi-stroke); border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 22px 60px rgba(0,0,0,.45); }
+.wi-glass--hover { transition: transform .25s cubic-bezier(.22,.61,.36,1), border-color .25s, background .25s; }
+.wi-glass--hover:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.075); }
+
+/* 5) 胶囊 CTA（蓝主 + 白透明副） */
+.wi-pill { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 24px;
+  border-radius: 999px; font-size: 15px; font-weight: 600; transition: filter .18s, background .18s; }
+.wi-pill--primary { background: var(--a-blue); color: #fff; }
+.wi-pill--primary:hover { filter: brightness(1.12); }
+.wi-pill--ghost { background: rgba(255,255,255,.08); color: var(--a-white); }
+.wi-pill--ghost:hover { background: rgba(255,255,255,.13); }
+.wi-pill svg { width: 15px; height: 15px; }
+
+/* 6) Hero 左右分栏（左文右渐变玻璃产品窗） */
+.wi-hero { display: grid; grid-template-columns: 1.02fr .98fr; gap: clamp(36px, 5vw, 64px);
+  align-items: center; padding: clamp(120px, 15vw, 180px) 0 clamp(70px, 8vw, 110px); }
+@media (max-width: 900px) { .wi-hero { grid-template-columns: 1fr; padding-top: 110px; } }
+.wi-hero__copy { position: relative; z-index: 1; }
+.wi-hero__shot { border-radius: 28px; overflow: hidden; position: relative;
+  background: linear-gradient(135deg, #2b2140 0%, #4a3f7a 46%, #8f7bd8 100%);
+  box-shadow: 0 44px 130px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.28);
+  padding: clamp(22px, 3vw, 38px); }
+.wi-hero__shot::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(160deg, rgba(255,255,255,.14), transparent 42%); }
+
+/* 7) 特性词胶囊跑马灯（底部横向滚动，两端渐隐） */
+.wi-marquee { overflow: hidden; padding: 26px 0 8px;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+.wi-marquee__track { display: flex; gap: 14px; width: max-content; animation: wi-scroll 34s linear infinite; }
+.wi-marquee:hover .wi-marquee__track { animation-play-state: paused; }
+.wi-chip { white-space: nowrap; padding: 11px 22px; border-radius: 999px; font-size: 14px; color: #e8e8ea;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08); transition: background .2s; }
+.wi-chip:hover { background: rgba(255,255,255,.12); }
+.wi-chip b { color: #fff; font-weight: 600; }
+@keyframes wi-scroll { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .wi-marquee__track { animation: none; } }
+
+/* 8) 渐变玻璃产品窗内嵌套的「岛」条（复刻灵动岛胶囊层次） */
+.wi-island { background: rgba(12,12,14,.78); border-radius: 22px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.1); }
+
+/* 9) wi-hero 布局收敛：覆盖 a-hero 的居中排版（WinIsland hero 左对齐 + 收紧字号与间距） */
+.a-hero.wi-glow { text-align: left; padding: 0; overflow: visible; }
+.a-hero.wi-glow .a-wrap { text-align: left; }
+.a-hero.wi-glow .a-h1 { font-size: clamp(44px, 5.6vw, 78px); line-height: 1.08; letter-spacing: -.025em;
+  background: linear-gradient(180deg, #fff 58%, rgba(255,255,255,.62)); -webkit-background-clip: text; background-clip: text; }
+.a-hero.wi-glow .a-hero__badge { margin-bottom: 18px; }
+.a-hero.wi-glow .a-hero__lead { margin-top: 20px; font-size: clamp(16px, 1.6vw, 19px); line-height: 1.65; }
+.a-hero.wi-glow .a-hero__links { margin-top: 30px; }
+.a-hero.wi-glow .a-hero__meta { margin-top: 26px; color: var(--a-gray2); font-size: 13px; }
+.a-hero.wi-glow .a-hero__stage { padding: 0; margin: 0; max-width: none; }
+.a-hero.wi-glow .a-win { border-radius: 18px; }

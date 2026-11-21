@@ -8,6 +8,15 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg">
 <link rel="stylesheet" href="assets/css/apple.css">
+<style>
+  /* 页内叠加样式（仅本页生效，不改 apple.css）：wi-* 契约类与既有 a-* 容器协调 */
+  /* 顶部大字标题区保留居中排版（分栏仅 index hero 需要），仅注入 wi-glow 氛围光晕 */
+  .a-hero.wi-glow { text-align: center; padding: clamp(120px, 14vw, 170px) 0 0; }
+  .a-hero.wi-glow .a-wrap { text-align: center; }
+  /* 六大能力行 → 液态玻璃 bento 卡：保留 a-row 骨架，叠加 wi-glass 观感（内距/行距按卡片化微调） */
+  .a-row.wi-glass { padding: 26px 30px; margin-bottom: 16px; }
+  .a-row.wi-glass:last-child { margin-bottom: 0; }
+</style>
 </head>
 <body>
 
@@ -19,7 +28,7 @@
     </a>
     <nav class="a-nav__links" aria-label="主导航">
       <a href="index.html">首页</a>
-      <a href="highlights.html">亮点</a>
+      <a href="highlights.html" class="on">亮点</a>
       <a href="features.html">特性</a>
       <a href="scenarios.html">场景</a>
       <a href="guide.html">文档</a>
@@ -31,7 +40,7 @@
 
 <main>
 
-  <section class="a-hero" style="padding-bottom:0">
+  <section class="a-hero wi-glow" style="padding-bottom:0">
     <div class="a-wrap">
       <p class="a-eyebrow a-reveal">核心亮点</p>
       <h2 class="a-h2 a-reveal" style="margin-top:14px">六件事，做到位。</h2>
@@ -42,15 +51,15 @@
   <section class="a-section" style="padding-top:clamp(50px,6vw,80px)">
     <div class="a-wrap">
       <div class="a-rows">
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">01</span>
           <div>
             <div class="a-row__title">说人话，它动手</div>
-            <p class="a-row__desc">43 个内置工具直连真实终端与文件系统。你说目标，它拆步骤、调工具、验证、给结果。整个过程看得见，每一步都能打断。不是建议，是执行。</p>
+            <p class="a-row__desc">58 个内置工具直连真实终端与文件系统。你说目标，它拆步骤、调工具、验证、给结果。整个过程看得见，每一步都能打断。不是建议，是执行。</p>
           </div>
           <span class="a-row__aside"><b>43</b>内置工具</span>
         </div>
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">02</span>
           <div>
             <div class="a-row__title">代码模式</div>
@@ -58,7 +67,7 @@
           </div>
           <span class="a-row__aside"><b>±</b>按改动撤销</span>
         </div>
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">03</span>
           <div>
             <div class="a-row__title">集群指挥室</div>
@@ -66,7 +75,7 @@
           </div>
           <span class="a-row__aside"><b>@</b>接力协作</span>
         </div>
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">04</span>
           <div>
             <div class="a-row__title">终端即入口</div>
@@ -74,7 +83,7 @@
           </div>
           <span class="a-row__aside"><b>jt</b>一行唤起</span>
         </div>
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">05</span>
           <div>
             <div class="a-row__title">本地优先</div>
@@ -82,7 +91,7 @@
           </div>
           <span class="a-row__aside"><b>LAN</b>仅局域网</span>
         </div>
-        <div class="a-row a-reveal">
+        <div class="a-row wi-glass wi-glass--hover a-reveal">
           <span class="a-row__idx">06</span>
           <div>
             <div class="a-row__title">越用越懂你</div>
@@ -118,8 +127,8 @@
       <h2 class="a-h2">眼见为实。</h2>
       <p class="a-lead" style="margin-top:16px">装上它，自己试一遍。</p>
       <div class="a-cta__row">
-        <a class="a-btn" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
-        <a class="a-btn a-btn--ghost" href="index.html">回到首页</a>
+        <a class="wi-pill wi-pill--primary" href="https://github.com/deepseekv5/jutian-agent/releases" target="_blank" rel="noopener">下载最新版</a>
+        <a class="wi-pill wi-pill--ghost" href="index.html">回到首页</a>
       </div>
     </div>
   </section>

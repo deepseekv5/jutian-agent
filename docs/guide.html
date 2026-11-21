@@ -25,10 +25,12 @@ a:hover{text-decoration:underline}
 ::selection{background:rgba(48,209,88,.28)}
 
 /* ── 顶部导航 ── */
-.nav{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);display:flex;align-items:center;
-  backdrop-filter:saturate(180%) blur(18px);-webkit-backdrop-filter:saturate(180%) blur(18px);
-  background:rgba(16,16,18,.78);border-bottom:1px solid var(--border)}
-.nav__inner{width:100%;max-width:1440px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:22px}
+.nav{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:100;height:var(--nav-h);display:flex;align-items:center;
+  width:min(1180px,calc(100% - 28px));border-radius:999px;
+  backdrop-filter:saturate(170%) blur(22px);-webkit-backdrop-filter:saturate(170%) blur(22px);
+  background:rgba(20,20,24,.66);border:1px solid var(--stroke, rgba(255,255,255,.1));
+  box-shadow:0 12px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07)}
+.nav__inner{width:100%;max-width:none;margin:0 auto;padding:0 12px 0 18px;display:flex;align-items:center;gap:20px}
 .nav__brand{display:flex;align-items:center;gap:9px;color:#fff;font-size:14.5px;font-weight:650;letter-spacing:.01em}
 .nav__brand:hover{text-decoration:none}
 .nav__brand svg{flex:none}
@@ -49,8 +51,8 @@ a:hover{text-decoration:underline}
 .menu-btn{display:none}
 
 /* ── 三栏骨架 ── */
-.layout{display:flex;max-width:1440px;margin:0 auto;padding-top:var(--nav-h)}
-.sidebar{position:fixed;top:var(--nav-h);bottom:0;left:0;width:var(--sidebar-w);overflow-y:auto;
+.layout{display:flex;max-width:1440px;margin:0 auto;padding-top:calc(var(--nav-h) + 14px)}
+.sidebar{position:fixed;top:calc(var(--nav-h) + 14px);bottom:0;left:0;width:var(--sidebar-w);overflow-y:auto;
   padding:26px 18px 40px 22px;border-right:1px solid var(--border-soft);scrollbar-width:thin}
 .sidebar::-webkit-scrollbar{width:4px}
 .sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
@@ -65,7 +67,7 @@ a:hover{text-decoration:underline}
 /* ── 正文 ── */
 .main{flex:1;min-width:0;padding:40px 44px 90px calc(var(--sidebar-w) + 34px);display:flex;justify-content:center}
 .doc{width:100%;max-width:720px;min-width:0}
-.outline{position:fixed;top:var(--nav-h);right:0;bottom:0;width:var(--outline-w);overflow-y:auto;padding:44px 20px 40px 12px;
+.outline{position:fixed;top:calc(var(--nav-h) + 14px);right:0;bottom:0;width:var(--outline-w);overflow-y:auto;padding:44px 20px 40px 12px;
   border-left:1px solid var(--border-soft);font-size:12px}
 .outline__title{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--text-3);text-transform:uppercase;margin-bottom:10px}
 .outline a{display:block;color:var(--text-3);padding:4px 0 4px 12px;border-left:1px solid var(--border);line-height:1.5;transition:.15s}

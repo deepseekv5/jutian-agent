@@ -49,6 +49,7 @@ const agentNav = `  <div class="a-nav__inner">
       <a href="highlights.html">亮点</a>
       <a href="features.html">特性</a>
       <a href="scenarios.html">场景</a>
+      <a href="guide.html">文档</a>
       <a href="about.html">关于</a>
     </nav>
     <a class="a-nav__cta" href="index.html#download">下载</a>
