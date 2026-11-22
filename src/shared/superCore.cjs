@@ -9018,7 +9018,7 @@ async function runSuperLoop(messages, deps) {
   const totalTokens = Number(deps.baseDeps.contextWindow) || 128e3;
   const budget = assembler.allocate(totalTokens, analysis, plan);
   emit({ type: "metric", name: "context.total", value: budget.total });
-  let working = injectContext(assembler.trim(messages, budget), analysis, plan, decision);
+  const working = injectContext(assembler.trim(messages, budget), analysis, plan, decision);
   if (deps.missionSummary || deps.missionDirective) {
     const parts = [];
     if (deps.missionSummary) parts.push("\u3010\u8DE8\u4F1A\u8BDD\u957F\u4EFB\u52A1\xB7\u5F53\u524D\u8FDB\u5EA6\u3011\n" + deps.missionSummary);

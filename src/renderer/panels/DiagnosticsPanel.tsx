@@ -157,6 +157,48 @@ function SuperRouteSection() {
   )
 }
 
+/** 计划执行进度（v18.3.0）：监听 super-plan 事件，展示分层调度的步骤进展 */
+interface PlanEvent { name: string; value: number; detail?: string; at: number }
+const planLog: PlanEvent[] = []
+if (typeof window !== 'undefined') {
+  window.addEventListener('super-plan', (e) => {
+    const d = (e as CustomEvent).detail
+    if (!d || !d.name) return
+    planLog.unshift({ name: String(d.name), value: Number(d.value) || 0, detail: String(d.detail || '').slice(0, 100), at: Date.now() })
+    if (planLog.length > 40) planLog.length = 40
+  })
+}
+function PlanExecutionSection() {
+  const { c } = useTheme()
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const h = () => bump((n) => n + 1)
+    window.addEventListener('super-plan', h)
+    return () => window.removeEventListener('super-plan', h)
+  }, [])
+  if (!planLog.length) return null
+  const stepCount = planLog.find(e => e.name === 'super.plan.steps')
+  return (
+    <details className="rounded-xl px-3.5 py-2.5" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }} open>
+      <summary className="flex items-center gap-2 cursor-pointer list-none">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: '#5e5ce6' }} />
+        <span className="text-[12.5px] font-medium" style={{ color: c.textHead }}>计划执行</span>
+        <span className="text-[11.5px] ml-1" style={{ color: c.textTertiary }}>
+          {stepCount ? `完成 ${stepCount.value} 步` : `${planLog.length} 条进度事件`}
+        </span>
+      </summary>
+      <div className="mt-2.5 space-y-1">
+        {planLog.slice(0, 12).map((e, i) => (
+          <div key={e.at + '-' + i} className="flex items-center gap-2 text-[11.5px]" style={{ color: c.textSecondary }}>
+            <span className="font-mono" style={{ color: c.textTertiary }}>{new Date(e.at).toLocaleTimeString()}</span>
+            <span>{e.name.replace(/^(super\.)?plan\./, '')}{e.detail ? ' · ' + e.detail : ''}</span>
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme()
   const [results, setResults] = useState<CheckResult[]>([])
@@ -275,6 +317,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-2">
         <SuperRouteSection />
+        <PlanExecutionSection />
         <AgentPerfSection />
         {results.map((r) => (
           <details key={r.id} className="rounded-xl px-3.5 py-2.5" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>

@@ -244,7 +244,7 @@ export async function runSuperLoop(messages: LoopMessage[], deps: SuperDeps): Pr
   const totalTokens = Number(deps.baseDeps.contextWindow) || 128000
   const budget = assembler.allocate(totalTokens, analysis, plan)
   emit({ type: 'metric', name: 'context.total', value: budget.total })
-  let working = injectContext(assembler.trim(messages, budget), analysis, plan, decision)
+  const working = injectContext(assembler.trim(messages, budget), analysis, plan, decision)
 
   // 长任务上下文（v18.4.0）：跨会话目标摘要 + 续跑指令走 system-reminder 通道
   if (deps.missionSummary || deps.missionDirective) {

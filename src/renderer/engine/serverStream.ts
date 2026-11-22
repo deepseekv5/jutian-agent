@@ -118,9 +118,17 @@ export async function streamChatViaServer(
           // v18.1.2：Super 全自动路由决策——广播到全局（诊断面板监听展示"为什么这样路由"）
           try { window.dispatchEvent(new CustomEvent('super-route', { detail: (ev as any).decision })) } catch { /* 非浏览器环境 */ }
           break
-        case 'super_metric':
-          try { window.dispatchEvent(new CustomEvent('super-metric', { detail: { name: (ev as any).name, value: (ev as any).value } })) } catch { /* 非浏览器环境 */ }
+        case 'super_metric': {
+          const name = String((ev as any).name || '')
+          try {
+            window.dispatchEvent(new CustomEvent('super-metric', { detail: { name, value: (ev as any).value } }))
+            // v18.3.0：计划执行事件（plan.*）单独广播给诊断面板
+            if (name.startsWith('plan.') || name.startsWith('super.plan.')) {
+              window.dispatchEvent(new CustomEvent('super-plan', { detail: { name, value: (ev as any).value, detail: (ev as any).detail } }))
+            }
+          } catch { /* 非浏览器环境 */ }
           break
+        }
         case 'done':
           await callbacks.onDone(ev.content || '', ev.toolCalls || [], ev.thinking || undefined)
           return
