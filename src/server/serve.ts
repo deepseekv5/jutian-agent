@@ -310,6 +310,12 @@ var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
 // v18.3.0：失败恢复模块（结构化恢复路线，独立编译的 cjs 旁加载）
 var FAILURE_RECOVERY = (() => { try { const m = require("./src/shared/failureRecovery.cjs"); return () => new (m.FailureRecovery)(); } catch (e) { console.error("failureRecovery.cjs load failed:", e.message); return null; } })();
+// v18.4.0：长任务跨会话编排（mission tracker）——目标可跨会话持续推进
+var MISSION_MOD = (() => { try { return require("./src/shared/missionTracker.cjs"); } catch (e) { console.error("missionTracker.cjs load failed:", e.message); return null; } })();
+var MISSION_TRACKER = MISSION_MOD ? new MISSION_MOD.MissionTracker({
+  load: () => { try { return loadJson("missions.json").items || []; } catch { return [] } },
+  save: (items) => { try { saveJson("missions.json", { items }); } catch {} },
+}) : null;
 // JT Core Ultra（v15.0.0）：移植 gemini-cli/OpenHands 护栏的高端内核，与 JT Core Pro+ 并存
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 // JT Core Auto（v17.1.0）：叠加自主目标闭环的内核（评估器 + 停滞检测 + 自动续跑）
@@ -4066,6 +4072,9 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             // ExecutionPlan 分层调度，规划层不再只做依赖校验的死代码
             enablePlanExecution: payload.enablePlanExecution !== false,
             planStepRounds: Number(payload.planStepRounds) || 2,
+            // 长任务跨会话上下文（v18.4.0）
+            missionSummary: payload.missionSummary ? String(payload.missionSummary).slice(0, 4000) : undefined,
+            missionDirective: payload.missionDirective ? String(payload.missionDirective).slice(0, 2000) : undefined,
             sink: { emit: (ev) => {
               if (ev.type === 'route') send({ type: 'super_trace', decision: ev.decision })
               if (ev.type === 'metric') send({ type: 'super_metric', name: ev.name, value: ev.value })
@@ -5533,6 +5542,56 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
     }
 
     // ─── 会话/消息/记忆 — 统一 SQLite（ly-next 单一数据源）───
+    // ═══ /api/missions —— 长任务跨会话编排（v18.4.0） ═══
+    if (url.pathname === "/api/missions" && req.method === "GET") {
+      if (!MISSION_TRACKER) return json(res, { error: "任务追踪模块不可用" }, 500);
+      const status = url.searchParams.get("status");
+      return json(res, { items: status ? MISSION_TRACKER.list(status) : MISSION_TRACKER.list(), stats: MISSION_TRACKER.stats() });
+    }
+    if (url.pathname === "/api/missions" && req.method === "POST") {
+      if (!MISSION_TRACKER) return json(res, { error: "任务追踪模块不可用" }, 500);
+      const d = await body(req);
+      const goal = String(d.goal || "").trim();
+      if (!goal) return json(res, { error: "缺少 goal" }, 400);
+      const m = MISSION_TRACKER.create(goal, {
+        project: String(d.project || ""),
+        maxRounds: Math.max(3, Math.min(100, Number(d.maxRounds) || 20)),
+      });
+      // 可选：初始里程碑列表（一次建好计划）
+      if (Array.isArray(d.milestones)) for (const t of d.milestones.slice(0, 20)) MISSION_TRACKER.addMilestone(m.id, String(t).slice(0, 200));
+      return json(res, { mission: m }, 201);
+    }
+    if (url.pathname.startsWith("/api/missions/") && req.method === "GET") {
+      if (!MISSION_TRACKER) return json(res, { error: "任务追踪模块不可用" }, 500);
+      const id = decodeURIComponent(url.pathname.slice("/api/missions/".length));
+      const m = MISSION_TRACKER.get(id);
+      return m ? json(res, { mission: m, summary: MISSION_TRACKER.summary(id) }) : json(res, { error: "任务不存在" }, 404);
+    }
+    if (url.pathname.startsWith("/api/missions/") && req.method === "PUT") {
+      if (!MISSION_TRACKER) return json(res, { error: "任务追踪模块不可用" }, 500);
+      const id = decodeURIComponent(url.pathname.slice("/api/missions/".length));
+      const d = await body(req);
+      const action = String(d.action || "");
+      try {
+        if (action === "link_session") MISSION_TRACKER.linkSession(id, String(d.sessionId || ""));
+        else if (action === "add_milestone") MISSION_TRACKER.addMilestone(id, String(d.title || ""));
+        else if (action === "mark_milestone") MISSION_TRACKER.markMilestone(id, String(d.milestoneId || ""), String(d.status || "done"), String(d.note || ""));
+        else if (action === "advance") {
+          const ev = d.evaluation || {};
+          const r = MISSION_TRACKER.advance(id, String(d.sessionId || ""), {
+            done: !!ev.done, note: String(ev.note || ""), ok: ev.ok !== false,
+          });
+          return json(res, { ...r, summary: MISSION_TRACKER.summary(id) });
+        }
+        else if (action === "pause") MISSION_TRACKER.pause(id, String(d.reason || ""));
+        else if (action === "resume") MISSION_TRACKER.resume(id);
+        else if (action === "complete") MISSION_TRACKER.complete(id, String(d.note || ""));
+        else if (action === "cancel") MISSION_TRACKER.cancel(id, String(d.reason || ""));
+        else return json(res, { error: "未知 action" }, 400);
+        return json(res, { mission: MISSION_TRACKER.get(id), summary: MISSION_TRACKER.summary(id) });
+      } catch (e) { return json(res, { error: String(e.message || e) }, 400); }
+    }
+
     // GET /api/sessions
     if (url.pathname === "/api/sessions" && req.method === "GET") {
       if (hasDb) { try { return json(res, db.listSessions()); } catch {} }

@@ -9018,7 +9018,15 @@ async function runSuperLoop(messages, deps) {
   const totalTokens = Number(deps.baseDeps.contextWindow) || 128e3;
   const budget = assembler.allocate(totalTokens, analysis, plan);
   emit({ type: "metric", name: "context.total", value: budget.total });
-  const working = injectContext(assembler.trim(messages, budget), analysis, plan, decision);
+  let working = injectContext(assembler.trim(messages, budget), analysis, plan, decision);
+  if (deps.missionSummary || deps.missionDirective) {
+    const parts = [];
+    if (deps.missionSummary) parts.push("\u3010\u8DE8\u4F1A\u8BDD\u957F\u4EFB\u52A1\xB7\u5F53\u524D\u8FDB\u5EA6\u3011\n" + deps.missionSummary);
+    if (deps.missionDirective) parts.push("\u3010\u7EED\u8DD1\u6307\u4EE4\u3011\n" + deps.missionDirective);
+    parts.push("\u672C\u8F6E\u5DE5\u4F5C\u8981\u670D\u52A1\u4E8E\u4E0A\u8FF0\u957F\u4EFB\u52A1\u76EE\u6807\uFF1A\u63A8\u8FDB\u5F53\u524D\u91CC\u7A0B\u7891\u3001\u907F\u514D\u91CD\u590D\u5DF2\u5B8C\u6210\u7684\u6B65\u9AA4\uFF1B\u5B8C\u6210\u540E\u7ED9\u51FA\u7B80\u77ED\u8FDB\u5EA6\u8BF4\u660E\u3002");
+    working.push({ role: "user", content: `<system-reminder>${parts.join("\n\n")}</system-reminder>` });
+    phase("mission-context");
+  }
   phase("guardrails");
   const baseRunTool = deps.baseDeps.runTool;
   const guardedDeps = { ...applyOverrides(deps.baseDeps, decision) };

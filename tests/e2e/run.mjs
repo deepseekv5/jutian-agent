@@ -90,6 +90,17 @@ const mockServer = http.createServer((req, res) => {
       else res.end(sseText('命令被拦截了。E2E-BLOCK-DONE'))
       return
     }
+    if (mockMode === 'read_fail') {
+      // 第一段调用一个不存在的文件（触发 not_found 失败恢复：先读父目录）
+      if (!sawToolResult) res.end(sseContentPrefix('我来读文件。') + sseToolCall('read_file', { path: '/tmp/jt-e2e-nope/not-exist.txt' }))
+      else {
+        // 第二轮检查历史 tool 结果里是否含恢复指令（[恢复建议]）
+        const toolMsgs = msgs.filter(m => m.role === 'tool').map(m => String(m.content || '')).join('\n')
+        const recovered = toolMsgs.includes('恢复建议') || toolMsgs.includes('list_dir')
+        res.end(sseText(recovered ? '已按恢复建议处理。E2E-RECOVERY-OK' : '未见恢复建议。E2E-RECOVERY-MISS'))
+      }
+      return
+    }
     res.end(sseText(`这是 mock 的回复。E2E-PLAIN-MARKER`))
   })
 })
@@ -265,6 +276,33 @@ async function runE2E() {
     if (blocked && finalOk) pass('E8 危险命令被安全盾拦截', '命中 cmd.rm_root 规则'); else fail('E8 危险命令被拦截', `blocked=${blocked} final=${finalOk}`)
   }
 
+  // E11 失败恢复（v18.3.0）：工具失败→结构化恢复指令注入（not_found→先读父目录）
+  mockMode = 'read_fail'
+  {
+    await send('读取一个不存在的文件')
+    const ok = await waitFor(() => page.evaluate(() => document.body.textContent.includes('E2E-RECOVERY-OK')), 30000)
+    const miss = await waitFor(() => page.evaluate(() => document.body.textContent.includes('E2E-RECOVERY-MISS')), 8000)
+    if (ok && !miss) pass('E11 失败恢复指令注入（not_found）'); else fail('E11 失败恢复', `ok=${ok} miss=${miss}`)
+  }
+
+  // E12 诊断面板「内核路由」区块（super_trace 前端消费闭环）
+  {
+    // 先跑一次 super 引擎产生路由事件
+    await fetch(`${BASE}/api/agent/engine`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engine: 'super' }) })
+    mockMode = 'plain'
+    await send('你好，测试路由记录')
+    const routeOk = await waitFor(() => page.evaluate(() => document.body.textContent.includes('E2E-PLAIN-MARKER')), 30000)
+    // 打开诊断面板（设置→诊断 tab 或命令面板）——用全局按钮文本定位
+    const diagOpened = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button,[title]')].find(x => /诊断/.test((x.title || '') + (x.textContent || '')))
+      if (b) { b.click(); return true }
+      return false
+    })
+    await sleep(800)
+    const hasSection = await page.evaluate(() => document.body.textContent.includes('内核路由'))
+    if (routeOk && diagOpened && hasSection) pass('E12 诊断面板内核路由区块'); else fail('E12 诊断面板', `route=${routeOk} opened=${diagOpened} section=${hasSection}`)
+  }
+
   // E6 内核切换（API 往返 + 状态条文本）
   {
     await setEngine('super')
@@ -306,6 +344,27 @@ async function runE2E() {
     await sleep(1000)
     const after = await page.evaluate(() => (document.body.textContent.match(/新对话/g) || []).length)
     if (clicked && after >= before) pass('E9 会话管理（新建对话按钮）', `${before}→${after}`); else fail('E9 会话管理', `clicked=${clicked}`)
+  }
+
+  // E13 长任务跨会话编排（v18.4.0）：/api/missions CRUD + advance 状态机
+  {
+    const created = await fetch(`${BASE}/api/missions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal: 'E2E 长任务：分三步完成配置升级', project: 'e2e', milestones: ['读取配置', '修改参数', '验证测试'] }),
+    }).then(r => r.json()).catch(() => ({}))
+    const mid = created.mission?.id
+    const list = await fetch(`${BASE}/api/missions`).then(r => r.json()).catch(() => ({ items: [] }))
+    const detail = mid ? await fetch(`${BASE}/api/missions/${mid}`).then(r => r.json()).catch(() => ({})) : {}
+    // advance：评估未完成 → 续跑指令；评估不可用(ok=false) → paused
+    let adv = {}
+    if (mid) adv = await fetch(`${BASE}/api/missions/${mid}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'advance', sessionId: 'e2e-session', evaluation: { done: false, note: '还差修改参数', ok: true } }),
+    }).then(r => r.json()).catch(() => ({}))
+    const ok = !!mid && (list.items || []).some(m => m.id === mid)
+      && (detail.mission?.milestones?.length === 3) && adv.shouldContinue === true
+      && String(adv.nextDirective || '').includes('修改参数')
+    if (ok) pass('E13 长任务 CRUD + advance 续跑', `任务 ${mid}`); else fail('E13 长任务编排', `mid=${mid} ms=${detail.mission?.milestones?.length} adv=${JSON.stringify(adv).slice(0, 80)}`)
   }
 
   // E10 设置读写往返

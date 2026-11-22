@@ -244,7 +244,17 @@ export async function runSuperLoop(messages: LoopMessage[], deps: SuperDeps): Pr
   const totalTokens = Number(deps.baseDeps.contextWindow) || 128000
   const budget = assembler.allocate(totalTokens, analysis, plan)
   emit({ type: 'metric', name: 'context.total', value: budget.total })
-  const working = injectContext(assembler.trim(messages, budget), analysis, plan, decision)
+  let working = injectContext(assembler.trim(messages, budget), analysis, plan, decision)
+
+  // 长任务上下文（v18.4.0）：跨会话目标摘要 + 续跑指令走 system-reminder 通道
+  if (deps.missionSummary || deps.missionDirective) {
+    const parts: string[] = []
+    if (deps.missionSummary) parts.push('【跨会话长任务·当前进度】\n' + deps.missionSummary)
+    if (deps.missionDirective) parts.push('【续跑指令】\n' + deps.missionDirective)
+    parts.push('本轮工作要服务于上述长任务目标：推进当前里程碑、避免重复已完成的步骤；完成后给出简短进度说明。')
+    working.push({ role: 'user', content: `<system-reminder>${parts.join('\n\n')}</system-reminder>` })
+    phase('mission-context')
+  }
 
   // ── 阶段 9：护栏包装 runTool ──
   phase('guardrails')

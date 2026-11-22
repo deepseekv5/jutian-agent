@@ -318,6 +318,10 @@ export interface SuperDeps {
   enablePlanExecution?: boolean
   /** 计划执行单步最大轮次提示（注入模型消息），默认 2 */
   planStepRounds?: number
+  /** 长任务（v18.4.0）：当前任务的进度摘要，注入 system 让模型知道跨会话目标 */
+  missionSummary?: string
+  /** 长任务续跑指令（上一步评估未完成时注入，让模型接着推进） */
+  missionDirective?: string
 }
 
 export interface SuperResult {
