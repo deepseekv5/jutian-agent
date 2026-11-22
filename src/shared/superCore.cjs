@@ -8449,6 +8449,413 @@ var SuperEventCollector = class {
   }
 };
 
+// src/shared/super/runtime/scheduler.ts
+function makeAbortError() {
+  const e = new Error("\u8C03\u5EA6\u5DF2\u4E2D\u6B62");
+  e.name = "AbortError";
+  return e;
+}
+function withTimeout(p, ms, message) {
+  if (ms <= 0) return p;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+function raceWithAbort(p, signal, reason) {
+  if (signal.aborted) return Promise.reject(reason());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(reason());
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(
+      (v) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(e);
+      }
+    );
+  });
+}
+function defaultSleep(ms, signal) {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(makeAbortError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(makeAbortError());
+    };
+    const cleanup = () => signal?.removeEventListener("abort", onAbort);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+function backoffDelay(attempt, base, multiplier, maxDelay) {
+  const raw = base * Math.pow(Math.max(1, multiplier), Math.max(0, attempt - 1));
+  return Math.min(maxDelay, Math.max(0, Math.floor(raw)));
+}
+async function mapWithConcurrency(items, limit, fn) {
+  const n = items.length;
+  if (n === 0) return [];
+  const cap = Math.max(1, Math.floor(limit > 0 ? limit : n));
+  const out = new Array(n);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(cap, n) }, async () => {
+    while (true) {
+      const i = next++;
+      if (i >= n) break;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+function normalizePlan(plan) {
+  const byId = /* @__PURE__ */ new Map();
+  for (const s of plan.steps || []) {
+    if (s && typeof s.id === "string" && s.id && !byId.has(s.id)) byId.set(s.id, s);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const rawLevels = [];
+  const missing = [];
+  for (const level of plan.levels || []) {
+    const clean = [];
+    for (const id of level || []) {
+      if (typeof id !== "string" || !id || seen.has(id)) continue;
+      if (!byId.has(id)) {
+        if (!missing.includes(id)) missing.push(id);
+        continue;
+      }
+      seen.add(id);
+      clean.push(id);
+    }
+    if (clean.length > 0) rawLevels.push(clean);
+  }
+  const orphans = (plan.steps || []).filter((s) => s && s.id && !seen.has(s.id)).map((s) => s.id);
+  if (orphans.length > 0) {
+    if (rawLevels.length === 0) rawLevels.push([]);
+    rawLevels[rawLevels.length - 1].push(...orphans);
+    for (const id of orphans) seen.add(id);
+  }
+  const baseLevel = /* @__PURE__ */ new Map();
+  rawLevels.forEach((ids, li) => ids.forEach((id) => baseLevel.set(id, li)));
+  const effectiveLevel = /* @__PURE__ */ new Map();
+  const maxRounds = Math.max(1, byId.size);
+  for (let round6 = 0; round6 < maxRounds; round6++) {
+    let changed = false;
+    for (const s of byId.values()) {
+      const own = baseLevel.get(s.id) ?? 0;
+      let eff = Math.max(effectiveLevel.get(s.id) ?? own, own);
+      for (const dep of s.dependsOn || []) {
+        if (!byId.has(dep)) continue;
+        const depEff = effectiveLevel.get(dep) ?? (baseLevel.get(dep) ?? 0);
+        if (depEff >= eff) eff = depEff + 1;
+      }
+      if (eff !== effectiveLevel.get(s.id)) {
+        effectiveLevel.set(s.id, eff);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  const levelCount = Math.max(0, ...Array.from(effectiveLevel.values()).map((v) => v + 1));
+  const groups = [];
+  for (let li = 0; li < levelCount; li++) {
+    const g = Array.from(byId.values()).filter((s) => (effectiveLevel.get(s.id) ?? 0) === li);
+    if (g.length > 0) groups.push(g);
+  }
+  return { groups, missing };
+}
+var ExecutionScheduler = class {
+  constructor(executor, opts = {}) {
+    this.executor = executor;
+    this.stepTimeoutMs = Math.max(0, opts.stepTimeoutMs ?? 0);
+    this.globalTimeoutMs = Math.max(0, opts.globalTimeoutMs ?? 0);
+    this.maxRetries = Math.max(0, Math.floor(opts.maxRetries ?? 0));
+    this.retryBaseMs = Math.max(0, opts.retryBaseMs ?? 50);
+    this.retryMultiplier = Math.max(1, opts.retryMultiplier ?? 2);
+    this.retryMaxDelayMs = Math.max(0, opts.retryMaxDelayMs ?? 2e3);
+    this.policy = opts.onFailure || "propagate";
+    this.sink = opts.sink;
+    this.externalSignal = opts.signal;
+    const requested = opts.maxConcurrency ?? 0;
+    this.maxConcurrency = requested > 0 ? Math.max(1, Math.floor(requested)) : Number.POSITIVE_INFINITY;
+    this.degradeResult = opts.degradeResult || (() => "");
+    this.sleep = opts.sleep || defaultSleep;
+    this.emitProgress = opts.emitProgress !== false;
+  }
+  stepTimeoutMs;
+  globalTimeoutMs;
+  maxRetries;
+  retryBaseMs;
+  retryMultiplier;
+  retryMaxDelayMs;
+  policy;
+  sink;
+  externalSignal;
+  maxConcurrency;
+  degradeResult;
+  sleep;
+  emitProgress;
+  /** 发射进度事件（phase / metric / error），失败静默不影响调度。 */
+  emitPhase(phase, detail) {
+    if (!this.sink || !this.emitProgress) return;
+    try {
+      this.sink.emit({ type: "phase", phase, detail });
+    } catch {
+    }
+  }
+  emitMetric(name, value, tags) {
+    if (!this.sink || !this.emitProgress) return;
+    try {
+      this.sink.emit({ type: "metric", name, value, tags });
+    } catch {
+    }
+  }
+  emitError(error, recoverable) {
+    if (!this.sink || !this.emitProgress) return;
+    try {
+      this.sink.emit({ type: "error", error, recoverable });
+    } catch {
+    }
+  }
+  /**
+   * 执行主入口。
+   */
+  async run(plan) {
+    const startedAt = Date.now();
+    const results = /* @__PURE__ */ new Map();
+    const attempts = /* @__PURE__ */ new Map();
+    const records = /* @__PURE__ */ new Map();
+    const failed = [];
+    const degraded = [];
+    const skipped = [];
+    const controller = new AbortController();
+    let aborted = false;
+    let timedOut = false;
+    const onExternalAbort = () => {
+      aborted = true;
+      controller.abort();
+    };
+    if (this.externalSignal) {
+      if (this.externalSignal.aborted) {
+        aborted = true;
+        controller.abort();
+      } else this.externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+    }
+    let globalTimer;
+    if (this.globalTimeoutMs > 0) {
+      globalTimer = setTimeout(() => {
+        timedOut = true;
+        aborted = true;
+        controller.abort();
+      }, this.globalTimeoutMs);
+    }
+    const isStopped = () => aborted || controller.signal.aborted;
+    const stopError = () => timedOut ? new Error(`\u5168\u5C40\u8D85\u65F6\uFF08${this.globalTimeoutMs}ms\uFF09`) : makeAbortError();
+    this.emitPhase("scheduler.start", `${plan.steps?.length || 0} \u6B65 / ${plan.levels?.length || 0} \u5C42`);
+    try {
+      const norm = normalizePlan(plan);
+      for (const id of norm.missing) {
+        const err = new Error(`\u6B65\u9AA4 ${id} \u5728\u6267\u884C\u8BA1\u5212\u4E2D\u51FA\u73B0\u4F46\u7F3A\u5C11\u5B9A\u4E49`);
+        if (this.policy === "degrade") {
+          const placeholder = this.degradeResult({ id, title: id, description: "", dependsOn: [], tools: [], expectedOutput: "", parallelizable: false, estimatedDifficulty: 0 }, err);
+          results.set(id, placeholder);
+          degraded.push(id);
+          this.emitPhase("step.degrade", `${id}: ${err.message}`);
+        } else {
+          failed.push(id);
+          this.emitError(err.message, false);
+        }
+        attempts.set(id, 0);
+      }
+      if (norm.missing.length > 0 && this.policy === "propagate") {
+        skipped.push(...norm.groups.flat().map((s) => s.id));
+        return this.finish({ results, attempts, records, failed, degraded, skipped, aborted, timedOut, startedAt, plan });
+      }
+      let stopScheduling = false;
+      for (let li = 0; li < norm.groups.length; li++) {
+        if (isStopped() || stopScheduling) {
+          for (const s of norm.groups.slice(li).flat()) skipped.push(s.id);
+          break;
+        }
+        const group = norm.groups[li];
+        this.emitPhase("level.start", `\u7B2C ${li + 1} \u5C42\uFF08${group.length} \u6B65\uFF09`);
+        const levelStart = Date.now();
+        const outcomes = await mapWithConcurrency(group, this.maxConcurrency, async (step) => {
+          if (isStopped() || stopScheduling) {
+            return { step, ok: false, value: "", error: stopError(), aborted: true, timedOut, degraded: false, attempts: 0, durationMs: 0 };
+          }
+          return this.runStep(step, controller.signal, isStopped, stopError);
+        });
+        for (const o of outcomes) {
+          attempts.set(o.step.id, o.attempts);
+          records.set(o.step.id, {
+            stepId: o.step.id,
+            attempts: o.attempts,
+            durationMs: o.durationMs,
+            ok: o.ok,
+            degraded: o.degraded,
+            aborted: o.aborted,
+            timedOut: o.timedOut,
+            error: o.error?.message
+          });
+          if (o.ok) {
+            results.set(o.step.id, o.value);
+            this.emitPhase("step.done", `${o.step.id}\uFF08${o.attempts} \u6B21\u5C1D\u8BD5\uFF09`);
+          } else if (o.degraded) {
+            results.set(o.step.id, o.value);
+            degraded.push(o.step.id);
+            this.emitPhase("step.degrade", `${o.step.id}: ${o.error?.message || "\u5931\u8D25"}`);
+          } else if (o.aborted) {
+            skipped.push(o.step.id);
+            this.emitPhase("step.skipped", `${o.step.id}: ${o.error?.message || "\u4E2D\u6B62"}`);
+          } else {
+            failed.push(o.step.id);
+            this.emitError(`\u6B65\u9AA4 ${o.step.id} \u5931\u8D25\uFF1A${o.error?.message || "\u672A\u77E5\u9519\u8BEF"}`, true);
+          }
+        }
+        this.emitMetric("scheduler.level", Date.now() - levelStart, { level: String(li + 1) });
+        this.emitPhase("level.end", `\u7B2C ${li + 1} \u5C42\u5B8C\u6210`);
+        const hardFailure = outcomes.some((o) => !o.ok && !o.degraded);
+        if (hardFailure && this.policy === "propagate") {
+          stopScheduling = true;
+        }
+      }
+      const allIds = new Set(plan.steps?.map((s) => s.id) || []);
+      for (const id of allIds) {
+        if (!results.has(id) && !failed.includes(id) && !degraded.includes(id) && !skipped.includes(id)) {
+          skipped.push(id);
+        }
+      }
+      return this.finish({ results, attempts, records, failed, degraded, skipped, aborted, timedOut, startedAt, plan });
+    } finally {
+      if (globalTimer) clearTimeout(globalTimer);
+      if (this.externalSignal) this.externalSignal.removeEventListener("abort", onExternalAbort);
+    }
+  }
+  /** 统一收尾：计算 success、发射完成事件、组装结果。 */
+  finish(args) {
+    const { results, attempts, records, failed, degraded, skipped, aborted, timedOut, startedAt, plan } = args;
+    const success = !aborted && !timedOut && failed.length === 0 && degraded.length === 0 && skipped.length === 0;
+    const durationMs = Date.now() - startedAt;
+    this.emitMetric("scheduler.success", success ? 1 : 0);
+    this.emitMetric("scheduler.duration", durationMs);
+    this.emitPhase("scheduler.done", `\u6210\u529F=${success} \u5931\u8D25=${failed.length} \u964D\u7EA7=${degraded.length} \u8DF3\u8FC7=${skipped.length} \u4E2D\u6B62=${aborted} \u8D85\u65F6=${timedOut}`);
+    return { results, success, failed, degraded, skipped, aborted, timedOut, attempts, records, durationMs };
+  }
+  /** 执行单步（含重试、单步超时、中止响应），返回结构化结果。 */
+  async runStep(step, signal, isStopped, stopError) {
+    const t0 = Date.now();
+    let attempt = 0;
+    const maxAttempts = this.maxRetries + 1;
+    while (attempt < maxAttempts) {
+      if (isStopped()) {
+        return { step, ok: false, value: "", error: stopError(), aborted: true, timedOut: false, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+      }
+      attempt++;
+      this.emitPhase(attempt === 1 ? "step.start" : "step.retry", `${step.id}#${attempt}`);
+      try {
+        const p = Promise.resolve().then(() => this.executor(step));
+        const timed = withTimeout(p, this.stepTimeoutMs, `\u6B65\u9AA4 ${step.id} \u6267\u884C\u8D85\u65F6\uFF08${this.stepTimeoutMs}ms\uFF09`);
+        const value = await raceWithAbort(timed, signal, stopError);
+        return { step, ok: true, value, aborted: false, timedOut: false, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        const stepTimedOut = error.message.includes("\u6267\u884C\u8D85\u65F6");
+        if (isStopped()) {
+          const timedOutFlag = stepTimedOut || error.message.includes("\u5168\u5C40\u8D85\u65F6");
+          return { step, ok: false, value: "", error, aborted: true, timedOut: timedOutFlag, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+        }
+        if (attempt < maxAttempts) {
+          const delay = backoffDelay(attempt, this.retryBaseMs, this.retryMultiplier, this.retryMaxDelayMs);
+          this.emitPhase("step.backoff", `${step.id} \u7B2C ${attempt} \u6B21\u5931\u8D25\uFF0C${delay}ms \u540E\u91CD\u8BD5`);
+          try {
+            await raceWithAbort(this.sleep(delay, signal), signal, stopError);
+          } catch (sleepErr) {
+            const e = sleepErr instanceof Error ? sleepErr : new Error(String(sleepErr));
+            return { step, ok: false, value: "", error: e, aborted: true, timedOut: false, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+          }
+          continue;
+        }
+        if (this.policy === "degrade") {
+          const placeholder = this.degradeResult(step, error);
+          return { step, ok: false, value: placeholder, error, aborted: false, timedOut: stepTimedOut, degraded: true, attempts: attempt, durationMs: Date.now() - t0 };
+        }
+        return { step, ok: false, value: "", error, aborted: false, timedOut: stepTimedOut, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+      }
+    }
+    return { step, ok: false, value: "", error: new Error("\u6B65\u9AA4\u6267\u884C\u672A\u4EA7\u751F\u7ED3\u679C"), aborted: false, timedOut: false, degraded: false, attempts: attempt, durationMs: Date.now() - t0 };
+  }
+  /**
+   * 执行前对计划做静态校验：缺失定义、自依赖、未知依赖、层级缺口、重复 id。
+   * 不抛错，返回问题清单（供调用方决定是否拒绝执行计划）。
+   */
+  validatePlan(plan) {
+    const issues = [];
+    const byId = /* @__PURE__ */ new Map();
+    for (const s of plan.steps || []) {
+      if (!s || typeof s.id !== "string" || !s.id) {
+        issues.push("\u5B58\u5728\u65E0 id \u6216 id \u975E\u5B57\u7B26\u4E32\u7684\u8BA1\u5212\u6B65\u9AA4");
+        continue;
+      }
+      if (byId.has(s.id)) issues.push(`\u6B65\u9AA4 id \u91CD\u590D\uFF1A${s.id}`);
+      else byId.set(s.id, s);
+    }
+    for (const s of byId.values()) {
+      if ((s.dependsOn || []).includes(s.id)) issues.push(`\u6B65\u9AA4 ${s.id} \u81EA\u6211\u4F9D\u8D56`);
+      for (const dep of s.dependsOn || []) {
+        if (!byId.has(dep)) issues.push(`\u6B65\u9AA4 ${s.id} \u4F9D\u8D56\u672A\u5B9A\u4E49\u6B65\u9AA4 ${dep}`);
+      }
+    }
+    const levelIds = /* @__PURE__ */ new Set();
+    for (const level of plan.levels || []) {
+      for (const id of level || []) {
+        if (!byId.has(id)) issues.push(`\u5C42\u7EA7\u5F15\u7528\u4E86\u672A\u5B9A\u4E49\u6B65\u9AA4 ${id}`);
+        if (levelIds.has(id)) issues.push(`\u6B65\u9AA4 ${id} \u5728 levels \u4E2D\u91CD\u590D\u51FA\u73B0`);
+        levelIds.add(id);
+      }
+    }
+    for (const id of byId.keys()) {
+      if (!levelIds.has(id)) issues.push(`\u6B65\u9AA4 ${id} \u672A\u5206\u914D\u5230\u4EFB\u4F55\u5C42\u7EA7\uFF08\u8C03\u5EA6\u5668\u4F1A\u8FFD\u52A0\u5230\u6700\u540E\u4E00\u5C42\uFF09`);
+    }
+    return issues;
+  }
+  /**
+   * 干跑（dry-run）：只做校验与层级规范化，不调用 executor，返回将要执行的分层顺序。
+   * 便于 UI 预览"哪些步骤会并行"。
+   */
+  dryRun(plan) {
+    const norm = normalizePlan(plan);
+    return {
+      levels: norm.groups.map((g) => g.map((s) => s.id)),
+      issues: this.validatePlan(plan),
+      totalSteps: (plan.steps || []).length
+    };
+  }
+};
+function createScheduler(executor, opts) {
+  return new ExecutionScheduler(executor, opts);
+}
+
 // src/shared/superCore.ts
 var assembler = createAssembler();
 var guardrails = createGuardrails();
@@ -8484,6 +8891,77 @@ function normalizeResult(raw) {
     stopped: typeof r.stopped === "string" ? r.stopped : void 0,
     error: typeof r.error === "string" ? r.error : void 0
   };
+}
+async function executePlan(plan, deps, runner, guardedDeps, emit) {
+  const started = Date.now();
+  const allTools = guardedDeps.tools || [];
+  const maxRounds = deps.planStepRounds ?? 2;
+  const stepMsgs = [];
+  const scheduler = createScheduler(
+    async (step) => {
+      const directive = `[\u6267\u884C\u8BA1\u5212\u6B65\u9AA4 ${step.id}] ${step.title}
+${step.description}
+\u9884\u671F\u4EA7\u7269\uFF1A${step.expectedOutput}
+\u5EFA\u8BAE\u5DE5\u5177\uFF1A${step.tools.join(", ") || "\u81EA\u4E3B\u9009\u62E9"}
+\u672C\u6B65\u8F6E\u6B21\u4E0A\u9650 ${maxRounds}\uFF1A\u5B8C\u6210\u672C\u6B65\u9AA4\u540E\u7ACB\u5373\u7ED9\u51FA\u7B80\u77ED\u786E\u8BA4\uFF0C\u4E0D\u8981\u7EE7\u7EED\u505A\u5176\u5B83\u6B65\u9AA4\u3002` + (stepMsgs.length ? `
+
+\u5DF2\u5B8C\u6210\u6B65\u9AA4\u7684\u4EA7\u7269\uFF08\u4F9B\u53C2\u8003\uFF0C\u52FF\u91CD\u590D\u6267\u884C\uFF09\uFF1A
+${stepMsgs.slice(-4).join("\n---\n")}` : "");
+      const base = deps.baseDeps.messages || [];
+      const stepMessages = [...base, { role: "user", content: directive }];
+      const stepDeps = { ...guardedDeps };
+      if (step.tools.length) {
+        const wanted = new Set(step.tools);
+        stepDeps.tools = allTools.filter((t) => wanted.has(t.name));
+      }
+      const raw = await runner(stepMessages, stepDeps);
+      const r = normalizeResult(raw);
+      const output = r.content || r.error || "\uFF08\u65E0\u4EA7\u7269\uFF09";
+      stepMsgs.push(`[${step.id}] ${step.title}: ${output.slice(0, 1200)}`);
+      return output;
+    },
+    {
+      sink: { emit },
+      // scheduler 的 phase/metric/error 进同一事件总线
+      signal: deps.signal,
+      onFailure: "degrade",
+      // 单步失败降级继续，不让整个计划卡死
+      maxRetries: 1,
+      degradeResult: (step, err) => `[\u6B65\u9AA4 ${step.id} \u5931\u8D25] ${err.message}\u2014\u2014\u5DF2\u8DF3\u8FC7\uFF0C\u7EE7\u7EED\u540E\u7EED\u6B65\u9AA4`,
+      emitProgress: true
+    }
+  );
+  const sched = await scheduler.run(plan);
+  const completed = plan.steps.length - sched.failed.length - sched.skipped.length;
+  emit({
+    type: "metric",
+    name: "super.plan.steps",
+    value: completed,
+    tags: { total: String(plan.steps.length), failed: String(sched.failed.length) }
+  });
+  const synthesisMessages = [
+    ...deps.baseDeps.messages || [],
+    {
+      role: "user",
+      content: `<system-reminder>\u6267\u884C\u8BA1\u5212\u5DF2\u5B8C\u6210\u3002\u4EE5\u4E0B\u662F\u5404\u6B65\u9AA4\u4EA7\u7269\uFF0C\u8BF7\u6574\u5408\u6210\u4E00\u4EFD\u5B8C\u6574\u7684\u6700\u7EC8\u7B54\u590D\u7ED9\u7528\u6237\uFF08\u4E0D\u8981\u91CD\u590D\u6267\u884C\u4EFB\u4F55\u5DE5\u5177\uFF0C\u5DE5\u5177\u5DF2\u5168\u90E8\u5B8C\u6210\uFF09\uFF1A
+
+${stepMsgs.join("\n\n")}
+
+\u8981\u6C42\uFF1A\u5148\u7ED9\u51FA\u7ED3\u679C\u6458\u8981\uFF0C\u518D\u5217\u51FA\u5173\u952E\u4EA7\u7269\u4E0E\u672A\u5B8C\u6210/\u5931\u8D25\u9879\uFF08\u5982\u6709\uFF09\u3002</system-reminder>`
+    }
+  ];
+  const synthRaw = await runner(synthesisMessages, { ...guardedDeps, tools: [] });
+  const synth = normalizeResult(synthRaw);
+  const exec = {
+    enabled: true,
+    steps: plan.steps.length,
+    completed,
+    failed: sched.failed,
+    degraded: sched.degraded,
+    aborted: sched.skipped,
+    durationMs: Date.now() - started
+  };
+  return { content: synth.content || stepMsgs.join("\n\n"), thinking: synth.thinking, toolCalls: [], exec };
 }
 function injectContext(messages, analysis, plan, decision) {
   const sys = assembler.buildSystemPrompt(analysis, plan, decision);
@@ -8564,8 +9042,21 @@ async function runSuperLoop(messages, deps) {
   phase("execution", `kernel=${decision.kernel}`);
   const runner = selectRunner(deps, decision.kernel);
   const execError = void 0;
-  const raw = await runner(working, guardedDeps);
-  const result = normalizeResult(raw);
+  let planExecution;
+  let result;
+  if (deps.enablePlanExecution && plan && plan.steps.length >= 3 && analysis.complexity.score >= 45) {
+    phase("plan-execution", `${plan.steps.length} \u6B65 / ${plan.levels.length} \u5C42`);
+    try {
+      const planned = await executePlan(plan, deps, runner, guardedDeps, emit);
+      planExecution = planned.exec;
+      result = { content: planned.content, thinking: planned.thinking, toolCalls: planned.toolCalls };
+    } catch (pe) {
+      emit({ type: "error", error: "\u8BA1\u5212\u6267\u884C\u5931\u8D25\uFF0C\u5DF2\u964D\u7EA7\u4E3A\u666E\u901A\u6267\u884C\uFF1A" + String(pe?.message || pe), recoverable: true });
+      result = normalizeResult(await runner(working, guardedDeps));
+    }
+  } else {
+    result = normalizeResult(await runner(working, guardedDeps));
+  }
   const loopCheck = guardrails.checkLoop(result.toolCalls);
   if (!loopCheck.allowed) emit({ type: "guardrail", result: loopCheck });
   phase("feedback");
@@ -8588,7 +9079,7 @@ async function runSuperLoop(messages, deps) {
     toolCalls: result.toolCalls,
     stopped: result.stopped,
     error: result.error || execError,
-    trace: { signals, analysis, plan, decision, model: modelChoice, durationMs, phases }
+    trace: { signals, analysis, plan, decision, model: modelChoice, durationMs, phases, planExecution }
   };
 }
 function summarizeTrace(result) {

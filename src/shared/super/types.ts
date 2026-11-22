@@ -314,6 +314,10 @@ export interface SuperDeps {
   /** 适配器（可选，启用学习） */
   adaptation?: AdaptationEngine
   signal?: AbortSignal
+  /** 计划执行（v18.3.0）：多步骤复杂任务按 ExecutionPlan 分层调度执行，默认 false（行为等价优先） */
+  enablePlanExecution?: boolean
+  /** 计划执行单步最大轮次提示（注入模型消息），默认 2 */
+  planStepRounds?: number
 }
 
 export interface SuperResult {
@@ -331,5 +335,15 @@ export interface SuperResult {
     model: ModelChoice | null
     durationMs: number
     phases: string[]
+    /** 计划执行（v18.3.0）：分层调度每步的完成情况，未启用计划执行时为空 */
+    planExecution?: {
+      enabled: boolean
+      steps: number
+      completed: number
+      failed: string[]
+      degraded: string[]
+      aborted: string[]
+      durationMs: number
+    }
   }
 }

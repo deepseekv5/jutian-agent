@@ -25,6 +25,7 @@ import { createAdaptationEngine } from './super/routing/adaptation'
 import { createAssembler } from './super/context/assembler'
 import { createGuardrails } from './super/guardrails/chain'
 import { SuperEventCollector } from './super/runtime/events'
+import { createScheduler, type SchedulerResult } from './super/runtime/scheduler'
 import type {
   SuperDeps, SuperResult, RouteDecision, TaskAnalysis, ExecutionPlan,
   TaskOutcome, ModelChoice, SuperEvent,
@@ -69,6 +70,98 @@ function normalizeResult(raw: unknown): { content: string; thinking: string; too
     stopped: typeof r.stopped === 'string' ? r.stopped : undefined,
     error: typeof r.error === 'string' ? r.error : undefined,
   }
+}
+
+/**
+ * 计划执行（v18.3.0）：plan-execute-synthesize。
+ *
+ * 此前 ExecutionScheduler 只被用于依赖校验（写完测试全绿的死代码——v12.1 教训）。
+ * 现在复杂多步骤任务真正按 ExecutionPlan 的 levels 分层调度：
+ *   1. 每步一次受限 runner 调用（工具集按 step.tools 收窄、轮次提示注入）
+ *   2. 同层并行 / 跨层串行（scheduler 的 Kahn 分层）
+ *   3. 产物汇总 → synthesis 轮次（tools:[] 纯文本，不再执行工具，避免重复副作用）
+ *
+ * 门控：仅 enablePlanExecution && plan.steps.length>=3 && complexity>=moderate 时启用；
+ * 简单任务走原路径（行为等价）。默认关闭，serve 侧显式开启。
+ */
+async function executePlan(
+  plan: NonNullable<ExecutionPlan>,
+  deps: SuperDeps,
+  runner: (m: LoopMessage[], d: unknown) => Promise<unknown>,
+  guardedDeps: Record<string, unknown>,
+  emit: (e: SuperEvent) => void,
+): Promise<{
+  content: string
+  thinking: string
+  toolCalls: LoopToolCall[]
+  exec: NonNullable<SuperResult['trace']['planExecution']>
+}> {
+  const started = Date.now()
+  const allTools = (guardedDeps.tools || []) as Array<{ name: string }>
+  const maxRounds = deps.planStepRounds ?? 2
+  const stepMsgs: string[] = []
+
+  const scheduler = createScheduler(
+    async (step) => {
+      // 单步消息：原始用户目标 + 当前步骤指令 + 已完成步骤产物（避免上下文断裂）
+      const directive =
+        `[执行计划步骤 ${step.id}] ${step.title}\n${step.description}\n` +
+        `预期产物：${step.expectedOutput}\n` +
+        `建议工具：${step.tools.join(', ') || '自主选择'}\n` +
+        `本步轮次上限 ${maxRounds}：完成本步骤后立即给出简短确认，不要继续做其它步骤。` +
+        (stepMsgs.length ? `\n\n已完成步骤的产物（供参考，勿重复执行）：\n${stepMsgs.slice(-4).join('\n---\n')}` : '')
+      const base = (deps.baseDeps.messages || []) as LoopMessage[]
+      const stepMessages: LoopMessage[] = [...base, { role: 'user', content: directive }]
+      // 工具白名单收窄（step.tools 非空时）——防止步骤越界执行其它副作用
+      const stepDeps: Record<string, unknown> = { ...guardedDeps }
+      if (step.tools.length) {
+        const wanted = new Set(step.tools)
+        stepDeps.tools = allTools.filter(t => wanted.has(t.name))
+      }
+      const raw = await runner(stepMessages, stepDeps)
+      const r = normalizeResult(raw)
+      const output = r.content || r.error || '（无产物）'
+      stepMsgs.push(`[${step.id}] ${step.title}: ${output.slice(0, 1200)}`)
+      return output
+    },
+    {
+      sink: { emit },                       // scheduler 的 phase/metric/error 进同一事件总线
+      signal: deps.signal,
+      onFailure: 'degrade',                 // 单步失败降级继续，不让整个计划卡死
+      maxRetries: 1,
+      degradeResult: (step, err) => `[步骤 ${step.id} 失败] ${err.message}——已跳过，继续后续步骤`,
+      emitProgress: true,
+    },
+  )
+
+  const sched: SchedulerResult = await scheduler.run(plan)
+  const completed = plan.steps.length - sched.failed.length - sched.skipped.length
+  emit({
+    type: 'metric', name: 'super.plan.steps', value: completed,
+    tags: { total: String(plan.steps.length), failed: String(sched.failed.length) },
+  })
+
+  // synthesis 轮次：把各步产物交给模型整合成最终答复，tools:[] 确保不再执行工具（防重复副作用）
+  const synthesisMessages: LoopMessage[] = [
+    ...((deps.baseDeps.messages || []) as LoopMessage[]),
+    {
+      role: 'user',
+      content: `<system-reminder>执行计划已完成。以下是各步骤产物，请整合成一份完整的最终答复给用户（不要重复执行任何工具，工具已全部完成）：\n\n${stepMsgs.join('\n\n')}\n\n要求：先给出结果摘要，再列出关键产物与未完成/失败项（如有）。</system-reminder>`,
+    },
+  ]
+  const synthRaw = await runner(synthesisMessages, { ...guardedDeps, tools: [] })
+  const synth = normalizeResult(synthRaw)
+
+  const exec: NonNullable<SuperResult['trace']['planExecution']> = {
+    enabled: true,
+    steps: plan.steps.length,
+    completed,
+    failed: sched.failed,
+    degraded: sched.degraded,
+    aborted: sched.skipped,
+    durationMs: Date.now() - started,
+  }
+  return { content: synth.content || stepMsgs.join('\n\n'), thinking: synth.thinking, toolCalls: [] /* 工具调用在步骤内已执行,synthesis 不调用工具 */, exec }
 }
 
 /** 给 messages 注入上下文工程组装的增强 system（<system-reminder> 通道，不污染正文） */
@@ -180,10 +273,24 @@ export async function runSuperLoop(messages: LoopMessage[], deps: SuperDeps): Pr
   phase('execution', `kernel=${decision.kernel}`)
   const runner = selectRunner(deps, decision.kernel)
   const execError: string | undefined = undefined
-  // 底层内核抛异常（含 NeedsClientError）原样上抛——serve 的 needs_client
-  // 处理逻辑按 e.name duck typing 接管，无需在此包装。
-  const raw = await runner(working, guardedDeps)
-  const result = normalizeResult(raw)
+  let planExecution: NonNullable<SuperResult['trace']['planExecution']> | undefined
+  let result: ReturnType<typeof normalizeResult>
+
+  // 计划执行分支（v18.3.0）：复杂多步骤任务按 ExecutionPlan 分层调度，规划层不再空转
+  if (deps.enablePlanExecution && plan && plan.steps.length >= 3 && analysis.complexity.score >= 45) {
+    phase('plan-execution', `${plan.steps.length} 步 / ${plan.levels.length} 层`)
+    try {
+      const planned = await executePlan(plan, deps, runner, guardedDeps, emit)
+      planExecution = planned.exec
+      result = { content: planned.content, thinking: planned.thinking, toolCalls: planned.toolCalls }
+    } catch (pe) {
+      // 计划执行失败 → 降级回普通单轮（行为等价兜底），emit 错误事件供诊断
+      emit({ type: 'error', error: '计划执行失败，已降级为普通执行：' + String((pe as Error)?.message || pe), recoverable: true })
+      result = normalizeResult(await runner(working, guardedDeps))
+    }
+  } else {
+    result = normalizeResult(await runner(working, guardedDeps))
+  }
 
   // 输出护栏：循环检测
   const loopCheck = guardrails.checkLoop(result.toolCalls)
@@ -210,7 +317,7 @@ export async function runSuperLoop(messages: LoopMessage[], deps: SuperDeps): Pr
     toolCalls: result.toolCalls,
     stopped: result.stopped as SuperResult['stopped'],
     error: result.error || execError,
-    trace: { signals, analysis, plan, decision, model: modelChoice, durationMs, phases },
+    trace: { signals, analysis, plan, decision, model: modelChoice, durationMs, phases, planExecution },
   }
 }
 

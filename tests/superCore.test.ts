@@ -124,3 +124,75 @@ describe('summarizeTrace', () => {
     expect(s).toContain('路由理由')
   })
 })
+
+/* ═══ 计划执行（v18.3.0）：ExecutionScheduler 真正接线，规划层不再空转 ═══ */
+describe('计划执行 plan-execute-synthesize', () => {
+  // 复杂多步骤任务（触发 plan >=3 步 + complexity>=45 门控）
+  const complexTask = '第一步读取 config.yaml 的数据库连接配置；第二步修改连接池参数把 max 从 10 改成 50 并写入文件；第三步运行 npm test 验证配置语法正确；第四步把结果汇总写到 CHANGELOG.md 的 Unreleased 段。'
+
+  function planDeps() {
+    const calls: Array<{ kind: string; tools: number; content: string }> = []
+    const runner = async (_m: LoopMessage[], d: unknown) => {
+      const dd = d as { tools?: unknown[] }
+      const msg = _m[_m.length - 1]
+      const text = typeof msg?.content === 'string' ? msg.content : ''
+      calls.push({
+        kind: text.includes('执行计划步骤') ? 'step' : text.includes('执行计划已完成') ? 'synthesis' : 'other',
+        tools: dd.tools?.length ?? -1,
+        content: text.slice(0, 40),
+      })
+      return { content: text.includes('执行计划已完成') ? '最终汇总答复' : '步骤产物：已完成', thinking: '', toolCalls: [] }
+    }
+    return { calls, deps: makeDeps({ runPro: vi.fn(runner), runUltra: vi.fn(runner), runAuto: vi.fn(runner), enablePlanExecution: true }) }
+  }
+
+  it('默认关闭计划执行时：只调一次 runner（行为等价）', async () => {
+    const { calls, deps } = planDeps()
+    deps.enablePlanExecution = false
+    await runSuperLoop(msgs(complexTask), deps)
+    expect(calls.length).toBe(1)
+  })
+
+  it('启用后复杂任务：分步调度 + synthesis（多次 runner 调用）', async () => {
+    const { calls, deps } = planDeps()
+    const r = await runSuperLoop(msgs(complexTask), deps)
+    expect(calls.filter(c => c.kind === 'step').length).toBeGreaterThanOrEqual(3)
+    expect(calls.some(c => c.kind === 'synthesis')).toBe(true)
+    // synthesis 轮次 tools 必须为空数组（不再执行工具，防重复副作用）
+    const synth = calls.find(c => c.kind === 'synthesis')
+    expect(synth?.tools).toBe(0)
+    expect(r.trace.planExecution?.enabled).toBe(true)
+    expect(r.trace.planExecution?.steps).toBeGreaterThanOrEqual(3)
+    expect(r.content).toContain('最终汇总答复')
+  })
+
+  it('简单任务即使启用也不触发计划执行（门控）', async () => {
+    const { calls, deps } = planDeps()
+    await runSuperLoop(msgs('你好'), deps)
+    expect(calls.length).toBe(1)
+  })
+
+  it('计划执行步骤失败时降级填充产物并继续（不掉整轮）', async () => {
+    const events: Array<{ type: string; error?: string }> = []
+    let calls = 0
+    const stepRunner = async (_m: LoopMessage[], d: unknown) => {
+      calls++
+      const msg = _m[_m.length - 1]
+      const text = typeof msg?.content === 'string' ? msg.content : ''
+      // 第一步工具抛错（模拟临时失败），其余步骤与 synthesis 正常
+      if (text.includes('执行计划步骤') && calls === 1) throw new Error('临时工具错误')
+      return { content: text.includes('执行计划已完成') ? '汇总答复' : '产物', thinking: '', toolCalls: [] }
+    }
+    const deps = makeDeps({
+      enablePlanExecution: true,
+      sink: { emit: e => events.push(e) },
+      runPro: vi.fn(stepRunner), runUltra: vi.fn(stepRunner), runAuto: vi.fn(stepRunner),
+    })
+    const r = await runSuperLoop(msgs(complexTask), deps)
+    expect(calls).toBeGreaterThanOrEqual(4)
+    expect(r.content).toContain('汇总答复')
+    // 调度器进度事件（level.start/step.done 等）进了诊断总线——计划执行全程可观测
+    const evAny = events as Array<{ type: string; phase?: string }>
+    expect(evAny.some(e => e.type === 'phase' && String(e.phase || '').startsWith('level.'))).toBe(true)
+  })
+})

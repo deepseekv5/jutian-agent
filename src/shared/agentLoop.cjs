@@ -947,9 +947,44 @@ async function executePlans(ctx, deps, messages, plans, perf) {
         toolResult = result.success ? clampToolResult(outText, pl.tc.name) : "\u274C \u9519\u8BEF: " + result.error;
         pl.obj.status = result.success ? "done" : "error";
         if (result.changeId) pl.obj.changeId = result.changeId;
+        if (deps.failureRecovery) {
+          if (result.success) deps.failureRecovery.reset();
+          else {
+            try {
+              const rec = deps.failureRecovery.plan({
+                toolName: pl.tc.name,
+                args: parsedArgs,
+                errorText: String(result.error || ""),
+                round: ctx.toolRound,
+                at: Date.now()
+              });
+              deps.failureRecovery.record({
+                toolName: pl.tc.name,
+                args: parsedArgs,
+                errorText: String(result.error || ""),
+                round: ctx.toolRound,
+                at: Date.now()
+              });
+              if (rec.instruction) toolResult += "\n\n[\u6062\u590D\u5EFA\u8BAE] " + rec.instruction;
+            } catch {
+            }
+          }
+        }
       } catch (te) {
         toolResult = "\u274C \u9519\u8BEF: " + (te instanceof Error ? te.message : String(te));
         pl.obj.status = "error";
+        if (deps.failureRecovery) {
+          try {
+            deps.failureRecovery.record({
+              toolName: pl.tc.name,
+              args: parsedArgs,
+              errorText: String(te instanceof Error ? te.message : te),
+              round: ctx.toolRound,
+              at: Date.now()
+            });
+          } catch {
+          }
+        }
       }
     }
     const ms = Date.now() - t0;

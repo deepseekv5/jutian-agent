@@ -308,6 +308,8 @@ var nodeCrypto = require("crypto");
 var CRON_MOD = (() => { try { return require("./src/shared/cron.cjs"); } catch (e) { console.error("cron.cjs load failed:", e.message); return null; } })();
 var PERMISSION_MOD = (() => { try { return require("./src/shared/permission.cjs"); } catch (e) { console.error("permission.cjs load failed:", e.message); return null; } })();
 var AGENT_LOOP = (() => { try { return require("./src/shared/agentLoop.cjs"); } catch (e) { console.error("agentLoop.cjs load failed:", e.message); return null; } })();
+// v18.3.0：失败恢复模块（结构化恢复路线，独立编译的 cjs 旁加载）
+var FAILURE_RECOVERY = (() => { try { const m = require("./src/shared/failureRecovery.cjs"); return () => new (m.FailureRecovery)(); } catch (e) { console.error("failureRecovery.cjs load failed:", e.message); return null; } })();
 // JT Core Ultra（v15.0.0）：移植 gemini-cli/OpenHands 护栏的高端内核，与 JT Core Pro+ 并存
 var ULTRA_LOOP = (() => { try { return require("./src/shared/jtCoreUltra.cjs"); } catch (e) { console.error("jtCoreUltra.cjs load failed:", e.message); return null; } })();
 // JT Core Auto（v17.1.0）：叠加自主目标闭环的内核（评估器 + 停滞检测 + 自动续跑）
@@ -3928,6 +3930,8 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
         } : null;
         const __coreDeps = {
           tools: __ultraTools,
+          // v18.3.0：每个请求独立失败恢复实例（跨请求不串状态）
+          failureRecovery: FAILURE_RECOVERY ? FAILURE_RECOVERY() : undefined,
           model,
           apiBase,
           contextWindow: Number(payload.contextWindow) || 0,
@@ -4058,7 +4062,15 @@ code{background:rgba(0,0,0,.05);padding:1px 6px;border-radius:5px;font-size:12px
             models: __models,
             preference: String(payload.preference || 'quality'),
             signal: abort.signal,
-            sink: { emit: (ev) => { if (ev.type === 'route') send({ type: 'super_trace', decision: ev.decision }); if (ev.type === 'metric') send({ type: 'super_metric', name: ev.name, value: ev.value }); } },
+            // v18.3.0：计划执行默认开启（payload 可显式关闭）——复杂多步骤任务按
+            // ExecutionPlan 分层调度，规划层不再只做依赖校验的死代码
+            enablePlanExecution: payload.enablePlanExecution !== false,
+            planStepRounds: Number(payload.planStepRounds) || 2,
+            sink: { emit: (ev) => {
+              if (ev.type === 'route') send({ type: 'super_trace', decision: ev.decision })
+              if (ev.type === 'metric') send({ type: 'super_metric', name: ev.name, value: ev.value })
+              if (ev.type === 'phase' && String(ev.phase || '').startsWith('step.')) send({ type: 'super_metric', name: 'plan.' + ev.phase, value: 1, detail: ev.detail })
+            } },
           });
         } else {
           result = await __runner(__ultraMsgs, __coreDeps);

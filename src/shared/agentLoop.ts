@@ -107,6 +107,8 @@ export interface AgentLoopDeps {
   isClientTool: (name: string) => boolean
   /** 客户端工具执行（返回作为 tool result 的字符串） */
   runClientTool?: (tc: LoopToolCall) => Promise<string>
+  /** 失败恢复（v18.3.0，可选）：工具失败时给出结构化恢复路线。未注入时行为等价 */
+  failureRecovery?: import('./failureRecovery').FailureRecovery
   /** 权限闸门：返回字符串=拒绝并作为结果；null/undefined=放行 */
   confirmTool?: (tc: LoopToolCall) => Promise<string | null | undefined>
   /** 该调用是否需要渲染层介入（确认弹窗 / 客户端工具）。返回 'confirm' | 'client_tool' | null */
@@ -574,9 +576,34 @@ export async function executePlans(
         toolResult = result.success ? clampToolResult(outText, pl.tc.name) : ('❌ 错误: ' + result.error)
         pl.obj.status = result.success ? 'done' : 'error'
         if (result.changeId) pl.obj.changeId = result.changeId
+        // v18.3.0 失败恢复：失败时记录并注入结构化恢复路线（未注入时零开销）
+        if (deps.failureRecovery) {
+          if (result.success) deps.failureRecovery.reset()
+          else {
+            try {
+              const rec = deps.failureRecovery.plan({
+                toolName: pl.tc.name, args: parsedArgs,
+                errorText: String(result.error || ''), round: ctx.toolRound, at: Date.now(),
+              })
+              deps.failureRecovery.record({
+                toolName: pl.tc.name, args: parsedArgs,
+                errorText: String(result.error || ''), round: ctx.toolRound, at: Date.now(),
+              })
+              if (rec.instruction) toolResult += '\n\n[恢复建议] ' + rec.instruction
+            } catch { /* 恢复模块异常不影响主流程 */ }
+          }
+        }
       } catch (te) {
         toolResult = '❌ 错误: ' + (te instanceof Error ? te.message : String(te))
         pl.obj.status = 'error'
+        if (deps.failureRecovery) {
+          try {
+            deps.failureRecovery.record({
+              toolName: pl.tc.name, args: parsedArgs,
+              errorText: String(te instanceof Error ? te.message : te), round: ctx.toolRound, at: Date.now(),
+            })
+          } catch { /* 忽略 */ }
+        }
       }
     }
     const ms = Date.now() - t0
