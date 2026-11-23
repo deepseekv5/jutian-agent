@@ -217,7 +217,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.93",
-    "ai": "^7.0.176",
+    "ai": "^7.0.177",
     "better-sqlite3": "^12.10.0",
     "ws": "^8.23.0"
   },
@@ -240,7 +240,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.6.2",
+    "autoprefixer": "^10.7.0",
     "electron": "^33.4.11",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
