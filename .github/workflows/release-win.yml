@@ -68,7 +68,7 @@ jobs:
           npm run lint 2>&1 | tee eslint-win.log
       - name: 上传 ESLint 日志（失败时诊断）
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eslint-win-log
           path: eslint-win.log
