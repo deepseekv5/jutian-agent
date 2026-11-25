@@ -218,7 +218,7 @@ describe('App-only 门卫：正确令牌放行', () => {
     })
     // 只要不是 403 拦截页就说明门卫放行了（业务层错误是另一回事）
     expect(r.status).not.toBe(403)
-  })
+  }, 30000) // llm-proxy 无有效模型配置时上游会走完整超时链，门卫检查本身很快但需等响应头
 
   it('带令牌访问具体页面路径会保留原路径（只去掉 app 参数）', async () => {
     const r = await fetch(`${BASE}/legal.html?app=${TOKEN}&x=1`, { redirect: 'manual' })

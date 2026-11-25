@@ -234,6 +234,8 @@ Markdown 全渲染、工具调用全展示、子代理进度实时同步。
 | [🛠 新增一个工具](docs/dev/add-tool.md) | 从实现到 schema 到三端可用的完整步骤 |
 | [🔐 安全审计](docs/dev/security-scan-2026-11-20.md) | 全项目扫描 591 项的逐条判定与证据 |
 
+**分层门禁**（v18.4.1 起）：日常开发跑 `npm run fast`（3-15 秒，只验改动文件+关联测试+契约）；发版前跑 `npm run check:full`（4 分钟，全量 tsc/lint/test/构建/契约）。CI 同步分层——PR 走 `pr-fast.yml` 快门禁，push main/tag 走 `ci.yml` 双系统全门禁。
+
 ### 工程
 
 | 文档 | 一句话 |

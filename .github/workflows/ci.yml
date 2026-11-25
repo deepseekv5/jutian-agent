@@ -10,9 +10,11 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  # v18.4.1 分层门禁：ci.yml 是发版级全量门禁（双系统 tsc/lint/test + 冒烟），
+  # 只在 push main / tag 触发。PR 走 pr-fast.yml 快门禁（改了什么验什么）。
   push:
     branches: [main]
-  pull_request:
+    tags: ['v*']
 
 jobs:
   verify:

@@ -1,0 +1,47 @@
+# PR 快门禁（v18.4.1 分层门禁）
+#
+# 目标：PR 阶段 <60 秒给出反馈——只验「改了什么」：
+#   · eslint 只查改动文件（全量 84s → 快档 <5s）
+#   · vitest 只跑命名关联的测试文件（全量 36s → 快档 3-15s）
+#   · verify 契约校验始终跑（<1s，schema↔TOOLS 漂移等致命问题）
+#
+# 发版级全门禁在 ci.yml（push main / tag 触发：双系统 tsc/lint/test + 冒烟启动）。
+# 快门禁不跑全量 tsc（编辑器 + 全门禁兜底），这是分层的明确取舍。
+name: PR Fast Gate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # fast-gate 需要对比 base 分支算改动文件
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 快门禁（lint 改动文件 + 关联测试 + 契约）
+        shell: bash
+        run: |
+          # PR 对比 base 分支；fetch 确保 origin/base 存在
+          BASE="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --no-tags 2>/dev/null || true
+          if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then BASE="HEAD~1"; fi
+          npm run fast -- --base "$BASE"
