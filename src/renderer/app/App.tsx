@@ -792,6 +792,11 @@ function MainApp() {
   useEffect(() => {
     document.documentElement.setAttribute('data-wallpaper', bgImage ? 'on' : 'off')
   }, [bgImage])
+  // 液态玻璃（v18.5.0）：独立开关，不依赖壁纸——一键关可回到纯净实底
+  useEffect(() => {
+    document.documentElement.setAttribute('data-liquid-glass', visualSettings.liquidGlass === false ? 'off' : 'on')
+    document.documentElement.style.setProperty('--glass-intensity', String(visualSettings.glassIntensity ?? 60))
+  }, [visualSettings.liquidGlass, visualSettings.glassIntensity])
   const bgOpacity = Math.max(0, Math.min(1, theme === 'dark'
     ? (visualSettings.bgOpacityDark ?? DEFAULT_VISUAL.bgOpacityDark)
     : (visualSettings.bgOpacityLight ?? DEFAULT_VISUAL.bgOpacityLight)))

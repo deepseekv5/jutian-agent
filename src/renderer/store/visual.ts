@@ -10,6 +10,10 @@ export interface VisualSettings {
   bgImage: string
   bgOpacityLight: number
   bgOpacityDark: number
+  /** 液态玻璃总开关（v18.5.0）：全标签页覆盖按钮/输入/卡片/面板，可一键关闭回到纯净实底 */
+  liquidGlass: boolean
+  /** 光学强度 0-100：控制折射高光/弹性反馈的显著程度 */
+  glassIntensity: number
 }
 
 export const DEFAULT_VISUAL: VisualSettings = {
@@ -17,6 +21,8 @@ export const DEFAULT_VISUAL: VisualSettings = {
   bgImage: '',  // v15.6.0：默认纯净实底（Codex 风）；用户可在设置里手动开内置视频/自定义壁纸
   bgOpacityLight: 0.5,
   bgOpacityDark: 0.6,
+  liquidGlass: true,      // v18.5.0：默认开启液态玻璃
+  glassIntensity: 60,
 }
 
 /** 读取视觉设置；解析失败时回落到默认值 */
@@ -35,6 +41,8 @@ export function saveVisualSettings(v: VisualSettings): void {
     localStorage.setItem(KEY, JSON.stringify(v))
   } catch { /* 隐私模式下 localStorage 不可写，忽略 */ }
   document.documentElement.style.setProperty('--glass-blur', `${v.glassBlur}px`)
+  document.documentElement.style.setProperty('--glass-intensity', String(v.glassIntensity ?? DEFAULT_VISUAL.glassIntensity))
+  document.documentElement.setAttribute('data-liquid-glass', v.liquidGlass === false ? 'off' : 'on')
   window.dispatchEvent(new Event('visual-changed'))
 }
 

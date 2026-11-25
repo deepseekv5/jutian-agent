@@ -91,6 +91,7 @@ const SEARCH_INDEX: { tab: TabId; label: string; labelEn?: string; desc: string;
   { tab: 'appearance', label: '上下文自动压缩阈值', labelEn: 'Auto-compact threshold', desc: '外观', keywords: 'compact 压缩 阈值 上下文 auto compact' },
   { tab: 'appearance', label: '朗读音色与语速', labelEn: 'TTS voice & speed', desc: '外观', keywords: 'tts 朗读 语音 音色 声音 语速 晓晓 云希 试听 voice speed' },
   { tab: 'appearance', label: '液态玻璃模糊强度', labelEn: 'Glass blur intensity', desc: '外观', keywords: 'glass blur 毛玻璃 模糊' },
+  { tab: 'appearance', label: '液态玻璃开关', labelEn: 'Liquid Glass toggle', desc: '外观', keywords: 'liquid glass 液态玻璃 折射 弹性' },
   { tab: 'appearance', label: '背景图片与透明度', labelEn: 'Background image & opacity', desc: '外观', keywords: 'background 背景 壁纸 透明度 wallpaper' },
   { tab: 'language', label: '界面语言', labelEn: 'Interface language', desc: '语言', keywords: 'language 语言 中文 english 中英文' },
   { tab: 'data', label: '会话数据统计 / 导入导出', labelEn: 'Session stats / import & export', desc: '数据', keywords: 'data 数据 导出 导入 备份 统计 清空' },
@@ -1661,6 +1662,26 @@ export default function SettingsModal({ settings, onSave, onClose, embedded = fa
               <Sub c={c} title={t('液态玻璃模糊强度', 'Glass Blur')}>
                 <input type="range" min={0} max={30} value={visual.glassBlur} onChange={e => saveVisual({ ...visual, glassBlur: Number(e.target.value) })} className="w-full h-1 rounded-full appearance-none cursor-pointer" style={{ accentColor: c.accent }} />
                 <div className="text-right text-[11px] font-mono mt-1" style={{ color: c.accent }}>{visual.glassBlur}px</div>
+              </Sub>
+              {/* 液态玻璃总开关（v18.5）：全应用折射高光/弹性反馈，一键关回纯净实底 */}
+              <Sub c={c} title={t('液态玻璃', 'Liquid Glass')}>
+                <div className="flex items-center justify-between p-3 rounded-lg mb-2" style={{ background: c.bgInput, border: `1px solid ${c.borderLight}` }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: c.textHead }}>{t('启用液态玻璃', 'Enable Liquid Glass')}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: c.textTertiary }}>{t('开启后全应用按钮、输入、卡片呈现折射高光与弹性反馈，可在设置随时关闭。', 'When enabled, buttons, inputs and cards across the app show refractive highlights and springy feedback; turn it off here any time.')}</div>
+                  </div>
+                  <Toggle c={c} on={visual.liquidGlass !== false} onClick={() => saveVisual({ ...visual, liquidGlass: visual.liquidGlass === false })} />
+                </div>
+                <div className="mb-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px]" style={{ color: c.textTertiary }}>{t('光学强度', 'Optical intensity')}</span>
+                    <span className="text-[11px] font-mono" style={{ color: c.accent }}>{visual.glassIntensity ?? DEFAULT_VISUAL.glassIntensity}%</span>
+                  </div>
+                  <input type="range" min={0} max={100} value={visual.glassIntensity ?? DEFAULT_VISUAL.glassIntensity}
+                    onChange={e => saveVisual({ ...visual, glassIntensity: Number(e.target.value) })}
+                    disabled={!visual.liquidGlass}
+                    className="w-full h-1 rounded-full appearance-none cursor-pointer" style={{ accentColor: c.accent, opacity: visual.liquidGlass ? 1 : 0.5 }} />
+                </div>
               </Sub>
               <Sub c={c} title={t('动态壁纸', 'Dynamic Wallpaper')}>
                 <p className="text-[11px] mb-3" style={{ color: c.textTertiary }}>{t('默认使用内置动态视频壁纸，可切换为静态图、自定义上传或关闭。', 'Defaults to the built-in dynamic video wallpaper. Switch to a still image, upload your own, or turn it off.')}</p>

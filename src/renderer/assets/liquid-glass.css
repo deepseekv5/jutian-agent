@@ -1,0 +1,152 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   液态玻璃主题层（v18.5.0）——全局可开关，覆盖所有标签页
+   学习 winisland.cn 的透镜/光学控件语言：折射高光 + 边缘光 + 弹性反馈。
+   约束：
+     · 只在 html[data-liquid-glass="on"] 下生效——一键关闭回到原样
+     · 磨砂复用全局 .global-veil（单次 backdrop-filter），不为每个控件叠加 GPU 开销；
+       这里只加「光学层」（伪元素高光/描边）与「弹性反馈」（transform）
+     · 所有选择器面向通用语义标签与既有类名，天然覆盖多 tab 的全部面板
+     · prefers-reduced-motion 下关掉弹性动画，保留静态高光
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --lg-intensity: .6;                       /* 由 --glass-intensity/100 覆盖 */
+  --lg-rim: rgba(255, 255, 255, .16);       /* 边缘光 */
+  --lg-sheen: rgba(255, 255, 255, .26);     /* 顶部高光 */
+  --lg-tint: rgba(255, 255, 255, .05);      /* 玻璃着色 */
+  --lg-spring: cubic-bezier(.2, .9, .25, 1.22);
+  --lg-press: .96;
+}
+html[data-liquid-glass="on"] {
+  --lg-intensity: calc(var(--glass-intensity, 60) / 100);
+}
+[data-theme="dark"] {
+  --lg-rim: rgba(255, 255, 255, .14);
+  --lg-sheen: rgba(255, 255, 255, .16);
+  --lg-tint: rgba(255, 255, 255, .055);
+}
+
+/* ── 0) 折射底材：液态玻璃需要「有东西可透」才显出透镜质感。
+   仅开启且无壁纸时给全局一层极淡彩光背景（学习参考页 showcase 的柔和场）；
+   有壁纸时壁纸本身即底材，不再叠加。这层在最底层，不拦截任何交互。 ── */
+html[data-liquid-glass="on"]:not([data-wallpaper="on"]) body {
+  background-color: #eef1f6;
+  background-image:
+    radial-gradient(58% 48% at 12% 8%, rgba(120, 190, 255, .28), transparent 62%),
+    radial-gradient(52% 44% at 88% 14%, rgba(150, 135, 235, .22), transparent 60%),
+    radial-gradient(60% 55% at 50% 96%, rgba(110, 220, 180, .20), transparent 64%);
+  background-attachment: fixed;
+}
+html[data-liquid-glass="on"][data-theme="dark"]:not([data-wallpaper="on"]) body {
+  background-color: #17181c;
+  background-image:
+    radial-gradient(58% 48% at 12% 8%, rgba(56, 132, 255, .16), transparent 62%),
+    radial-gradient(52% 44% at 88% 14%, rgba(120, 92, 220, .14), transparent 60%),
+    radial-gradient(60% 55% at 50% 96%, rgba(40, 180, 140, .12), transparent 64%);
+}
+
+/* ── 1) 通用玻璃材质：给所有卡片/面板/输入/弹层加边缘光与折射着色 ── */
+/* 注意：index.css 的 Codex 实底决策对 .glass/.rounded-* 用了 box-shadow:none !important，
+   这里必须用同等 !important + html[data-liquid-glass="on"] 更高优先级覆盖，否则完全看不到效果 */
+html[data-liquid-glass="on"] :is(
+  .glass, .glass-strong, .tool-card, .thinking-card,
+  [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-lg"],
+  [class*="panel"], [class*="modal"], [class*="popover"], [class*="dropdown"]
+) {
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 var(--lg-sheen),
+    inset 0 0 0 1px var(--lg-rim),
+    var(--shadow-soft, 0 8px 24px rgba(0, 0, 0, .10)) !important;
+}
+/* 让 .glass  carriers 半透，底材（body 彩光/wallpaper）才能透出——覆盖 index.css 的实色 !important */
+html[data-liquid-glass="on"]:not([data-wallpaper="on"]) .glass {
+  background: color-mix(in srgb, var(--jt-paper, #fff) 88%, transparent) !important;
+  backdrop-filter: blur(calc(var(--glass-blur, 12) * 1px)) saturate(1.25) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur, 12) * 1px)) saturate(1.25) !important;
+}
+html[data-liquid-glass="on"]:not([data-wallpaper="on"]) .glass-strong {
+  background: color-mix(in srgb, var(--jt-paper, #fff) 72%, transparent) !important;
+  backdrop-filter: blur(22px) saturate(1.3) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.3) !important;
+}
+/* 卡片自身也半透，让底部彩光场透出——这是「透镜」与「白卡」的区别 */
+html[data-liquid-glass="on"]:not([data-wallpaper="on"]) :is(.rounded-xl, .rounded-2xl, [class*="card"]) {
+  background-color: color-mix(in srgb, var(--surface-card, #fff) 92%, transparent) !important;
+}
+html[data-theme="dark"][data-liquid-glass="on"]:not([data-wallpaper="on"]) :is(.rounded-xl, .rounded-2xl, [class*="card"]) {
+  background-color: color-mix(in srgb, var(--surface-card, #2c2c30) 88%, transparent) !important;
+}
+
+/* 顶部光学高光带（伪元素，不占布局、不拦截点击） */
+html[data-liquid-glass="on"] :is(.glass, .glass-strong, .tool-card, [class*="modal"], [class*="popover"])::before {
+  content: '';
+  position: absolute;
+  left: 8%; right: 8%; top: 0; height: 1px;
+  pointer-events: none; z-index: 1;
+  background: linear-gradient(90deg, transparent, var(--lg-sheen), transparent);
+  opacity: var(--lg-intensity);
+}
+
+/* ── 2) 按钮：全标签页所有按钮的光学质感 + 弹性按压 ── */
+html[data-liquid-glass="on"] button:not(:disabled),
+html[data-liquid-glass="on"] [role="button"]:not([aria-disabled="true"]) {
+  position: relative;
+  isolation: isolate;
+  transition: transform .18s var(--lg-spring), box-shadow .18s ease, filter .18s ease;
+}
+html[data-liquid-glass="on"] button:not(:disabled):hover,
+html[data-liquid-glass="on"] [role="button"]:not([aria-disabled="true"]):hover {
+  filter: brightness(calc(1 + .06 * var(--lg-intensity)));
+}
+html[data-liquid-glass="on"] button:not(:disabled):active,
+html[data-liquid-glass="on"] [role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(calc(1 - .04 * var(--lg-intensity)));
+}
+/* 主按钮（蓝/绿实心）加一层内高光，凸起如玻璃键 */
+html[data-liquid-glass="on"] :is([class*="primary"], [class*="cta"], [class*="send"], button[style*="accent"]) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 4px 14px -6px rgba(0, 0, 0, .3) !important;
+}
+
+/* ── 3) 输入 / 搜索 / 文本域：内凹玻璃井 ── */
+html[data-liquid-glass="on"] :is(input:not([type="range"]):not([type="checkbox"]), textarea, [contenteditable="true"], [class*="search"]) {
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .06), inset 0 0 0 1px var(--lg-rim);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+html[data-liquid-glass="on"] :is(input, textarea, [contenteditable="true"]):focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #2997ff) 60%, transparent), 0 0 0 3px color-mix(in srgb, var(--accent, #2997ff) 18%, transparent);
+}
+
+/* ── 4) 滑块 / 开关：弹性反馈（学习参考页 jelly/togglePose） ── */
+html[data-liquid-glass="on"] input[type="range"] { cursor: ew-resize; }
+html[data-liquid-glass="on"] input[type="range"]::-webkit-slider-thumb {
+  box-shadow: inset 0 1px 1px #fff, 0 2px 8px -2px rgba(0, 0, 0, .35);
+  transition: transform .16s var(--lg-spring);
+}
+html[data-liquid-glass="on"] input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(calc(1 + .12 * var(--lg-intensity)));
+}
+
+/* ── 5) 标签栏 / 侧栏项：玻璃片选中态 ── */
+html[data-liquid-glass="on"] :is([class*="tab"], [class*="sidebar"]) [class*="on"],
+html[data-liquid-glass="on"] :is([class*="tab"], [class*="sidebar"]) [aria-selected="true"] {
+  box-shadow: inset 0 1px 0 var(--lg-sheen), inset 0 0 0 1px var(--lg-rim);
+}
+
+/* ── 6) 进度条：光学发射器（参考页 lg-progress-emitter） ── */
+html[data-liquid-glass="on"] [class*="progress"] [class*="fill"],
+html[data-liquid-glass="on"] [class*="progress"] [class*="bar"] {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 12px -3px var(--accent, #2997ff);
+}
+
+/* ── 7) 减少动态：关弹性，留静态高光 ── */
+@media (prefers-reduced-motion: reduce) {
+  html[data-liquid-glass="on"] :is(button, [role="button"], input[type="range"]::-webkit-slider-thumb) {
+    transition: none !important;
+  }
+  html[data-liquid-glass="on"] button:not(:disabled):active,
+  html[data-liquid-glass="on"] [role="button"]:not([aria-disabled="true"]):active,
+  html[data-liquid-glass="on"] input[type="range"]:active::-webkit-slider-thumb {
+    transform: none !important;
+  }
+}

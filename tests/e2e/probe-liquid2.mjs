@@ -1,0 +1,11 @@
+import puppeteer from 'puppeteer-core';
+const b = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: 'new', args: ['--no-sandbox'] });
+const p = await b.newPage();
+await p.setViewport({ width: 1366, height: 900 });
+await p.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+await p.evaluateOnNewDocument(() => { localStorage.setItem('lyclaw_legal_consent', '2026-11-19'); localStorage.setItem('lyclaw_theme','dark'); });
+await p.goto('http://127.0.0.1:7453/', { waitUntil: 'networkidle2', timeout: 60000 });
+await new Promise(r => setTimeout(r, 1500));
+await p.screenshot({ path: '/tmp/jt-lg-dark.png' });
+console.log(JSON.stringify(await p.evaluate(() => ({ theme: document.documentElement.getAttribute('data-theme'), flag: document.documentElement.getAttribute('data-liquid-glass') }))));
+await b.close();
