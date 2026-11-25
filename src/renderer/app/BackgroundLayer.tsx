@@ -8,9 +8,24 @@ import { useTheme } from '../hooks/useTheme'
 interface Props {
   bgImage: string
   opacity: number
+  /** 液态玻璃（v18.5.2）：无壁纸时用可见光场替代纯净实底，玻璃才有可折射的底材 */
+  liquidGlass?: boolean
 }
 
-export default function BackgroundLayer({ bgImage, opacity: bgOpacity }: Props) {
+/** 液态玻璃光场：无壁纸时铺一层肉眼可见的柔和彩光（参考 winisland 展示页的场），
+ *  玻璃控件半透后才能折射出层次——纯净实底上做玻璃=白卡，这是关键。 */
+const LIQUID_FIELD_LIGHT =
+  'radial-gradient(ellipse 50% 44% at 14% 10%, rgba(96,164,238,.42), transparent 68%),' +
+  'radial-gradient(ellipse 44% 40% at 88% 16%, rgba(150,124,224,.34), transparent 66%),' +
+  'radial-gradient(ellipse 54% 50% at 52% 96%, rgba(90,200,164,.30), transparent 70%),' +
+  'linear-gradient(160deg,#eef2f8,#e4eaf3)'
+const LIQUID_FIELD_DARK =
+  'radial-gradient(ellipse 50% 44% at 14% 10%, rgba(58,124,224,.34), transparent 68%),' +
+  'radial-gradient(ellipse 44% 40% at 88% 16%, rgba(122,84,206,.30), transparent 66%),' +
+  'radial-gradient(ellipse 54% 50% at 52% 96%, rgba(36,158,126,.24), transparent 70%),' +
+  'linear-gradient(160deg,#20232c,#14161c)'
+
+export default function BackgroundLayer({ bgImage, opacity: bgOpacity, liquidGlass }: Props) {
   const { theme } = useTheme()
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
@@ -41,8 +56,11 @@ export default function BackgroundLayer({ bgImage, opacity: bgOpacity }: Props) 
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: '#faf7f0' }} aria-hidden />
     )
     return (
-      // v16.4.0：走 --jt-paper token（值与原硬编码一致，但跟随主题变量，避免与主题机制脱节）
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'var(--jt-paper)' }} aria-hidden />
+      // v18.5.2：液态玻璃开启时铺可见光场（玻璃折射的底材），否则维持纯净实底 --jt-paper
+      <div style={{
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: liquidGlass ? (theme === 'dark' ? LIQUID_FIELD_DARK : LIQUID_FIELD_LIGHT) : 'var(--jt-paper)',
+      }} aria-hidden />
     )
   }
 

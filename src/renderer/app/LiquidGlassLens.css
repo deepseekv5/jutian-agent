@@ -1,0 +1,76 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   LiquidGlassLens 组件定位样式
+
+   注意：父容器必须 position:relative（或 absolute/fixed），否则本组件会
+   相对最近的定位祖先甚至视口定位。推荐层级：
+     外层 div 设 position:relative
+       └ LiquidGlassLens（zIndex:0，玻璃在内容下方）
+       └ 内容 div（position:relative，zIndex:1）
+
+   本文件只负责组件自身定位与 CSS fallback，不修改全局液态玻璃主题
+   （主题由 src/renderer/assets/liquid-glass.css 管理）。
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.lg-lens {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;                 /* 默认不拦截下层交互 */
+  isolation: isolate;
+  contain: paint;
+  /* 与 liquid-glass.css 的主题变量对接；无主题时给出兜底值 */
+  --lg-lens-tint: var(--lg-tint, rgba(255, 255, 255, 0.42));
+  --lg-lens-shadow: var(--lg-shadow, 0 20px 44px -24px rgba(28, 42, 70, 0.34));
+}
+
+.lg-lens canvas.lg-lens__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+}
+
+/* interactive 时显式开启指针事件，用于拖动跟手与 jelly 形变 */
+.lg-lens[data-interactive='true'],
+.lg-lens.lg-lens--interactive {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.lg-lens.lg-lens--interactive:active {
+  cursor: grabbing;
+}
+
+/* ── CSS fallback ─────────────────────────────────────────────────────────
+   WebGL 不可用或上下文丢失时显示：回到 liquid-glass.css 的半透明磨砂观感。
+   注意这是「视觉兜底」，不是真折射；真折射由上面的 canvas shader 完成。 */
+.lg-lens__fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  border-radius: inherit;
+  background: var(--lg-lens-tint);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), var(--lg-lens-shadow);
+  transition: opacity 160ms ease;
+}
+
+.lg-lens.lg-lens--fallback .lg-lens__fallback {
+  opacity: 1;
+}
+
+.lg-lens.lg-lens--fallback canvas.lg-lens__canvas {
+  display: none;
+}
+
+/* 减少动态：关闭过渡，但保留静态玻璃观感（shader 侧也只渲染一帧） */
+@media (prefers-reduced-motion: reduce) {
+  .lg-lens__fallback {
+    transition: none;
+  }
+}

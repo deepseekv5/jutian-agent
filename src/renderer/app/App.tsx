@@ -981,7 +981,7 @@ function MainApp() {
 
   return (
     <div className="h-screen overflow-hidden flex relative jt-compact">
-      <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} />
+      <BackgroundLayer bgImage={bgImage} opacity={bgOpacity} liquidGlass={visualSettings.liquidGlass !== false} />
       {bgImage && <div className="global-veil" aria-hidden />}
       {/* 氛围模式：全屏氛围光晕（顶栏「氛围」按钮开关，Esc 退出） */}
       {ambient && <div className="ambient-veil" aria-hidden />}

@@ -4,6 +4,8 @@ import { PAGE_META, type PageType } from './TabBar'
 import { CARDS, GROUPS } from './pageCatalog'
 import ChatHome from './ChatHome'
 import BrandMark from './BrandMark'
+import LiquidGlassLens from './LiquidGlassLens'
+import { loadVisualSettings } from '../store/visual'
 
 /**
  * Codex Exact 布局（v15.7.0）
@@ -126,6 +128,13 @@ function CodexMark({ size = 52 }: { size?: number }) {
 export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }: HomeProps) {
   const { lang, t } = useLanguage()
   const [text, setText] = useState('')
+  // v18.6.0：液态玻璃开关（跟随设置实时联动）
+  const [glassOn, setGlassOn] = useState(() => loadVisualSettings().liquidGlass !== false)
+  useEffect(() => {
+    const h = () => setGlassOn(loadVisualSettings().liquidGlass !== false)
+    window.addEventListener('visual-changed', h)
+    return () => window.removeEventListener('visual-changed', h)
+  }, [])
   // v16.3.0：主界面双模式——工作台（功能启动台）/ 对话（独立纯聊天）
   // v16.3.2：模式由侧栏三选切换器统一控制（工作/编程/对话），此处跟随全局 chat_mode
   const [mode, setMode] = useState<'workspace' | 'chat'>(() => {
@@ -180,13 +189,15 @@ export function CodexHome({ onAsk, onOpenTab, onCreate, modelLabel, workLabel }:
 
         {mode === 'chat' ? <ChatHome /> : (<>
         {/* 紧凑提问行：在上方、单行、不悬浮 */}
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-8" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.plus} /></svg>
+        <div className="relative flex items-center gap-2 rounded-xl px-3 py-2 mb-8" style={{ background: 'var(--jt-paper-alt)', border: '1px solid var(--jt-hairline-soft)' }}>
+          {/* v18.6.0：真实 WebGL 折射透镜（设置里可关；GL 不可用时 CSS fallback） */}
+          {glassOn && <LiquidGlassLens material="soft" radius={14} style={{ zIndex: 0 }} />}
+          <svg className="w-4 h-4 shrink-0 relative z-10" fill="none" viewBox="0 0 24 24" stroke="var(--jt-ink-3)" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.plus} /></svg>
           <input value={text} onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } }}
             placeholder={t('输入一句话开始新对话，或搜索下面的功能…', 'Start a chat, or search features below…')}
-            className="flex-1 bg-transparent outline-none text-[13px] jt-codex-input" style={{ color: 'var(--jt-ink)' }} />
-          <button onClick={ask} className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
+            className="flex-1 bg-transparent outline-none text-[13px] jt-codex-input relative z-10" style={{ color: 'var(--jt-ink)' }} />
+          <button onClick={ask} className="w-7 h-7 rounded-lg grid place-items-center shrink-0 relative z-10" style={{ background: 'var(--jt-ink)', color: 'var(--jt-paper)' }} title={t('发送', 'Send')}>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d={ICONS.arrow} /></svg>
           </button>
         </div>
