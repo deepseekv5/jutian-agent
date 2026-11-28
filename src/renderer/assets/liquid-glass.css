@@ -72,15 +72,17 @@ html[data-liquid-glass="on"] :is(input, textarea, [contenteditable="true"]):focu
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #2997ff) 55%, transparent), 0 0 0 3px color-mix(in srgb, var(--accent, #2997ff) 15%, transparent) !important;
 }
 
-/* ── 3) 正文容器（卡片/面板）：轻度玻璃——比控件更实，保文字可读 ── */
+/* ── 3) 正文容器（卡片/面板）：玻璃染色 + 柔影，不做实时背景模糊。
+   v18.6.1 性能轮：卡片背后是静态光场/纸面，blur 对柔渐变几乎无视觉差，
+   却是滚动流的最大重采样开销（每条消息卡每帧全量重采样，50 条消息 =
+   数百个 backdrop-filter）。实时模糊只保留给控件与浮层（数量有限、
+   面积小）；观感用不透明度微补偿。 ── */
 html[data-liquid-glass="on"]:not([data-wallpaper="on"]) :is(.rounded-xl, .rounded-2xl, [class*="card"]) {
-  background-color: color-mix(in srgb, var(--surface-card, #fff) calc(85% - 18% * var(--lg-i)), transparent) !important;
+  background-color: color-mix(in srgb, var(--surface-card, #fff) calc(88% - 12% * var(--lg-i)), transparent) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 12px 30px -22px rgba(28, 42, 70, .38) !important;
-  backdrop-filter: blur(12px) saturate(1.3) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
 }
 html[data-liquid-glass="on"][data-theme="dark"]:not([data-wallpaper="on"]) :is(.rounded-xl, .rounded-2xl, [class*="card"]) {
-  background-color: color-mix(in srgb, var(--surface-card, #2c2c30) calc(84% - 18% * var(--lg-i)), transparent) !important;
+  background-color: color-mix(in srgb, var(--surface-card, #2c2c30) calc(86% - 12% * var(--lg-i)), transparent) !important;
 }
 
 /* ── 3b) 关键：主内容滚动容器本身必须半透，否则它铺的实色会把 body 光场
@@ -126,6 +128,26 @@ html[data-liquid-glass="on"] input[type="range"]::-webkit-slider-thumb {
 }
 html[data-liquid-glass="on"] input[type="range"]:active::-webkit-slider-thumb {
   transform: scale(calc(1 + .14 * var(--lg-i)));
+}
+
+/* ── 5b) 性能保险丝：data-glass-lite（帧率持续不足时由 glassPerf.ts 自动挂上；
+   低配设备 data-low-power 直接常驻）。收敛实时背景模糊，保留染色/高光/柔影——
+   背后多为静态场/实底，观感轻降、流畅优先。放在第 1 节之后以同特异性覆盖。 ── */
+html[data-glass-lite="1"] :is(
+  button, [role="button"], input:not([type="range"]):not([type="checkbox"]),
+  textarea, [contenteditable="true"],
+  [class*="tool-card"], [class*="search"], [class*="pill"], [class*="chip"],
+  [class*="segment"], [class*="switch"], [class*="slider"], [class*="popover"],
+  [class*="dropdown"], [class*="menu"], [class*="toast"]
+), [data-low-power="1"] :is(
+  button, [role="button"], input:not([type="range"]):not([type="checkbox"]),
+  textarea, [contenteditable="true"],
+  [class*="tool-card"], [class*="search"], [class*="pill"], [class*="chip"],
+  [class*="segment"], [class*="switch"], [class*="slider"], [class*="popover"],
+  [class*="dropdown"], [class*="menu"], [class*="toast"]
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ── 6) 减少动态：关弹性，留静态玻璃 ── */

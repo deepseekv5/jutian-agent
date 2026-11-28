@@ -16,6 +16,7 @@ import RuntimeHints from './RuntimeHints';
 import { useViewport, useKeyboardInset } from '../hooks/useViewport';
 import { useAndroid } from '../hooks/useAndroid';
 import BackgroundLayer from './BackgroundLayer';
+import { startGlassPerfGuard } from './glassPerf';
 import { CodexRail, CodexHome } from './CodexShell';
 import CommandPalette from './CommandPalette';
 import PermissionPrompt from './PermissionPrompt';
@@ -797,6 +798,12 @@ function MainApp() {
     document.documentElement.setAttribute('data-liquid-glass', visualSettings.liquidGlass === false ? 'off' : 'on')
     document.documentElement.style.setProperty('--glass-intensity', String(visualSettings.glassIntensity ?? 60))
   }, [visualSettings.liquidGlass, visualSettings.glassIntensity])
+  // 玻璃性能保险丝（v18.6.1）：帧率持续掉时自动挂 data-glass-lite 收敛实时模糊；
+  // 仅玻璃开启时运行 rAF，关闭时零开销
+  useEffect(() => {
+    if (visualSettings.liquidGlass === false) return
+    return startGlassPerfGuard()
+  }, [visualSettings.liquidGlass])
   const bgOpacity = Math.max(0, Math.min(1, theme === 'dark'
     ? (visualSettings.bgOpacityDark ?? DEFAULT_VISUAL.bgOpacityDark)
     : (visualSettings.bgOpacityLight ?? DEFAULT_VISUAL.bgOpacityLight)))
